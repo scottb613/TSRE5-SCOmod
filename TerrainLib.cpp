@@ -167,7 +167,15 @@ void TerrainLib::setTextureToTrackObj(Brush* brush, float* punkty, int length, i
 
 }
 
+int TerrainLib::paintWaterEdges(Brush* brush, int x, int z){
+    return 0;
+}
+
 void TerrainLib::setTerrainToTrackObj(Brush* brush, float* punkty, int length, int tx, int tz, float* matrix, float offsetY){
+
+}
+
+void TerrainLib::smoothTerrainToTrackObj(Brush* brush, float* punkty, int length, int tx, int tz, float* matrix){
 
 }
 

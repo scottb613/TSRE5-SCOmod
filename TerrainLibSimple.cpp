@@ -451,6 +451,15 @@ void TerrainLibSimple::setTerrainToTrackObj(Brush* brush, float* punkty, int len
     }
 }
 
+void TerrainLibSimple::smoothTerrainToTrackObj(Brush* brush, float* punkty, int length, int tx, int tz, float* matrix){
+    (void)brush;
+    (void)punkty;
+    (void)length;
+    (void)tx;
+    (void)tz;
+    (void)matrix;
+}
+
 void TerrainLibSimple::setTerrainTexture(Brush* brush, int x, int z, float* p){
     float posx = p[0];
     float posz = p[2];

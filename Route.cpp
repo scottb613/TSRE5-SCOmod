@@ -1320,6 +1320,26 @@ void Route::setTerrainTextureToTrack(int x, int y, float* pos, Brush* brush, int
     Game::terrainLib->setTextureToTrackObj(brush, punkty.data(), length, x, y);
 }
 
+int Route::setTerrainTextureToTileTrack(int x, int y, Brush* brush){
+    QVector<float> punkty;
+    punkty.reserve(10000);
+    int sections = this->trackDB->getVectorSectionPointsForTile(x, y, punkty);
+    int length = punkty.length();
+    if(length > 0)
+        Game::terrainLib->setTextureToTrackObj(brush, punkty.data(), length, x, y);
+    return sections;
+}
+
+int Route::setTerrainTextureToTileRoad(int x, int y, Brush* brush){
+    QVector<float> punkty;
+    punkty.reserve(10000);
+    int sections = this->roadDB->getVectorSectionPointsForTile(x, y, punkty);
+    int length = punkty.length();
+    if(length > 0)
+        Game::terrainLib->setTextureToTrackObj(brush, punkty.data(), length, x, y);
+    return sections;
+}
+
 void Route::setTerrainToTrackObj(WorldObj* obj, Brush* brush){
     if(obj == NULL) return;
     if(obj->typeObj != WorldObj::worldobj)
@@ -1368,6 +1388,53 @@ void Route::setTerrainToTrackObj(WorldObj* obj, Brush* brush){
         int length = ptr - punkty;
         if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":" << "l "<<length;
         Game::terrainLib->setTerrainToTrackObj(brush, punkty, length, obj->x, obj->y, obj->matrix);
+        delete[] punkty;
+    }
+}
+
+void Route::smoothTerrainToTrackObj(WorldObj* obj, Brush* brush){
+    if(obj == NULL) return;
+    if(obj->typeObj != WorldObj::worldobj)
+        return;
+
+    if(obj->typeID == obj->groupobject) {
+        GroupObj *gobj = (GroupObj*)obj;
+        for(int i = 0; i < gobj->objects.size(); i++ ){
+            smoothTerrainToTrackObj(gobj->objects[i], brush);
+        }
+        return;
+    }
+
+    if(obj->type == "trackobj" || obj->type == "dyntrack" ){
+        QVector<float> punkty;
+        punkty.reserve(10000);
+        if(this->tsection->isRoadShape(obj->sectionIdx))
+            this->roadDB->getVectorSectionPoints(obj->x, obj->y, obj->UiD, punkty);
+        else
+            this->trackDB->getVectorSectionPoints(obj->x, obj->y, obj->UiD, punkty);
+        int length = punkty.length();
+        if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":" << "l "<<length;
+        if(length == 0){
+            if(obj->sectionIdx >= 0){
+                float matrix[16];
+                for(int i = 0; i < tsection->shape[obj->sectionIdx]->path[0].n; i++){
+                    memcpy(matrix, obj->matrix, sizeof(float)*16);
+                    int sidx = tsection->shape[obj->sectionIdx]->path[0].sect[i];
+                    tsection->sekcja[sidx]->getPoints(punkty, matrix);
+                }
+            }
+            length = punkty.length();
+            if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":" << "l "<<length;
+        }
+        if(length > 0)
+            Game::terrainLib->smoothTerrainToTrackObj(brush, punkty.data(), length, obj->x, obj->y, obj->matrix);
+    } else if(obj->hasLinePoints()) {
+        float* punkty = new float[10000];
+        float* ptr = punkty;
+        obj->getLinePoints(ptr);
+        int length = ptr - punkty;
+        if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":" << "l "<<length;
+        Game::terrainLib->smoothTerrainToTrackObj(brush, punkty, length, obj->x, obj->y, obj->matrix);
         delete[] punkty;
     }
 }

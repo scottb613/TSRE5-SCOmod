@@ -107,7 +107,10 @@ public:
     void flipObject(WorldObj *obj);
     void setTerrainTextureToObj(int x, int y, float *pos, Brush* brush, WorldObj* obj = NULL);
     void setTerrainTextureToTrack(int x, int y, float *pos, Brush* brush, int mode = 0);
+    int setTerrainTextureToTileTrack(int x, int y, Brush* brush);
+    int setTerrainTextureToTileRoad(int x, int y, Brush* brush);
     void setTerrainToTrackObj(WorldObj* obj, Brush* brush);
+    void smoothTerrainToTrackObj(WorldObj* obj, Brush* brush);
     int getTileObjCount(int x, int z);
     int getTileHiddenObjCount(int x, int z);
     int getStartTileX();

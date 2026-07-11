@@ -70,6 +70,7 @@ public:
     float setHeight(int x, int z, float posx, float posz, float val, bool add = false);
     void setFixedHeight(float val);
     void paintTexture(Brush* brush, int x, int z, float posx, float posz);
+    int paintWaterEdges(Brush* brush);
     void lockTexture(Brush* brush, int x, int z, float posx, float posz);
     void setTexture(Brush* brush, int x, int z, float posx, float posz);
     void setTexture(Brush* brush, int u);

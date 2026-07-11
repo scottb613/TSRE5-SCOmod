@@ -1131,6 +1131,13 @@ void Game::load() {
     }
     
     qDebug() <<  Game::AppVersion ;
+
+    if(maxObjLag < 2)
+        maxObjLag = 2;
+    if(allowObjLag > maxObjLag)
+        allowObjLag = maxObjLag;
+    if(allowObjLag < 0)
+        allowObjLag = 0;
     
     cleanupLogs();
 
@@ -1368,7 +1375,7 @@ void Game::CreateNewSettingsFile(){
     out << "// startTileY = \"\"                  // optional start location  \n " ; 
     out << "// geoPath = {path}                // Drive and folder housing HGT files  \n " ; 
     out << "loadActivities = true            // Check route activities for errors  \n " ; 
-    out << "loadAllWFiles = true             // Load entire route to check errors  \n " ; 
+    out << "loadAllWFiles = false            // true loads the entire route for error checking; slower on large routes  \n " ; 
     out << "// routeMergeString = \"\"          // For merging a second route with offsets X Y Z applied  e.g. \"IRM:0:0:0\"  \n " ; 
     out << "// routeMergeTDB = false            // set to true to merge TDBs  \n " ; 
     out << "// routeMergeTerrain = false        // set to true to overwrite overlapping terrain heights  \n " ; 
@@ -1428,8 +1435,8 @@ void Game::CreateNewSettingsFile(){
     out << "\n " ; 
     out << "\n " ; 
     out << "//// Route Editor Viewport Tokens  \n " ; 
-    out << "AASamples = 16  \n " ; 
-    out << "allowObjLag = 1000          \n " ; 
+    out << "AASamples = 0  \n " ; 
+    out << "allowObjLag = 10          \n " ; 
     out << "cameraFov = 35   \n " ; 
     out << "cameraSpeedMax = 40                // Camera movement with SHIFT  \n " ; 
     out << "cameraSpeedMin = 1                 // Camera movement with CTRL  \n " ; 
@@ -1437,7 +1444,7 @@ void Game::CreateNewSettingsFile(){
     out << "cameraStickToTerrain = true        // Stop camera from going underground, toggled with \"/\" key  \n " ; 
     out << "// fogColor =   \n " ; 
     out << "// fogDensity =  \n " ; 
-    out << "hudEnabled = TRUE                 //  \n " ; 
+    out << "hudEnabled = false                //  \n " ; 
     out << "hudScale = 1                      // HUD text scale  \n " ; 
     out << "lockCamera = true                 // same as hitting the . when moving about with the camera, can be unset  \n " ; 
     out << "markerHeight = 10                 // Height of the marker stick  \n " ; 
@@ -1446,7 +1453,7 @@ void Game::CreateNewSettingsFile(){
     out << "MSTSshadows = false               // dumb down shadows when true  \n " ; 
     out << "naviWindow = 10, 50               // X, Y of Navigation window for RE   \n " ; 
     out << "newSymbols = true                 // default is true, false uses the older TSRE pyramids   \n " ; 
-    out << "objectLod = 4000                  // 2000 is plenty for most purposes   \n " ; 
+    out << "objectLod = 3000                  // 2000 is plenty for most purposes   \n " ; 
     out << "oglDefaultLineWidth = 1           // width of standard lines  \n " ; 
     out << "railProfile = 0.7175, 0.7895      // rail edges for dynamic track  \n " ; 
     out << "renderTrItems = false             // Show the black markers for TrItems  \n " ; 
@@ -1457,10 +1464,10 @@ void Game::CreateNewSettingsFile(){
     out << "selectedTerrWidth = 4             // terrain selection line width  \n " ; 
     out << "skyColor =  #E0FFFF  \n " ; 
     out << "statusWindow=10,400                // X, Y of Status Window  \n " ; 
-    out << "tileLod = 2                       // tiles in each direction to load  \n " ; 
+    out << "tileLod = 1                       // tiles in each direction to load  \n " ; 
     out << "toolsHidden = false               // only show the viewport  \n " ; 
     out << "useSuperelevation = false         // apply superelevation when rendering curves  \n " ; 
-    out << "viewCompass = true                // show compass at top center  \n " ; 
+    out << "viewCompass = false               // show compass at top center  \n " ; 
     out << "viewMarkers = true                // view markers selected in Navi window  \n " ; 
     out << "viewTRLabels == true              // view data labels for interactives  \n " ;
     

@@ -52,6 +52,7 @@ public:
     void setTileBlob(int x, int z, float* p);
     void setTextureToTrackObj(Brush* brush, float* punkty, int length, int x, int z);
     void setTerrainToTrackObj(Brush* brush, float* punkty, int length, int x, int z, float* matrix, float offsetY = 0);
+    void smoothTerrainToTrackObj(Brush* brush, float* punkty, int length, int x, int z, float* matrix);
     int getTexture(int x, int z, float* p);
     bool load(int x, int z);
     void getUnsavedInfo(QVector<QString> &items);

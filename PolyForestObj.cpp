@@ -25,6 +25,7 @@
 #include "ReadFile.h"
 #include "TDB.h"
 #include "Vector4f.h"
+#include <QElapsedTimer>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -338,9 +339,17 @@ void PolyForestObj::drawShape(){
     }*/
 
     if (!init) {
+        QElapsedTimer forestTimer;
+        forestTimer.start();
         if(!Game::ignoreLoadLimits){
-            if(Game::allowObjLag < 1)  return;
-            Game::allowObjLag-=2;
+            int forestLoadCost = 2 + population / 200;
+            if(forestLoadCost > Game::maxObjLag)
+                forestLoadCost = Game::maxObjLag;
+            if(forestLoadCost < 2)
+                forestLoadCost = 2;
+            if(Game::allowObjLag < forestLoadCost)
+                return;
+            Game::allowObjLag -= forestLoadCost;
         }
         
         //qint64 timeNow = QDateTime::currentMSecsSinceEpoch();
@@ -483,6 +492,9 @@ void PolyForestObj::drawShape(){
         //qDebug() << "polyForest gen time: " << (timeNow2 - timeNow);
         delete[] punkty;
         init = true;
+        qint64 forestTime = forestTimer.elapsed();
+        if(forestTime > 40)
+            qDebug() << "PolyForest init stall" << forestTime << "ms population" << population << "texture" << treeTexture;
     }
     shape.render();
     if(selected){

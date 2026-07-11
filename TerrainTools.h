@@ -12,6 +12,7 @@
 #define	TERRAINTOOLS_H
 
 #include <QtWidgets>
+#include <QJsonArray>
 #include "Route.h"
 
 class Brush;
@@ -43,6 +44,9 @@ public slots:
     void chooseColorEnabled();
     void updateTexPrev();
     void setBrushTextureId(int val);
+    void applyPaintPreset();
+    void savePaintPreset();
+    void removePaintPreset();
     // brush
     void setBrushSize(int val);
     void setBrushSize(QString val);
@@ -66,6 +70,7 @@ public slots:
     void setSun3(QString val);    
 
     void resetDefaultValues();
+    void resetRouteTerrtexPaint();
     void setPinPointBrush();
     
     void msg(QString text, QString val);
@@ -83,6 +88,12 @@ private:
     int currentBrushShape = -1;
     void nextBrushShape();
     QVector<QPair<int, Texture*>> texLastItems;
+    QString paintPresetFilePath();
+    void refreshPaintPresets();
+    QJsonArray readPaintPresets();
+    bool writePaintPresets(const QJsonArray &presets);
+    QString currentTexturePresetPath();
+    void applyTexturePresetPath(QString texturePath);
     //QVector<QImage
     
     QPixmap* texPreview;
@@ -91,9 +102,14 @@ private:
     ClickableLabel* texPreviewLabel;
     QVector<ClickableLabel*> texPreviewLabels;
     QSignalMapper texPreviewSignals;
+    QComboBox* presetCombo;
+    QPushButton* presetApply;
+    QPushButton* presetSave;
+    QPushButton* presetRemove;
     
     QPushButton* colorw;
     QPushButton* resetDefaults;
+    QPushButton* resetRouteTerrtex;
     QPushButton* setPinPoint;    
     
     // brush gui

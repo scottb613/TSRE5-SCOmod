@@ -114,7 +114,11 @@ public slots:
     void paintToolObjSelected();
     void paintToolTDB();
     void paintToolTDBVector();
+    void paintToolTileTrack();
+    void paintToolTileRoad();
+    void paintToolWaterEdges();
     void setTerrainToObj();
+    void smoothTerrainToObj();
     void adjustObjPositionToTerrainMenu();
     void adjustObjRotationToTerrainMenu();
     void pickObjForPlacement();

@@ -9,6 +9,7 @@
  */
 
 #include "Terrain.h"
+#include <cmath>
 #include <QDebug>
 #include "Game.h"
 #include <QFile>
@@ -1472,10 +1473,139 @@ void Terrain::paintTexture(Brush* brush, int x, int z, float posx, float posz) {
             //qDebug() << tx << " " << tz;
             if ((tx < 0.0 - size) || (tx > 1.0 + size) || (tz < 0.0 - size) || (tz > 1.0 + size))
                 continue;
+            if (i < 0 || j < 0 || i >= patches || j >= patches)
+                continue;
             if(!texLocked[j * patches + i])
                 this->paintTextureOnTile(brush, j, i, tx, tz);
         }
 
+}
+
+int Terrain::paintWaterEdges(Brush* brush) {
+    if (brush == NULL)
+        return 0;
+
+    int samples = *tfile->nsamples;
+    int sampleSize = *tfile->sampleSize;
+    float tileSize = sampleSize * samples;
+    int patches = tfile->patchsetNpatches;
+    float patchSize = tileSize / patches;
+    int paintedEdges = 0;
+    int patchRes = samples / patches;
+
+    auto hasWater = [this, patches](int x, int z) {
+        if (x < 0 || z < 0 || x >= patches || z >= patches)
+            return false;
+        return (tfile->flags[z * patches + x] & 0xc0) != 0;
+    };
+
+    auto waterHeight = [this, tileSize](float x, float z) {
+        return (((x) * (z)) / (tileSize * tileSize)) * tfile->WSE +
+                (((tileSize - x) * (z)) / (tileSize * tileSize)) * tfile->WSW +
+                (((tileSize - x) * (tileSize - z)) / (tileSize * tileSize)) * tfile->WNW +
+                (((x) * (tileSize - z)) / (tileSize * tileSize)) * tfile->WNE;
+    };
+
+    float brushWorldSize = ((float)brush->size / 512.0f) * patchSize;
+    float step = brushWorldSize * 0.5f;
+    if (step < 4.0f)
+        step = 4.0f;
+    if (step > patchSize * 0.5f)
+        step = patchSize * 0.5f;
+
+    auto paintLocal = [this, brush, patches, patchSize](float tilePosX, float tilePosZ) {
+        int patchX = tilePosX / patchSize;
+        int patchZ = tilePosZ / patchSize;
+        float size = (float)(brush->size) / 512.0f;
+
+        for (int i = patchX - 1; i < patchX + 2; i++) {
+            for (int j = patchZ - 1; j < patchZ + 2; j++) {
+                if (i < 0 || j < 0 || i >= patches || j >= patches)
+                    continue;
+
+                float tx = tilePosX - i * patchSize;
+                float tz = tilePosZ - j * patchSize;
+                tx /= patchSize;
+                tz /= patchSize;
+
+                if ((tx < 0.0 - size) || (tx > 1.0 + size) || (tz < 0.0 - size) || (tz > 1.0 + size))
+                    continue;
+
+                if (!texLocked[j * patches + i])
+                    this->paintTextureOnTile(brush, j, i, tx, tz);
+            }
+        }
+    };
+
+    for (int z = 0; z < patches; z++) {
+        for (int x = 0; x < patches; x++) {
+            if (!hasWater(x, z))
+                continue;
+
+            int startX = x * patchRes;
+            int endX = (x + 1) * patchRes;
+            int startZ = z * patchRes;
+            int endZ = (z + 1) * patchRes;
+            if (endX > samples)
+                endX = samples;
+            if (endZ > samples)
+                endZ = samples;
+
+            for (int sz = startZ; sz < endZ; sz++) {
+                for (int sx = startX; sx < endX; sx++) {
+                    float x0 = sx * sampleSize;
+                    float x1 = (sx + 1) * sampleSize;
+                    float z0 = sz * sampleSize;
+                    float z1 = (sz + 1) * sampleSize;
+
+                    float d00 = terrainData[sz][sx] - waterHeight(x0, z0);
+                    float d10 = terrainData[sz][sx + 1] - waterHeight(x1, z0);
+                    float d01 = terrainData[sz + 1][sx] - waterHeight(x0, z1);
+                    float d11 = terrainData[sz + 1][sx + 1] - waterHeight(x1, z1);
+
+                    auto crosses = [](float a, float b) {
+                        if (a == 0.0f || b == 0.0f)
+                            return true;
+                        return (a < 0.0f && b > 0.0f) || (a > 0.0f && b < 0.0f);
+                    };
+                    auto interp = [](float a, float b) {
+                        float denom = a - b;
+                        if (denom > -0.0001f && denom < 0.0001f)
+                            return 0.5f;
+                        float t = a / denom;
+                        if (t < 0.0f)
+                            t = 0.0f;
+                        if (t > 1.0f)
+                            t = 1.0f;
+                        return t;
+                    };
+                    auto paintCrossing = [&paintLocal, &paintedEdges](float px, float pz) {
+                        paintLocal(px, pz);
+                        paintedEdges++;
+                    };
+
+                    if (crosses(d00, d10)) {
+                        float t = interp(d00, d10);
+                        paintCrossing(x0 + (x1 - x0) * t, z0);
+                    }
+                    if (crosses(d10, d11)) {
+                        float t = interp(d10, d11);
+                        paintCrossing(x1, z0 + (z1 - z0) * t);
+                    }
+                    if (crosses(d01, d11)) {
+                        float t = interp(d01, d11);
+                        paintCrossing(x0 + (x1 - x0) * t, z1);
+                    }
+                    if (crosses(d00, d01)) {
+                        float t = interp(d00, d01);
+                        paintCrossing(x0, z0 + (z1 - z0) * t);
+                    }
+                }
+            }
+        }
+    }
+
+    return paintedEdges;
 }
 
 void Terrain::lockTexture(Brush* brush, int x, int z, float posx, float posz) {

@@ -15,6 +15,10 @@
 #include "TransferObj.h"
 #include "ClickableLabel.h"
 #include "Game.h"
+#include "TFile.h"
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 TerrainTools::TerrainTools(QString name)
     : QWidget(){
@@ -165,6 +169,26 @@ TerrainTools::TerrainTools(QString name)
     vbox->setAlignment(vlist1, Qt::AlignHCenter);
     //vbox->addWidget(texPreviewLabel);
     //vbox->setAlignment(texPreviewLabel, Qt::AlignHCenter);
+
+    QLabel *presetLabel = new QLabel("Presets:");
+    presetLabel->setContentsMargins(3,0,0,0);
+    presetLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    vbox->addWidget(presetLabel);
+
+    presetCombo = new QComboBox;
+    presetApply = new QPushButton("Apply", this);
+    presetSave = new QPushButton("Save", this);
+    presetRemove = new QPushButton("Remove", this);
+
+    QGridLayout *vlistPreset = new QGridLayout;
+    vlistPreset->setSpacing(2);
+    vlistPreset->setContentsMargins(3,0,1,0);
+    vlistPreset->addWidget(presetCombo,0,0,1,3);
+    vlistPreset->addWidget(presetApply,1,0);
+    vlistPreset->addWidget(presetSave,1,1);
+    vlistPreset->addWidget(presetRemove,1,2);
+    vbox->addItem(vlistPreset);
+
     QLabel *label2 = new QLabel("Brush settings:");
     label2->setContentsMargins(3,0,0,0);
     label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
@@ -258,6 +282,7 @@ TerrainTools::TerrainTools(QString name)
     sun2 = GuiFunct::newQLineEdit(25,3);       
     sun3 = GuiFunct::newQLineEdit(25,3);    
     resetDefaults = new QPushButton("Reset Defaults", this);
+    resetRouteTerrtex = new QPushButton("Reset Route Terrtex Paint", this);
     setPinPoint = new QPushButton("Set Pinpoint", this);    
     
     QLabel *label3 = new QLabel("Embankment settings:");
@@ -284,6 +309,7 @@ TerrainTools::TerrainTools(QString name)
     
     vlist2->addWidget(setPinPoint,row,0);        
     vlist2->addWidget(resetDefaults,row++,1,1,2);    
+    vlist2->addWidget(resetRouteTerrtex,row++,0,1,3);
     
     /*
     
@@ -346,8 +372,20 @@ TerrainTools::TerrainTools(QString name)
     QObject::connect(resetDefaults, SIGNAL(released()),
                       this, SLOT(resetDefaultValues()));
 
+    QObject::connect(resetRouteTerrtex, SIGNAL(released()),
+                      this, SLOT(resetRouteTerrtexPaint()));
+
     QObject::connect(setPinPoint, SIGNAL(released()),
                       this, SLOT(setPinPointBrush()));
+
+    QObject::connect(presetApply, SIGNAL(released()),
+                      this, SLOT(applyPaintPreset()));
+
+    QObject::connect(presetSave, SIGNAL(released()),
+                      this, SLOT(savePaintPreset()));
+
+    QObject::connect(presetRemove, SIGNAL(released()),
+                      this, SLOT(removePaintPreset()));
 
     // brush
     QObject::connect(sSize, SIGNAL(valueChanged(int)),
@@ -441,6 +479,7 @@ TerrainTools::TerrainTools(QString name)
       Game::terrainTools[4] = 1;
       Game::terrainTools[5] = 10; 
     }
+    refreshPaintPresets();
     
 }
 
@@ -806,6 +845,228 @@ void TerrainTools::setBrushTextureId(int val){
     updateTexPrev();
 }
 
+QString TerrainTools::paintPresetFilePath()
+{
+    QString path = Game::root + "/routes/" + Game::route + "/tsre_terrain_paint_presets.json";
+    path.replace("//", "/");
+    return path;
+}
+
+QJsonArray TerrainTools::readPaintPresets()
+{
+    QFile file(paintPresetFilePath());
+    if (!file.exists())
+        return QJsonArray();
+    if (!file.open(QIODevice::ReadOnly))
+        return QJsonArray();
+
+    QJsonParseError error;
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &error);
+    file.close();
+    if (error.error != QJsonParseError::NoError || !doc.isObject())
+        return QJsonArray();
+
+    return doc.object()["presets"].toArray();
+}
+
+bool TerrainTools::writePaintPresets(const QJsonArray &presets)
+{
+    QFile file(paintPresetFilePath());
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+
+    QJsonObject root;
+    root["version"] = 1;
+    root["presets"] = presets;
+    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    file.close();
+    return true;
+}
+
+void TerrainTools::refreshPaintPresets()
+{
+    if (presetCombo == NULL)
+        return;
+
+    QString selected = presetCombo->currentText();
+    presetCombo->blockSignals(true);
+    presetCombo->clear();
+
+    QJsonArray presets = readPaintPresets();
+    for (int i = 0; i < presets.size(); i++) {
+        QJsonObject preset = presets[i].toObject();
+        QString name = preset["name"].toString().trimmed();
+        if (!name.isEmpty())
+            presetCombo->addItem(name);
+    }
+
+    int idx = presetCombo->findText(selected);
+    if (idx >= 0)
+        presetCombo->setCurrentIndex(idx);
+    presetCombo->blockSignals(false);
+}
+
+QString TerrainTools::currentTexturePresetPath()
+{
+    if (paintBrush == NULL || paintBrush->tex == NULL)
+        return "";
+
+    QString path = paintBrush->tex->pathid;
+    path.replace("\\", "/");
+    if (path.isEmpty())
+        return "";
+
+    return QFileInfo(path).fileName();
+}
+
+void TerrainTools::applyTexturePresetPath(QString texturePath)
+{
+    texturePath = texturePath.trimmed();
+    if (texturePath.isEmpty())
+        return;
+
+    QString path = texturePath;
+    if (QFileInfo(path).isRelative()) {
+        path = Game::root + "/routes/" + Game::route + "/terrtex/" + texturePath;
+        path.replace("//", "/");
+    }
+
+    if (!QFile::exists(path)) {
+        QMessageBox::warning(this, "Paint Preset", "Preset texture was not found:\n" + texturePath);
+        return;
+    }
+
+    int texId = TexLib::addTex(path);
+    if (texId < 0 || TexLib::mtex.find(texId) == TexLib::mtex.end() || TexLib::mtex[texId] == NULL) {
+        QMessageBox::warning(this, "Paint Preset", "Preset texture could not be loaded:\n" + texturePath);
+        return;
+    }
+
+    paintBrush->texId = texId;
+    paintBrush->tex = TexLib::mtex[texId];
+    paintBrush->useTexture = true;
+
+    texLastItems.push_back(qMakePair(paintBrush->texId, paintBrush->tex));
+    if (texLastItems.size() > 7)
+        texLastItems.removeFirst();
+    updateTexPrev();
+}
+
+void TerrainTools::applyPaintPreset()
+{
+    QString selected = presetCombo->currentText();
+    if (selected.isEmpty())
+        return;
+
+    QJsonArray presets = readPaintPresets();
+    for (int i = 0; i < presets.size(); i++) {
+        QJsonObject preset = presets[i].toObject();
+        if (preset["name"].toString() != selected)
+            continue;
+
+        applyTexturePresetPath(preset["texture"].toString());
+
+        int size = preset["size"].toInt(paintBrush->size);
+        if (size < 1) size = 1;
+        if (size > 100) size = 100;
+        setBrushSize(size);
+        sSize->setValue(size);
+
+        int intensity = preset["intensity"].toInt((int)(paintBrush->alpha * 100.0f));
+        if (intensity < 1) intensity = 1;
+        if (intensity > 100) intensity = 100;
+        setBrushAlpha(intensity);
+        sIntensity->setValue(intensity);
+
+        emit setPaintBrush(paintBrush);
+        return;
+    }
+}
+
+void TerrainTools::savePaintPreset()
+{
+    QString texturePath = currentTexturePresetPath();
+    if (texturePath.isEmpty()) {
+        QMessageBox::warning(this, "Paint Preset", "Choose a texture before saving a paint preset.");
+        return;
+    }
+
+    bool ok = false;
+    QString defaultName = presetCombo->currentText();
+    QString name = QInputDialog::getText(this, "Save Paint Preset", "Preset name:",
+            QLineEdit::Normal, defaultName, &ok).trimmed();
+    if (!ok)
+        return;
+    if (name.isEmpty()) {
+        QMessageBox::warning(this, "Paint Preset", "Preset name cannot be empty.");
+        return;
+    }
+    if (name.length() > 48)
+        name = name.left(48);
+
+    QJsonArray presets = readPaintPresets();
+    QJsonArray updated;
+    bool replacing = false;
+    for (int i = 0; i < presets.size(); i++) {
+        QJsonObject preset = presets[i].toObject();
+        if (preset["name"].toString().compare(name, Qt::CaseInsensitive) == 0) {
+            replacing = true;
+            continue;
+        }
+        updated.append(preset);
+    }
+
+    if (replacing) {
+        if (QMessageBox::question(this, "Save Paint Preset",
+                "Replace the existing preset named \"" + name + "\"?",
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+            return;
+    }
+
+    QJsonObject preset;
+    preset["name"] = name;
+    preset["texture"] = texturePath;
+    preset["size"] = paintBrush->size;
+    preset["intensity"] = (int)(paintBrush->alpha * 100.0f + 0.5f);
+    updated.append(preset);
+
+    if (!writePaintPresets(updated)) {
+        QMessageBox::warning(this, "Paint Preset", "Could not write the route paint preset file.");
+        return;
+    }
+
+    refreshPaintPresets();
+    int idx = presetCombo->findText(name);
+    if (idx >= 0)
+        presetCombo->setCurrentIndex(idx);
+}
+
+void TerrainTools::removePaintPreset()
+{
+    QString selected = presetCombo->currentText();
+    if (selected.isEmpty())
+        return;
+
+    if (QMessageBox::question(this, "Remove Paint Preset",
+            "Remove preset \"" + selected + "\"?",
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        return;
+
+    QJsonArray presets = readPaintPresets();
+    QJsonArray updated;
+    for (int i = 0; i < presets.size(); i++) {
+        QJsonObject preset = presets[i].toObject();
+        if (preset["name"].toString() != selected)
+            updated.append(preset);
+    }
+
+    if (!writePaintPresets(updated)) {
+        QMessageBox::warning(this, "Paint Preset", "Could not write the route paint preset file.");
+        return;
+    }
+    refreshPaintPresets();
+}
+
 void TerrainTools::updateTexPrev(){
     if(!this->paintBrush->tex->loaded)
         return;
@@ -922,5 +1183,107 @@ void TerrainTools::resetDefaultValues()
     }
    
     preloadTextures();
+    refreshPaintPresets();
 
+}
+
+void TerrainTools::resetRouteTerrtexPaint()
+{
+    QString routePath = Game::root + "/routes/" + Game::route;
+    QString tilePath = routePath + "/tiles";
+    QString terrtexPath = routePath + "/terrtex";
+
+    QDir tileDir(tilePath);
+    if (!tileDir.exists()) {
+        QMessageBox::warning(this, "Reset Route Terrtex Paint", "Route tiles folder was not found.");
+        return;
+    }
+
+    QFileInfoList tileFiles = tileDir.entryInfoList(QStringList() << "*.t", QDir::Files, QDir::Name);
+    if (tileFiles.isEmpty()) {
+        QMessageBox::warning(this, "Reset Route Terrtex Paint", "No terrain tile files were found.");
+        return;
+    }
+
+    QString warning = "This will reset every terrain tile patch in the current route to terrain.ace "
+            "and delete per-tile ACE/DDS files from terrtex whose names start with a tile name.\n\n"
+            "This cannot be undone from TSRE. Continue?";
+    if (QMessageBox::question(this, "Reset Route Terrtex Paint", warning,
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        return;
+
+    QSet<QString> tileNames;
+    int tilesReset = 0;
+    int tilesFailed = 0;
+
+    QProgressDialog progress("Resetting route terrain paint...", "Cancel", 0, tileFiles.size(), this);
+    progress.setWindowModality(Qt::ApplicationModal);
+    progress.setMinimumDuration(0);
+
+    for (int i = 0; i < tileFiles.size(); i++) {
+        if (progress.wasCanceled())
+            break;
+
+        QFileInfo tileInfo = tileFiles[i];
+        QString tileName = tileInfo.completeBaseName();
+        tileNames.insert(tileName.toLower());
+        progress.setValue(i);
+        progress.setLabelText("Resetting " + tileName + ".t");
+        qApp->processEvents();
+
+        TFile tfile;
+        if (!tfile.readT(tileInfo.absoluteFilePath())) {
+            tilesFailed++;
+            continue;
+        }
+
+        int defaultMat = tfile.getMatByTexture("terrain.ace");
+        if (defaultMat < 0)
+            defaultMat = tfile.newMat();
+
+        int patches = tfile.patchsetNpatches;
+        for (int patch = 0; patch < patches * patches; patch++) {
+            tfile.tdata[patch * 13 + 6] = defaultMat;
+            tfile.tdata[patch * 13 + 7] = 0.001f;
+            tfile.tdata[patch * 13 + 8] = 0.001f;
+            tfile.tdata[patch * 13 + 9] = 0.062375f;
+            tfile.tdata[patch * 13 + 10] = 0.0f;
+            tfile.tdata[patch * 13 + 11] = 0.0f;
+            tfile.tdata[patch * 13 + 12] = 0.062375f;
+        }
+
+        tfile.save(tileInfo.absoluteFilePath());
+        tilesReset++;
+    }
+    progress.setValue(tileFiles.size());
+
+    int filesDeleted = 0;
+    int filesFailed = 0;
+    QDir terrtexDir(terrtexPath);
+    if (terrtexDir.exists()) {
+        QFileInfoList texFiles = terrtexDir.entryInfoList(QStringList() << "*.ace" << "*.ACE" << "*.dds" << "*.DDS", QDir::Files, QDir::Name);
+        for (int i = 0; i < texFiles.size(); i++) {
+            QFileInfo texInfo = texFiles[i];
+            QString baseName = texInfo.completeBaseName().toLower();
+            int split = baseName.indexOf('_');
+            if (split < 0)
+                continue;
+
+            QString tileName = baseName.left(split);
+            if (!tileNames.contains(tileName))
+                continue;
+
+            if (QFile::remove(texInfo.absoluteFilePath()))
+                filesDeleted++;
+            else
+                filesFailed++;
+        }
+    }
+
+    QMessageBox::information(this, "Reset Route Terrtex Paint",
+            QString("Reset %1 tile(s).\nFailed tile saves: %2\nDeleted %3 per-tile texture file(s).\nFailed deletes: %4")
+            .arg(tilesReset)
+            .arg(tilesFailed)
+            .arg(filesDeleted)
+            .arg(filesFailed));
 }

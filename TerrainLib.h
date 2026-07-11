@@ -54,6 +54,7 @@ public:
     virtual bool isLoaded(int x, int z);
     virtual QSet<Terrain*> paintHeightMap(Brush* brush, int x, int z, float* p);
     virtual void paintTexture(Brush* brush, int x, int z, float* p);
+    virtual int paintWaterEdges(Brush* brush, int x, int z);
     virtual void lockTexture(Brush* brush, int x, int z, float* p);
     virtual void setTerrainTexture(Brush* brush, int x, int z, float* p);
     virtual void toggleGaps(int x, int z, float* p, float direction);
@@ -66,6 +67,7 @@ public:
     virtual void setTileBlob(int x, int z, float* p);
     virtual void setTextureToTrackObj(Brush* brush, float* punkty, int length, int x, int z);
     virtual void setTerrainToTrackObj(Brush* brush, float* punkty, int length, int x, int z, float* matrix, float offsetY = 0);
+    virtual void smoothTerrainToTrackObj(Brush* brush, float* punkty, int length, int x, int z, float* matrix);
     virtual int getTexture(int x, int z, float* p);
     virtual bool load(int x, int z);
     virtual void getUnsavedInfo(QVector<QString> &items);

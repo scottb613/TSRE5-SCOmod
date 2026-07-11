@@ -276,7 +276,10 @@ void AceLib::run() {
         //texture->loaded = true;
         //texture->editable = true;
     }
-    if(Game::textureQuality > 1){
+    // Do not downsample textures while route editing. Terrain paint saves the
+    // editable image back to ACE, so reducing it here can permanently turn a
+    // 1024x1024 terrtex patch into 512x512 after painting.
+    if(Game::textureQuality > 1 && !Game::writeEnabled){
         int nw = texture->width/Game::textureQuality;
         int nh = texture->height/Game::textureQuality;
         float scalew = (float)texture->width/nw;

@@ -13,6 +13,7 @@
 #include <QOpenGLShaderProgram>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <math.h>
 #include "GLUU.h"
 #include "SFile.h"
@@ -535,6 +536,14 @@ void RouteEditorGLWidget::paintGL(){
 }
 
 void RouteEditorGLWidget::paintGL2() {
+    QElapsedTimer frameTimer;
+    frameTimer.start();
+    qint64 afterShadow = 0;
+    qint64 afterTerrainLo = 0;
+    qint64 afterTerrain = 0;
+    qint64 afterWorld = 0;
+    qint64 afterUi = 0;
+
     Game::currentShapeLib = currentShapeLib;
     if (route == NULL) return;
     if (!route->loaded) return;
@@ -542,6 +551,7 @@ void RouteEditorGLWidget::paintGL2() {
     // Render Shadows
     if (Game::shadowsEnabled > 0)
        renderShadowMaps();
+    afterShadow = frameTimer.elapsed();
 
     // Render Scene
     //gluu->currentShader = gluu->shaders["StandardBloom"];
@@ -582,6 +592,7 @@ void RouteEditorGLWidget::paintGL2() {
     Game::terrainLib->renderLo(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode);
     for(int i = 0; i < route->env->waterCount; i++)
         Game::terrainLib->renderWaterLo(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode, i);
+    afterTerrainLo = frameTimer.elapsed();
     Mat4::identity(gluu->mvMatrix);
     glClear(GL_DEPTH_BUFFER_BIT);
 
@@ -590,6 +601,7 @@ void RouteEditorGLWidget::paintGL2() {
     Mat4::multiply(gluu->pMatrix, gluu->pMatrix, camera->getMatrix());
     gluu->setMatrixUniforms();
     Game::terrainLib->render(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode);
+    afterTerrain = frameTimer.elapsed();
     //glClear(GL_DEPTH_BUFFER_BIT);
     // Render World
     Mat4::perspective(gluu->pMatrix, Game::cameraFov * M_PI / 180, float(this->width()) / this->height(), 0.2f, Game::objectLod);
@@ -600,6 +612,7 @@ void RouteEditorGLWidget::paintGL2() {
         if (!selection && !Game::playerMode) drawPointer();
     
     route->render(gluu, camera->pozT, camera->getPos(), camera->getTarget(), camera->getRotX(), 3.14f / 3, renderMode);
+    afterWorld = frameTimer.elapsed();
 
     //if (!selection)
     for(int i = 0; i < route->env->waterCount; i++)
@@ -645,6 +658,9 @@ void RouteEditorGLWidget::paintGL2() {
         emit this->pointerInfo(aktPointerPos);
         
     }
+    afterUi = frameTimer.elapsed();
+    if(afterUi > 75)
+        qDebug() << "Frame stall" << afterUi << "ms shadow" << afterShadow << "terrainLo" << afterTerrainLo - afterShadow << "terrain" << afterTerrain - afterTerrainLo << "world" << afterWorld - afterTerrain << "ui" << afterUi - afterWorld << "allowObjLag" << Game::allowObjLag;
 }
 
 void RouteEditorGLWidget::renderShadowMaps() {
@@ -1194,7 +1210,10 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
                 }
                 break;
             case Qt::Key_F:
-                setTerrainToObj();
+                if(event->modifiers() & Qt::ShiftModifier)
+                    smoothTerrainToObj();
+                else
+                    setTerrainToObj();
                 break;
             case Qt::Key_H:
                 adjustObjPositionToTerrainMenu();
@@ -1889,6 +1908,48 @@ void RouteEditorGLWidget::paintToolTDBVector(){
     route->setTerrainTextureToTrack((int) camera->pozT[0], (int) camera->pozT[1], aktPointerPos, defaultPaintBrush, 1);
 }
 
+void RouteEditorGLWidget::paintToolTileTrack(){
+    int tileX = (int) camera->pozT[0];
+    int tileZ = (int) camera->pozT[1];
+    float posx = aktPointerPos[0];
+    float posz = aktPointerPos[2];
+    Game::check_coords(tileX, tileZ, posx, posz);
+
+    int sections = route->setTerrainTextureToTileTrack(tileX, tileZ, defaultPaintBrush);
+    if(sections > 0)
+        emit sendMsg(QString("msg"), QString("Autopainted track on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(sections) + QString(" sections."));
+    else
+        emit sendMsg(QString("msg"), QString("No track sections found on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("."));
+}
+
+void RouteEditorGLWidget::paintToolTileRoad(){
+    int tileX = (int) camera->pozT[0];
+    int tileZ = (int) camera->pozT[1];
+    float posx = aktPointerPos[0];
+    float posz = aktPointerPos[2];
+    Game::check_coords(tileX, tileZ, posx, posz);
+
+    int sections = route->setTerrainTextureToTileRoad(tileX, tileZ, defaultPaintBrush);
+    if(sections > 0)
+        emit sendMsg(QString("msg"), QString("Autopainted roads on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(sections) + QString(" sections."));
+    else
+        emit sendMsg(QString("msg"), QString("No road sections found on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("."));
+}
+
+void RouteEditorGLWidget::paintToolWaterEdges(){
+    int tileX = (int) camera->pozT[0];
+    int tileZ = (int) camera->pozT[1];
+    float posx = aktPointerPos[0];
+    float posz = aktPointerPos[2];
+    Game::check_coords(tileX, tileZ, posx, posz);
+
+    int paintedEdges = Game::terrainLib->paintWaterEdges(defaultPaintBrush, tileX, tileZ);
+    if(paintedEdges > 0)
+        emit sendMsg(QString("msg"), QString("Autopainted water edges on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(paintedEdges));
+    else
+        emit sendMsg(QString("msg"), QString("No water edges found on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("."));
+}
+
 void RouteEditorGLWidget::editFind1x1() {
     editFind(0);
 }
@@ -1928,6 +1989,15 @@ void RouteEditorGLWidget::setTerrainToObj(){
         route->setTerrainToTrackObj((WorldObj*)selectedObj, defaultPaintBrush);
     else
         route->setTerrainToTrackObj((WorldObj*)lastSelectedObj, defaultPaintBrush);
+    Undo::StateEnd();
+}
+
+void RouteEditorGLWidget::smoothTerrainToObj(){
+    Undo::StateBegin();
+    if (selectedObj != NULL)
+        route->smoothTerrainToTrackObj((WorldObj*)selectedObj, defaultPaintBrush);
+    else
+        route->smoothTerrainToTrackObj((WorldObj*)lastSelectedObj, defaultPaintBrush);
     Undo::StateEnd();
 }
 
@@ -2547,10 +2617,26 @@ void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
                 defaultMenuActions["paintToolTDBVector"] = new QAction(tr("&Nearest TDB/RDB Vector"), this); 
                 QObject::connect(defaultMenuActions["paintToolTDBVector"], SIGNAL(triggered()), this, SLOT(paintToolTDBVector()));
             }
+            if(defaultMenuActions["paintToolTileTrack"] == NULL){
+                defaultMenuActions["paintToolTileTrack"] = new QAction(tr("&Track on Tile"), this);
+                QObject::connect(defaultMenuActions["paintToolTileTrack"], SIGNAL(triggered()), this, SLOT(paintToolTileTrack()));
+            }
+            if(defaultMenuActions["paintToolTileRoad"] == NULL){
+                defaultMenuActions["paintToolTileRoad"] = new QAction(tr("&Roads on Tile"), this);
+                QObject::connect(defaultMenuActions["paintToolTileRoad"], SIGNAL(triggered()), this, SLOT(paintToolTileRoad()));
+            }
+            if(defaultMenuActions["paintToolWaterEdges"] == NULL){
+                defaultMenuActions["paintToolWaterEdges"] = new QAction(tr("&Water on Tile"), this);
+                QObject::connect(defaultMenuActions["paintToolWaterEdges"], SIGNAL(triggered()), this, SLOT(paintToolWaterEdges()));
+            }
             menuTool.addAction(defaultMenuActions["paintToolObjSelected"]);
             menuTool.addAction(defaultMenuActions["paintToolObj"]);
             menuTool.addAction(defaultMenuActions["paintToolTDB"]);
             menuTool.addAction(defaultMenuActions["paintToolTDBVector"]); 
+            menuTool.addSeparator();
+            menuTool.addAction(defaultMenuActions["paintToolTileTrack"]);
+            menuTool.addAction(defaultMenuActions["paintToolTileRoad"]);
+            menuTool.addAction(defaultMenuActions["paintToolWaterEdges"]);
         }
 
     }

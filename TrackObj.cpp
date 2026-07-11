@@ -12,6 +12,7 @@
 #include "SFile.h"
 #include "ShapeLib.h"
 #include "GLMatrix.h"
+#include <array>
 #include <math.h>
 #include "ParserX.h"
 #include "TS.h"

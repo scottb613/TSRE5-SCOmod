@@ -10,6 +10,7 @@
 
 #include "TDB.h"
 #include <QDebug>
+#include <array>
 #include <functional>
 #include "Game.h"
 #include "ParserX.h"
@@ -2811,6 +2812,49 @@ void TDB::getVectorSectionPoints(int x, int y, int nId, int sId, QVector<float> 
     }
     tsection->sekcja[(int) n->trVectorSection[sId].param[0]]->getPoints(ptr, matrix);
     return;
+}
+
+int TDB::getVectorSectionPointsForTile(int x, int z, QVector<float> &ptr){
+    int sections = 0;
+    QVector<float> sectionPoints;
+    sectionPoints.reserve(4096);
+
+    for (int nodeId = 1; nodeId <= iTRnodes; nodeId++) {
+        TRnode* n = trackNodes[nodeId];
+        if (n == NULL) continue;
+        if (n->typ != 1) continue;
+
+        for (int sectionId = 0; sectionId < n->iTrv; sectionId++) {
+            sectionPoints.clear();
+            getVectorSectionPoints(x, -z, nodeId, sectionId, sectionPoints);
+            if (sectionPoints.isEmpty())
+                continue;
+
+            bool intersectsTile = false;
+            int oldLength = ptr.length();
+            for (int i = 0; i < sectionPoints.length(); i += 3) {
+                int tx = x;
+                int tz = z;
+                float px = sectionPoints[i];
+                float pz = sectionPoints[i + 2];
+                Game::check_coords(tx, tz, px, pz);
+                if (tx != x || tz != z)
+                    continue;
+
+                ptr.push_back(sectionPoints[i]);
+                ptr.push_back(sectionPoints[i + 1]);
+                ptr.push_back(sectionPoints[i + 2]);
+                intersectsTile = true;
+            }
+
+            if (intersectsTile)
+                sections++;
+            else
+                ptr.resize(oldLength);
+        }
+    }
+
+    return sections;
 }
 
 void TDB::updateTrItemRData(TRitem* tr){

@@ -37,7 +37,7 @@ createNewIfNotExist = true       // Create routeName if not already present
 
 geoPath = e:/SRTM                // Drive and folder housing HGT files
 loadActivities = true            // Check route activities for errors
-loadAllWFiles = true             // Load entire route to check errors
+loadAllWFiles = false            // true loads the entire route for error checking; slower on large routes
 // routeMergeString = ""          // For merging a second route with offsets X Y Z applied  e.g. "IRM:0:0:0"
 // routeMergeTDB = false            // set to true to merge TDBs
 // routeMergeTerrain = false        // set to true to overwrite overlapping terrain heights
@@ -97,8 +97,8 @@ writeTDB = true                   // set to false to manually decide what to add
 
 
 //// Route Editor Viewport Tokens
-AASamples = 16
-allowObjLag = 1000                   
+AASamples = 0
+allowObjLag = 10                   
 cameraFov = 35 
 cameraSpeedMax = 40                // Camera movement with SHIFT
 cameraSpeedMin = 1                 // Camera movement with CTRL
@@ -106,7 +106,7 @@ cameraSpeedStd = 3                 // Camera movement normal
 cameraStickToTerrain = true        // Stop camera from going underground, toggled with "/" key
 fogColor =
 fogDensity =
-hudEnabled = TRUE                 //
+hudEnabled = false                //
 hudScale = 1                      // HUD text scale
 lockCamera = true                 // same as hitting the . when moving about with the camera, can be unset
 markerHeight = 10                 // Height of the marker stick
@@ -115,7 +115,7 @@ markerText = 2.5                  // Text size for marker text
 MSTSshadows = false               // dumb down shadows when true
 naviWindow = 50, 50               // X, Y of Navigation window for RE
 newSymbols = true                 // default is true, false uses the older TSRE pyramids
-objectLod = 4000                  // 2000 is plenty for most purposes
+objectLod = 3000                  // 2000 is plenty for most purposes
 oglDefaultLineWidth = 1           // width of standard lines
 railProfile = 0.7175, 0.7895      // rail edges for dynamic track
 renderTrItems = false             // Show the black markers for TrItems
@@ -126,10 +126,10 @@ selectedTerrColor = #FFB612       // terrain selection line color
 selectedTerrWidth = 4             // terrain selection line width
 skyColor =  #E0FFFF
 statusWindow=0,100                // X, Y of Status Window
-tileLod = 2                       // tiles in each direction to load
+tileLod = 1                       // tiles in each direction to load
 toolsHidden = false               // only show the viewport
 useSuperelevation = false         // apply superelevation when rendering curves
-viewCompass = true                // show compass at top center
+viewCompass = false               // show compass at top center
 viewMarkers = true                // view markers selected in Navi window
 wireLineHeight = 6.8              // yellow TDB line height
 

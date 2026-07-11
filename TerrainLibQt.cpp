@@ -12,7 +12,9 @@
 #include "Terrain.h"
 #include "GLMatrix.h"
 #include <QOpenGLShaderProgram>
+#include <algorithm>
 #include <set>
+#include <limits>
 #include <math.h>
 #include "Game.h"
 #include "Brush.h"
@@ -24,6 +26,7 @@
 #include "TerrainInfo.h"
 #include "Renderer.h"
 #include "TexLib.h"
+#include "TerrainTrackMath.h"
 
 TerrainLibQt::TerrainLibQt() {
 }
@@ -413,10 +416,13 @@ void TerrainLibQt::setTextureToTrackObj(Brush* brush, float* punkty, int length,
 
 void TerrainLibQt::setTerrainToTrackObj(Brush* brush, float* punkty, int length, int tx, int tz, float* matrix, float offsetY) {
     QSet<Terrain*> uterr;
+    if(brush == NULL || punkty == NULL || length < 3)
+        return;
+    (void)matrix;
+
     // calculating plane equation
     float p1[3];
     float p2[3];
-    float p3[3];
     
     p1[0] = punkty[0];
     p1[1] = punkty[1];
@@ -424,120 +430,194 @@ void TerrainLibQt::setTerrainToTrackObj(Brush* brush, float* punkty, int length,
     p2[0] = punkty[length-3];
     p2[1] = punkty[length-2];
     p2[2] = punkty[length-1];
-    p3[0] = 10;
-    p3[1] = 0;
-    p3[2] = 10;
-    Vec3::transformMat4(p3, p3, matrix);
     if(Game::debugOutput) qDebug() << p1[0] << " " << p1[1] <<" " << p1[2];
     if(Game::debugOutput) qDebug() << p2[0] << " " << p2[1] <<" " << p2[2];
-    if(Game::debugOutput) qDebug() << p3[0] << " " << p3[1] <<" " << p3[2];
-    Vector3f vec1, vec2, vec3;
-    vec1.x = p2[0] - p1[0]; vec1.y = p2[1] - p1[1]; vec1.z = p2[2] - p1[2];
-    vec2.x = p3[0] - p1[0]; vec2.y = p3[1] - p1[1]; vec2.z = p3[2] - p1[2];
 
-    //Vector3f::cross(vec3, vec1, vec2);
-    vec3.x = vec1.y * vec2.z - vec1.z * vec2.y;
-    vec3.y = vec1.z * vec2.x - vec1.x * vec2.z;
-    vec3.z = vec1.x * vec2.y - vec1.y * vec2.x;
-    if(Game::debugOutput) qDebug() << vec1.x << " " << vec1.y <<" " << vec1.z;
-    if(Game::debugOutput) qDebug() << vec2.x << " " << vec2.y <<" " << vec2.z;
-    if(Game::debugOutput) qDebug() << vec3.x << " " << vec3.y <<" " << vec3.z;
-    float vec3d = vec3.x*p1[0] + vec3.y*p1[1] + vec3.z*p1[2];
-    vec3.x /= vec3.y;
-    vec3.z /= vec3.y;
-    vec3d /= vec3.y;
-    
-    // end of calculating plane equation
-    
-    for(int i = 0; i < length; i+=3 ){
-        float h = vec3d - vec3.x*punkty[i] - vec3.z*punkty[i+2];
-        if(Game::debugOutput) qDebug() << punkty[i] << " " << punkty[i+1] <<" " << punkty[i+2] <<" "<<h <<"";
+    const float gridSize = TerrainTrackMath::GridSize;
+    const float bedHalfWidth = TerrainTrackMath::bedHalfWidth(brush->eSize);
+    const float influenceRadius = TerrainTrackMath::conformInfluenceRadius(bedHalfWidth, brush->eRadius);
+    TerrainTrackMath::Bounds bounds = TerrainTrackMath::boundsForTrack(punkty, length);
+    const int startX = TerrainTrackMath::gridStart(bounds.minX, influenceRadius);
+    const int endX = TerrainTrackMath::gridEnd(bounds.maxX, influenceRadius);
+    const int startZ = TerrainTrackMath::gridStart(bounds.minZ, influenceRadius);
+    const int endZ = TerrainTrackMath::gridEnd(bounds.maxZ, influenceRadius);
+
+    QSet<Terrain*> undoTerrains;
+
+    for(int gx = startX; gx <= endX; gx += (int)gridSize){
+        for(int gz = startZ; gz <= endZ; gz += (int)gridSize){
+            float distance;
+            float trackHeight;
+            if(!TerrainTrackMath::nearestTrack(punkty, length, (float)gx, (float)gz, distance, trackHeight))
+                continue;
+            if(distance > influenceRadius)
+                continue;
+
+            int ttx = tx;
+            int ttz = tz;
+            int posx = gx;
+            int posz = gz;
+            Game::check_coords(ttx, ttz, posx, posz);
+            Terrain *terr = getTerrainByXY(ttx, ttz);
+            if(terr == NULL || !terr->loaded)
+                continue;
+
+            if(!undoTerrains.contains(terr)){
+                Undo::PushTerrainHeightMap(terr->mojex, terr->mojez, terr->terrainData, terr->getSampleCount());
+                undoTerrains.insert(terr);
+            }
+
+            float lx = posx;
+            float lz = posz;
+            terr->getLocalCoords(ttx, ttz, lx, lz);
+            int sampleSize = terr->getSampleSize();
+            int sx = lx / sampleSize;
+            int sz = lz / sampleSize;
+            float originalHeight = terr->terrainData[sz][sx];
+            float targetHeight = trackHeight + offsetY;
+
+            if(distance > bedHalfWidth){
+                float shoulderWidth = originalHeight > targetHeight
+                    ? TerrainTrackMath::shoulderWidth(influenceRadius, bedHalfWidth, brush->eCut)
+                    : TerrainTrackMath::shoulderWidth(influenceRadius, bedHalfWidth, brush->eEmb);
+                if(distance > bedHalfWidth + shoulderWidth)
+                    continue;
+
+                float blend = TerrainTrackMath::smoothStep((distance - bedHalfWidth) / shoulderWidth);
+                targetHeight = targetHeight + (originalHeight - targetHeight) * blend;
+            }
+
+            uterr.insert(setHeight256(tx, tz, gx, gz, targetHeight));
+        }
     }
-    //qDebug() << p1[0] << " " << p1[1] <<" "<<p1[2] <<"";
-    //qDebug() << p2[0] << " " << p2[1] <<" "<<p2[2] <<"";
-    //qDebug() << p3[0] << " " << p3[1] <<" "<<p3[2] <<"";
-    
-    // use equation
-    int xxf, zzf;
-    int xxc, zzc;
-    int xx, zz;
-    float h; 
 
-    float diffC = 0;
-    float diffE = 0;
-    int iis, jjs;
-    
-    //set to undo
-    int ttx, ttz;
-    Terrain *terr = NULL;
-    for(int ii = -brush->eRadius; ii < brush->eRadius; ii++)
-        for(int jj = -brush->eRadius; jj < brush->eRadius; jj++){
-            if(sqrt(ii*ii + jj*jj) > brush->eRadius) continue;
-            for(int i = 0; i< length; i+=3){
-                xx = floor((float)punkty[i]/8.0) + ii;
-                zz = floor((float)punkty[i+2]/8.0) + jj;
-                xx *= 8;
-                zz *= 8;
-                ttx = tx;
-                ttz = tz;
-                Game::check_coords(ttx, ttz, xx, zz);
-                if(terr != getTerrainByXY(ttx, ttz)){
-                    terr = getTerrainByXY(ttx, ttz);
-                    if (terr == NULL) continue;
-                    if (!terr->loaded) continue;
-                    Undo::PushTerrainHeightMap(terr->mojex, terr->mojez, terr->terrainData, terr->getSampleCount());
+    foreach (Terrain *value, uterr){
+        if(value == NULL)
+            continue;
+        value->setModified(true);
+        value->refresh();
+        updateTerrainHeightmap(value);
+    }
+}
+
+void TerrainLibQt::smoothTerrainToTrackObj(Brush* brush, float* punkty, int length, int tx, int tz, float* matrix) {
+    QSet<Terrain*> uterr;
+    if(brush == NULL || punkty == NULL || length < 3)
+        return;
+    (void)matrix;
+
+    const float gridSize = TerrainTrackMath::GridSize;
+    const float bedHalfWidth = TerrainTrackMath::bedHalfWidth(brush->eSize);
+    const float smoothStart = TerrainTrackMath::smoothStart(bedHalfWidth);
+    const float influenceRadius = TerrainTrackMath::smoothInfluenceRadius(bedHalfWidth, brush->eRadius);
+    const float smoothWidth = std::max(gridSize, influenceRadius - smoothStart);
+    float strength = std::max(0.35f, brush->alpha);
+    if(strength < 0.0f) strength = 0.0f;
+    if(strength > 1.0f) strength = 1.0f;
+
+    TerrainTrackMath::Bounds bounds = TerrainTrackMath::boundsForTrack(punkty, length);
+    const int startX = TerrainTrackMath::gridStart(bounds.minX, influenceRadius);
+    const int endX = TerrainTrackMath::gridEnd(bounds.maxX, influenceRadius);
+    const int startZ = TerrainTrackMath::gridStart(bounds.minZ, influenceRadius);
+    const int endZ = TerrainTrackMath::gridEnd(bounds.maxZ, influenceRadius);
+
+    struct SmoothTarget {
+        int gx;
+        int gz;
+        float height;
+        Terrain* terrain;
+    };
+    QVector<SmoothTarget> targets;
+
+    for(int gx = startX; gx <= endX; gx += (int)gridSize){
+        for(int gz = startZ; gz <= endZ; gz += (int)gridSize){
+            float distance;
+            float trackHeight;
+            if(!TerrainTrackMath::nearestTrack(punkty, length, (float)gx, (float)gz, distance, trackHeight))
+                continue;
+            if(distance > influenceRadius)
+                continue;
+
+            int ttx = tx;
+            int ttz = tz;
+            int posx = gx;
+            int posz = gz;
+            Game::check_coords(ttx, ttz, posx, posz);
+            Terrain *terr = getTerrainByXY(ttx, ttz);
+            if(terr == NULL || !terr->loaded)
+                continue;
+
+            float originalHeight = getHeight(tx, tz, gx, gz, false);
+            if(distance <= bedHalfWidth){
+                if(fabs(trackHeight - originalHeight) < 0.001f)
+                    continue;
+
+                SmoothTarget target;
+                target.gx = gx;
+                target.gz = gz;
+                target.height = trackHeight;
+                target.terrain = terr;
+                targets.push_back(target);
+                continue;
+            }
+
+            if(distance < smoothStart)
+                continue;
+
+            float weightedHeight = 0.0f;
+            float weightTotal = 0.0f;
+
+            for(int ox = -2; ox <= 2; ox++){
+                for(int oz = -2; oz <= 2; oz++){
+                    float sampleX = gx + ox * gridSize;
+                    float sampleZ = gz + oz * gridSize;
+                    float sampleHeight = getHeight(tx, tz, sampleX, sampleZ, false);
+                    if(sampleHeight < -999.0f)
+                        continue;
+                    float sampleDistance;
+                    float sampleTrackHeight;
+                    if(!TerrainTrackMath::nearestTrack(punkty, length, sampleX, sampleZ, sampleDistance, sampleTrackHeight))
+                        continue;
+                    if(sampleDistance < smoothStart)
+                        continue;
+                    float kernelDistance = sqrt((float)(ox*ox + oz*oz));
+                    float weight = 1.0f / (1.0f + kernelDistance);
+                    if(ox == 0 && oz == 0)
+                        weight = 2.0f;
+                    weightedHeight += sampleHeight * weight;
+                    weightTotal += weight;
                 }
             }
+
+            if(weightTotal <= 0.0f)
+                continue;
+
+            float averageHeight = weightedHeight / weightTotal;
+            float fade = 1.0f - TerrainTrackMath::smoothStep((distance - smoothStart) / smoothWidth);
+            float targetHeight = originalHeight + (averageHeight - originalHeight) * strength * fade;
+            if(fabs(targetHeight - originalHeight) < 0.001f)
+                continue;
+
+            SmoothTarget target;
+            target.gx = gx;
+            target.gz = gz;
+            target.height = targetHeight;
+            target.terrain = terr;
+            targets.push_back(target);
         }
-    //0
-    
-    for(int ii = -brush->eRadius; ii < brush->eRadius; ii++)
-        for(int jj = -brush->eRadius; jj < brush->eRadius; jj++){
-            if(sqrt(ii*ii + jj*jj) > brush->eRadius) continue;
-            for(int i = 0; i< length; i+=3){
-                xx = floor((float)punkty[i]/8.0);
-                zz = floor((float)punkty[i+2]/8.0);
-                xx += ii;
-                zz += jj;
-                if(ii <= -brush->eSize) 
-                    iis = ii+brush->eSize-1;
-                else if(ii >= brush->eSize) 
-                    iis = ii-brush->eSize;
-                else
-                    iis = 0;
-                if(jj <= -brush->eSize) 
-                    jjs = jj+brush->eSize-1;
-                else if(jj >= brush->eSize) 
-                    jjs = jj-brush->eSize;
-                else
-                    jjs = 0;
-                h = vec3d - vec3.x*xx*8 - vec3.z*zz*8;
-                //
-                diffC = sqrt(iis*iis + jjs*jjs)*brush->eCut;
-                diffE = sqrt(iis*iis + jjs*jjs)*brush->eEmb;
-                //qDebug() << diffC <<" "<<diffE;
-                uterr.insert(setHeight256(tx, tz, xx*8, zz*8, h + offsetY, diffC, diffE));
-            }
+    }
+
+    QSet<Terrain*> undoTerrains;
+    for(int i = 0; i < targets.size(); i++){
+        Terrain* terr = targets[i].terrain;
+        if(terr == NULL || !terr->loaded)
+            continue;
+        if(!undoTerrains.contains(terr)){
+            Undo::PushTerrainHeightMap(terr->mojex, terr->mojez, terr->terrainData, terr->getSampleCount());
+            undoTerrains.insert(terr);
         }
-    
-    /*for(int j = 0; j < brush->eSize; j++)
-        for(int i = 0; i< length; i+=3){
-            xxf = floor((float)punkty[i]/8.0 -1*j);
-            zzf = floor((float)punkty[i+2]/8.0 -1*j);
-            xxc = ceil((float)punkty[i]/8.0 +1*j);
-            zzc = ceil((float)punkty[i+2]/8.0 +1*j);
-            //xx+=ii;
-            //zz+=jj;
-            h = vec3d - vec3.x*xxf*8 - vec3.z*zzf*8;
-            uterr.insert(setHeight256(tx, tz, xxf*8, zzf*8, h));
-            h = vec3d - vec3.x*xxc*8 - vec3.z*zzf*8;
-            uterr.insert(setHeight256(tx, tz, xxc*8, zzf*8, h));
-            h = vec3d - vec3.x*xxf*8 - vec3.z*zzc*8;
-            uterr.insert(setHeight256(tx, tz, xxf*8, zzc*8, h));
-            h = vec3d - vec3.x*xxc*8 - vec3.z*zzc*8;
-            uterr.insert(setHeight256(tx, tz, xxc*8, zzc*8, h));
-            //qDebug() << xx << " " << zz << " " << h;
-        }*/
+        uterr.insert(setHeight256(tx, tz, targets[i].gx, targets[i].gz, targets[i].height));
+    }
 
     foreach (Terrain *value, uterr){
         if(value == NULL)
@@ -656,6 +736,16 @@ void TerrainLibQt::paintTexture(Brush* brush, int x, int z, float* p) {
     if (terr == NULL) return;
     if (terr->loaded == false) return;
     terr->paintTexture(brush, x, z, posx, posz);
+}
+
+int TerrainLibQt::paintWaterEdges(Brush* brush, int x, int z) {
+    Terrain *terr = this->getTerrainByXY(x, z);
+    if (terr == NULL) return 0;
+    if (terr->loaded == false) return 0;
+    int paintedEdges = terr->paintWaterEdges(brush);
+    if (paintedEdges > 0)
+        updateTerrainTFile(terr);
+    return paintedEdges;
 }
 
 void TerrainLibQt::lockTexture(Brush* brush, int x, int z, float* p) {
