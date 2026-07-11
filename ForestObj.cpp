@@ -25,7 +25,6 @@
 #include "ReadFile.h"
 #include "TDB.h"
 #include "Vector4f.h"
-#include <QElapsedTimer>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -338,8 +337,6 @@ void ForestObj::drawShape(){
     }*/
 
     if (!init) {
-        QElapsedTimer forestTimer;
-        forestTimer.start();
         if(!Game::ignoreLoadLimits){
             int forestLoadCost = 2 + population / 200;
             if(forestLoadCost > Game::maxObjLag)
@@ -506,9 +503,6 @@ void ForestObj::drawShape(){
         //qDebug() << "forest gen time: " << (timeNow2 - timeNow);
         delete[] punkty;
         init = true;
-        qint64 forestTime = forestTimer.elapsed();
-        if(forestTime > 40)
-            qDebug() << "Forest init stall" << forestTime << "ms population" << population << "texture" << treeTexture;
     }
     shape.render();
     if(selected){

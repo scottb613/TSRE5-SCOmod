@@ -32,7 +32,7 @@ I also added a small terrain math helper/test so the nearest-track terrain shapi
 
 Performance/stutter pass
 
-I investigated severe editor stutters on populated routes, especially with forests. The main finding was that forest generation was happening lazily in the render path on the GUI/render thread. I added budgeted forest generation and stall logging so long bursts are reduced and easier to diagnose.
+I investigated severe editor stutters on populated routes, especially with forests. The main finding was that forest generation was happening lazily in the render path on the GUI/render thread. I added budgeted forest generation so long bursts are reduced during normal editor use.
 
 Related default settings were tuned for smoother editor startup/use:
 
@@ -52,12 +52,6 @@ I added new tile-level autopaint tools for texture work:
 The water tool started as a simple water-patch painter, but that painted the 16x16 terrain swatches rather than the actual shoreline. It was then changed to detect the real water/terrain contour by comparing terrain heights against the tile water plane. This produces a shoreline-style feather around actual water edges, including shallow-water cases where terrain pokes above the water surface.
 
 The water edge tool now uses the pointer tile, not just the camera tile, so the tile being pointed at is the one processed.
-
-A diagnostic script was also added:
-
-tools/inspect_water_tile.py
-
-This reads a tile .t file and _y.raw height data, reports water height, water patch flags, locked patches, and counts actual shoreline crossings. It was used to investigate a difficult shallow-river tile with many small land loops.
 
 Route/tile autopaint workflow
 

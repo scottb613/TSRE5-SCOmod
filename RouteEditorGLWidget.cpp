@@ -13,7 +13,6 @@
 #include <QOpenGLShaderProgram>
 #include <QCoreApplication>
 #include <QDateTime>
-#include <QElapsedTimer>
 #include <math.h>
 #include "GLUU.h"
 #include "SFile.h"
@@ -536,14 +535,6 @@ void RouteEditorGLWidget::paintGL(){
 }
 
 void RouteEditorGLWidget::paintGL2() {
-    QElapsedTimer frameTimer;
-    frameTimer.start();
-    qint64 afterShadow = 0;
-    qint64 afterTerrainLo = 0;
-    qint64 afterTerrain = 0;
-    qint64 afterWorld = 0;
-    qint64 afterUi = 0;
-
     Game::currentShapeLib = currentShapeLib;
     if (route == NULL) return;
     if (!route->loaded) return;
@@ -551,7 +542,6 @@ void RouteEditorGLWidget::paintGL2() {
     // Render Shadows
     if (Game::shadowsEnabled > 0)
        renderShadowMaps();
-    afterShadow = frameTimer.elapsed();
 
     // Render Scene
     //gluu->currentShader = gluu->shaders["StandardBloom"];
@@ -592,7 +582,6 @@ void RouteEditorGLWidget::paintGL2() {
     Game::terrainLib->renderLo(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode);
     for(int i = 0; i < route->env->waterCount; i++)
         Game::terrainLib->renderWaterLo(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode, i);
-    afterTerrainLo = frameTimer.elapsed();
     Mat4::identity(gluu->mvMatrix);
     glClear(GL_DEPTH_BUFFER_BIT);
 
@@ -601,7 +590,6 @@ void RouteEditorGLWidget::paintGL2() {
     Mat4::multiply(gluu->pMatrix, gluu->pMatrix, camera->getMatrix());
     gluu->setMatrixUniforms();
     Game::terrainLib->render(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode);
-    afterTerrain = frameTimer.elapsed();
     //glClear(GL_DEPTH_BUFFER_BIT);
     // Render World
     Mat4::perspective(gluu->pMatrix, Game::cameraFov * M_PI / 180, float(this->width()) / this->height(), 0.2f, Game::objectLod);
@@ -612,7 +600,6 @@ void RouteEditorGLWidget::paintGL2() {
         if (!selection && !Game::playerMode) drawPointer();
     
     route->render(gluu, camera->pozT, camera->getPos(), camera->getTarget(), camera->getRotX(), 3.14f / 3, renderMode);
-    afterWorld = frameTimer.elapsed();
 
     //if (!selection)
     for(int i = 0; i < route->env->waterCount; i++)
@@ -658,9 +645,6 @@ void RouteEditorGLWidget::paintGL2() {
         emit this->pointerInfo(aktPointerPos);
         
     }
-    afterUi = frameTimer.elapsed();
-    if(afterUi > 75)
-        qDebug() << "Frame stall" << afterUi << "ms shadow" << afterShadow << "terrainLo" << afterTerrainLo - afterShadow << "terrain" << afterTerrain - afterTerrainLo << "world" << afterWorld - afterTerrain << "ui" << afterUi - afterWorld << "allowObjLag" << Game::allowObjLag;
 }
 
 void RouteEditorGLWidget::renderShadowMaps() {
