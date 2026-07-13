@@ -218,6 +218,60 @@ bool TerrainLibQt::reload(int x, int z) {
     return false;
 }
 
+int TerrainLibQt::reloadLoaded() {
+    std::set<std::pair<int, int>> detailedTiles;
+    std::set<std::pair<int, int>> lowTiles;
+
+    QHashIterator<unsigned int, TerrainInfo*> i(terrainQt);
+    while (i.hasNext()) {
+        i.next();
+        if (i.value() == NULL) continue;
+        Terrain* tTile = (Terrain*) i.value()->t;
+        if (tTile == NULL || !tTile->loaded) continue;
+        detailedTiles.insert(std::make_pair((int)tTile->mojex, (int)tTile->mojez));
+    }
+
+    QHashIterator<unsigned int, TerrainInfo*> i2(terrainQtLo);
+    while (i2.hasNext()) {
+        i2.next();
+        if (i2.value() == NULL) continue;
+        Terrain* tTile = (Terrain*) i2.value()->t;
+        if (tTile == NULL || !tTile->loaded) continue;
+        lowTiles.insert(std::make_pair((int)tTile->mojex, (int)tTile->mojez));
+    }
+
+    int reloaded = 0;
+    for (std::set<std::pair<int, int>>::iterator it = detailedTiles.begin(); it != detailedTiles.end(); ++it) {
+        if (quadTree == NULL)
+            continue;
+        unsigned int terrainNameId = quadTree->getMyNameId(it->first, -it->second);
+        if (terrainNameId == 0)
+            continue;
+
+        terrainQt[terrainNameId] = new TerrainInfo();
+        quadTree->fillTerrainInfo(it->first, -it->second, terrainQt[terrainNameId]);
+        terrainQt[terrainNameId]->t = new Terrain(terrainQt[terrainNameId]);
+        if (terrainQt[terrainNameId]->t->loaded)
+            reloaded++;
+    }
+
+    for (std::set<std::pair<int, int>>::iterator it = lowTiles.begin(); it != lowTiles.end(); ++it) {
+        if (quadTreeLo == NULL)
+            continue;
+        unsigned int terrainNameId = quadTreeLo->getMyNameId(it->first, -it->second);
+        if (terrainNameId == 0)
+            continue;
+
+        terrainQtLo[terrainNameId] = new TerrainInfo();
+        quadTreeLo->fillTerrainInfo(it->first, -it->second, terrainQtLo[terrainNameId]);
+        terrainQtLo[terrainNameId]->t = new Terrain(terrainQtLo[terrainNameId]);
+        if (terrainQtLo[terrainNameId]->t->loaded)
+            reloaded++;
+    }
+
+    return reloaded;
+}
+
 float TerrainLibQt::getHeight(int x, int z, float posx, float posz) {
     return TerrainLibQt::getHeight(x, z, posx, posz, false);
 }
@@ -398,6 +452,7 @@ void TerrainLibQt::setHeightFromGeo(int x, int z, float* p) {
 }
 
 void TerrainLibQt::setTextureToTrackObj(Brush* brush, float* punkty, int length, int tx, int tz) {
+    QSet<Terrain*> touchedTerrains;
     float posx, posz;
     int ttx, ttz;
     for(int i = 0; i < length; i+=3 ){
@@ -411,6 +466,11 @@ void TerrainLibQt::setTextureToTrackObj(Brush* brush, float* punkty, int length,
             continue;
         if (terr->loaded == false) continue;
         terr->paintTexture(brush, ttx, ttz, posx, posz);
+        touchedTerrains.insert(terr);
+    }
+
+    foreach (Terrain *terr, touchedTerrains) {
+        updateTerrainTFile(terr);
     }
 }
 

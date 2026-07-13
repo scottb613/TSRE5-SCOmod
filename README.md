@@ -13,6 +13,9 @@ This branch is based on Eric's `TSRE8.006 baseline` from the `master` branch of 
 - Protection against accidental 1024 terrtex downsampling while painting.
 - A confirmed route terrtex reset tool for returning painted terrain tiles to `terrain.ace`.
 - Route-local F2 terrain paint presets for texture, brush size, and intensity.
+- 0-360 degree terrain texture rotation for seamless directional textures.
+- Single-instance startup protection.
+- Cleaner route-selection startup screen when switching MSTS root folders.
 - Build fixes for current MSYS2/MinGW tooling.
 - Initial editor stutter mitigation around forest/object loading bursts.
 

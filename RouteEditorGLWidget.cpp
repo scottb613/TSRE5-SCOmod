@@ -13,6 +13,7 @@
 #include <QOpenGLShaderProgram>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QMessageBox>
 #include <math.h>
 #include "GLUU.h"
 #include "SFile.h"
@@ -1854,18 +1855,26 @@ void RouteEditorGLWidget::putTerrainTexToolSelectPresent(){
 
 void RouteEditorGLWidget::putTerrainTexToolSelect0(){
     defaultPaintBrush->texTransformation = defaultPaintBrush->ROT0;
+    defaultPaintBrush->texRotationDegrees = 0;
+    emit sendMsg(QString("textureRotation"), QString("0"));
 }
 
 void RouteEditorGLWidget::putTerrainTexToolSelect90(){
     defaultPaintBrush->texTransformation = defaultPaintBrush->ROT90;
+    defaultPaintBrush->texRotationDegrees = 90;
+    emit sendMsg(QString("textureRotation"), QString("90"));
 }
 
 void RouteEditorGLWidget::putTerrainTexToolSelect180(){
     defaultPaintBrush->texTransformation = defaultPaintBrush->ROT180;
+    defaultPaintBrush->texRotationDegrees = 180;
+    emit sendMsg(QString("textureRotation"), QString("180"));
 }
 
 void RouteEditorGLWidget::putTerrainTexToolSelect270(){
     defaultPaintBrush->texTransformation = defaultPaintBrush->ROT270;
+    defaultPaintBrush->texRotationDegrees = 270;
+    emit sendMsg(QString("textureRotation"), QString("270"));
 }
 
 void RouteEditorGLWidget::placeToolStickTerrain(){
@@ -1932,6 +1941,36 @@ void RouteEditorGLWidget::paintToolWaterEdges(){
         emit sendMsg(QString("msg"), QString("Autopainted water edges on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(paintedEdges));
     else
         emit sendMsg(QString("msg"), QString("No water edges found on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("."));
+}
+
+void RouteEditorGLWidget::paintToolResetTile(){
+    QVector<QString> unsavedItems;
+    getUnsavedInfo(unsavedItems);
+    if (!unsavedItems.isEmpty()) {
+        QMessageBox::warning(this, "Reset Tile",
+                QString("There are %1 pending route change(s).\n\nSave your changes, then retry Reset Tile.")
+                .arg(unsavedItems.size()));
+        return;
+    }
+
+    int tileX = (int) camera->pozT[0];
+    int tileZ = (int) camera->pozT[1];
+    float posx = aktPointerPos[0];
+    float posz = aktPointerPos[2];
+    Game::check_coords(tileX, tileZ, posx, posz);
+
+    QString msg = QString("Reset terrain paint on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("?");
+    if (QMessageBox::question(this, "Reset Tile", msg, QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        return;
+
+    int filesDeleted = 0;
+    int filesFailed = 0;
+    if (!route->resetTerrainTextureOnTile(tileX, tileZ, filesDeleted, filesFailed)) {
+        emit sendMsg(QString("msg"), QString("Reset Tile failed on ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("."));
+        return;
+    }
+
+    emit sendMsg(QString("msg"), QString("Reset tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(". Deleted ") + QString::number(filesDeleted) + QString(" texture file(s), failed ") + QString::number(filesFailed) + QString("."));
 }
 
 void RouteEditorGLWidget::editFind1x1() {
@@ -2613,6 +2652,10 @@ void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
                 defaultMenuActions["paintToolWaterEdges"] = new QAction(tr("&Water on Tile"), this);
                 QObject::connect(defaultMenuActions["paintToolWaterEdges"], SIGNAL(triggered()), this, SLOT(paintToolWaterEdges()));
             }
+            if(defaultMenuActions["paintToolResetTile"] == NULL){
+                defaultMenuActions["paintToolResetTile"] = new QAction(tr("&Reset Tile Paint"), this);
+                QObject::connect(defaultMenuActions["paintToolResetTile"], SIGNAL(triggered()), this, SLOT(paintToolResetTile()));
+            }
             menuTool.addAction(defaultMenuActions["paintToolObjSelected"]);
             menuTool.addAction(defaultMenuActions["paintToolObj"]);
             menuTool.addAction(defaultMenuActions["paintToolTDB"]);
@@ -2621,6 +2664,7 @@ void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
             menuTool.addAction(defaultMenuActions["paintToolTileTrack"]);
             menuTool.addAction(defaultMenuActions["paintToolTileRoad"]);
             menuTool.addAction(defaultMenuActions["paintToolWaterEdges"]);
+            menu.addAction(defaultMenuActions["paintToolResetTile"]);
         }
 
     }

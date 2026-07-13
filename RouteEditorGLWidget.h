@@ -117,6 +117,7 @@ public slots:
     void paintToolTileTrack();
     void paintToolTileRoad();
     void paintToolWaterEdges();
+    void paintToolResetTile();
     void setTerrainToObj();
     void smoothTerrainToObj();
     void adjustObjPositionToTerrainMenu();

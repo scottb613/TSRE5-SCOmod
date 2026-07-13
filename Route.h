@@ -109,6 +109,7 @@ public:
     void setTerrainTextureToTrack(int x, int y, float *pos, Brush* brush, int mode = 0);
     int setTerrainTextureToTileTrack(int x, int y, Brush* brush);
     int setTerrainTextureToTileRoad(int x, int y, Brush* brush);
+    bool resetTerrainTextureOnTile(int x, int y, int &filesDeleted, int &filesFailed);
     void setTerrainToTrackObj(WorldObj* obj, Brush* brush);
     void smoothTerrainToTrackObj(WorldObj* obj, Brush* brush);
     int getTileObjCount(int x, int z);

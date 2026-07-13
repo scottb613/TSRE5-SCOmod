@@ -1,0 +1,105 @@
+TSRE SCOmod Code File Edit Ledger
+
+Purpose
+
+This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
+
+Primary source files edited
+
+- TSRE5-Trainsim.Com-Fork-master/main.cpp
+  - Added single-instance startup guard.
+  - Added startup warning for a second TSRE launch.
+
+- TSRE5-Trainsim.Com-Fork-master/LoadWindow.cpp
+  - Fixed route-selection table refresh when switching MSTS root folders.
+  - Ensured route loading uses the route-name column.
+
+- TSRE5-Trainsim.Com-Fork-master/Route.cpp
+  - Added/updated tile-level autopaint operations.
+  - Shared track/road tile vector painting path.
+  - Added water-edge tile painting and reset-tile/reset-route paint support.
+
+- TSRE5-Trainsim.Com-Fork-master/Route.h
+  - Added declarations for new route paint/reset helpers.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
+  - Added menu entries and event hookups for tile autopaint/reset commands.
+  - Added Shift+F terrain smoothing handling.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
+  - Added declarations for new editor actions/helpers.
+
+- TSRE5-Trainsim.Com-Fork-master/Terrain.cpp
+  - Updated terrain conforming, smoothing, texture paint, and tile refresh/reset behavior.
+
+- TSRE5-Trainsim.Com-Fork-master/Terrain.h
+  - Added declarations/state for terrain conforming, paint, reset, and texture helpers.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.cpp
+  - Added terrain paint presets UI.
+  - Added texture rotation control.
+  - Added reset route terrtex paint button and related UI wiring.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.h
+  - Added declarations/state for presets, texture rotation, and reset controls.
+
+- TSRE5-Trainsim.Com-Fork-master/Brush.h
+  - Added/stored brush state needed by paint presets and texture rotation.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainLib.cpp
+  - Updated terrain library behavior used by paint/reset operations.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainLib.h
+  - Added declarations used by terrain paint/reset operations.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainLibQt.cpp
+  - Updated texture loading/saving behavior to protect editable terrain texture resolution.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainLibQt.h
+  - Added declarations used by updated texture handling.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainLibSimple.cpp
+  - Updated terrain texture/material handling used by reset/paint operations.
+
+- TSRE5-Trainsim.Com-Fork-master/AceLib.cpp
+  - Updated ACE texture load/save safety around editable terrain texture buffers.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+  - Updated default/editor settings used by smoother startup and route editing.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.cpp
+  - Touched during track/road vector paint investigation and shared paint path work.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.h
+  - Touched during track/road vector paint investigation and shared paint path work.
+
+- TSRE5-Trainsim.Com-Fork-master/PolyForestObj.cpp
+  - Updated forest generation behavior for stutter reduction.
+
+- TSRE5-Trainsim.Com-Fork-master/ForestObj.cpp
+  - Updated forest generation behavior for stutter reduction.
+
+- TSRE5-Trainsim.Com-Fork-master/WorldObj.cpp
+  - Fixed accidental assignment-in-condition debug checks found during compiler cleanup.
+
+Created source/test/reference code files
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainTrackMath.h
+  - Created helper for terrain-to-track width/conforming math.
+
+- TSRE5-Trainsim.Com-Fork-master/tests/TerrainTrackMathTest.cpp
+  - Created small independent test for terrain track math behavior.
+
+- reference/mstsexporter.py
+  - Saved local reference copy of the MSTS Blender exporter for future shape/export research.
+
+Project files edited
+
+- TSRE5-Trainsim.Com-Fork-master/nbproject/Makefile-Release_x64.mk
+  - Updated by project/build configuration work as needed for the current MinGW/Qt build.
+
+- TSRE5-Trainsim.Com-Fork-master/nbproject/Makefile-Debug_x64.mk
+  - Updated by project/build configuration work as needed for the current MinGW/Qt build.
+
+- TSRE5-Trainsim.Com-Fork-master/nbproject/Makefile-impl.mk
+  - Updated by project/build configuration work as needed for the current MinGW/Qt build.

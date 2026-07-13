@@ -1,6 +1,19 @@
-Forum draft: TSRE terrain and editor improvement worklist
+TSRE Terrain and Editor Improvement Worklist
+
+Purpose and scope
 
 I have been working through a set of practical TSRE route-editor improvements, mainly focused on making terrain work less painful for MSTS/Open Rails route building. The work started with track cuts and embankments, then expanded into route painting, water-edge detection, texture cleanup, and some editor quality-of-life items.
+
+There has been talk for years about a new Open Rails route editor, and I would still welcome one, but we also have to be realistic. TSRE is what we actually have today. It can be cumbersome, awkward, and less than ideal, but it is also a working route editor with real capability. Rather than waiting indefinitely for a replacement, I think it makes sense to embrace the tool we have and keep improving it where practical.
+
+I do not intend this to become a separate production fork of Eric's work. This is a test branch for debugging, experimentation, and evaluation. Eric's code should remain the production copy. My goal is to make focused improvements in the areas I know best, then hand them back to Eric for consideration and, hopefully, eventual inclusion in the main project. As history has proven, my interest around here tends to ebb and flow, sometimes disappearing for months at a time, which makes me a poor candidate to host or maintain the main code long term. I have compiled an operational TSRE test build, though I will spare everyone the embarrassing details of how long it took me to get a clean compile.
+
+Test branch, forked from Eric's TSRE master branch:
+
+https://github.com/scottb613/TSRE5-SCOmod
+
+This branch includes the current experimental code and an operational test executable package for evaluation. I suggest you keep this copy completely separate from your production copy of TSRE.
+
 
 Cut and embankment terrain conforming
 
@@ -14,6 +27,8 @@ The goal was:
 - smoother shoulder transitions
 - much steeper cut/berm walls when the cut/embankment sliders are set high
 - more useful results at common settings such as 2-10-10-2
+
+The F-tool track-width setting was also adjusted. The old width 1 behavior was effectively a single terrain data point, which was too narrow to be useful and could leave the result looking pinched. The low-end sizing now treats the first useful width more like the old width 2 behavior, so the 1/2/3 settings step through practical terrain-bed widths instead of starting with an unusably thin strip.
 
 I also added a Shift+F smoothing pass for the selected track/ruler object. The smoothing pass was revised so it does not round the track bed into a trough or move the locked track-elevation points vertically. The important limitation is that MSTS terrain vertices have fixed horizontal X/Z positions, so the tool can only change heights; it cannot physically move jagged vertices sideways away from the track.
 
@@ -32,7 +47,7 @@ I also added a small terrain math helper/test so the nearest-track terrain shapi
 
 Performance/stutter pass
 
-I investigated severe editor stutters on populated routes, especially with forests. The main finding was that forest generation was happening lazily in the render path on the GUI/render thread. I added budgeted forest generation so long bursts are reduced during normal editor use.
+I investigated severe editor stutters on populated routes, especially with forests. The main finding was that forest generation was happening lazily in the render path on the GUI/render thread. I added budgeted forest generation and stall logging so long bursts are reduced and easier to diagnose.
 
 Related default settings were tuned for smoother editor startup/use:
 
@@ -41,19 +56,7 @@ Related default settings were tuned for smoother editor startup/use:
 - disabled a few expensive/default visual options
 - mouseSpeed adjusted in the test dist settings
 
-Water-edge autopaint
-
-I added new tile-level autopaint tools for texture work:
-
-- Track on Tile
-- Roads on Tile
-- Water on Tile
-
-The water tool started as a simple water-patch painter, but that painted the 16x16 terrain swatches rather than the actual shoreline. It was then changed to detect the real water/terrain contour by comparing terrain heights against the tile water plane. This produces a shoreline-style feather around actual water edges, including shallow-water cases where terrain pokes above the water surface.
-
-The water edge tool now uses the pointer tile, not just the camera tile, so the tile being pointed at is the one processed.
-
-Route/tile autopaint workflow
+Tile autopaint and water-edge painting
 
 The existing route painting workflow was expanded with tile-level commands instead of only object-by-object painting. The goal was to make repeated texture operations much faster without requiring a full route-wide processing pass.
 
@@ -63,31 +66,41 @@ Current tile-level tools:
 - Roads on Tile
 - Water on Tile
 
-These use the current brush texture, size, and intensity.
+These use the current brush texture, size, and intensity. Track and road tile painting now share the same implementation path; the only difference is whether the track database or road database is used as the vector source.
+
+The water tool started as a simple water-patch painter, but that painted the 16x16 terrain swatches rather than the actual shoreline. It was then changed to detect the real water/terrain contour by comparing terrain heights against the tile water plane. This produces a shoreline-style feather around actual water edges, including shallow-water cases where terrain pokes above the water surface.
+
+The water edge tool now uses the pointer tile, not just the camera tile, so the tile being pointed at is the one processed.
 
 Terrain texture resolution protection
 
-I found a probable cause for 1024x1024 terrain texture swatches being saved back out as 512x512. TSRE’s textureQuality setting could downsample textures when making them editable, and then the terrain paint save path wrote that reduced in-memory size back to the ACE file.
+I found a probable cause for occasional cases where 1024x1024 terrain texture swatches were saved back out as 512x512. TSRE's textureQuality setting could downsample textures when making them editable, and then the terrain paint save path wrote that reduced in-memory size back to the ACE file.
 
 The fix prevents route-editing paint buffers from being downsampled before saving. In other words, textureQuality can still be useful for viewing/runtime, but should not permanently reduce editable terrtex files.
 
-Route terrtex reset tool
+Route and tile terrtex reset tools
 
-I added a destructive-but-confirmed cleanup button in the F2 terrain tools panel:
+I added destructive-but-confirmed cleanup tools for terrain paint reset work.
 
-Reset Route Terrtex Paint
-
-This tool:
+Reset Route Terrtex Paint:
 
 - asks for confirmation
+- refuses to run when there are pending route changes
 - walks every .t file in the current route tiles folder
 - resets every terrain patch material to terrain.ace
 - saves the .t files
 - deletes per-tile .ace/.dds files in terrtex whose filenames start with real tile names
 
-It does not delete shared/default textures such as terrain.ace or microtex.ace.
+Reset Tile Paint:
 
-This is intended as a clean reset after experimenting with lots of tile texture swatches.
+- is available as a separate right-click menu item below Auto Paint
+- works on the tile under the pointer
+- refuses to run when there are pending route changes
+- resets that tile to terrain.ace
+- deletes generated ACE/DDS files for that tile
+- reloads the tile afterward
+
+These tools do not delete shared/default textures such as terrain.ace or microtex.ace. They are intended as cleanup/reset tools after experimenting with lots of tile texture swatches.
 
 F2 terrain paint presets
 
@@ -99,6 +112,8 @@ Each preset stores:
 - texture filename/path
 - brush size
 - brush intensity
+- brush shape
+- texture rotation
 
 The UI has:
 
@@ -113,9 +128,45 @@ tsre_terrain_paint_presets.json
 
 This keeps route-specific paint workflows with the route and avoids changing MSTS/ORTS route files for editor-only metadata.
 
+Texture rotation
+
+I added a full 0-360 degree texture rotation control under the F2 terrain paint intensity slider. This is intended for seamless textures where angle matters, such as crop rows, plowed fields, and other directional ground textures.
+
+The existing 0/90/180/270 rotation choices still work, but the slider allows finer control. A rotation of 0 remains the normal default texture orientation.
+
+Seasonal texture investigation
+
+I investigated the F2 Day/Night/Snow texture selector. The current code is not a reliable live seasonal terrain-paint selector. It changes the editor season/lighting, but the terrain paint pipeline still has several limitations:
+
+- loaded terrain tiles do not automatically rebind their texture paths when the selector changes
+- the texture picker/preload path still defaults to the main TERRTEX folder
+- setTexture intentionally refuses to change material references while seasonal editing is active
+- pixel painting may still write to whatever texture object/path was already loaded
+
+The cleaner future design would be an explicit paint target for Day, Snow, and Night. Changing the target should reload terrain texture bindings, point the texture picker at the selected folder, and write seasonal texture edits only to that selected TERRTEX subfolder without changing the tile's material names.
+
 Window/settings investigation
 
 I checked why TSRE was not remembering some window positions. The settings file supports manual Navi/Status window positions, but live window geometry is not fully saved/restored. Current aligned values were captured into the test dist settings file.
+
+Startup and route selection cleanup
+
+I added a startup guard so only one TSRE instance can run at a time. If TSRE is already open, a second launch now reports that TSRE is already running and exits before opening another editor window.
+
+I also fixed the route-selection startup screen. When switching MSTS root folders, the route table was clearing cell contents but not removing the existing rows, which left blank rows/cells mixed into the display. The table now resets its row count before repopulating. Route loading was also tightened so it always loads from the route-name column, even if the selected cell is in the Last Modified column.
+
+Route database safety notes
+
+During testing, a route lost its road vector display because ConnRiv.rdb and ConnRiv.rit had been flattened to empty/header-only files. The route was restored from backup, and the road painting code was returned to the same shared vector-paint path used by track painting.
+
+This does not appear to be a Roads on Tile issue. It is more likely a route-save/database-safety issue, possibly related to a crash during save or saving an empty in-memory road database over a valid file.
+
+Potential future protection:
+
+- write TDB/RDB/TIT/RIT files through temporary files first
+- validate the temporary output before replacing the original
+- keep a timestamped backup of the previous database file
+- avoid overwriting a large existing RDB with an empty one unless the user intentionally rebuilds it
 
 Packaging/versioning
 
@@ -124,18 +175,19 @@ The current baseline was saved as v0.0 before the paint preset work:
 Saves/TSRE-source-v0.0.zip
 Saves/TSRE-dist-v0.0.zip
 
-The preset-enabled build was compiled and copied into the test dist.
+The preset-enabled build was compiled and copied into the test dist. A v0.1 test package was also prepared for local testing and GitHub release upload.
 
 Potential next work
 
 - improve water-edge detection with a one-patch margin around water patches for difficult shallow rivers
 - add route-wide versions of tile autopaint tools if needed
-- add arbitrary texture rotation for crop rows/angled fields
-- make window position saving/restoring persistent
+- make the seasonal Day/Snow/Night texture workflow reliable
+- make route database saves safer with atomic writes/backups
+- make window position saving/restoring persistent beyond the current manual settings support
 - further reduce forest/object stutters by moving more generation out of the render path
 - improve the Shift+F smoothing tool where possible within the fixed terrain-grid limitation
 - add safer backup/preview options before destructive terrtex reset operations
 
 Overall goal
 
-The general direction is to make TSRE more practical as a production route editor: better track terrain shaping, faster tile-based painting, cleaner shoreline texturing, safer texture handling, and fewer repetitive manual cleanup steps.
+The general direction is to make TSRE more practical as a production route editor: better track terrain shaping, faster tile-based painting, cleaner shoreline texturing, safer texture handling, safer route database saves, and fewer repetitive manual cleanup steps.

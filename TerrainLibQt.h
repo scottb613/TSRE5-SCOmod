@@ -67,6 +67,7 @@ public:
     void save();
     void refresh(int x, int z);
     bool reload(int x, int z);
+    int reloadLoaded();
     void loadQuadTree();
     void createNewRouteTerrain(int x, int z);
     void saveEmpty(int x, int z);

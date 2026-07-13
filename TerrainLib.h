@@ -74,6 +74,7 @@ public:
     virtual void save();
     virtual void refresh(int x, int z);
     virtual bool reload(int x, int z);
+    virtual int reloadLoaded();
     virtual void loadQuadTree();
     virtual void createNewRouteTerrain(int x, int z);
     virtual void saveEmpty(int x, int z);

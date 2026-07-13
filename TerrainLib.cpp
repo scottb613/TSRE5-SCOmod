@@ -115,6 +115,10 @@ bool TerrainLib::reload(int x, int z) {
     return false;
 }
 
+int TerrainLib::reloadLoaded() {
+    return 0;
+}
+
 float TerrainLib::getHeight(int x, int z, float posx, float posz) {
     return 0;
 }

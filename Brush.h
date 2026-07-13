@@ -22,13 +22,15 @@ public:
         ROT90 = 2,
         ROT180 = 3,
         ROT270 = 4,
-        PRESENT = 5
+        PRESENT = 5,
+        CUSTOM = 6
     };
     
     Brush();
     // texture
     Texture* tex = 0;
     Transformation texTransformation = RANDOM;
+    int texRotationDegrees = 0;
     bool useTexture = false;
     int color[3];
     int texId = -1;

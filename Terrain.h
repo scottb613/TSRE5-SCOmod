@@ -114,6 +114,7 @@ public:
     QString getPatchTexTransformString(int x, int z, float posx, float posz);
     void setPatchTexTransform(QString val);
     void setPatchTexTransform(QString val, int u);
+    void setPatchTexRotationDegrees(int degrees, int u);
     void removeAllGaps();
     void toggleGaps(int x, int z, float posx, float posz, float direction);
     void setErrorBias(int x, int z, float posx, float posz, float val);

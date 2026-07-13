@@ -546,6 +546,36 @@ void Terrain::resetPatchTexCoords(int uu){
     this->refresh();
 }
 
+void Terrain::setPatchTexRotationDegrees(int degrees, int u){
+    if (u < 0 || u >= 256)
+        return;
+
+    degrees = degrees % 360;
+    if (degrees < 0)
+        degrees += 360;
+
+    const float start = 0.001f;
+    const float scale = 0.062375f;
+    const float center = start + 8.0f * scale;
+    const float radians = (float)degrees * 3.14159265358979323846f / 180.0f;
+    const float c = cosf(radians);
+    const float s = sinf(radians);
+
+    const float a = scale * c;
+    const float b = -scale * s;
+    const float d = scale * s;
+    const float e = scale * c;
+
+    tfile->tdata[(u)*13 + 1 + 6] = center - 8.0f * a - 8.0f * b;
+    tfile->tdata[(u)*13 + 2 + 6] = center - 8.0f * d - 8.0f * e;
+    tfile->tdata[(u)*13 + 3 + 6] = a;
+    tfile->tdata[(u)*13 + 4 + 6] = b;
+    tfile->tdata[(u)*13 + 5 + 6] = d;
+    tfile->tdata[(u)*13 + 6 + 6] = e;
+
+    modified = true;
+}
+
 void Terrain::rotateTex(int idx) {
 
     float x11 = (0) * tfile->tdata[(idx)*13 + 3 + 6] + (0) * tfile->tdata[(idx)*13 + 4 + 6] + tfile->tdata[(idx)*13 + 1 + 6];
@@ -1417,6 +1447,8 @@ void Terrain::setTexture(Brush* brush, int u) {
         rotateTex(u);
     } else if(brush->texTransformation == brush->PRESENT){
         
+    } else if(brush->texTransformation == brush->CUSTOM){
+        setPatchTexRotationDegrees(brush->texRotationDegrees, u);
     } else {
         int count = 0;
         resetPatchTexCoords(u);

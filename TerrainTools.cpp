@@ -16,6 +16,7 @@
 #include "ClickableLabel.h"
 #include "Game.h"
 #include "TFile.h"
+#include "TerrainLib.h"
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -206,6 +207,10 @@ TerrainTools::TerrainTools(QString name)
     sIntensity->setMinimum(1);
     sIntensity->setMaximum(100);
     sIntensity->setValue(paintBrush->alpha*100);
+    sTextureRotation = new QSlider(Qt::Horizontal);
+    sTextureRotation->setMinimum(0);
+    sTextureRotation->setMaximum(360);
+    sTextureRotation->setValue(paintBrush->texRotationDegrees);
 
     seasonType = new QComboBox;
     seasonType->setStyleSheet("combobox-popup: 0;");
@@ -233,6 +238,9 @@ TerrainTools::TerrainTools(QString name)
     leSize->setValidator(new QIntValidator(1, 100, this));
     leIntensity = GuiFunct::newQLineEdit(25,3);
     leIntensity->setValidator(new QIntValidator(1, 100, this));
+    leTextureRotation = GuiFunct::newQLineEdit(25,3);
+    leTextureRotation->setValidator(new QIntValidator(0, 360, this));
+    leTextureRotation->setText(QString::number(paintBrush->texRotationDegrees, 10));
     row = 0;
     vlist->addWidget(GuiFunct::newQLabel("Color:", labelWidth),row,0);
     vlist->addWidget(colorw,row++,1,1,2);
@@ -242,6 +250,9 @@ TerrainTools::TerrainTools(QString name)
     vlist->addWidget(GuiFunct::newQLabel("Intensity:", labelWidth),row,0);
     vlist->addWidget(leIntensity,row,1);
     vlist->addWidget(sIntensity,row++,2);
+    vlist->addWidget(GuiFunct::newQLabel("Rotation:", labelWidth),row,0);
+    vlist->addWidget(leTextureRotation,row,1);
+    vlist->addWidget(sTextureRotation,row++,2);
     vlist->addWidget(GuiFunct::newQLabel("Fixed Height:", labelWidth),row,0);
     vlist->addWidget(fheight,row++,1,1,2);
     vlist->addWidget(GuiFunct::newQLabel("Height type:", labelWidth),row,0);
@@ -394,11 +405,17 @@ TerrainTools::TerrainTools(QString name)
     QObject::connect(sIntensity, SIGNAL(valueChanged(int)),
                       this, SLOT(setBrushAlpha(int)));
 
+    QObject::connect(sTextureRotation, SIGNAL(valueChanged(int)),
+                      this, SLOT(setTextureRotation(int)));
+
     QObject::connect(leSize, SIGNAL(textEdited(QString)),
                       this, SLOT(setBrushSize(QString)));
     
     QObject::connect(leIntensity, SIGNAL(textEdited(QString)),
                       this, SLOT(setBrushAlpha(QString)));
+
+    QObject::connect(leTextureRotation, SIGNAL(textEdited(QString)),
+                      this, SLOT(setTextureRotation(QString)));
     
     // embarkment
     QObject::connect(sEsize, SIGNAL(valueChanged(int)),
@@ -491,10 +508,17 @@ void TerrainTools::nextBrushShape(){
     currentBrushShape++;
     if(currentBrushShape > brushShapes.size()-1)
         currentBrushShape = 0;
-    if(brushShapes.size() > 0){
-        paintBrush->brushshape = &brushShapes[currentBrushShape];
-        texPreviewLabels[6]->setPixmap(QPixmap::fromImage(*paintBrush->brushshape));
-    }
+    setBrushShapeIndex(currentBrushShape);
+}
+
+void TerrainTools::setBrushShapeIndex(int brushIndex){
+    if(brushShapes.size() <= 0)
+        return;
+    if(brushIndex < 0 || brushIndex > brushShapes.size()-1)
+        return;
+    currentBrushShape = brushIndex;
+    paintBrush->brushshape = &brushShapes[currentBrushShape];
+    texPreviewLabels[6]->setPixmap(QPixmap::fromImage(*paintBrush->brushshape));
 }
 
 void TerrainTools::heightToolEnabled(bool val){
@@ -714,6 +738,25 @@ void TerrainTools::setBrushAlpha(int val){
     //qDebug() << "a";
     this->leIntensity->setText(QString::number(val,10));
     this->paintBrush->alpha = (float)val/100;
+}
+
+void TerrainTools::setTextureRotation(QString val){
+    emit setPaintBrush(this->paintBrush);
+    int ival = val.toInt(0, 10);
+    if(ival < 0) ival = 0;
+    if(ival > 360) ival = 360;
+    this->sTextureRotation->setValue(ival);
+    this->paintBrush->texRotationDegrees = ival;
+    this->paintBrush->texTransformation = ival == 0 ? Brush::ROT0 : Brush::CUSTOM;
+}
+
+void TerrainTools::setTextureRotation(int val){
+    emit setPaintBrush(this->paintBrush);
+    if(val < 0) val = 0;
+    if(val > 360) val = 360;
+    this->leTextureRotation->setText(QString::number(val,10));
+    this->paintBrush->texRotationDegrees = val;
+    this->paintBrush->texTransformation = val == 0 ? Brush::ROT0 : Brush::CUSTOM;
 }
 
 void TerrainTools::setFheight(QString val){
@@ -978,6 +1021,17 @@ void TerrainTools::applyPaintPreset()
         setBrushAlpha(intensity);
         sIntensity->setValue(intensity);
 
+        if (preset.contains("brush"))
+            setBrushShapeIndex(preset["brush"].toInt(currentBrushShape));
+
+        if (preset.contains("rotation")) {
+            int rotation = preset["rotation"].toInt(paintBrush->texRotationDegrees);
+            if (rotation < 0) rotation = 0;
+            if (rotation > 360) rotation = 360;
+            setTextureRotation(rotation);
+            sTextureRotation->setValue(rotation);
+        }
+
         emit setPaintBrush(paintBrush);
         return;
     }
@@ -1028,6 +1082,8 @@ void TerrainTools::savePaintPreset()
     preset["texture"] = texturePath;
     preset["size"] = paintBrush->size;
     preset["intensity"] = (int)(paintBrush->alpha * 100.0f + 0.5f);
+    preset["brush"] = currentBrushShape;
+    preset["rotation"] = paintBrush->texRotationDegrees;
     updated.append(preset);
 
     if (!writePaintPresets(updated)) {
@@ -1140,6 +1196,15 @@ void TerrainTools::msg(QString text, QString val){
         buttonTools["waterTerrTool"]->setText(t+val);
         t = buttonTools["gapsTerrainTool"]->text().left(buttonTools["gapsTerrainTool"]->text().length() - 1);
         buttonTools["gapsTerrainTool"]->setText(t+val);
+    } else if(text == "textureRotation"){
+        int rotation = val.toInt();
+        if(rotation < 0) rotation = 0;
+        if(rotation > 360) rotation = 360;
+        sTextureRotation->blockSignals(true);
+        leTextureRotation->setText(QString::number(rotation, 10));
+        sTextureRotation->setValue(rotation);
+        sTextureRotation->blockSignals(false);
+        paintBrush->texRotationDegrees = rotation;
     } else if(text == "preloadTextures")
     { 
         qDebug() << "emit received";
@@ -1174,8 +1239,10 @@ void TerrainTools::resetDefaultValues()
       setEradius(Game::terrainTools[3]);
       setBrushSize(Game::terrainTools[4]);
       setBrushAlpha(Game::terrainTools[5]);   
+      setTextureRotation(0);
       sSize->setValue(paintBrush->size);
       sIntensity->setValue(paintBrush->alpha*100);
+      sTextureRotation->setValue(paintBrush->texRotationDegrees);
       sEsize->setValue(paintBrush->eSize);
       sEemb->setValue(paintBrush->eEmb);
       sEcut->setValue(paintBrush->eCut);
@@ -1189,6 +1256,20 @@ void TerrainTools::resetDefaultValues()
 
 void TerrainTools::resetRouteTerrtexPaint()
 {
+    QVector<QString> unsavedItems;
+    if (Game::currentRoute != NULL)
+        Game::currentRoute->getUnsavedInfo(unsavedItems);
+    else if (Game::terrainLib != NULL)
+        Game::terrainLib->getUnsavedInfo(unsavedItems);
+
+    if (!unsavedItems.isEmpty()) {
+        QMessageBox::warning(this, "Reset Route Terrtex Paint",
+                QString("There are %1 pending route change(s).\n\n"
+                        "Save your changes, then retry the reset.")
+                .arg(unsavedItems.size()));
+        return;
+    }
+
     QString routePath = Game::root + "/routes/" + Game::route;
     QString tilePath = routePath + "/tiles";
     QString terrtexPath = routePath + "/terrtex";
@@ -1280,10 +1361,15 @@ void TerrainTools::resetRouteTerrtexPaint()
         }
     }
 
+    int tilesReloaded = 0;
+    if (Game::terrainLib != NULL)
+        tilesReloaded = Game::terrainLib->reloadLoaded();
+
     QMessageBox::information(this, "Reset Route Terrtex Paint",
-            QString("Reset %1 tile(s).\nFailed tile saves: %2\nDeleted %3 per-tile texture file(s).\nFailed deletes: %4")
+            QString("Reset %1 tile(s).\nFailed tile saves: %2\nDeleted %3 per-tile texture file(s).\nFailed deletes: %4\nReloaded %5 loaded tile(s).")
             .arg(tilesReset)
             .arg(tilesFailed)
             .arg(filesDeleted)
-            .arg(filesFailed));
+            .arg(filesFailed)
+            .arg(tilesReloaded));
 }

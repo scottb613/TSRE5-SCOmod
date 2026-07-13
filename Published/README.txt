@@ -1,17 +1,22 @@
-TSRE5-SCOmod Terrain Tools Test Build v0.1
+TSRE5-SCOmod Test Build v0.2
 
 This package contains the TSRE5 executable and runtime files from the terrain/editor improvement work.
 
 Highlights:
 - improved track cuts and embankments
+- adjusted F-tool track-width behavior for practical 1/2/3 sizing
 - Shift+F terrain smoothing pass
 - tile-level track, road, and water autopaint
 - real shoreline/water-edge terrain painting
-- route terrtex paint reset tool
+- route and tile terrtex paint reset tools
 - F2 terrain paint presets saved per route
+- 0-360 degree terrain texture rotation control
 - texture paint resolution protection for 1024 terrtex files
 - forest/object stutter mitigation pass
+- startup guard to prevent multiple TSRE instances
+- fixed route-selection table refresh when switching MSTS roots
 
 See worklist.txt for the full forum-style summary.
+See fileEdit.txt for the code/project file edit ledger.
 
 Run TSRE5.exe from this folder.

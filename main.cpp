@@ -17,6 +17,8 @@
 #include <QPalette>
 #include <QColor>
 #include <QStringList>
+#include <QSharedMemory>
+#include <QMessageBox>
 #include <iostream>
 #include "Game.h"
 #include "RouteEditorWindow.h"
@@ -315,6 +317,12 @@ int main(int argc, char *argv[]){
     QApplication::setApplicationVersion(Game::AppVersion);
     //QApplication::pr
     QApplication app(argc, argv);
+
+    QSharedMemory singleInstance("TSRE5-single-instance");
+    if(!singleInstance.create(1)){
+        QMessageBox::warning(NULL, "TSRE5 already running", "TSRE5 is already running.");
+        return 0;
+    }
     
     QString workingDir = QDir::currentPath();
 

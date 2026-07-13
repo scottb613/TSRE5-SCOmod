@@ -52,6 +52,8 @@ public slots:
     void setBrushSize(QString val);
     void setBrushAlpha(int val);
     void setBrushAlpha(QString val);
+    void setTextureRotation(int val);
+    void setTextureRotation(QString val);
     void setFheight(QString val);
     void setHtype(int val);
     void setSeasonType(int val);
@@ -94,6 +96,7 @@ private:
     bool writePaintPresets(const QJsonArray &presets);
     QString currentTexturePresetPath();
     void applyTexturePresetPath(QString texturePath);
+    void setBrushShapeIndex(int brushIndex);
     //QVector<QImage
     
     QPixmap* texPreview;
@@ -116,8 +119,10 @@ private:
     
     QSlider *sSize;
     QSlider *sIntensity;
+    QSlider *sTextureRotation;
     QLineEdit *leSize;
     QLineEdit *leIntensity;
+    QLineEdit *leTextureRotation;
     QLineEdit *fheight;
     QComboBox* hType;
     QComboBox* seasonType;

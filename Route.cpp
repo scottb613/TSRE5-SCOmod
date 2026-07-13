@@ -19,6 +19,7 @@
 #include "TerrainLib.h"
 #include "TerrainLibSimple.h"
 #include "TerrainLibQt.h"
+#include "TFile.h"
 #include "Game.h"
 #include "TrackObj.h"
 #include "Path.h"
@@ -1320,24 +1321,81 @@ void Route::setTerrainTextureToTrack(int x, int y, float* pos, Brush* brush, int
     Game::terrainLib->setTextureToTrackObj(brush, punkty.data(), length, x, y);
 }
 
-int Route::setTerrainTextureToTileTrack(int x, int y, Brush* brush){
+static int setTerrainTextureToTileFromDb(TDB *db, int x, int y, Brush* brush){
+    if (db == NULL)
+        return 0;
+
     QVector<float> punkty;
     punkty.reserve(10000);
-    int sections = this->trackDB->getVectorSectionPointsForTile(x, y, punkty);
+    int sections = db->getVectorSectionPointsForTile(x, y, punkty);
     int length = punkty.length();
     if(length > 0)
         Game::terrainLib->setTextureToTrackObj(brush, punkty.data(), length, x, y);
     return sections;
 }
 
+int Route::setTerrainTextureToTileTrack(int x, int y, Brush* brush){
+    return setTerrainTextureToTileFromDb(this->trackDB, x, y, brush);
+}
+
 int Route::setTerrainTextureToTileRoad(int x, int y, Brush* brush){
-    QVector<float> punkty;
-    punkty.reserve(10000);
-    int sections = this->roadDB->getVectorSectionPointsForTile(x, y, punkty);
-    int length = punkty.length();
-    if(length > 0)
-        Game::terrainLib->setTextureToTrackObj(brush, punkty.data(), length, x, y);
-    return sections;
+    return setTerrainTextureToTileFromDb(this->roadDB, x, y, brush);
+}
+
+bool Route::resetTerrainTextureOnTile(int x, int y, int &filesDeleted, int &filesFailed){
+    filesDeleted = 0;
+    filesFailed = 0;
+
+    QString routePath = Game::root + "/routes/" + Game::route;
+    QString tileName = Terrain::getTileName(x, -y);
+    QString tilePath = routePath + "/tiles/" + tileName + ".t";
+
+    TFile tfile;
+    if (!tfile.readT(tilePath))
+        return false;
+
+    int defaultMat = tfile.getMatByTexture("terrain.ace");
+    if (defaultMat < 0)
+        defaultMat = tfile.newMat();
+
+    int patches = tfile.patchsetNpatches;
+    for (int patch = 0; patch < patches * patches; patch++) {
+        tfile.tdata[patch * 13 + 6] = defaultMat;
+        tfile.tdata[patch * 13 + 7] = 0.001f;
+        tfile.tdata[patch * 13 + 8] = 0.001f;
+        tfile.tdata[patch * 13 + 9] = 0.062375f;
+        tfile.tdata[patch * 13 + 10] = 0.0f;
+        tfile.tdata[patch * 13 + 11] = 0.0f;
+        tfile.tdata[patch * 13 + 12] = 0.062375f;
+    }
+
+    tfile.save(tilePath);
+
+    QDir terrtexDir(routePath + "/terrtex");
+    if (terrtexDir.exists()) {
+        QString tilePrefix = tileName.toLower() + "_";
+        QFileInfoList texFiles = terrtexDir.entryInfoList(QStringList() << "*.ace" << "*.ACE" << "*.dds" << "*.DDS", QDir::Files, QDir::Name);
+        for (int i = 0; i < texFiles.size(); i++) {
+            QFileInfo texInfo = texFiles[i];
+            if (!texInfo.completeBaseName().toLower().startsWith(tilePrefix))
+                continue;
+
+            if (QFile::remove(texInfo.absoluteFilePath()))
+                filesDeleted++;
+            else
+                filesFailed++;
+        }
+    }
+
+    if (Game::terrainLib != NULL) {
+        Game::terrainLib->setDetailedTerrainAsCurrent();
+        Game::terrainLib->reload(x, y);
+    }
+    reloadTile(x, y);
+    if (tile[x * 10000 + y] != NULL)
+        tile[x * 10000 + y]->setModified(false);
+
+    return true;
 }
 
 void Route::setTerrainToTrackObj(WorldObj* obj, Brush* brush){

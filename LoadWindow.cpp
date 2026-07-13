@@ -198,7 +198,9 @@ void LoadWindow::routeLoad(){
         Game::writeTDB = true;
     }else{
         if(routeList.currentRow() < 0) return;
-        Game::route = routeList.currentItem()->text();
+        QTableWidgetItem *routeItem = routeList.item(routeList.currentRow(), 0);
+        if(routeItem == NULL) return;
+        Game::route = routeItem->text();
         Game::checkRoute(Game::route);
     }
     qDebug() << Game::route;
@@ -213,12 +215,13 @@ void LoadWindow::listRoutes(){
 
     //// EFO this is new code to support multiple columns and clickable sorting
     
+    routeList.setSortingEnabled(false);
     routeList.clearContents();
+    routeList.setRowCount(0);
 
     // Set column headers
     routeList.setColumnCount(2);
     routeList.rowHeight(10);
-    routeList.setSortingEnabled(1);
     routeList.horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     routeList.verticalHeader()->setVisible(false);
     
@@ -241,6 +244,7 @@ void LoadWindow::listRoutes(){
     }
     routeList.resizeColumnsToContents();
     routeList.resizeRowsToContents();
+    routeList.setSortingEnabled(true);
     
     
 /*   This is Goku's original code -- it had a single column list and used a QListView
