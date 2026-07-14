@@ -19,6 +19,7 @@
 #include "TexLib.h"
 #include "Vector2f.h"
 #include "TerrainLib.h"
+#include "Terrain.h"
 #include "TS.h"
 #include "Game.h"
 #include "FileFunctions.h"
@@ -32,6 +33,7 @@
 
 QVector<PolyForestObj::PolyForestList> PolyForestObj::polyForestList;
 float PolyForestObj::ForestClearDistance = 0;
+int PolyForestObj::TextureRevision = 0;
 
 PolyForestObj::PolyForestObj() {
     this->loaded = false;
@@ -64,6 +66,7 @@ PolyForestObj::~PolyForestObj() {
 }
 
 void PolyForestObj::LoadPolyForestList(){
+    PolyForestObj::polyForestList.clear();
     QString path = Game::root + "/routes/" + Game::route + "/polyForests.dat";
     path.replace("//", "/");
     qDebug() << path;
@@ -268,6 +271,7 @@ void PolyForestObj::resize(float x, float y, float z){
 
 void PolyForestObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos, float* target, float fov, int selectionColor, int renderMode) {
     if (!loaded) return;
+    if (!Game::viewForestRegions) return;
     //if (jestPQ < 2) return;
     //GLUU* gluu = GLUU::get();
     //if((this.position===undefined)||this.qDirection===undefined) return;
@@ -336,6 +340,16 @@ void PolyForestObj::drawShape(){
             f->glDisable(GL_TEXTURE_2D);
         }
     }*/
+
+    if (textureRevision != PolyForestObj::TextureRevision) {
+        init = false;
+        if (texturePath != NULL) {
+            delete texturePath;
+            texturePath = NULL;
+        }
+        shape.deleteVBO();
+        textureRevision = PolyForestObj::TextureRevision;
+    }
 
     if (!init) {
         if(!Game::ignoreLoadLimits){
@@ -470,7 +484,7 @@ void PolyForestObj::drawShape(){
                 }
             }
             
-        texturePath = new QString(resPath.toLower()+"/"+treeTexture.toLower());
+        texturePath = new QString(Terrain::resolveTexturePath(resPath.toLower(), Terrain::textureSubdirCandidatesForSeason(Game::season), treeTexture.toLower()));
         shape.setMaterial(texturePath);
         shape.init(punkty, ptr, RenderItem::VNTA, GL_TRIANGLES);
         /*shape.VAO.create();
@@ -579,4 +593,8 @@ void PolyForestObj::deleteVBO(){
     //this->shape.deleteVBO();
     this->init = false;
     this->box.deleteVBO();
+}
+
+void PolyForestObj::InvalidateSeasonTextures(){
+    PolyForestObj::TextureRevision++;
 }

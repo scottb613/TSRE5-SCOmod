@@ -200,8 +200,6 @@ void SettingsDialog::setupUi() {
     addRow(l, "routeMergeTDB", "bool", "Route Merge TDB", "");
     addRow(l, "routeMergeTerrain", "bool", "Route Merge Terrain", "");
     addRow(l, "routeMergeTerrtex", "bool", "Route Merge Terrtex", "");
-    addRow(l, "season", "string", "Season", "winter/autumn/spring/summer/night");
-    addRow(l, "seasonalEditing", "bool", "Seasonal Editing", "");
     addRow(l, "autoFix", "bool", "Auto Fix", "repair TDB anomalies");
     addRow(l, "deepunderground", "number", "Deep Underground", "");
     addRow(l, "deleteTrWatermarks", "bool", "Delete Tr Watermarks", "");

@@ -13,6 +13,8 @@
 #include <QDebug>
 #include "Game.h"
 #include <QFile>
+#include <QDir>
+#include <QFileInfo>
 #include "ReadFile.h"
 #include "TexLib.h"
 #include "TerrainLib.h"
@@ -49,6 +51,97 @@ Terrain::Terrain(float x, float y) {
     load();
 }
 
+QStringList Terrain::textureSubdirCandidatesForSeason(QString season) {
+    QString key = season.trimmed().toLower();
+    QStringList out;
+
+    if (key == "spring")
+        out << "spring/";
+    else if (key == "autumn" || key == "fall")
+        out << "autumn/" << "fall/";
+    else if (key == "winter")
+        out << "winter/";
+    else if (key == "snow" || key == "wintersnow")
+        out << "snow/";
+    else if (key == "springsnow")
+        out << "springsnow/" << "snow/";
+    else if (key == "autumnsnow" || key == "fallsnow")
+        out << "autumnsnow/" << "fallsnow/" << "snow/";
+    else if (key == "night")
+        out << "night/";
+
+    out.removeDuplicates();
+    return out;
+}
+
+QStringList Terrain::textureSubdirCandidatesForFlags(int flags, QString season) {
+    if (flags <= 0)
+        return QStringList();
+
+    QString key = season.trimmed().toLower();
+    QStringList out;
+
+    if (key == "winter" || key == "autumnsnow" || key == "wintersnow" || key == "springsnow") {
+        if ((flags & Game::TextureFlags["snow"]) != 0 || (flags & Game::TextureFlags["snowtrack"]) != 0)
+            out << "snow/";
+    }
+
+    if (Game::TextureFlags.contains(key) && (flags & Game::TextureFlags[key]) != 0)
+        out << textureSubdirCandidatesForSeason(season);
+
+    out.removeDuplicates();
+    return out;
+}
+
+QString Terrain::routeTerrtexPath(QString seasonSubdir) {
+    seasonSubdir.replace("\\", "/");
+    if (!seasonSubdir.isEmpty() && !seasonSubdir.endsWith("/"))
+        seasonSubdir += "/";
+    QString path = Game::root + "/routes/" + Game::route + "/terrtex/" + seasonSubdir;
+    path.replace("//", "/");
+    return path;
+}
+
+QString Terrain::routeTexturesPath(QString seasonSubdir) {
+    seasonSubdir.replace("\\", "/");
+    if (!seasonSubdir.isEmpty() && !seasonSubdir.endsWith("/"))
+        seasonSubdir += "/";
+    QString path = Game::root + "/routes/" + Game::route + "/textures/" + seasonSubdir;
+    path.replace("//", "/");
+    return path;
+}
+
+QString Terrain::resolveTexturePath(QString basePath, QString seasonSubdir, QString textureName) {
+    return resolveTexturePath(basePath, QStringList() << seasonSubdir, textureName);
+}
+
+QString Terrain::resolveTexturePath(QString basePath, QStringList seasonSubdirs, QString textureName) {
+    textureName.replace("\\", "/");
+    if (QFileInfo(textureName).isAbsolute())
+        return textureName;
+
+    basePath.replace("\\", "/");
+    if (!basePath.endsWith("/"))
+        basePath += "/";
+    basePath.replace("//", "/");
+
+    for (int i = 0; i < seasonSubdirs.size(); i++) {
+        QString subdir = seasonSubdirs[i];
+        subdir.replace("\\", "/");
+        if (!subdir.isEmpty() && !subdir.endsWith("/"))
+            subdir += "/";
+
+        QString candidate = basePath + subdir + textureName;
+        candidate.replace("//", "/");
+        if (QFile::exists(candidate))
+            return candidate;
+    }
+
+    QString rootCandidate = basePath + textureName;
+    rootCandidate.replace("//", "/");
+    return rootCandidate;
+}
+
 void Terrain::load(){
     typeObj = this->terrainobj;
     loaded = false;
@@ -67,21 +160,12 @@ void Terrain::load(){
     VBO = new QOpenGLBuffer();
     VAO = new QOpenGLVertexArrayObject();
   
-    int esdAlternativeTexture = 0x01;
-    QString seasonPath;
-    if((esdAlternativeTexture & Game::TextureFlags[Game::season]) != 0)
-        seasonPath = Game::season.toLower() + "/";
+    int esdAlternativeTexture = Game::TextureFlags["snow"];
+    QStringList terrainSeasonPaths = Terrain::textureSubdirCandidatesForFlags(esdAlternativeTexture, Game::season);
+    QString seasonPath = terrainSeasonPaths.isEmpty() ? "" : terrainSeasonPaths[0];
 
-    if(Game::season.toLower() == "winter" || Game::season.toLower() == "autumnsnow" || Game::season.toLower() == "wintersnow" || Game::season.toLower() == "springsnow" ){
-        if(esdAlternativeTexture & Game::TextureFlags["snow"] != 0)
-            seasonPath = "snow/";
-        if(esdAlternativeTexture & Game::TextureFlags["snowtrack"] != 0)
-            seasonPath = "snow/";
-    }
-    
-    
-    texturepath = Game::root + "/routes/" + Game::route + "/terrtex/"+seasonPath;
-    rootTexturepath = Game::root + "/routes/" + Game::route + "/terrtex/";
+    texturepath = Terrain::routeTerrtexPath(seasonPath);
+    rootTexturepath = Terrain::routeTerrtexPath();
     QString path = Game::root + "/routes/" + Game::route + "/" + TileDir[(int)lowTile] + "/";
     tfile = new TFile();
 

@@ -35,6 +35,7 @@ public:
     };
     static float ForestClearDistance;
     static QVector<ForestList> forestList;
+    static int TextureRevision;
     QString treeTexture = "";
     float scaleRangeX = 0;
     float scaleRangeZ = 0;
@@ -63,12 +64,14 @@ public:
     void render(GLUU* gluu, float lod, float posx, float posz, float* playerW, float* target, float fov, int selectionColor, int renderMode);
     static void LoadForestList();
     static int GetListIdByTexture(QString texture);
+    static void InvalidateSeasonTextures();
     virtual ~ForestObj();
 private:
     void drawShape();
     bool getBoxPoints(QVector<float>& points);
     int tex;
     bool init;
+    int textureRevision = -1;
     OglObj shape;
     QString * texturePath = NULL;
 };

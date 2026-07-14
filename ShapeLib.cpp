@@ -73,3 +73,11 @@ int ShapeLib::addShape(QString path, QString texPath) {
     
     return jestshape++;      
 }
+
+void ShapeLib::refreshSeasonTextures() {
+    for (auto it = shape.begin(); it != shape.end(); ++it) {
+        if (it->second == NULL)
+            continue;
+        it->second->refreshSeasonTextures();
+    }
+}

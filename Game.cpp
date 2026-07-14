@@ -110,6 +110,7 @@ bool Game::viewTileGrid = true;
 bool Game::viewTerrainGrid = false;
 bool Game::viewTerrainShape = true;
 bool Game::viewInteractives = true;
+bool Game::viewForestRegions = true;
 bool Game::viewTrackDbLines = true;
 bool Game::viewTsectionLines = true;
 bool Game::viewPointer3d = true;
@@ -898,7 +899,8 @@ void Game::load() {
         }
 
         if(setname =="season"){
-            season = setval;
+            // Disabled for SCOmod: seasonal display is controlled live from the
+            // F2 terrain texture selector so old settings files cannot override it.
         }
         
         if(setname =="startapp"){
@@ -911,10 +913,9 @@ void Game::load() {
         }
   */      
         if(setname =="seasonalediting"){
-            if((setval == "true") or (setval == "1") or (setval == "on"))
-                seasonalEditing = true;
-            else
-                seasonalEditing = false; 
+            // Disabled for SCOmod. The old global seasonal-editing mode caused
+            // terrain/shape confusion; seasonal preview now uses the F2 selector.
+            seasonalEditing = false;
         }
 
         
@@ -1141,17 +1142,7 @@ void Game::load() {
     
     cleanupLogs();
 
-    if(Game::seasonalEditing)
-    {
-        QMessageBox infobox;        
-        infobox.setWindowTitle("Seasonal Editing On");
-        infobox.setInformativeText("If you plan to do terrain painting, exit TSRE, open up your \"Settings.txt\" file, and comment out seasonal editing or set it to false.\n\n Terrain painting, auto-paint, and some shapes may not render correctly with seasonal editing turned on.");
-        infobox.setFixedWidth(150);
-        infobox.exec();
-    }
-
-
-    
+    Game::seasonalEditing = false;
 }
 /*
 bool Game::loadRouteEditor(){

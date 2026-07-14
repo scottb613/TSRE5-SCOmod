@@ -15,6 +15,10 @@
 #include "TransferObj.h"
 #include "ClickableLabel.h"
 #include "Game.h"
+#include "ShapeLib.h"
+#include "Terrain.h"
+#include "ForestObj.h"
+#include "PolyForestObj.h"
 #include "TFile.h"
 #include "TerrainLib.h"
 #include <QJsonArray>
@@ -214,9 +218,11 @@ TerrainTools::TerrainTools(QString name)
 
     seasonType = new QComboBox;
     seasonType->setStyleSheet("combobox-popup: 0;");
-    seasonType->addItem("Daytime");
+    seasonType->addItem("Summer");
+    seasonType->addItem("Spring");
+    seasonType->addItem("Autumn");
+    seasonType->addItem("Winter");
     seasonType->addItem("Night");
-    seasonType->addItem("Snow");
     
     
     hType = new QComboBox;
@@ -258,7 +264,7 @@ TerrainTools::TerrainTools(QString name)
     vlist->addWidget(GuiFunct::newQLabel("Height type:", labelWidth),row,0);
     vlist->addWidget(hType,row++,1,1,2);
 
-    vlist->addWidget(GuiFunct::newQLabel("Texture Type:", labelWidth),row,0);
+    vlist->addWidget(GuiFunct::newQLabel("Texture Set:", labelWidth),row,0);
     vlist->addWidget(seasonType,row++,1,1,2);
     
 
@@ -644,8 +650,8 @@ void TerrainTools::preloadTextures(){
 
 void TerrainTools::preloadTexTool(QString filename)
 {
-    QString path = Game::root+"/routes/"+Game::route+"/terrtex";
-    filename = path + '/' + filename; 
+    filename = Terrain::resolveTexturePath(Terrain::routeTerrtexPath(),
+            Terrain::textureSubdirCandidatesForFlags(Game::TextureFlags["snow"], Game::season), filename);
     if(Game::debugOutput) qDebug() << "preloading " << filename;
     int result = TexLib::getTex(filename);     
     if(result == -1)
@@ -664,7 +670,8 @@ void TerrainTools::preloadTexTool(QString filename)
 
 void TerrainTools::setTexToolEnabled(){
     QFileDialog fd;
-    QString path = Game::root+"/routes/"+Game::route+"/terrtex";
+    QStringList terrainSubdirs = Terrain::textureSubdirCandidatesForFlags(Game::TextureFlags["snow"], Game::season);
+    QString path = Terrain::routeTerrtexPath(terrainSubdirs.isEmpty() ? "" : terrainSubdirs[0]);
     path.replace("//", "/");
     fd.setDirectory(path);
     fd.setFileMode(QFileDialog::ExistingFiles);
@@ -773,31 +780,41 @@ void TerrainTools::setHtype(int val){
 }
 
 void TerrainTools::setSeasonType(int val){
-    qDebug() << "Val = " << val;    
-    if(val == 0)
-    {
-        
-        // Game::sunLightDirection[] = {-1.0,2.0,1.0};
+    if(val == 1) {
+        Game::season = "Spring";
         Game::sunLightDirection[0] = -1;
         Game::sunLightDirection[1] = 2;
-        Game::sunLightDirection[2] = 1;        
-        Game::season = "Spring";        
-    }
-    if(val == 1 )
-    {
-        Game::sunLightDirection[0] = -10;
-        Game::sunLightDirection[1] = -10;
-        Game::sunLightDirection[2] = -10;        
-        Game::season = "Night";
-    }
-    if(val == 2)
-    {
+        Game::sunLightDirection[2] = 1;
+    } else if(val == 2) {
+        Game::season = "Autumn";
+        Game::sunLightDirection[0] = -1;
+        Game::sunLightDirection[1] = 2;
+        Game::sunLightDirection[2] = 1;
+    } else if(val == 3) {
+        Game::season = "Winter";
         Game::sunLightDirection[0] = 2;
         Game::sunLightDirection[1] = 2;
-        Game::sunLightDirection[2] = 2;        
-        Game::season = "Winter";
+        Game::sunLightDirection[2] = 2;
+    } else if(val == 4) {
+        Game::season = "Night";
+        Game::sunLightDirection[0] = -10;
+        Game::sunLightDirection[1] = -10;
+        Game::sunLightDirection[2] = -10;
+    } else {
+        Game::season = "Summer";
+        Game::sunLightDirection[0] = -1;
+        Game::sunLightDirection[1] = 2;
+        Game::sunLightDirection[2] = 1;
     }
-    qDebug() << "season = " << Game::season;        
+
+    if (Game::terrainLib != NULL)
+        Game::terrainLib->reloadLoaded();
+    if (Game::currentShapeLib != NULL)
+        Game::currentShapeLib->refreshSeasonTextures();
+    ForestObj::InvalidateSeasonTextures();
+    PolyForestObj::InvalidateSeasonTextures();
+
+    emit setPaintBrush(this->paintBrush);
 }
 
 
@@ -970,8 +987,8 @@ void TerrainTools::applyTexturePresetPath(QString texturePath)
 
     QString path = texturePath;
     if (QFileInfo(path).isRelative()) {
-        path = Game::root + "/routes/" + Game::route + "/terrtex/" + texturePath;
-        path.replace("//", "/");
+        path = Terrain::resolveTexturePath(Terrain::routeTerrtexPath(),
+                Terrain::textureSubdirCandidatesForFlags(Game::TextureFlags["snow"], Game::season), texturePath);
     }
 
     if (!QFile::exists(path)) {

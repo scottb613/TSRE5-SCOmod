@@ -105,6 +105,7 @@ public:
     static bool viewTerrainGrid;
     static bool viewTerrainShape;
     static bool viewInteractives;
+    static bool viewForestRegions;
     static bool viewTrackDbLines;
     static bool viewTsectionLines;
     static bool viewMarkers;

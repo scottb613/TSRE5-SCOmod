@@ -11,6 +11,7 @@
 #ifndef TERRAIN_H
 #define	TERRAIN_H
 #include <QString>
+#include <QStringList>
 #include "GLUU.h"
 #include "TFile.h"
 #include "Vector3f.h"
@@ -48,6 +49,12 @@ public:
     virtual void updateTFile();
     virtual ~Terrain();
     static void SaveEmpty(QString name, int samples = 256, int sampleSize = 8, int patches = 16, bool low = false);
+    static QStringList textureSubdirCandidatesForSeason(QString season);
+    static QStringList textureSubdirCandidatesForFlags(int flags, QString season);
+    static QString routeTerrtexPath(QString seasonSubdir = "");
+    static QString routeTexturesPath(QString seasonSubdir = "");
+    static QString resolveTexturePath(QString basePath, QStringList seasonSubdirs, QString textureName);
+    static QString resolveTexturePath(QString basePath, QString seasonSubdir, QString textureName);
     static QString getTileName(int x, int y);
     static QString getTileNameExperimental(int x, int y);
     static QString getTileNameExperimental2(int x, int y);

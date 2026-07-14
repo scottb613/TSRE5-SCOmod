@@ -19,6 +19,7 @@
 #include "TexLib.h"
 #include "Vector2f.h"
 #include "TerrainLib.h"
+#include "Terrain.h"
 #include "TS.h"
 #include "Game.h"
 #include "FileFunctions.h"
@@ -32,6 +33,7 @@
 
 QVector<ForestObj::ForestList> ForestObj::forestList;
 float ForestObj::ForestClearDistance = 0;
+int ForestObj::TextureRevision = 0;
 
 ForestObj::ForestObj() {
     this->loaded = false;
@@ -63,6 +65,7 @@ ForestObj::~ForestObj() {
 }
 
 void ForestObj::LoadForestList(){
+    ForestObj::forestList.clear();
     QString path = Game::root + "/routes/" + Game::route + "/forests.dat";
     path.replace("//", "/");
     
@@ -267,6 +270,7 @@ void ForestObj::resize(float x, float y, float z){
 
 void ForestObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos, float* target, float fov, int selectionColor, int renderMode) {
     if (!loaded) return;
+    if (!Game::viewForestRegions) return;
     //if (jestPQ < 2) return;
     //GLUU* gluu = GLUU::get();
     //if((this.position===undefined)||this.qDirection===undefined) return;
@@ -335,6 +339,16 @@ void ForestObj::drawShape(){
             f->glDisable(GL_TEXTURE_2D);
         }
     }*/
+
+    if (textureRevision != ForestObj::TextureRevision) {
+        init = false;
+        if (texturePath != NULL) {
+            delete texturePath;
+            texturePath = NULL;
+        }
+        shape.deleteVBO();
+        textureRevision = ForestObj::TextureRevision;
+    }
 
     if (!init) {
         if(!Game::ignoreLoadLimits){
@@ -469,22 +483,7 @@ void ForestObj::drawShape(){
                 }
             }
 
-
-/// EFO trying to add seasonal support for forest objects             
-            
-        QString seasonPath = "";
-        //qDebug() << esdAlternativeTexture << this->TextureFlags[Game::season];
-        //qDebug() << (esdAlternativeTexture & this->TextureFlags[Game::season]);
-
-        if((Game::TextureFlags[Game::season]) != 0)
-            seasonPath = "/" + Game::season.toLower();
-
-        if(Game::season.toLower() == "winter" || Game::season.toLower() == "autumnsnown" || Game::season.toLower() == "wintersnow" || Game::season.toLower() == "springsnow" ){
-            if(Game::TextureFlags["snow"] != 0)
-                seasonPath = "/snow";
-        }
-                        
-        texturePath = new QString(resPath.toLower() + seasonPath +"/"+treeTexture.toLower());
+        texturePath = new QString(Terrain::resolveTexturePath(resPath.toLower(), Terrain::textureSubdirCandidatesForSeason(Game::season), treeTexture.toLower()));
         shape.setMaterial(texturePath);
         shape.init(punkty, ptr, RenderItem::VNTA, GL_TRIANGLES);
         /*shape.VAO.create();
@@ -593,4 +592,8 @@ void ForestObj::deleteVBO(){
     //this->shape.deleteVBO();
     this->init = false;
     this->box.deleteVBO();
+}
+
+void ForestObj::InvalidateSeasonTextures(){
+    ForestObj::TextureRevision++;
 }

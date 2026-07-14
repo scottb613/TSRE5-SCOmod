@@ -165,6 +165,7 @@ public:
     QString pathid;
     QString sciezka;
     QString nazwa;
+    QString baseTexPath;
     QString texPath;
     QString sdName;
     int isinit = 0;
@@ -218,6 +219,7 @@ public:
     bool isSnapable();
     void addSnapablePoints(QVector<float> &out);
     void reload();
+    void refreshSeasonTextures();
     unsigned int newState();
     void setAnimated(unsigned int stateId, bool animated);
     void setEnabledSubObjs(unsigned int stateId, unsigned int enabledSubObjs);
@@ -241,6 +243,7 @@ private:
     QVector<State> state;
     
     void loadSd();
+    QString resolveTexturePath(QString textureName) const;
     float* getPmatrix(int currentDlevel, float* pmatrix, int matrix);
     float* getPmatrixAnimated(int currentDlevel, float* pmatrix, int matrix, float frame);
     void buildFrameIds();

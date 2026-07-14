@@ -1,4 +1,4 @@
-TSRE Terrain and Editor Improvement Worklist
+TSRE SCOmod Improvements
 
 Purpose and scope
 
@@ -8,11 +8,23 @@ There has been talk for years about a new Open Rails route editor, and I would s
 
 I do not intend this to become a separate production fork of Eric's work. This is a test branch for debugging, experimentation, and evaluation. Eric's code should remain the production copy. My goal is to make focused improvements in the areas I know best, then hand them back to Eric for consideration and, hopefully, eventual inclusion in the main project. As history has proven, my interest around here tends to ebb and flow, sometimes disappearing for months at a time, which makes me a poor candidate to host or maintain the main code long term. I have compiled an operational TSRE test build, though I will spare everyone the embarrassing details of how long it took me to get a clean compile.
 
+Completed Work Summary
+
+The following major updates and fixes have been implemented in this testing phase.
+
+- Terrain Conforming & Smoothing: Overhauled the F-key terrain-to-track logic to ensure flatter track beds, smoother shoulder transitions, and steeper cut/berm walls without creating holes or encroachment. Added a Shift+F vertical smoothing pass for track and ruler objects.
+- Tile-Level Autopaint: Introduced rapid tile-level painting commands for Track, Roads, and Water, including an intelligent water-edge detection tool that accurately feathers shorelines against actual terrain heights.
+- Seasonal & Texture Improvements: Exposed Summer, Spring, Autumn, Winter, and Night texture selections directly in the F2 panel, with route-object, forest, transfer, dynamic-track, and TERRTEX fallback refreshes tied to that selector. Added a "Mirror Seasons" option to paint both normal and snow terrain textures simultaneously, disabled the obsolete settings-file seasonal editing switch, added 0-360 degree texture rotation for seamless directional ground textures, and fixed high-resolution (1024x1024) editable texture downsampling.
+- Terrain Paint Presets: Created route-local terrain paint presets (saving texture path, brush size, intensity, shape, and rotation) to a dedicated JSON file, keeping editor metadata out of MSTS/ORTS route files.
+- Performance Optimization: Added budgeted forest generation and stall logging to reduce severe editor stutters on populated routes. Included a View menu toggle to completely hide and skip generating Forest Regions while navigating, and fixed a texture-cache invalidation bug that caused severe lag/wrong texture reuse when generated geometry reapplied the same material path.
+- Cleanup Tools: Added destructive, confirmation-gated reset tools to completely clear route or tile-level terrain paint (reverting to terrain.ace) and delete generated swatch files.
+- Quality of Life & Build Fixes: Cleaned up the codebase for full MSYS2/MinGW toolchain compatibility. Added a startup guard to prevent multiple TSRE instances from running simultaneously, fixed visual bugs in the route-selection screen, and established a dedicated desktop icon/shortcut helper.
+
 Test branch, forked from Eric's TSRE master branch:
 
 https://github.com/scottb613/TSRE5-SCOmod
 
-This branch includes the current experimental code and an operational test executable package for evaluation. I suggest you keep this copy completely separate from your production copy of TSRE.
+This branch includes the current experimental code and an operational test executable package for evaluation. Look for "RELEASES" on the right side panel and download the ZIP. In the root folder I added a small program, AddShortcutDesktop.cmd, to add a desktop shortcut for TSRE. When unzipping the folder, I suggest you keep this copy completely separate from your production copy of TSRE.
 
 
 Cut and embankment terrain conforming
@@ -49,6 +61,8 @@ Performance/stutter pass
 
 I investigated severe editor stutters on populated routes, especially with forests. The main finding was that forest generation was happening lazily in the render path on the GUI/render thread. I added budgeted forest generation and stall logging so long bursts are reduced and easier to diagnose.
 
+I also added a View menu toggle for Forest Region. When unchecked, TSRE skips drawing normal forest and polyforest regions, and also avoids generating their tree geometry while the layer is hidden. This gives route builders a quick way to work through dense routes without forest regions constantly filling the view or adding extra render/generation cost.
+
 Related default settings were tuned for smoother editor startup/use:
 
 - lower default object/tile load pressure
@@ -70,13 +84,29 @@ These use the current brush texture, size, and intensity. Track and road tile pa
 
 The water tool started as a simple water-patch painter, but that painted the 16x16 terrain swatches rather than the actual shoreline. It was then changed to detect the real water/terrain contour by comparing terrain heights against the tile water plane. This produces a shoreline-style feather around actual water edges, including shallow-water cases where terrain pokes above the water surface.
 
-The water edge tool now uses the pointer tile, not just the camera tile, so the tile being pointed at is the one processed.
+The water edge tool uses the pointer tile, so the tile being pointed at is the one processed.
 
 Terrain texture resolution protection
 
 I found a probable cause for occasional cases where 1024x1024 terrain texture swatches were saved back out as 512x512. TSRE's textureQuality setting could downsample textures when making them editable, and then the terrain paint save path wrote that reduced in-memory size back to the ACE file.
 
 The fix prevents route-editing paint buffers from being downsampled before saving. In other words, textureQuality can still be useful for viewing/runtime, but should not permanently reduce editable terrtex files.
+
+Seasonal terrain texture painting
+
+The old hidden settings-file seasonal editing workflow was replaced for terrain painting. The F2 terrain paint panel now exposes the texture set directly, using Summer, Spring, Autumn, Winter, and Night choices. Changing the texture set reloads the currently loaded terrain, object shape textures, transfer textures, dynamic track textures, and generated forest/polyforest texture bindings so the editor display matches the selected season as closely as the route's available files allow.
+
+The old startup warning, Settings-panel entries, and settings-file parser hook for the seasonal editing workaround were removed. Old `season = ...` and `seasonalEditing = ...` settings are now ignored/forced off, so older settings files cannot silently override the F2 selector. Terrain painting and dynamic-track seasonal display now follow the active F2 season selection instead of a hidden settings switch.
+
+To significantly speed up seasonal route building, I added a Mirror Seasons checkbox that allows you to paint both normal and snow terrain textures in a single operation. When enabled, TSRE paints the active texture set first, then automatically checks for the same source texture in the paired seasonal folder. If the matching texture exists in both locations, TSRE updates the paired seasonal tile texture simultaneously, meaning you do not have to paint the route twice to cover both summer and winter ground. If the matching source texture is missing, the active texture set is painted normally and the mirror step is safely skipped.
+
+Seasonal texture loading now follows an ORTS-style fallback model. When Spring, Autumn/Fall, Winter/Snow, or Night is selected, TSRE searches the matching seasonal subfolder first for each individual texture file, then falls back to the root texture folder if that file is missing. TERRTEX uses the same per-file fallback, so a missing seasonal terrain swatch no longer turns the tile black. Object textures now try the active editor season first even when the old SD alternative-texture flags are missing or incomplete. The resolver also checks ACE/DDS alternatives, so a seasonal DDS can satisfy a material that originally referenced an ACE file.
+
+Mirror Seasons still mirrors between the active texture set and the paired Snow/base set. Non-winter sets mirror toward Snow/Winter, and Winter mirrors back to the base TerrTex set. This keeps the feature tile-level and brush/autopaint-level only, avoiding heavy full-route processing.
+
+When Mirror Seasons is off, terrain painting now still protects the opposite season from missing tile swatches. If painting creates a new per-tile TERRTEX patch in the active season, TSRE creates a matching placeholder patch in the paired Snow/base TERRTEX folder only when that opposite patch does not already exist. The placeholder is copied from the route's terrain.ace when available, or from the bundled SCOmod content terrain.ace fallback.
+
+A follow-up texture-cache bug was also fixed after testing on a large populated route. Generated objects such as forest regions may reapply their same material path frequently, so TSRE now invalidates cached texture IDs only when the material path actually changes. This avoids severe stutter and wrong texture reuse while still allowing seasonal texture refreshes to bind new material paths correctly.
 
 Route and tile terrtex reset tools
 
@@ -134,16 +164,15 @@ I added a full 0-360 degree texture rotation control under the F2 terrain paint 
 
 The existing 0/90/180/270 rotation choices still work, but the slider allows finer control. A rotation of 0 remains the normal default texture orientation.
 
-Seasonal texture investigation
+Seasonal texture selection
 
-I investigated the F2 Day/Night/Snow texture selector. The current code is not a reliable live seasonal terrain-paint selector. It changes the editor season/lighting, but the terrain paint pipeline still has several limitations:
+I replaced the old F2 Day/Night/Snow texture selector behavior with a cleaner seasonal selection path for Summer, Spring, Autumn, Winter, and Night. Changing the season now refreshes currently loaded terrain, route object shapes, transfers, dynamic track textures, and generated forest/polyforest texture bindings so the display changes without requiring a restart.
 
-- loaded terrain tiles do not automatically rebind their texture paths when the selector changes
-- the texture picker/preload path still defaults to the main TERRTEX folder
-- setTexture intentionally refuses to change material references while seasonal editing is active
-- pixel painting may still write to whatever texture object/path was already loaded
+Texture lookup now follows a per-file fallback model. TSRE checks the selected seasonal texture folder first, then falls back to the normal root texture folder when a matching seasonal file is missing. This applies to terrain TERRTEX, route objects, transfers, procedural dynamic track textures, and forest/polyforest generated geometry. Old settings-file `season` and `seasonalEditing` values are ignored, so the F2 selector is the active seasonal control.
 
-The cleaner future design would be an explicit paint target for Day, Snow, and Night. Changing the target should reload terrain texture bindings, point the texture picker at the selected folder, and write seasonal texture edits only to that selected TERRTEX subfolder without changing the tile's material names.
+During large-route testing, a texture-cache invalidation bug caused severe lag and incorrect texture reuse when generated geometry repeatedly reapplied the same material path. That was corrected by invalidating cached texture IDs only when the material path actually changes.
+
+Mirror Seasons remains the explicit terrain-paint option for writing the active TERRTEX edit into the matching opposite seasonal folder when both files are available. This keeps normal seasonal display fallback separate from intentional cross-season paint edits.
 
 Window/settings investigation
 
@@ -154,6 +183,8 @@ Startup and route selection cleanup
 I added a startup guard so only one TSRE instance can run at a time. If TSRE is already open, a second launch now reports that TSRE is already running and exits before opening another editor window.
 
 I also fixed the route-selection startup screen. When switching MSTS root folders, the route table was clearing cell contents but not removing the existing rows, which left blank rows/cells mixed into the display. The table now resets its row count before repopulating. Route loading was also tightened so it always loads from the route-name column, even if the selected cell is in the Last Modified column.
+
+I added a proper TSRE icon to the Windows executable resource, using the icon stored in the local content folder. I also added a small AddShortcutDesktop.cmd helper, modeled after the SCO LIDEX shortcut helper, which creates a TSRE5 SCOmod desktop shortcut pointing at the local executable and using the same icon.
 
 Route database safety notes
 
@@ -170,18 +201,17 @@ Potential future protection:
 
 Packaging/versioning
 
-The current baseline was saved as v0.0 before the paint preset work:
+The current tested package is v0.2:
 
-Saves/TSRE-source-v0.0.zip
-Saves/TSRE-dist-v0.0.zip
+dist/tsre-scomod-v0.2.zip
 
-The preset-enabled build was compiled and copied into the test dist. A v0.1 test package was also prepared for local testing and GitHub release upload.
+Known-good source and runtime snapshots were also saved locally before the seasonal texture work was expanded, so there is a clean rollback point if needed.
 
 Potential next work
 
 - improve water-edge detection with a one-patch margin around water patches for difficult shallow rivers
 - add route-wide versions of tile autopaint tools if needed
-- make the seasonal Day/Snow/Night texture workflow reliable
+- continue testing seasonal texture fallback on more routes
 - make route database saves safer with atomic writes/backups
 - make window position saving/restoring persistent beyond the current manual settings support
 - further reduce forest/object stutters by moving more generation out of the render path

@@ -20,6 +20,7 @@ OglObj::OglObj() {
     loaded = false;
     texId = -1;
     materialType = NONE;
+    res = NULL;
     for(int i = 0; i < 6; i++)
         bound[i] = 0;   
 }
@@ -44,6 +45,11 @@ void OglObj::setMaterial(float r, float g, float b) {
 }
 
 void OglObj::setMaterial(QString* path) {
+    // Do not invalidate on every call: forest/terrain render paths may reapply
+    // the same material often, and forcing a reload there causes severe stutter.
+    if (res == NULL || path == NULL || *res != *path) {
+        texId = -1;
+    }
     materialType = TEXTURE;
     res = path;
 }

@@ -14,13 +14,18 @@ Primary source files edited
   - Fixed route-selection table refresh when switching MSTS root folders.
   - Ensured route loading uses the route-name column.
 
+- TSRE5-Trainsim.Com-Fork-master/CELoadWindow.cpp
+  - Removed the obsolete seasonal-editing startup reset.
+
 - TSRE5-Trainsim.Com-Fork-master/Route.cpp
   - Added/updated tile-level autopaint operations.
   - Shared track/road tile vector painting path.
   - Added water-edge tile painting and reset-tile/reset-route paint support.
+  - Added route-level season object refresh for procedural forest regions.
 
 - TSRE5-Trainsim.Com-Fork-master/Route.h
   - Added declarations for new route paint/reset helpers.
+  - Added declaration for season object refresh.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
   - Added menu entries and event hookups for tile autopaint/reset commands.
@@ -31,20 +36,51 @@ Primary source files edited
 
 - TSRE5-Trainsim.Com-Fork-master/Terrain.cpp
   - Updated terrain conforming, smoothing, texture paint, and tile refresh/reset behavior.
+  - Added explicit terrain texture-set folder handling for base seasons, Winter/Snow, and Night fallback.
+  - Added ORTS-style seasonal texture resolver with per-file seasonal folder fallback to the root texture folder.
+  - Applied the resolver to terrain TERRTEX rendering so missing seasonal swatches fall back cleanly instead of rendering black.
+  - Added loaded-terrain seasonal texture rebinding so detailed and distant terrain tiles can re-resolve textures after an F2 season change.
+  - Added Mirror Seasons support for terrain texture painting.
+  - Added opposite-season placeholder patch creation when painting with Mirror Seasons off, using route or bundled SCOmod terrain.ace fallbacks.
+  - Removed terrain paint blocking/copy behavior from the old seasonal-editing workaround.
 
 - TSRE5-Trainsim.Com-Fork-master/Terrain.h
   - Added declarations/state for terrain conforming, paint, reset, and texture helpers.
+  - Added seasonal TERRTEX path helpers, texture resolver declarations, terrain texture rebinding, and mirror paint helper declaration.
 
 - TSRE5-Trainsim.Com-Fork-master/TerrainTools.cpp
   - Added terrain paint presets UI.
   - Added texture rotation control.
   - Added reset route terrtex paint button and related UI wiring.
+  - Replaced the old Daytime/Night/Snow texture selector with Summer/Spring/Autumn/Winter/Night.
+  - Added Mirror Seasons checkbox and season-change terrain/object reload and preview refresh.
+  - Updated texture picker/preload, preset restore, and previous texture restore to use seasonal TERRTEX fallback.
+  - Disabled the obsolete settings-file seasonal workflow in favor of the F2 selector-driven seasonal preview.
 
 - TSRE5-Trainsim.Com-Fork-master/TerrainTools.h
   - Added declarations/state for presets, texture rotation, and reset controls.
+  - Added declarations/state for texture-set selection and Mirror Seasons.
 
 - TSRE5-Trainsim.Com-Fork-master/Brush.h
   - Added/stored brush state needed by paint presets and texture rotation.
+  - Added active terrtex season folder and Mirror Seasons paint state.
+
+- TSRE5-Trainsim.Com-Fork-master/SFile.cpp
+  - Preserved base object texture paths separately from seasonal texture paths.
+  - Recomputed Winter/Snow object texture paths during shape reload.
+  - Added object-shape texture fallback so each seasonal texture file can fall back to the root texture folder if missing.
+  - Changed object seasonal lookup to try the active editor season first for every loaded shape texture, instead of relying only on legacy SD alternative-texture flags.
+  - Changed season refresh to invalidate cached shape texture IDs instead of synchronously reloading every texture, avoiding route-load/season-change stalls and wrong texture reuse.
+
+- TSRE5-Trainsim.Com-Fork-master/SFile.h
+  - Added base texture path state and seasonal texture path helper declaration.
+  - Added seasonal texture candidate helper declaration.
+
+- TSRE5-Trainsim.Com-Fork-master/ShapeLib.cpp
+  - Added loaded-shape texture reload support for season changes.
+
+- TSRE5-Trainsim.Com-Fork-master/ShapeLib.h
+  - Added shape-library reload declaration.
 
 - TSRE5-Trainsim.Com-Fork-master/TerrainLib.cpp
   - Updated terrain library behavior used by paint/reset operations.
@@ -54,6 +90,7 @@ Primary source files edited
 
 - TSRE5-Trainsim.Com-Fork-master/TerrainLibQt.cpp
   - Updated texture loading/saving behavior to protect editable terrain texture resolution.
+  - Changed loaded terrain season refresh to rebind texture IDs in place for both detailed and distant terrain tiles.
 
 - TSRE5-Trainsim.Com-Fork-master/TerrainLibQt.h
   - Added declarations used by updated texture handling.
@@ -66,6 +103,12 @@ Primary source files edited
 
 - TSRE5-Trainsim.Com-Fork-master/Game.cpp
   - Updated default/editor settings used by smoother startup and route editing.
+  - Added forest-region view toggle state.
+  - Removed the old seasonal-editing startup warning, generated settings-file hint, and settings parser hook.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.h
+  - Added declaration for forest-region view toggle state.
+  - Removed the obsolete seasonal-editing settings flag declaration.
 
 - TSRE5-Trainsim.Com-Fork-master/TDB.cpp
   - Touched during track/road vector paint investigation and shared paint path work.
@@ -75,12 +118,44 @@ Primary source files edited
 
 - TSRE5-Trainsim.Com-Fork-master/PolyForestObj.cpp
   - Updated forest generation behavior for stutter reduction.
+  - Added forest-region view toggle render/generation guard.
+  - Added season texture refresh/rebuild support for generated tree geometry.
+  - Added seasonal forest texture lookup with root fallback.
 
 - TSRE5-Trainsim.Com-Fork-master/ForestObj.cpp
   - Updated forest generation behavior for stutter reduction.
+  - Added forest-region view toggle render/generation guard.
+  - Added season texture refresh/rebuild support for generated tree geometry.
+  - Added seasonal forest texture lookup with root fallback.
 
 - TSRE5-Trainsim.Com-Fork-master/WorldObj.cpp
   - Fixed accidental assignment-in-condition debug checks found during compiler cleanup.
+
+- TSRE5-Trainsim.Com-Fork-master/OglObj.cpp
+  - Reset cached texture IDs only when generated objects receive a changed material path, avoiding severe stutter from repeated same-material assignments while still allowing seasonal refreshes to bind new textures.
+
+- TSRE5-Trainsim.Com-Fork-master/TexLib.cpp
+  - Fixed texture reload mode so reloading an already-cached texture returns the existing texture's real ID instead of accidentally returning texture ID 0.
+
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+  - Removed the old visible Season/Seasonal Editing settings rows from the Settings panel.
+  - Removed the obsolete seasonal-editing settings lookup.
+
+- TSRE5-Trainsim.Com-Fork-master/ProceduralMstsDyntrack.cpp
+  - Updated procedural dynamic track texture selection to follow the active season directly with normal-texture fallback.
+
+- TSRE5-Trainsim.Com-Fork-master/TransferObj.cpp
+  - Updated transfer texture selection to use the active seasonal texture folder with root fallback.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainClient.cpp
+  - Updated terrain-client texture paths to use the shared TERRTEX season helper.
+
+- TSRE5-Trainsim.Com-Fork-master/TSRE5_resource.rc
+  - Added the TSRE icon to the Windows executable resource.
+  - Corrected the Windows resource file type to application.
+
+- AddShortcutDesktop.cmd
+  - Created desktop shortcut helper for the local/package TSRE5 SCOmod executable.
 
 Created source/test/reference code files
 
@@ -93,6 +168,9 @@ Created source/test/reference code files
 - reference/mstsexporter.py
   - Saved local reference copy of the MSTS Blender exporter for future shape/export research.
 
+- TSRE5-Trainsim.Com-Fork-master/tsre.ico
+  - Added executable icon asset used by the Windows resource file.
+
 Project files edited
 
 - TSRE5-Trainsim.Com-Fork-master/nbproject/Makefile-Release_x64.mk
@@ -103,3 +181,6 @@ Project files edited
 
 - TSRE5-Trainsim.Com-Fork-master/nbproject/Makefile-impl.mk
   - Updated by project/build configuration work as needed for the current MinGW/Qt build.
+
+- TSRE5-Trainsim.Com-Fork-master/nbproject/qt-Release_x64.pro
+  - Added explicit Windows resource file reference for the TSRE executable icon.

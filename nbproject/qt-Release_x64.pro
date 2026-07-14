@@ -15,6 +15,7 @@ HEADERS += PolyForestObj.h PropertiesHazard.h RouteMergeDialog.h SettingsDialog.
 HEADERS += TerrainTrackMath.h
 FORMS +=
 RESOURCES +=
+RC_FILE = ../TSRE5_resource.rc
 TRANSLATIONS +=
 OBJECTS_DIR = build/Release_x64/MinGW_64b-Windows
 MOC_DIR = 

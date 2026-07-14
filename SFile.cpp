@@ -29,6 +29,7 @@
 #include "RenderItem.h"
 #include "Renderer.h"
 #include "Route.h"
+#include "Terrain.h"
 
 SFile::SFile() {
     pathid = "";
@@ -40,6 +41,7 @@ SFile::SFile(QString pathid, QString name, QString texp ) {
     this->nazwa = name;
     this->isinit = 1;
     this->loaded = 0;
+    this->baseTexPath = texp;
     this->texPath = texp;
     state.push_back(State());
 }
@@ -605,21 +607,13 @@ void SFile::loadSd() {
             continue;
         }
     }
-    QString seasonPath;
-    //qDebug() << esdAlternativeTexture << this->TextureFlags[Game::season];
-    //qDebug() << (esdAlternativeTexture & this->TextureFlags[Game::season]);
-    if((esdAlternativeTexture & Game::TextureFlags[Game::season]) != 0)
-        seasonPath = "/" + Game::season.toLower();
-    
-    if(Game::season.toLower() == "winter" || Game::season.toLower() == "autumnsnown" || Game::season.toLower() == "wintersnow" || Game::season.toLower() == "springsnow" ){
-        if(esdAlternativeTexture & Game::TextureFlags["snow"] != 0)
-            seasonPath = "/snow";
-        if(esdAlternativeTexture & Game::TextureFlags["snowtrack"] != 0)
-            seasonPath = "/snow";
-    }
-    texPath += seasonPath;
+    texPath = baseTexPath;
     loadedSd = true;
     delete data;
+}
+
+QString SFile::resolveTexturePath(QString textureName) const {
+    return Terrain::resolveTexturePath(baseTexPath, Terrain::textureSubdirCandidatesForFlags(esdAlternativeTexture, Game::season), textureName);
 }
 
 void SFile::getSize() {
@@ -868,6 +862,19 @@ void SFile::reload() {
     }
 }
 
+void SFile::refreshSeasonTextures() {
+    if (loaded != 1 || ilosci <= 0 || image == NULL)
+        return;
+
+    texPath = baseTexPath;
+    for (int i = 0; i < ilosci; i++) {
+        image[i].texAddr = -1;
+        image[i].tex = -1;
+    }
+    renderItems.clear();
+    requiresUpdate = true;
+}
+
 unsigned int SFile::newState(){
     state.push_back(State());
     return state.size() - 1;
@@ -1030,8 +1037,7 @@ void SFile::pushRenderItem(int selectionColor, unsigned int stateId){
                 } else if (image[texture[primstate[prim_state].arg4].image].tex == -2) {
                 } else if (image[texture[primstate[prim_state].arg4].image].tex == -1) {
                     image[texture[primstate[prim_state].arg4].image].tex = TexLib::addTex(
-                            texPath,
-                            image[texture[primstate[prim_state].arg4].image].name
+                            resolveTexturePath(image[texture[primstate[prim_state].arg4].image].name)
                             );
                     requiresUpdate = true;
                 } else if (TexLib::mtex[image[texture[primstate[prim_state].arg4].image].tex]->glLoaded) {
@@ -1181,8 +1187,7 @@ void SFile::render(int selectionColor, unsigned int stateId) {
                 //    qDebug() << "=========" << image[texture[primstate[prim_state].arg4].image].name;
                 //}
                 image[texture[primstate[prim_state].arg4].image].tex = TexLib::addTex(
-                        texPath,
-                        image[texture[primstate[prim_state].arg4].image].name
+                        resolveTexturePath(image[texture[primstate[prim_state].arg4].image].name)
                         );
                 //glDisable(GL_TEXTURE_2D);
             } else if (TexLib::mtex[image[texture[primstate[prim_state].arg4].image].tex]->glLoaded) {
