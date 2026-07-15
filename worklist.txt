@@ -1,5 +1,7 @@
 TSRE SCOmod Improvements
 
+Alright boys, pour yourself a strong cup of coffee and set a spell. We need to have us a plain talk about TSRE: what it does right, where it gives us fits, and what we can still do to make this old mule pull a little smoother. This is a long post, no denying that, but if you've ever spent an evening fussing track into a hillside, painting terrain patch by patch, or muttering at the editor like it ought to know better by now, I reckon it'll be worth the read.
+
 Purpose and scope
 
 I have been working through a set of practical TSRE route-editor improvements, mainly focused on making terrain work less painful for MSTS/Open Rails route building. The work started with track cuts and embankments, then expanded into route painting, water-edge detection, texture cleanup, and some editor quality-of-life items.
@@ -8,17 +10,27 @@ There has been talk for years about a new Open Rails route editor, and I would s
 
 I do not intend this to become a separate production fork of Eric's work. This is a test branch for debugging, experimentation, and evaluation. Eric's code should remain the production copy. My goal is to make focused improvements in the areas I know best, then hand them back to Eric for consideration and, hopefully, eventual inclusion in the main project. As history has proven, my interest around here tends to ebb and flow, sometimes disappearing for months at a time, which makes me a poor candidate to host or maintain the main code long term. I have compiled an operational TSRE test build, though I will spare everyone the embarrassing details of how long it took me to get a clean compile.
 
-Completed Work Summary
+Highlights
 
-The following major updates and fixes have been implemented in this testing phase.
-
-- Terrain Conforming & Smoothing: Overhauled the F-key terrain-to-track logic to ensure flatter track beds, smoother shoulder transitions, and steeper cut/berm walls without creating holes or encroachment. Added a Shift+F vertical smoothing pass for track and ruler objects.
-- Tile-Level Autopaint: Introduced rapid tile-level painting commands for Track, Roads, and Water, including an intelligent water-edge detection tool that accurately feathers shorelines against actual terrain heights.
-- Seasonal & Texture Improvements: Exposed Summer, Spring, Autumn, Winter, and Night texture selections directly in the F2 panel, with route-object, forest, transfer, dynamic-track, and TERRTEX fallback refreshes tied to that selector. Added a "Mirror Seasons" option to paint both normal and snow terrain textures simultaneously, disabled the obsolete settings-file seasonal editing switch, added 0-360 degree texture rotation for seamless directional ground textures, and fixed high-resolution (1024x1024) editable texture downsampling.
-- Terrain Paint Presets: Created route-local terrain paint presets (saving texture path, brush size, intensity, shape, and rotation) to a dedicated JSON file, keeping editor metadata out of MSTS/ORTS route files.
-- Performance Optimization: Added budgeted forest generation and stall logging to reduce severe editor stutters on populated routes. Included a View menu toggle to completely hide and skip generating Forest Regions while navigating, and fixed a texture-cache invalidation bug that caused severe lag/wrong texture reuse when generated geometry reapplied the same material path.
-- Cleanup Tools: Added destructive, confirmation-gated reset tools to completely clear route or tile-level terrain paint (reverting to terrain.ace) and delete generated swatch files.
-- Quality of Life & Build Fixes: Cleaned up the codebase for full MSYS2/MinGW toolchain compatibility. Added a startup guard to prevent multiple TSRE instances from running simultaneously, fixed visual bugs in the route-selection screen, and established a dedicated desktop icon/shortcut helper.
+- Improved F-key terrain conforming for track cuts and embankments.
+- Adjusted F-tool track-width behavior so the 1/2/3 settings are more practical.
+- Added a `Shift+F` terrain smoothing pass for selected track/ruler objects.
+- Added tile-level autopaint tools for track, roads, and water.
+- Added real shoreline/water-edge terrain painting based on terrain/water contour detection.
+- Added route and tile terrtex reset tools for returning painted terrain tiles to `terrain.ace`.
+- Added route-local F2 terrain paint presets for texture, brush size, intensity, brush shape, and rotation.
+- Added a 0-360 degree terrain texture rotation control for seamless directional textures.
+- Added an F2 seasonal selector for Summer, Spring, Autumn, Winter, and Night.
+- Added seasonal fallback refresh for terrain, route objects, transfers, dynamic track, and forest/polyforest geometry.
+- Added Mirror Seasons for paired normal/snow terrain painting.
+- Disabled the old settings-file `season` / `seasonalEditing` controls so the F2 selector is the active seasonal control.
+- Protected editable 1024x1024 terrtex files from accidental downsampling while painting.
+- Added forest/object stutter mitigation and a View menu toggle for Forest Regions.
+- Fixed a texture-cache invalidation bug that caused severe lag and wrong texture reuse on large populated routes.
+- Added single-instance startup protection.
+- Fixed route-selection table refresh when switching MSTS root folders.
+- Added a Windows executable icon and `AddShortcutDesktop.cmd` helper.
+- Added build fixes for current MSYS2/MinGW tooling.
 
 Test branch, forked from Eric's TSRE master branch:
 
