@@ -566,6 +566,8 @@ RouteEditorWindow::RouteEditorWindow() {
     
     QObject::connect(statusWindow, SIGNAL(windowClosed()),
                       this, SLOT(statusWindowClosed()));     
+    QObject::connect(statusWindow, SIGNAL(statusCommand(QString)),
+                      glWidget, SLOT(statusPanelCommand(QString)));
 
     QObject::connect(errorMessagesWindow, SIGNAL(windowClosed()),
                       this, SLOT(errorMessagesWindowClosed())); 

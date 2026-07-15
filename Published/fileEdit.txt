@@ -14,6 +14,7 @@ Primary source files edited
   - Fixed route-selection table refresh when switching MSTS root folders.
   - Ensured route loading uses the route-name column.
   - Added Restore Last Session startup button and AppData lastSession.json restore handling.
+  - Updated the startup window titlebar to TSRE SCOmod v0.3 branding.
 
 - TSRE5-Trainsim.Com-Fork-master/LoadWindow.h
   - Added Restore Last Session slot, button, and startup button layout helpers.
@@ -35,14 +36,32 @@ Primary source files edited
   - Added menu entries and event hookups for tile autopaint/reset commands.
   - Added Shift+F terrain smoothing handling.
   - Added camera state export/restore support for Restore Last Session.
+  - Added Status Window command handling for clickable editor-state buttons.
+  - Added richer selected-object status labels and clear-selection handling.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
   - Added declarations for new editor actions/helpers.
   - Added Restore Last Session camera state declaration.
+  - Added Status Window command slot declaration.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
   - Added AppData lastSession.json writing on normal editor close.
   - Added main/Navi/Status window geometry restore handling.
+  - Connected the Status Window control-panel commands to the editor widget.
+
+- TSRE5-Trainsim.Com-Fork-master/Camera.cpp
+  - Added camera terrain-lock setter used by the clickable Status Window.
+
+- TSRE5-Trainsim.Com-Fork-master/Camera.h
+  - Added camera terrain-lock setter declaration.
+
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.cpp
+  - Converted passive status readouts into clickable button controls.
+  - Added state-aware button colors for editor modes and terrain-brush direction.
+  - Added selected-object clear button and Camera Free / Camera Terrain Free labels.
+
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.h
+  - Added Status Window command signal and button action slots.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
   - Added private Restore Last Session save/restore helpers.
@@ -119,6 +138,7 @@ Primary source files edited
   - Updated default/editor settings used by smoother startup and route editing.
   - Added forest-region view toggle state.
   - Removed the old seasonal-editing startup warning, generated settings-file hint, and settings parser hook.
+  - Updated application name/version branding to TSRE SCOmod v0.3.
   - Added Restore Last Session window/camera restore state.
   - Added shared AppData/TSRE JSON path helpers for session and route preset state.
 

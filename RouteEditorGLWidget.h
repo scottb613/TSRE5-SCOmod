@@ -112,6 +112,7 @@ public slots:
     void reloadMkrFiles();
     void setCameraObject(GameObj* obj);
     void setMoveStep(float val);
+    void statusPanelCommand(QString name);
     void paintToolObj();
     void paintToolObjSelected();
     void paintToolTDB();

@@ -35,6 +35,8 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added a Windows executable icon and `AddShortcutDesktop.cmd` helper.
 - Added build fixes for current MSYS2/MinGW tooling.
 - Added Restore Last Session on the startup screen to reopen the last route, camera view, and editor window layout.
+- Converted the Status Window into a compact clickable control panel.
+- Updated startup and editor titlebars to identify the build as `TSRE SCOmod v0.3`.
 
 ## Downloads
 
@@ -53,6 +55,14 @@ When TSRE closes normally, it writes `lastSession.json` under the user's AppData
 Route paint presets are also stored under the AppData TSRE folder, with a separate route-specific folder for each MSTS root/route combination.
 
 This lets a route builder restart TSRE and return to the last working context without reselecting the route and manually flying back to the same location.
+
+## Status Window Control Panel
+
+The Status Window is now a compact clickable control panel instead of only a passive readout. It can show and toggle common editor states such as Select, Place New, Rotate, Translate, Resize, AutoTDB, Stick To Terrain, Terrain Brush direction, Camera lock, and Camera Terrain lock.
+
+The selected-object readout now shows useful broad categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking that selected-object button clears the current selection.
+
+The startup screen and main editor window titlebars now identify the build as `TSRE SCOmod v0.3`.
 
 ## Seasonal TERRTEX Painting
 

@@ -34,6 +34,7 @@ public:
     virtual void setPos(float* pos);
     virtual void setPos(float x, float y, float z);
     virtual void setPlayerRot(float x, float y);
+    virtual void setLockYaxis(bool val);
     virtual float getRotX();
     virtual float getRotY();
     virtual void setPozT(int x, int y);

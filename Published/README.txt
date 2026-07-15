@@ -20,6 +20,9 @@ Highlights:
 - startup guard to prevent multiple TSRE instances
 - fixed route-selection table refresh when switching MSTS roots
 - Restore Last Session button for reopening the last route, camera view, and editor layout
+- clickable Status Window control panel for common editor state toggles
+- useful selected-object status readout with click-to-clear selection
+- TSRE SCOmod v0.3 startup and editor titlebar branding
 - embedded TSRE icon in the Windows executable
 - AddShortcutDesktop.cmd helper for creating a desktop shortcut
 
@@ -31,5 +34,8 @@ TERRTEX painting only writes to default TERRTEX and TERRTEX/SNOW. Mirror Season 
 
 Startup restore note:
 After TSRE closes normally, it writes lastSession.json under the user's AppData TSRE folder. The startup screen's Restore Last Session button reloads the last route, main/Navi/Status window positions, and camera view. Route paint preset JSON files are also stored under the AppData TSRE folder in route-specific subfolders.
+
+Status window note:
+The Status Window now works as a compact clickable control panel for common editor states. The selected-object button reports the current broad selection type and clears the current selection when clicked.
 
 Run TSRE5.exe from this folder, or run AddShortcutDesktop.cmd to create a desktop shortcut.

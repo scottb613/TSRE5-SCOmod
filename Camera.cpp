@@ -1,9 +1,9 @@
 /*  This file is part of TSRE5.
  *
- *  TSRE5 - train sim game engine and MSTS/OR Editors. 
+ *  TSRE5 - train sim game engine and MSTS/OR Editors.
  *  Copyright (C) 2016 Piotr Gadecki <pgadecki@gmail.com>
  *
- *  Licensed under GNU General Public License 3.0 or later. 
+ *  Licensed under GNU General Public License 3.0 or later.
  *
  *  See LICENSE.md or https://www.gnu.org/licenses/gpl.html
  */
@@ -18,7 +18,7 @@
 
 Camera::Camera(float* pt) {
     pozT = pt;
-    
+
     up[0] = 0;
     up[1] = 1;
     up[2] = 0;
@@ -27,16 +27,16 @@ Camera::Camera(float* pt) {
     playerPos[0] = 0;
     playerPos[1] = 10;
     playerPos[2] = 0;
-    
+
     relativeRot[0] = 0;
     relativeRot[1] = 0;
     relativeRot[2] = 0;
     relativePos[0] = 0;
     relativePos[1] = 0;
     relativePos[2] = 0;
-    
+
     Mat4::identity(lookAt);
-    
+
     moveF = moveR = moveB = moveL = false;
     fov = Game::cameraFov;
     lockYaxis = Game::lockCamera;
@@ -72,9 +72,13 @@ void Camera::setPos(float* pos){
 void Camera::setPos(float x, float y, float z){
 }
 
-void Camera::setPlayerRot(float x, float y){   
+void Camera::setPlayerRot(float x, float y){
     this->playerRot[0] = x;
     this->playerRot[1] = y;
+}
+
+void Camera::setLockYaxis(bool val){
+    lockYaxis = val;
 }
 
 void Camera::setPozT(int x, int y){
@@ -95,7 +99,7 @@ void Camera::update(float fps) {
 }
 
 void Camera::renderHud(GLUU *gluu){
-    
+
     if(cameraObject != NULL)
         cameraObject->renderHud();
 }

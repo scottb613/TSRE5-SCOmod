@@ -33,6 +33,8 @@ Highlights
 - Added a Windows executable icon and `AddShortcutDesktop.cmd` helper.
 - Added build fixes for current MSYS2/MinGW tooling.
 - Added Restore Last Session on the startup screen to reopen the last route, camera view, and editor window layout.
+- Converted the Status Window into a compact clickable control panel.
+- Updated the startup and editor titlebars to identify the build as TSRE SCOmod v0.3.
 
 Test branch, forked from Eric's TSRE master branch:
 
@@ -45,6 +47,14 @@ Startup session restore
 I added a Restore Last Session button to the first startup screen. Before a route is selected, the old full-width Exit button is now split into Restore Last Session and Exit. When TSRE closes normally, it writes a small lastSession.json file under the user's AppData TSRE folder. That file records the last route root, selected route, main window size and position, Navi/Status window positions, and the editor camera tile, position, and rotation.
 
 The intent is simple: if you were deep in a route, looking at a specific trouble spot, you can restart TSRE and return to that same working context without reselecting the MSTS folder, reselecting the route, and manually flying back to the same location.
+
+Status window control panel
+
+The old Status Window was mostly a passive readout. I changed it into a compact clickable control panel while keeping roughly the same footprint. It now shows and controls common editing states such as Select, Place New, Rotate, Translate, Resize, AutoTDB, Stick To Terrain, Terrain Brush direction, Camera lock, and Camera Terrain lock.
+
+The button colors now show state at a glance: active/on states are highlighted, neutral states stay dark, and terrain-brush direction uses different colors for plus and minus. The selected-object readout is now useful as well, showing broad selection categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking the selected-object button clears the current selection.
+
+I also updated the visible program titlebars so the startup screen and main editor window identify the build as TSRE SCOmod v0.3 instead of the older Trainsim.Com Fork version string.
 
 
 Cut and embankment terrain conforming

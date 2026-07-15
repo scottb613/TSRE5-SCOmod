@@ -42,7 +42,7 @@
 //////// Version
 //////////////////////////////////
 
-QString Game::AppVersion = "Trainsim.Com Fork v0.8.006c";  // over-ride from main.cpp
+QString Game::AppVersion = "v0.3";  // over-ride from main.cpp
 
 
 bool Game::ServerMode = false;
@@ -56,7 +56,7 @@ SoundList *Game::soundList = NULL;
 TerrainLib *Game::terrainLib = NULL;   
 bool Game::LocalTSectionOnly = false;
 bool Game::UseWorkingDir = false;
-QString Game::AppName = "TSRE5";
+QString Game::AppName = "TSRE SCOmod";
 
 /// EFO New Setting for default startup option
 QString Game::startapp = "r";
