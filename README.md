@@ -16,6 +16,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Improved F-key terrain conforming for track cuts and embankments.
 - Adjusted F-tool track-width behavior so the 1/2/3 settings are more practical.
 - Added a `Shift+F` terrain smoothing pass for selected track/ruler objects.
+- Added an F2 `Conform DB` height brush mode for grade-following spot terrain cleanup along track and road databases.
 - Added tile-level autopaint tools for track, roads, and water.
 - Added real shoreline/water-edge terrain painting based on terrain/water contour detection.
 - Added route and tile terrtex reset tools for returning painted terrain tiles to `terrain.ace`.
@@ -23,6 +24,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added a 0-360 degree terrain texture rotation control for seamless directional textures.
 - Added an F2 seasonal selector for Summer, Spring, Autumn, Winter, and Night.
 - Added seasonal fallback refresh for terrain, route objects, transfers, dynamic track, and forest/polyforest geometry.
+- Fixed transfer-object reload behavior when switching from Winter back to Summer.
 - Added Mirror Seasons for paired normal/snow terrain painting.
 - Disabled the old settings-file `season` / `seasonalEditing` controls so the F2 selector is the active seasonal control.
 - Protected editable 1024x1024 terrtex files from accidental downsampling while painting.
