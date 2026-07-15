@@ -19,6 +19,7 @@ Highlights:
 - forest/object stutter mitigation pass
 - startup guard to prevent multiple TSRE instances
 - fixed route-selection table refresh when switching MSTS roots
+- Restore Last Session button for reopening the last route, camera view, and editor layout
 - embedded TSRE icon in the Windows executable
 - AddShortcutDesktop.cmd helper for creating a desktop shortcut
 
@@ -27,5 +28,8 @@ See fileEdit.txt for the code/project file edit ledger.
 
 Seasonal TERRTEX note:
 TERRTEX painting only writes to default TERRTEX and TERRTEX/SNOW. Mirror Season applies the same brush/autopaint trace to the paired side, but only when a matching paired source texture exists. No matching snow/default texture means no mirror paint for that stroke. With Mirror Season off, TSRE still creates safe terrain.ace placeholders on the opposite side when needed so one-season painting does not leave blank tiles.
+
+Startup restore note:
+After TSRE closes normally, it writes lastSession.json beside the executable. The startup screen's Restore Last Session button reloads the last route, main/Navi/Status window positions, and camera view.
 
 Run TSRE5.exe from this folder, or run AddShortcutDesktop.cmd to create a desktop shortcut.

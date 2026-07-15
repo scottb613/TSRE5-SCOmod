@@ -28,6 +28,7 @@ public slots:
     void handleBrowseButton(QString directory = "");
 
     void routeLoad();
+    void restoreLastSession();
     void setNewRoute();
     void setLoadRoute();
     void cRecentEnabled(QString val);
@@ -35,11 +36,14 @@ signals:
     void showMainWindow();
 private:
     void listRoutes();
+    void updateStartupButtons(bool validRoot);
+    bool readLastSession();
     QTableWidget routeList;
     QComboBox cRecent;
     QPushButton *browse;
     QPushButton *load;
     QPushButton *neww;
+    QPushButton *restoreLast;
     QPushButton *exit;
 
     

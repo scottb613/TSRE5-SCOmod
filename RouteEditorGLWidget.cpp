@@ -14,6 +14,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QMessageBox>
+#include <QJsonObject>
 #include <math.h>
 #include "GLUU.h"
 #include "SFile.h"
@@ -291,6 +292,29 @@ void RouteEditorGLWidget::cameraInit(){
         spos[1] = 0;
     }
     camera->setPos((float*) &spos);
+    if(Game::restoreLastSessionCamera){
+        camera->setPozT(Game::restoreCameraTileX, Game::restoreCameraTileZ);
+        camera->setPos(Game::restoreCameraX, Game::restoreCameraY, Game::restoreCameraZ);
+        camera->setPlayerRot(Game::restoreCameraRotX, Game::restoreCameraRotY);
+        Game::terrainLib->load(Game::restoreCameraTileX, Game::restoreCameraTileZ);
+        Game::restoreLastSessionCamera = false;
+    }
+}
+
+QJsonObject RouteEditorGLWidget::getSessionCameraState() const{
+    QJsonObject state;
+    if(camera == NULL)
+        return state;
+
+    float* pos = camera->getPos();
+    state["tileX"] = (int)camera->pozT[0];
+    state["tileZ"] = (int)camera->pozT[1];
+    state["x"] = pos[0];
+    state["y"] = pos[1];
+    state["z"] = pos[2];
+    state["rotX"] = camera->getRotX();
+    state["rotY"] = camera->getRotY();
+    return state;
 }
 
 void RouteEditorGLWidget::initializeGL() {

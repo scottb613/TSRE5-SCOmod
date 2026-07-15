@@ -18,6 +18,7 @@
 #include <QOpenGLBuffer>
 #include <QMatrix4x4>
 #include <QBasicTimer>
+#include <QJsonObject>
 #include "CameraFree.h"
 #include "CameraConsist.h"
 #include "WorldObj.h"
@@ -56,6 +57,7 @@ public:
     
     bool initRoute();
     void cameraInit();
+    QJsonObject getSessionCameraState() const;
     void playInit();
     
     void getUnsavedInfo(QVector<QString> &items);

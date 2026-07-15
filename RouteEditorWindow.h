@@ -73,6 +73,7 @@ public slots:
     void viewTerrainShape(bool show);
     void viewTerrainGrid(bool show);
     void viewInteractives(bool show);
+    void viewForestRegions(bool show);
     void viewTrackDbLines(bool show);
     void viewTsectionLines(bool show);
     void viewTrackItems(bool show);
@@ -116,6 +117,8 @@ protected:
     void hideAllTools();
 
 private:
+    void saveLastSession();
+    void applyRestoredSessionGeometry();
     QWidget* box;
     QWidget* box2;
     
@@ -172,6 +175,7 @@ private:
     QAction* vViewTerrainShape;
     QAction* vShowWorldObjPivotPoints;
     QAction* vViewInteractives;
+    QAction* vViewForestRegions;
     QAction* vViewTrackDbLines;
     QAction* vViewTsectionLines;
     QAction* vViewTrackItems;

@@ -216,6 +216,30 @@ QColor *Game::terrBrushColor = new QColor("#000000");   // Default black
 QString Game::mainPos;   /// EFO Null handling exists
 QString Game::statusPos;  /// EFO Null handling exists
 QString Game::naviPos;  /// EFO Null handling exists
+bool Game::restoreLastSessionWindowGeometry = false;
+int Game::restoreMainX = 0;
+int Game::restoreMainY = 0;
+int Game::restoreMainW = 0;
+int Game::restoreMainH = 0;
+bool Game::restoreMainMaximized = false;
+bool Game::restoreNaviGeometry = false;
+int Game::restoreNaviX = 0;
+int Game::restoreNaviY = 0;
+int Game::restoreNaviW = 0;
+int Game::restoreNaviH = 0;
+bool Game::restoreStatusGeometry = false;
+int Game::restoreStatusX = 0;
+int Game::restoreStatusY = 0;
+int Game::restoreStatusW = 0;
+int Game::restoreStatusH = 0;
+bool Game::restoreLastSessionCamera = false;
+int Game::restoreCameraTileX = 0;
+int Game::restoreCameraTileZ = 0;
+float Game::restoreCameraX = 0;
+float Game::restoreCameraY = 0;
+float Game::restoreCameraZ = 0;
+float Game::restoreCameraRotX = 0;
+float Game::restoreCameraRotY = 0;
 
 bool  Game::debugOutput = false;
 bool  Game::legacySupport = false; 

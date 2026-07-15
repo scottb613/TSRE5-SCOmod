@@ -34,6 +34,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Fixed route-selection table refresh when switching MSTS root folders.
 - Added a Windows executable icon and `AddShortcutDesktop.cmd` helper.
 - Added build fixes for current MSYS2/MinGW tooling.
+- Added Restore Last Session on the startup screen to reopen the last route, camera view, and editor window layout.
 
 ## Downloads
 
@@ -42,6 +43,14 @@ Executable test builds are intended to be published on the GitHub Releases page,
 Download the current test ZIP from Releases when available. Keep this copy separate from any production TSRE install.
 
 The ZIP includes `AddShortcutDesktop.cmd`, which can create a desktop shortcut for the packaged `TSRE5.exe`.
+
+## Startup Session Restore
+
+The first startup screen now includes `Restore Last Session`. Before a route is selected, the old full-width `Exit` button is split into `Restore Last Session` and `Exit`.
+
+When TSRE closes normally, it writes `lastSession.json` beside the executable. That file records the last route root, selected route, main window size and position, Navi/Status window positions, and the editor camera tile, position, and rotation.
+
+This lets a route builder restart TSRE and return to the last working context without reselecting the route and manually flying back to the same location.
 
 ## Seasonal TERRTEX Painting
 

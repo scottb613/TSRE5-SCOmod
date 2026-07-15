@@ -13,6 +13,10 @@
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
 #include <QNetworkReply>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QFile>
+#include <QCoreApplication>
 #include "Game.h"
 #include <QDebug>
 #include "NewRouteWindow.h"
@@ -43,6 +47,9 @@ LoadWindow::LoadWindow() {
     neww = new QPushButton("New");
     neww->setStyleSheet(QString("background-color: ")+Game::StyleYellowButton);
     connect(neww, SIGNAL (released()), this, SLOT (setNewRoute()));
+    restoreLast = new QPushButton("Restore Last Session");
+    restoreLast->setStyleSheet(QString("background-color: ")+Game::StyleGreenButton);
+    connect(restoreLast, SIGNAL (released()), this, SLOT (restoreLastSession()));
     exit = new QPushButton("Exit");
     exit->setStyleSheet(QString("background-color: ")+Game::StyleRedButton);
 
@@ -81,6 +88,7 @@ LoadWindow::LoadWindow() {
     QHBoxLayout *vbox = new QHBoxLayout;
     vbox->addWidget(load);
     vbox->addWidget(neww);
+    vbox->addWidget(restoreLast);
     vbox->addWidget(exit);
     vbox->setContentsMargins(0,0,0,0);
     box->setLayout(vbox);
@@ -112,18 +120,12 @@ LoadWindow::LoadWindow() {
     
     if(Game::checkRoot(Game::root)){
         qDebug()<<"ok";
-        load->show();
-        neww->show();
-        neww->setFixedWidth(100);
-        exit->setFixedWidth(100);
+        updateStartupButtons(true);
         browse->setText(Game::root);
         browse->setStyleSheet(QString("color: ")+Game::StyleGreenText);
         this->listRoutes();
     } else {
-        exit->setFixedWidth(600);
-        load->hide();
-        //nowa->hide();
-        neww->hide();
+        updateStartupButtons(false);
     }
 }
 
@@ -153,14 +155,11 @@ void LoadWindow::handleBrowseButton(QString directory){
     load->hide();
     //nowa->hide();
     neww->hide();
-    exit->setFixedWidth(600);
+    updateStartupButtons(false);
     routeList.clear();
     if(Game::checkRoot(directory)){
         qDebug()<<"ok";
-        load->show();
-        neww->show();
-        neww->setFixedWidth(100);
-        exit->setFixedWidth(100);
+        updateStartupButtons(true);
         browse->setStyleSheet(QString("color: ")+Game::StyleGreenText);
         Game::root = directory;
         this->listRoutes();
@@ -186,6 +185,108 @@ void LoadWindow::handleBrowseButton(QString directory){
         in.flush();
         file.close();
     }
+}
+
+void LoadWindow::updateStartupButtons(bool validRoot){
+    restoreLast->setEnabled(QFile::exists(QCoreApplication::applicationDirPath()+"/lastSession.json"));
+    restoreLast->show();
+    exit->show();
+    if(validRoot){
+        load->show();
+        neww->show();
+        load->setFixedWidth(100);
+        neww->setFixedWidth(100);
+        restoreLast->setFixedWidth(180);
+        exit->setFixedWidth(100);
+    } else {
+        load->hide();
+        neww->hide();
+        restoreLast->setFixedWidth(300);
+        exit->setFixedWidth(300);
+    }
+}
+
+bool LoadWindow::readLastSession(){
+    QFile file(QCoreApplication::applicationDirPath()+"/lastSession.json");
+    if(!file.open(QIODevice::ReadOnly))
+        return false;
+
+    QJsonParseError parseError;
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
+    file.close();
+    if(parseError.error != QJsonParseError::NoError || !doc.isObject())
+        return false;
+
+    QJsonObject root = doc.object();
+    QString routeRoot = root.value("root").toString();
+    QString routeName = root.value("route").toString();
+    if(routeRoot.isEmpty() || routeName.isEmpty())
+        return false;
+
+    if(!Game::checkRoot(routeRoot))
+        return false;
+
+    Game::root = routeRoot;
+    if(!Game::checkRoute(routeName))
+        return false;
+
+    Game::route = routeName;
+
+    QJsonObject mainWindow = root.value("mainWindow").toObject();
+    if(!mainWindow.isEmpty()){
+        Game::restoreLastSessionWindowGeometry = true;
+        Game::restoreMainX = mainWindow.value("x").toInt();
+        Game::restoreMainY = mainWindow.value("y").toInt();
+        Game::restoreMainW = mainWindow.value("w").toInt();
+        Game::restoreMainH = mainWindow.value("h").toInt();
+        Game::restoreMainMaximized = mainWindow.value("maximized").toBool(false);
+        Game::mainPos = QString::number(Game::restoreMainX)+","+QString::number(Game::restoreMainY);
+    }
+
+    QJsonObject naviWindow = root.value("naviWindow").toObject();
+    if(!naviWindow.isEmpty()){
+        Game::restoreNaviGeometry = true;
+        Game::restoreNaviX = naviWindow.value("x").toInt();
+        Game::restoreNaviY = naviWindow.value("y").toInt();
+        Game::restoreNaviW = naviWindow.value("w").toInt();
+        Game::restoreNaviH = naviWindow.value("h").toInt();
+        Game::naviPos = QString::number(Game::restoreNaviX)+","+QString::number(Game::restoreNaviY);
+    }
+
+    QJsonObject statusWindow = root.value("statusWindow").toObject();
+    if(!statusWindow.isEmpty()){
+        Game::restoreStatusGeometry = true;
+        Game::restoreStatusX = statusWindow.value("x").toInt();
+        Game::restoreStatusY = statusWindow.value("y").toInt();
+        Game::restoreStatusW = statusWindow.value("w").toInt();
+        Game::restoreStatusH = statusWindow.value("h").toInt();
+        Game::statusPos = QString::number(Game::restoreStatusX)+","+QString::number(Game::restoreStatusY);
+    }
+
+    QJsonObject camera = root.value("camera").toObject();
+    if(!camera.isEmpty()){
+        Game::restoreLastSessionCamera = true;
+        Game::restoreCameraTileX = camera.value("tileX").toInt();
+        Game::restoreCameraTileZ = camera.value("tileZ").toInt();
+        Game::restoreCameraX = (float)camera.value("x").toDouble();
+        Game::restoreCameraY = (float)camera.value("y").toDouble();
+        Game::restoreCameraZ = (float)camera.value("z").toDouble();
+        Game::restoreCameraRotX = (float)camera.value("rotX").toDouble();
+        Game::restoreCameraRotY = (float)camera.value("rotY").toDouble();
+    }
+
+    return true;
+}
+
+void LoadWindow::restoreLastSession(){
+    if(!readLastSession()){
+        QMessageBox::warning(this, "Restore Last Session", "The last session could not be restored.");
+        updateStartupButtons(Game::checkRoot(Game::root));
+        return;
+    }
+
+    this->hide();
+    emit showMainWindow();
 }
 
 void LoadWindow::routeLoad(){

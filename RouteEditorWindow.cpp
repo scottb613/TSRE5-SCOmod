@@ -10,6 +10,11 @@
 
 #include <QtWidgets>
 #include <QStatusBar>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QFile>
+#include <QDateTime>
+#include <QCoreApplication>
 #include "RouteEditorGLWidget.h"
 #include "RouteEditorWindow.h"
 #include "Game.h"
@@ -296,6 +301,9 @@ RouteEditorWindow::RouteEditorWindow() {
     vViewInteractives = GuiFunct::newMenuCheckAction(tr("&Interactives"), this); 
     viewMenu->addAction(vViewInteractives);
     QObject::connect(vViewInteractives, SIGNAL(triggered(bool)), this, SLOT(viewInteractives(bool)));
+    vViewForestRegions = GuiFunct::newMenuCheckAction(tr("&Forest Region"), this, Game::viewForestRegions);
+    viewMenu->addAction(vViewForestRegions);
+    QObject::connect(vViewForestRegions, SIGNAL(triggered(bool)), this, SLOT(viewForestRegions(bool)));
     vViewTrackDbLines = GuiFunct::newMenuCheckAction(tr("Track&DB Lines"), this); 
     viewMenu->addAction(vViewTrackDbLines);
     QObject::connect(vViewTrackDbLines, SIGNAL(triggered(bool)), this, SLOT(viewTrackDbLines(bool)));    
@@ -695,6 +703,7 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
         
     if(unsavedItems.size() == 0){
         if(Game::debugOutput) qDebug() << "Nothing to Save";
+        saveLastSession();
         emit exitNow();
         event->accept();
         SoundManager::CloseAl();              
@@ -715,6 +724,7 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
         return;
     }
     if(unsavedDialog.changed == 2){
+        saveLastSession();
         emit exitNow();
         event->accept();
         SoundManager::CloseAl();        
@@ -727,6 +737,7 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
     save();
 
 
+    saveLastSession();
     
     emit exitNow();
     event->accept();
@@ -735,6 +746,68 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
     //exitToLoadWindow();    
     //qApp->quit();
     
+}
+
+void RouteEditorWindow::saveLastSession(){
+    QJsonObject root;
+    root["savedAt"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+    root["root"] = Game::root;
+    root["route"] = Game::route;
+
+    QJsonObject mainWindow;
+    QRect mainGeom = geometry();
+    mainWindow["x"] = mainGeom.x();
+    mainWindow["y"] = mainGeom.y();
+    mainWindow["w"] = mainGeom.width();
+    mainWindow["h"] = mainGeom.height();
+    mainWindow["maximized"] = isMaximized();
+    root["mainWindow"] = mainWindow;
+
+    QJsonObject navi;
+    QRect naviGeom = naviWindow->geometry();
+    navi["x"] = naviGeom.x();
+    navi["y"] = naviGeom.y();
+    navi["w"] = naviGeom.width();
+    navi["h"] = naviGeom.height();
+    navi["visible"] = naviWindow->isVisible();
+    root["naviWindow"] = navi;
+
+    QJsonObject status;
+    QRect statusGeom = statusWindow->geometry();
+    status["x"] = statusGeom.x();
+    status["y"] = statusGeom.y();
+    status["w"] = statusGeom.width();
+    status["h"] = statusGeom.height();
+    status["visible"] = statusWindow->isVisible();
+    root["statusWindow"] = status;
+
+    root["camera"] = glWidget->getSessionCameraState();
+
+    QFile file(QCoreApplication::applicationDirPath()+"/lastSession.json");
+    if(file.open(QIODevice::WriteOnly | QIODevice::Truncate)){
+        file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+        file.close();
+    }
+}
+
+void RouteEditorWindow::applyRestoredSessionGeometry(){
+    if(Game::restoreLastSessionWindowGeometry){
+        if(Game::restoreMainW > 0 && Game::restoreMainH > 0)
+            setGeometry(Game::restoreMainX, Game::restoreMainY, Game::restoreMainW, Game::restoreMainH);
+        if(Game::restoreMainMaximized)
+            showMaximized();
+        Game::restoreLastSessionWindowGeometry = false;
+    }
+
+    if(Game::restoreNaviGeometry && Game::restoreNaviW > 0 && Game::restoreNaviH > 0){
+        naviWindow->setGeometry(Game::restoreNaviX, Game::restoreNaviY, Game::restoreNaviW, Game::restoreNaviH);
+        Game::restoreNaviGeometry = false;
+    }
+
+    if(Game::restoreStatusGeometry && Game::restoreStatusW > 0 && Game::restoreStatusH > 0){
+        statusWindow->setGeometry(Game::restoreStatusX, Game::restoreStatusY, Game::restoreStatusW, Game::restoreStatusH);
+        Game::restoreStatusGeometry = false;
+    }
 }
 
 void RouteEditorWindow::save(){
@@ -1006,6 +1079,9 @@ void RouteEditorWindow::showWorldObjPivotPointsEnabled(bool show){
 void RouteEditorWindow::viewInteractives(bool show){
     Game::viewInteractives = show;
 }
+void RouteEditorWindow::viewForestRegions(bool show){
+    Game::viewForestRegions = show;
+}
 void RouteEditorWindow::viewTrackDbLines(bool show){
     Game::viewTrackDbLines = show;
 }
@@ -1083,6 +1159,7 @@ void RouteEditorWindow::show(){
     if(Game::lockCamera == true) emit updStatus(QString("camera"),QString("Camera Locked")); else emit updStatus(QString("camera"),QString("Camera Unlocked"));
     
     QMainWindow::show();
+    applyRestoredSessionGeometry();
 }
 
 void RouteEditorWindow::naviWindowClosed(){
@@ -1118,6 +1195,7 @@ void RouteEditorWindow::viewUnselectAll(){
     vViewTerrainShape->setChecked(false);
     vShowWorldObjPivotPoints->setChecked(false);
     vViewInteractives->setChecked(false);
+    vViewForestRegions->setChecked(false);
     vViewTrackDbLines->setChecked(false);
     vViewTsectionLines->setChecked(false);
     vViewTrackItems->setChecked(false);
@@ -1131,6 +1209,7 @@ void RouteEditorWindow::viewUnselectAll(){
     vViewTerrainShape->triggered(false);
     vShowWorldObjPivotPoints->triggered(false);
     vViewInteractives->triggered(false);
+    vViewForestRegions->triggered(false);
     vViewTrackDbLines->triggered(false);
     vViewTsectionLines->triggered(false);
     vViewTrackItems->triggered(false);
