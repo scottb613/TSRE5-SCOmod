@@ -16,7 +16,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QFile>
-#include <QCoreApplication>
 #include "Game.h"
 #include <QDebug>
 #include "NewRouteWindow.h"
@@ -188,7 +187,7 @@ void LoadWindow::handleBrowseButton(QString directory){
 }
 
 void LoadWindow::updateStartupButtons(bool validRoot){
-    restoreLast->setEnabled(QFile::exists(QCoreApplication::applicationDirPath()+"/lastSession.json"));
+    restoreLast->setEnabled(QFile::exists(Game::lastSessionFilePath()));
     restoreLast->show();
     exit->show();
     if(validRoot){
@@ -207,7 +206,7 @@ void LoadWindow::updateStartupButtons(bool validRoot){
 }
 
 bool LoadWindow::readLastSession(){
-    QFile file(QCoreApplication::applicationDirPath()+"/lastSession.json");
+    QFile file(Game::lastSessionFilePath());
     if(!file.open(QIODevice::ReadOnly))
         return false;
 

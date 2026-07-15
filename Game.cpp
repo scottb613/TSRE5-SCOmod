@@ -14,6 +14,8 @@
 #include <QDir>
 #include <QString>
 #include <QEventLoop>
+#include <QStandardPaths>
+#include <QCryptographicHash>
 //#include <QCoreApplication>
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
@@ -278,6 +280,37 @@ int Game::logfileDays = 99999;
 QStringList Game::preloadTextures;
 
 bool Game::resetTools = false;
+
+QString Game::appDataDir(){
+    QString base = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    if(base.isEmpty())
+        base = QDir::homePath()+"/AppData/Local";
+
+    QString path = base + "/TSRE";
+    QDir().mkpath(path);
+    return path;
+}
+
+QString Game::routeAppDataDir(){
+    QString cleanRoute = route.trimmed();
+    if(cleanRoute.isEmpty())
+        cleanRoute = "unknown_route";
+    cleanRoute.replace(QRegExp("[^A-Za-z0-9_\\-]+"), "_");
+    cleanRoute = cleanRoute.left(80);
+
+    QString rootHash = QString(QCryptographicHash::hash(root.toUtf8(), QCryptographicHash::Md5).toHex().left(8));
+    QString path = appDataDir()+"/routes/"+cleanRoute+"_"+rootHash;
+    QDir().mkpath(path);
+    return path;
+}
+
+QString Game::lastSessionFilePath(){
+    return appDataDir()+"/lastSession.json";
+}
+
+QString Game::terrainPaintPresetFilePath(){
+    return routeAppDataDir()+"/tsre_terrain_paint_presets.json";
+}
 
 bool Game::CheckBraces = false;
 bool Game::UnsafeMode = false;

@@ -924,9 +924,7 @@ void TerrainTools::setBrushTextureId(int val){
 
 QString TerrainTools::paintPresetFilePath()
 {
-    QString path = Game::root + "/routes/" + Game::route + "/tsre_terrain_paint_presets.json";
-    path.replace("//", "/");
-    return path;
+    return Game::terrainPaintPresetFilePath();
 }
 
 QJsonArray TerrainTools::readPaintPresets()

@@ -8,7 +8,7 @@ I have been working through a set of practical TSRE route-editor improvements, m
 
 There has been talk for years about a new Open Rails route editor, and I would still welcome one, but we also have to be realistic. TSRE is what we actually have today. It can be cumbersome, awkward, and less than ideal, but it is also a working route editor with real capability. Rather than waiting indefinitely for a replacement, I think it makes sense to embrace the tool we have and keep improving it where practical.
 
-I do not intend this to become a separate production fork of Eric's work. This is a test branch for debugging, experimentation, and evaluation. Eric's code should remain the production copy. My goal is to make focused improvements in the areas I know best, then hand them back to Eric for consideration and, hopefully, eventual inclusion in the main project. As history has proven, my interest around here tends to ebb and flow, sometimes disappearing for months at a time, which makes me a poor candidate to host or maintain the main code long term. I have compiled an operational TSRE test build, though I will spare everyone the embarrassing details of how long it took me to get a clean compile.
+I do not intend this to become a separate production fork of Eric's work. This is a test branch for debugging, experimentation, and evaluation. Eric's code should remain the production copy. My goal is to make focused improvements in the areas I know best, then hand them back to Eric for consideration and, hopefully, eventual inclusion in the main project. As history has proven, my interest around here tends to ebb and flow, sometimes disappearing for months at a time, which makes me a poor candidate to host or maintain production code long term. I have compiled an operational TSRE test build, though I will spare everyone the embarrassing details of how long it took me to get a clean compile.
 
 Highlights
 
@@ -23,7 +23,7 @@ Highlights
 - Added a 0-360 degree terrain texture rotation control for seamless directional textures.
 - Added an F2 seasonal selector for Summer, Spring, Autumn, Winter, and Night.
 - Added seasonal fallback refresh for terrain, route objects, transfers, dynamic track, and forest/polyforest geometry.
-- Restored the F2 Mirror Season button for paired normal/snow terrain painting.
+- Added the F2 Mirror Season button for paired normal/snow terrain painting.
 - Disabled the old settings-file `season` / `seasonalEditing` controls so the F2 selector is the active seasonal control.
 - Protected editable 1024x1024 terrtex files from accidental downsampling while painting.
 - Added forest/object stutter mitigation and a View menu toggle for Forest Regions.
@@ -42,7 +42,7 @@ This branch includes the current experimental code and an operational test execu
 
 Startup session restore
 
-I added a Restore Last Session button to the first startup screen. Before a route is selected, the old full-width Exit button is now split into Restore Last Session and Exit. When TSRE closes normally, it writes a small lastSession.json file beside the executable. That file records the last route root, selected route, main window size and position, Navi/Status window positions, and the editor camera tile, position, and rotation.
+I added a Restore Last Session button to the first startup screen. Before a route is selected, the old full-width Exit button is now split into Restore Last Session and Exit. When TSRE closes normally, it writes a small lastSession.json file under the user's AppData TSRE folder. That file records the last route root, selected route, main window size and position, Navi/Status window positions, and the editor camera tile, position, and rotation.
 
 The intent is simple: if you were deep in a route, looking at a specific trouble spot, you can restart TSRE and return to that same working context without reselecting the MSTS folder, reselecting the route, and manually flying back to the same location.
 
@@ -180,11 +180,11 @@ The UI has:
 - Save
 - Remove
 
-Presets are saved per route in:
+Presets are saved per route under the user's AppData TSRE folder, with a separate route-specific folder for each MSTS root/route combination:
 
 tsre_terrain_paint_presets.json
 
-This keeps route-specific paint workflows with the route and avoids changing MSTS/ORTS route files for editor-only metadata.
+This keeps route-specific paint workflows separated by route while avoiding extra editor-only JSON files in either the TSRE program folder or MSTS/ORTS route folders.
 
 Texture rotation
 

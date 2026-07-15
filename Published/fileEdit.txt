@@ -13,7 +13,7 @@ Primary source files edited
 - TSRE5-Trainsim.Com-Fork-master/LoadWindow.cpp
   - Fixed route-selection table refresh when switching MSTS root folders.
   - Ensured route loading uses the route-name column.
-  - Added Restore Last Session startup button and lastSession.json restore handling.
+  - Added Restore Last Session startup button and AppData lastSession.json restore handling.
 
 - TSRE5-Trainsim.Com-Fork-master/LoadWindow.h
   - Added Restore Last Session slot, button, and startup button layout helpers.
@@ -41,7 +41,7 @@ Primary source files edited
   - Added Restore Last Session camera state declaration.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
-  - Added lastSession.json writing on normal editor close.
+  - Added AppData lastSession.json writing on normal editor close.
   - Added main/Navi/Status window geometry restore handling.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
@@ -63,6 +63,7 @@ Primary source files edited
 
 - TSRE5-Trainsim.Com-Fork-master/TerrainTools.cpp
   - Added terrain paint presets UI.
+  - Moved route-specific paint preset JSON storage to AppData/TSRE instead of route folders.
   - Added texture rotation control.
   - Added reset route terrtex paint button and related UI wiring.
   - Replaced the old Daytime/Night/Snow texture selector with Summer/Spring/Autumn/Winter/Night.
@@ -119,11 +120,13 @@ Primary source files edited
   - Added forest-region view toggle state.
   - Removed the old seasonal-editing startup warning, generated settings-file hint, and settings parser hook.
   - Added Restore Last Session window/camera restore state.
+  - Added shared AppData/TSRE JSON path helpers for session and route preset state.
 
 - TSRE5-Trainsim.Com-Fork-master/Game.h
   - Added declaration for forest-region view toggle state.
   - Removed the obsolete seasonal-editing settings flag declaration.
   - Added Restore Last Session window/camera restore state declarations.
+  - Added shared AppData/TSRE JSON path helper declarations.
 
 - TSRE5-Trainsim.Com-Fork-master/TDB.cpp
   - Touched during track/road vector paint investigation and shared paint path work.

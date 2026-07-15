@@ -48,7 +48,9 @@ The ZIP includes `AddShortcutDesktop.cmd`, which can create a desktop shortcut f
 
 The first startup screen now includes `Restore Last Session`. Before a route is selected, the old full-width `Exit` button is split into `Restore Last Session` and `Exit`.
 
-When TSRE closes normally, it writes `lastSession.json` beside the executable. That file records the last route root, selected route, main window size and position, Navi/Status window positions, and the editor camera tile, position, and rotation.
+When TSRE closes normally, it writes `lastSession.json` under the user's AppData TSRE folder. That file records the last route root, selected route, main window size and position, Navi/Status window positions, and the editor camera tile, position, and rotation.
+
+Route paint presets are also stored under the AppData TSRE folder, with a separate route-specific folder for each MSTS root/route combination.
 
 This lets a route builder restart TSRE and return to the last working context without reselecting the route and manually flying back to the same location.
 

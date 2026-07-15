@@ -14,7 +14,6 @@
 #include <QJsonObject>
 #include <QFile>
 #include <QDateTime>
-#include <QCoreApplication>
 #include "RouteEditorGLWidget.h"
 #include "RouteEditorWindow.h"
 #include "Game.h"
@@ -783,7 +782,7 @@ void RouteEditorWindow::saveLastSession(){
 
     root["camera"] = glWidget->getSessionCameraState();
 
-    QFile file(QCoreApplication::applicationDirPath()+"/lastSession.json");
+    QFile file(Game::lastSessionFilePath());
     if(file.open(QIODevice::WriteOnly | QIODevice::Truncate)){
         file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
         file.close();

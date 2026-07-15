@@ -71,6 +71,10 @@ public:
     static bool ignoreLoadLimits;
     static void load();
     static void InitAssets();
+    static QString appDataDir();
+    static QString routeAppDataDir();
+    static QString lastSessionFilePath();
+    static QString terrainPaintPresetFilePath();
     //static bool loadRouteEditor();
     //static bool loadConEditor();
     static bool checkRoot(QString dir);
