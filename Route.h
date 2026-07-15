@@ -97,6 +97,7 @@ public:
     void preloadWFilesInit();
     int newTile(int x, int z, bool forced = false);
     void reloadTile(int x, int z);
+    void reloadLoadedWorldObjects();
     void deleteObj(WorldObj* obj);
     void undoPlaceObj(int x, int y, int UiD);
     void removeTrackFromTDB(WorldObj* obj);
@@ -109,6 +110,7 @@ public:
     void setTerrainTextureToTrack(int x, int y, float *pos, Brush* brush, int mode = 0);
     int setTerrainTextureToTileTrack(int x, int y, Brush* brush);
     int setTerrainTextureToTileRoad(int x, int y, Brush* brush);
+    bool findNearestDbHeight(int x, int y, float *pos, float maxDistance, float &height);
     bool resetTerrainTextureOnTile(int x, int y, int &filesDeleted, int &filesFailed);
     void setTerrainToTrackObj(WorldObj* obj, Brush* brush);
     void smoothTerrainToTrackObj(WorldObj* obj, Brush* brush);

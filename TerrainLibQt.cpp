@@ -941,6 +941,8 @@ QSet<Terrain*> TerrainLibQt::paintHeightMap(Brush* brush, int x, int z, float* p
             h = h*brush->alpha*brush->direction*10.0*tileSizeMultipler;;
             
             terr->setErrorBias(tx, tz, tpx, tpz, 0);
+            float samplePosX = tpx;
+            float samplePosZ = tpz;
             float lx = tpx, lz = tpz;
             terr->getLocalCoords(tx, tz, lx, lz);
             //qDebug() << tpx << lx << tpz << lz;
@@ -968,6 +970,14 @@ QSet<Terrain*> TerrainLibQt::paintHeightMap(Brush* brush, int x, int z, float* p
                     terr->terrainData[tpz][tpx] += h*brush->direction;
                     if(terr->terrainData[tpz][tpx] > hAvg)
                         terr->terrainData[tpz][tpx] = hAvg;
+                }
+            } else if(brush->hType == 4 && Game::currentRoute != NULL){
+                float samplePos[3] = {samplePosX, terr->terrainData[tpz][tpx], samplePosZ};
+                float targetHeight = 0;
+                float maxDbDistance = std::min(24.0f, std::max(8.0f, size * 8.0f));
+                if(Game::currentRoute->findNearestDbHeight(tx, tz, samplePos, maxDbDistance, targetHeight)){
+                    float strength = std::max(0.0f, std::min(1.0f, ((float)(size - sqrt(i*i + j*j)) / size) * brush->alpha));
+                    terr->terrainData[tpz][tpx] += (targetHeight - terr->terrainData[tpz][tpx]) * strength;
                 }
             }
         }

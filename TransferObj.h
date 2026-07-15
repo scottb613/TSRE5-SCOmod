@@ -55,7 +55,7 @@ private:
     int tex;
     bool init;
     float bound[6];
-    QString *texturePath;
+    QString *texturePath = NULL;
     bool getBoxPoints(QVector<float> &points);
 };
 

@@ -15,6 +15,7 @@ Highlights
 - Improved F-key terrain conforming for track cuts and embankments.
 - Adjusted F-tool track-width behavior so the 1/2/3 settings are more practical.
 - Added a `Shift+F` terrain smoothing pass for selected track/ruler objects.
+- Added an F2 `Conform DB` height brush mode for grade-following spot terrain cleanup along track and road databases.
 - Added tile-level autopaint tools for track, roads, and water.
 - Added real shoreline/water-edge terrain painting based on terrain/water contour detection.
 - Added route and tile terrtex reset tools for returning painted terrain tiles to `terrain.ace`.
@@ -55,6 +56,12 @@ The goal was:
 The F-tool track-width setting was also adjusted. The old width 1 behavior was effectively a single terrain data point, which was too narrow to be useful and could leave the result looking pinched. The low-end sizing now treats the first useful width more like the old width 2 behavior, so the 1/2/3 settings step through practical terrain-bed widths instead of starting with an unusably thin strip.
 
 I also added a Shift+F smoothing pass for the selected track/ruler object. The smoothing pass was revised so it does not round the track bed into a trough or move the locked track-elevation points vertically. The important limitation is that MSTS terrain vertices have fixed horizontal X/Z positions, so the tool can only change heights; it cannot physically move jagged vertices sideways away from the track.
+
+F2 Conform DB height brush
+
+I added a new F2 Height type called Conform DB. This is intended for spot cleanup along track or road grades after the broader F-key terrain conforming pass. Instead of flattening the whole brush to one height, each terrain sample under the brush checks the nearest track or road database line and moves toward that database elevation at that exact X/Z point. This means brushing along a grade follows the grade, making it easier to correct stray terrain points without destroying the slope.
+
+The brush is range-limited so it only responds to reasonably nearby database lines, and the existing brush size/intensity still control the affected area and feathering.
 
 Build and compiler cleanup
 
@@ -109,6 +116,8 @@ Seasonal terrain texture painting
 The old hidden settings-file seasonal editing workflow was replaced for terrain painting. The F2 terrain paint panel now exposes the texture set directly, using Summer, Spring, Autumn, Winter, and Night choices. Changing the texture set reloads the currently loaded terrain, object shape textures, transfer textures, dynamic track textures, and generated forest/polyforest texture bindings so the editor display matches the selected season as closely as the route's available files allow.
 
 The old startup warning, Settings-panel entries, and settings-file parser hook for the seasonal editing workaround were removed. Old `season = ...` and `seasonalEditing = ...` settings are now ignored/forced off, so older settings files cannot silently override the F2 selector. Terrain painting and dynamic-track seasonal display now follow the active F2 season selection instead of a hidden settings switch.
+
+I also fixed transfer-object reload behavior so switching from Winter back to Summer invalidates cached transfer geometry/materials and rebuilds transfers against the active texture set.
 
 To significantly speed up seasonal route building, I added a Mirror Seasons checkbox that allows you to paint both normal and snow terrain textures in a single operation. When enabled, TSRE paints the active texture set first, then automatically checks for the same source texture in the paired seasonal folder. If the matching texture exists in both locations, TSRE updates the paired seasonal tile texture simultaneously, meaning you do not have to paint the route twice to cover both summer and winter ground. If the matching source texture is missing, the active texture set is painted normally and the mirror step is safely skipped.
 
@@ -175,16 +184,6 @@ Texture rotation
 I added a full 0-360 degree texture rotation control under the F2 terrain paint intensity slider. This is intended for seamless textures where angle matters, such as crop rows, plowed fields, and other directional ground textures.
 
 The existing 0/90/180/270 rotation choices still work, but the slider allows finer control. A rotation of 0 remains the normal default texture orientation.
-
-Seasonal texture selection
-
-I replaced the old F2 Day/Night/Snow texture selector behavior with a cleaner seasonal selection path for Summer, Spring, Autumn, Winter, and Night. Changing the season now refreshes currently loaded terrain, route object shapes, transfers, dynamic track textures, and generated forest/polyforest texture bindings so the display changes without requiring a restart.
-
-Texture lookup now follows a per-file fallback model. TSRE checks the selected seasonal texture folder first, then falls back to the normal root texture folder when a matching seasonal file is missing. This applies to terrain TERRTEX, route objects, transfers, procedural dynamic track textures, and forest/polyforest generated geometry. Old settings-file `season` and `seasonalEditing` values are ignored, so the F2 selector is the active seasonal control.
-
-During large-route testing, a texture-cache invalidation bug caused severe lag and incorrect texture reuse when generated geometry repeatedly reapplied the same material path. That was corrected by invalidating cached texture IDs only when the material path actually changes.
-
-Mirror Seasons remains the explicit terrain-paint option for writing the active TERRTEX edit into the matching opposite seasonal folder when both files are available. This keeps normal seasonal display fallback separate from intentional cross-season paint edits.
 
 Window/settings investigation
 

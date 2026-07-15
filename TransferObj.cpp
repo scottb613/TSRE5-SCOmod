@@ -159,7 +159,9 @@ Ref::RefItem* TransferObj::getRefInfo(){
 }
 
 void TransferObj::deleteVBO(){
-    //this->shape.deleteVBO();
+    // Do not destroy the transfer shape VBO during season changes; reload may
+    // be called outside the active render context. Marking init false is enough
+    // to rebuild geometry/materials on the next draw.
     this->init = false;
     this->box.deleteVBO();
 }
@@ -246,7 +248,7 @@ void TransferObj::render(GLUU* gluu, float lod, float posx, float posz, float* p
 };
 
 void TransferObj::reload(){
-
+    deleteVBO();
 }
 
 

@@ -71,6 +71,7 @@
 #include "RouteMergeDialog.h"
 #include "UnsafeModeDialog.h"
 #include "TerrainTools.h" // EFO
+#include <math.h>
 #include <iostream>
 
 
@@ -1340,6 +1341,46 @@ int Route::setTerrainTextureToTileTrack(int x, int y, Brush* brush){
 
 int Route::setTerrainTextureToTileRoad(int x, int y, Brush* brush){
     return setTerrainTextureToTileFromDb(this->roadDB, x, y, brush);
+}
+
+bool Route::findNearestDbHeight(int x, int y, float *pos, float maxDistance, float &height){
+    if (pos == NULL || maxDistance <= 0)
+        return false;
+
+    Game::check_coords(x, y, pos);
+
+    float bestDistance = maxDistance;
+    float bestHeight = 0;
+    bool found = false;
+    float playerT[2] = {(float)x, (float)y};
+
+    TDB *dbs[2] = {this->trackDB, this->roadDB};
+    for (int i = 0; i < 2; i++) {
+        if (dbs[i] == NULL)
+            continue;
+
+        float sample[3];
+        Vec3::copy(sample, pos);
+        float tpos[3];
+        int ok = dbs[i]->findNearestPositionOnTDB(playerT, sample, NULL, tpos);
+        if (ok < 0)
+            continue;
+
+        float dx = sample[0] - pos[0];
+        float dz = sample[2] - pos[2];
+        float distance = sqrt(dx * dx + dz * dz);
+        if (distance <= bestDistance) {
+            bestDistance = distance;
+            bestHeight = sample[1];
+            found = true;
+        }
+    }
+
+    if (!found)
+        return false;
+
+    height = bestHeight;
+    return true;
 }
 
 bool Route::resetTerrainTextureOnTile(int x, int y, int &filesDeleted, int &filesFailed){
@@ -2691,6 +2732,22 @@ void Route::createNew() {
 void Route::reloadTile(int x, int z) {
     tile[x * 10000 + z] = new Tile(x, z);
     return;
+}
+
+void Route::reloadLoadedWorldObjects() {
+    foreach (Tile* tTile, tile) {
+        if (tTile == NULL || tTile->loaded != 1)
+            continue;
+
+        for (int i = 0; i < tTile->jestObiektow; i++) {
+            WorldObj *obj = tTile->obiekty[i];
+            if (obj == NULL || !obj->loaded)
+                continue;
+            if (obj->typeID != WorldObj::transfer)
+                continue;
+            obj->reload();
+        }
+    }
 }
 
 int Route::newTile(int x, int z, bool forced) {

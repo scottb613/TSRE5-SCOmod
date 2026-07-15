@@ -135,6 +135,20 @@ TerrainTools::TerrainTools(QString name)
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     
+    QLabel *textureSetLabel = new QLabel("Texture Set:");
+    textureSetLabel->setContentsMargins(3,0,0,0);
+    textureSetLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    vbox->addWidget(textureSetLabel);
+
+    seasonType = new QComboBox;
+    seasonType->setStyleSheet("combobox-popup: 0;");
+    seasonType->addItem("Summer");
+    seasonType->addItem("Spring");
+    seasonType->addItem("Autumn");
+    seasonType->addItem("Winter");
+    seasonType->addItem("Night");
+    vbox->addWidget(seasonType);
+
     label0 = new QLabel("Edit Terrain Layers:");
     label0->setContentsMargins(3,0,0,0);
     label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
@@ -216,21 +230,13 @@ TerrainTools::TerrainTools(QString name)
     sTextureRotation->setMaximum(360);
     sTextureRotation->setValue(paintBrush->texRotationDegrees);
 
-    seasonType = new QComboBox;
-    seasonType->setStyleSheet("combobox-popup: 0;");
-    seasonType->addItem("Summer");
-    seasonType->addItem("Spring");
-    seasonType->addItem("Autumn");
-    seasonType->addItem("Winter");
-    seasonType->addItem("Night");
-    
-    
     hType = new QComboBox;
     hType->setStyleSheet("combobox-popup: 0;");
     hType->addItem("Add - simple");
     hType->addItem("Add - if inside 'Size' radius");
     hType->addItem("Fixed Height");
     hType->addItem("Flatten");
+    hType->addItem("Conform DB");
     hType->setCurrentIndex(paintBrush->hType);
     fheight = new QLineEdit();
     QDoubleValidator* doubleValidator = new QDoubleValidator(-5000, 5000, 2, this); 
@@ -263,9 +269,6 @@ TerrainTools::TerrainTools(QString name)
     vlist->addWidget(fheight,row++,1,1,2);
     vlist->addWidget(GuiFunct::newQLabel("Height type:", labelWidth),row,0);
     vlist->addWidget(hType,row++,1,1,2);
-
-    vlist->addWidget(GuiFunct::newQLabel("Texture Set:", labelWidth),row,0);
-    vlist->addWidget(seasonType,row++,1,1,2);
     
 
     vbox->addItem(vlist);
@@ -811,6 +814,8 @@ void TerrainTools::setSeasonType(int val){
         Game::terrainLib->reloadLoaded();
     if (Game::currentShapeLib != NULL)
         Game::currentShapeLib->refreshSeasonTextures();
+    if (Game::currentRoute != NULL)
+        Game::currentRoute->reloadLoadedWorldObjects();
     ForestObj::InvalidateSeasonTextures();
     PolyForestObj::InvalidateSeasonTextures();
 
