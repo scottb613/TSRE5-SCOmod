@@ -25,7 +25,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added an F2 seasonal selector for Summer, Spring, Autumn, Winter, and Night.
 - Added seasonal fallback refresh for terrain, route objects, transfers, dynamic track, and forest/polyforest geometry.
 - Fixed transfer-object reload behavior when switching from Winter back to Summer.
-- Added Mirror Seasons for paired normal/snow terrain painting.
+- Added Mirror Season for paired default/snow TERRTEX painting with matching paired textures required.
 - Disabled the old settings-file `season` / `seasonalEditing` controls so the F2 selector is the active seasonal control.
 - Protected editable 1024x1024 terrtex files from accidental downsampling while painting.
 - Added forest/object stutter mitigation and a View menu toggle for Forest Regions.
@@ -42,6 +42,19 @@ Executable test builds are intended to be published on the GitHub Releases page,
 Download the current test ZIP from Releases when available. Keep this copy separate from any production TSRE install.
 
 The ZIP includes `AddShortcutDesktop.cmd`, which can create a desktop shortcut for the packaged `TSRE5.exe`.
+
+## Seasonal TERRTEX Painting
+
+TERRTEX painting has only two real output targets:
+
+- default `TERRTEX`
+- snow `TERRTEX/SNOW`
+
+The F2 texture set selector still helps preview Summer, Spring, Autumn, Winter, and Night texture lookup for route objects, transfers, dynamic track, forest, and polyforest textures. For terrain painting, however, Mirror Season only works between default TERRTEX and snow TERRTEX. It does not write Spring, Autumn, Fall, or Night terrain folders.
+
+When `Mirror Season` is on, TSRE applies the same brush/autopaint trace to the paired TERRTEX side, but it uses the paired side's matching source texture. Default painting uses the default texture. Snow painting uses the snow texture. If the matching paired texture does not exist, the mirror paint is skipped for that stroke.
+
+When `Mirror Season` is off, TSRE still protects the opposite TERRTEX side from blank tiles. If painting creates a new per-tile terrain swatch, TSRE creates a matching placeholder swatch on the paired default/snow side if one does not already exist. That placeholder comes from the route's paired-side `terrain.ace` when available, or from the bundled SCOmod `terrain.ace` fallback.
 
 ## Documentation
 

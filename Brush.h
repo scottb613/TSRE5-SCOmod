@@ -32,6 +32,7 @@ public:
     Transformation texTransformation = RANDOM;
     int texRotationDegrees = 0;
     bool useTexture = false;
+    bool mirrorSeason = false;
     int color[3];
     int texId = -1;
     // universal

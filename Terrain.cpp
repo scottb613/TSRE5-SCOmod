@@ -115,6 +115,13 @@ QString Terrain::resolveTexturePath(QString basePath, QString seasonSubdir, QStr
     return resolveTexturePath(basePath, QStringList() << seasonSubdir, textureName);
 }
 
+QString Terrain::pairedTerrtexSubdir() {
+    QString key = Game::season.trimmed().toLower();
+    if (key == "winter" || key == "snow" || key == "wintersnow" || key == "autumnsnow" || key == "springsnow")
+        return "";
+    return "snow/";
+}
+
 QString Terrain::resolveTexturePath(QString basePath, QStringList seasonSubdirs, QString textureName) {
     textureName.replace("\\", "/");
     if (QFileInfo(textureName).isAbsolute())
@@ -142,6 +149,96 @@ QString Terrain::resolveTexturePath(QString basePath, QStringList seasonSubdirs,
     return rootCandidate;
 }
 
+QString Terrain::terrainPlaceholderPath(QString seasonSubdir) {
+    QString routePlaceholder = Terrain::routeTerrtexPath(seasonSubdir) + "terrain.ace";
+    routePlaceholder.replace("//", "/");
+    if (QFile::exists(routePlaceholder))
+        return routePlaceholder;
+
+    QString key = seasonSubdir.trimmed().toLower();
+    QString contentPlaceholder = "content/terrain.ace";
+    if (key == "snow" || key == "snow/")
+        contentPlaceholder = "content/SNOW/terrain.ace";
+
+    contentPlaceholder.replace("//", "/");
+    return contentPlaceholder;
+}
+
+void Terrain::ensurePairedSeasonPlaceholder(QString textureName) {
+    QString pairedSubdir = Terrain::pairedTerrtexSubdir();
+    QString targetDir = Terrain::routeTerrtexPath(pairedSubdir);
+    QString target = targetDir + textureName;
+    target.replace("//", "/");
+    if (QFile::exists(target))
+        return;
+
+    QDir().mkpath(targetDir);
+    QString source = Terrain::terrainPlaceholderPath(pairedSubdir);
+    if (QFile::exists(source))
+        QFile::copy(source, target);
+}
+
+void Terrain::paintPairedSeasonTexture(Brush* brush, QString textureName, int patchIdx, float x, float z) {
+    if (brush == NULL || brush->tex == NULL)
+        return;
+
+    QString pairedSubdir = Terrain::pairedTerrtexSubdir();
+    QString targetDir = Terrain::routeTerrtexPath(pairedSubdir);
+    QString target = targetDir + textureName;
+    target.replace("//", "/");
+
+    QString brushTextureName = QFileInfo(brush->tex->pathid).fileName();
+    QString pairedBrushPath = targetDir + brushTextureName;
+    pairedBrushPath.replace("//", "/");
+    if (!QFile::exists(pairedBrushPath))
+        return;
+
+    int pairedBrushTexId = TexLib::addTex(pairedBrushPath);
+    if (pairedBrushTexId < 0 || TexLib::mtex.find(pairedBrushTexId) == TexLib::mtex.end() || TexLib::mtex[pairedBrushTexId] == NULL)
+        return;
+
+    if (texMirrorId[patchIdx] < 0) {
+        if (QFile::exists(target)) {
+            texMirrorId[patchIdx] = TexLib::addTex(target);
+        } else {
+            QString placeholder = Terrain::terrainPlaceholderPath(pairedSubdir);
+            if (!QFile::exists(placeholder))
+                return;
+
+            int placeholderTexId = TexLib::addTex(placeholder);
+            if (placeholderTexId < 0)
+                return;
+
+            texMirrorId[patchIdx] = TexLib::cloneTex(placeholderTexId);
+            if (texMirrorId[patchIdx] >= 0)
+                TexLib::mtex[texMirrorId[patchIdx]]->pathid = target;
+        }
+    }
+
+    if (texMirrorId[patchIdx] < 0 || TexLib::mtex.find(texMirrorId[patchIdx]) == TexLib::mtex.end() || TexLib::mtex[texMirrorId[patchIdx]] == NULL)
+        return;
+
+    Brush pairedBrush = *brush;
+    pairedBrush.texId = pairedBrushTexId;
+    pairedBrush.tex = TexLib::mtex[pairedBrushTexId];
+    TexLib::mtex[texMirrorId[patchIdx]]->paint(&pairedBrush, z, x);
+    TexLib::mtex[texMirrorId[patchIdx]]->update();
+    texMirrorModified[patchIdx] = true;
+}
+
+void Terrain::savePairedSeasonTexture(int patchIdx) {
+    if (texMirrorId[patchIdx] < 0)
+        return;
+
+    Texture* tex = TexLib::mtex[texMirrorId[patchIdx]];
+    if (tex == NULL)
+        return;
+
+    QFileInfo targetInfo(tex->pathid);
+    QDir().mkpath(targetInfo.absolutePath());
+    TexLib::save("ace", tex->pathid, texMirrorId[patchIdx]);
+}
+
 void Terrain::load(){
     typeObj = this->terrainobj;
     loaded = false;
@@ -151,8 +248,10 @@ void Terrain::load(){
     for (int i = 0; i < 256; i++) {
         texid[i] = -1;
         texid2[i] = -1;
+        texMirrorId[i] = -1;
         hidden[i] = false;
         texModified[i] = false;
+        texMirrorModified[i] = false;
         texLocked[i] = false;
         uniqueTex[i] = false;
         selectedPatchs[i] = false;
@@ -1740,6 +1839,7 @@ void Terrain::paintTextureOnTile(Brush* brush, int y, int u, float x, float z) {
     if (texid[y * patches + u] < 0)
         return;
     
+    bool newSwatch = false;
     if (name != *tfile->materials[(int) tfile->tdata[(y * patches + u)*13 + 0 + 6]].tex[0]) {
         if(Game::seasonalEditing && Game::season.length() > 0)
             return;
@@ -1752,16 +1852,21 @@ void Terrain::paintTextureOnTile(Brush* brush, int y, int u, float x, float z) {
         texid[y * patches + u] = TexLib::cloneTex(texid[y * patches + u]);
         TexLib::mtex[texid[y * patches + u]]->pathid = texturepath + name;
         uniqueTex[y * patches + u] = true;
+        newSwatch = true;
         reloadLines();
         //TexLib::save("ace", texturepath+name, texid[y * 16 + u]);
         //TexLib::mtex[texid[y * 16 + u]]->GLTextures();
     }
+    if (newSwatch)
+        ensurePairedSeasonPlaceholder(name);
     convertTexToDefaultCoords(y * patches + u);
 
     TexLib::mtex[texid[y * patches + u]]->sendToUndo(texid[y * patches + u]);
     TexLib::mtex[texid[y * patches + u]]->paint(brush, z, x);
     TexLib::mtex[texid[y * patches + u]]->update();
     this->texModified[y * patches + u] = true;
+    if (brush != NULL && brush->mirrorSeason)
+        paintPairedSeasonTexture(brush, name, y * patches + u, x, z);
     this->modified = true;
 }
 
@@ -3141,7 +3246,11 @@ void Terrain::save() {
             if (this->texModified[y * patches + u] == false) continue;
             //QString name = this->getTileName(mojex, -mojez) + "_" + QString::number(y) + "_" + QString::number(u) + ".ace";
             TexLib::save("ace", TexLib::mtex[texid[y * patches + u]]->pathid, texid[y * patches + u]);
+            if (this->texMirrorModified[y * patches + u]) {
+                savePairedSeasonTexture(y * patches + u);
+            }
             this->texModified[y * patches + u] = false;
+            this->texMirrorModified[y * patches + u] = false;
         }
 }
 

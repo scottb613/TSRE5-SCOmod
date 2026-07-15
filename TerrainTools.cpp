@@ -114,6 +114,8 @@ TerrainTools::TerrainTools(QString name)
     vlist0->setSpacing(2);
     vlist0->setContentsMargins(3,0,1,0);    
     row = 0;
+    mirrorSeason = new QPushButton("Mirror Season", this);
+    mirrorSeason->setCheckable(true);
     vlist0->addWidget(buttonTools["paintToolColor"],row,0);
     vlist0->addWidget(buttonTools["paintToolTexture"],row,1);
     vlist0->addWidget(buttonTools["lockTexTool"],row++,2);
@@ -254,6 +256,8 @@ TerrainTools::TerrainTools(QString name)
     leTextureRotation->setValidator(new QIntValidator(0, 360, this));
     leTextureRotation->setText(QString::number(paintBrush->texRotationDegrees, 10));
     row = 0;
+    vlist->addWidget(GuiFunct::newQLabel("Terrtex:", labelWidth),row,0);
+    vlist->addWidget(mirrorSeason,row++,1,1,2);
     vlist->addWidget(GuiFunct::newQLabel("Color:", labelWidth),row,0);
     vlist->addWidget(colorw,row++,1,1,2);
     vlist->addWidget(GuiFunct::newQLabel("Size:", labelWidth),row,0);
@@ -388,6 +392,9 @@ TerrainTools::TerrainTools(QString name)
     
     QObject::connect(colorw, SIGNAL(released()),
                       this, SLOT(chooseColorEnabled()));
+
+    QObject::connect(mirrorSeason, SIGNAL(toggled(bool)),
+                      this, SLOT(mirrorSeasonEnabled(bool)));
     
     QObject::connect(resetDefaults, SIGNAL(released()),
                       this, SLOT(resetDefaultValues()));
@@ -565,6 +572,11 @@ void TerrainTools::paintTexToolEnabled(bool val){
     } else {
         emit enableTool("");
     }
+}
+
+void TerrainTools::mirrorSeasonEnabled(bool val){
+    this->paintBrush->mirrorSeason = val;
+    emit setPaintBrush(this->paintBrush);
 }
 
 void TerrainTools::chooseColorEnabled(){

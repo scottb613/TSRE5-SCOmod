@@ -176,7 +176,9 @@ protected:
     bool uniqueTex[256];
     int texid[256];
     int texid2[256];
+    int texMirrorId[256];
     bool texModified[256];
+    bool texMirrorModified[256];
     bool texLocked[256];
     bool selectedPatchs[256];
     QOpenGLBuffer *VBO = NULL;
@@ -230,6 +232,11 @@ protected:
     float getScaleTex(int idx);
     void convertTexToDefaultCoords(int idx);
     void paintTextureOnTile(Brush* brush, int y, int u, float x, float z);
+    static QString pairedTerrtexSubdir();
+    static QString terrainPlaceholderPath(QString seasonSubdir);
+    void ensurePairedSeasonPlaceholder(QString textureName);
+    void paintPairedSeasonTexture(Brush* brush, QString textureName, int patchIdx, float x, float z);
+    void savePairedSeasonTexture(int patchIdx);
     void reloadLines();
     
     virtual void load();
