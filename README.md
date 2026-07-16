@@ -50,6 +50,8 @@ Download the current test ZIP from Releases when available. Keep this copy separ
 
 The ZIP includes `AddShortcutDesktop.cmd`, which can create a desktop shortcut for the packaged `TSRE5.exe`.
 
+The ZIP also includes `LICENSE.md` and `THIRD-PARTY-NOTICES.txt`. TSRE5-SCOmod follows the original TSRE5 GPLv3 license; bundled runtime DLLs remain under their respective upstream licenses.
+
 ## Startup Session Restore
 
 The first startup screen now includes `Restore Last Session`. Before a route is selected, the old full-width `Exit` button is split into `Restore Last Session` and `Exit`.

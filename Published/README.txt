@@ -2,6 +2,14 @@ TSRE5-SCOmod Test Build v0.3
 
 This package contains the TSRE5 executable and runtime files from the terrain/editor improvement work.
 
+License and source:
+TSRE5-SCOmod is distributed under the GNU General Public License version 3, following the original TSRE5 project by Piotr Gadecki / GokuMK and Eric's Trainsim.Com fork. See LICENSE.md.
+
+Source code for this build is available at:
+https://github.com/scottb613/TSRE5-SCOmod/tree/tsre-scomod-wip
+
+Bundled runtime DLLs remain under their respective upstream licenses. See THIRD-PARTY-NOTICES.txt.
+
 Highlights:
 - improved track cuts and embankments
 - adjusted F-tool track-width behavior for practical 1/2/3 sizing
