@@ -2857,6 +2857,50 @@ int TDB::getVectorSectionPointsForTile(int x, int z, QVector<float> &ptr){
     return sections;
 }
 
+int TDB::getVectorSectionPointsForTile(int x, int z, int nodeId, QVector<float> &ptr){
+    if(nodeId < 1 || nodeId > iTRnodes)
+        return 0;
+
+    TRnode* n = trackNodes[nodeId];
+    if(n == NULL || n->typ != 1)
+        return 0;
+
+    int sections = 0;
+    QVector<float> sectionPoints;
+    sectionPoints.reserve(4096);
+
+    for(int sectionId = 0; sectionId < n->iTrv; sectionId++){
+        sectionPoints.clear();
+        getVectorSectionPoints(x, -z, nodeId, sectionId, sectionPoints);
+        if(sectionPoints.isEmpty())
+            continue;
+
+        bool intersectsTile = false;
+        int oldLength = ptr.length();
+        for(int i = 0; i < sectionPoints.length(); i += 3){
+            int tx = x;
+            int tz = z;
+            float px = sectionPoints[i];
+            float pz = sectionPoints[i + 2];
+            Game::check_coords(tx, tz, px, pz);
+            if(tx != x || tz != z)
+                continue;
+
+            ptr.push_back(sectionPoints[i]);
+            ptr.push_back(sectionPoints[i + 1]);
+            ptr.push_back(sectionPoints[i + 2]);
+            intersectsTile = true;
+        }
+
+        if(intersectsTile)
+            sections++;
+        else
+            ptr.resize(oldLength);
+    }
+
+    return sections;
+}
+
 void TDB::updateTrItemRData(TRitem* tr){
     if(tr == NULL) 
         return;

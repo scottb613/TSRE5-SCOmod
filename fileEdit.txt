@@ -32,20 +32,24 @@ Primary source files edited
   - Shared track/road tile vector painting path.
   - Added water-edge tile painting and reset-tile/reset-route paint support.
   - Added route-level season object refresh for procedural forest regions.
+  - Added selected-object Ctrl+F tile conform helper for selected track/road objects.
 
 - TSRE5-Trainsim.Com-Fork-master/Route.h
   - Added declarations for new route paint/reset helpers.
   - Added declaration for season object refresh.
+  - Added declaration for selected-object Ctrl+F tile conform helper.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
   - Added menu entries and event hookups for tile autopaint/reset commands.
   - Added Shift+F terrain smoothing handling.
+  - Added Ctrl+F handling for selected track/road tile conforming.
   - Added camera state export/restore support for Restore Last Session.
   - Added Status Window command handling for clickable editor-state buttons.
   - Added richer selected-object status labels and clear-selection handling.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
   - Added declarations for new editor actions/helpers.
+  - Added selected track/road tile conform action declaration.
   - Added Restore Last Session camera state declaration.
   - Added Status Window command slot declaration.
 
@@ -64,9 +68,17 @@ Primary source files edited
   - Converted passive status readouts into clickable button controls.
   - Added state-aware button colors for editor modes and terrain-brush direction.
   - Added selected-object clear button and Camera Free / Camera Terrain Free labels.
+  - Added gentle delayed window snapping to nearby window frame edges.
 
 - TSRE5-Trainsim.Com-Fork-master/StatusWindow.h
   - Added Status Window command signal and button action slots.
+  - Added timer-based snap state/slot.
+
+- TSRE5-Trainsim.Com-Fork-master/NaviWindow.cpp
+  - Added gentle delayed window snapping to nearby window frame edges.
+
+- TSRE5-Trainsim.Com-Fork-master/NaviWindow.h
+  - Added timer-based snap state/slot.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
   - Added private Restore Last Session save/restore helpers.
@@ -164,9 +176,11 @@ Primary source files edited
 
 - TSRE5-Trainsim.Com-Fork-master/TDB.cpp
   - Touched during track/road vector paint investigation and shared paint path work.
+  - Added helper to extract one track/road database vector's points clipped to a specific tile.
 
 - TSRE5-Trainsim.Com-Fork-master/TDB.h
   - Touched during track/road vector paint investigation and shared paint path work.
+  - Added declaration for tile-clipped single-vector point extraction.
 
 - TSRE5-Trainsim.Com-Fork-master/PolyForestObj.cpp
   - Updated forest generation behavior for stutter reduction.

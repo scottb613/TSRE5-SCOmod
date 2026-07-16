@@ -16,6 +16,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Improved F-key terrain conforming for track cuts and embankments.
 - Adjusted F-tool track-width behavior so the 1/2/3 settings are more practical.
 - Added a `Shift+F` terrain smoothing pass for selected track/ruler objects.
+- Added selected-object `Ctrl+F` tile conforming for selected track/road objects.
 - Added an F2 `Conform DB` height brush mode for grade-following spot terrain cleanup along track and road databases.
 - Added tile-level autopaint tools for track, roads, and water.
 - Added real shoreline/water-edge terrain painting based on terrain/water contour detection.
@@ -37,6 +38,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added Restore Last Session on the startup screen to reopen the last route, camera view, and editor window layout.
 - Added a high-resolution branded startup splash and scaled loader/about display so the banner is not cropped.
 - Converted the Status Window into a compact clickable control panel.
+- Added gentle delayed snapping for the Status and Navi windows.
 - Updated startup and editor titlebars to identify the build as `TSRE SCOmod v0.3`.
 - Fixed F3 OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened F3 OSM Vector Map loading so failed network replies do not crash the editor.
@@ -51,47 +53,6 @@ Download the current test ZIP from Releases when available. Keep this copy separ
 The ZIP includes `AddShortcutDesktop.cmd`, which can create a desktop shortcut for the packaged `TSRE5.exe`.
 
 The ZIP also includes `LICENSE.md` and `THIRD-PARTY-NOTICES.txt`. TSRE5-SCOmod follows the original TSRE5 GPLv3 license; bundled runtime DLLs remain under their respective upstream licenses.
-
-## Startup Session Restore
-
-The first startup screen now includes `Restore Last Session`. Before a route is selected, the old full-width `Exit` button is split into `Restore Last Session` and `Exit`.
-
-When TSRE closes normally, it writes `lastSession.json` under the user's AppData TSRE folder. That file records the last route root, selected route, main window size and position, Navi/Status window positions, and the editor camera tile, position, and rotation.
-
-Route paint presets are also stored under the AppData TSRE folder, with a separate route-specific folder for each MSTS root/route combination.
-
-This lets a route builder restart TSRE and return to the last working context without reselecting the route and manually flying back to the same location.
-
-## Status Window Control Panel
-
-The Status Window is now a compact clickable control panel instead of only a passive readout. It can show and toggle common editor states such as Select, Place New, Rotate, Translate, Resize, AutoTDB, Stick To Terrain, Terrain Brush direction, Camera lock, and Camera Terrain lock.
-
-The selected-object readout now shows useful broad categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking that selected-object button clears the current selection.
-
-The startup screen and main editor window titlebars now identify the build as `TSRE SCOmod v0.3`.
-
-The startup, consist-loader, and About screens now scale the high-resolution SCOmod splash image into the loader banner area instead of showing a top-left crop. The packaged splash includes the Beast of Burden Locomotive Works logo, a centered photorealistic track scene, the TSRE mark, and a small credit for Piotr Gadecki.
-
-## F3 Map Loading
-
-The packaged build now includes the current OpenSSL 3 runtime DLLs needed by the MSYS2/Qt network stack. This fixes OSM Vector Map HTTPS loads that failed with TLS initialization errors before any OSM data was received.
-
-The OSM loader also treats failed HTTPS/HTTP/empty/non-XML replies as no-data responses instead of parsing them as valid map data, avoiding crash-to-desktop behavior on bad network replies.
-
-The default downloaded map imagery resolution is now 4096 for clearer per-tile F3 map output.
-
-## Seasonal TERRTEX Painting
-
-TERRTEX painting has only two real output targets:
-
-- default `TERRTEX`
-- snow `TERRTEX/SNOW`
-
-The F2 texture set selector still helps preview Summer, Spring, Autumn, Winter, and Night texture lookup for route objects, transfers, dynamic track, forest, and polyforest textures. For terrain painting, however, Mirror Season only works between default TERRTEX and snow TERRTEX. It does not write Spring, Autumn, Fall, or Night terrain folders.
-
-When `Mirror Season` is on, TSRE applies the same brush/autopaint trace to the paired TERRTEX side, but it uses the paired side's matching source texture. Default painting uses the default texture. Snow painting uses the snow texture. If the matching paired texture does not exist, the mirror paint is skipped for that stroke.
-
-When `Mirror Season` is off, TSRE still protects the opposite TERRTEX side from blank tiles. If painting creates a new per-tile terrain swatch, TSRE creates a matching placeholder swatch on the paired default/snow side if one does not already exist. That placeholder comes from the route's paired-side `terrain.ace` when available, or from the bundled SCOmod `terrain.ace` fallback.
 
 ## Documentation
 

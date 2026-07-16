@@ -123,6 +123,8 @@ public slots:
     void paintToolResetTile();
     void setTerrainToObj();
     void smoothTerrainToObj();
+    void setTerrainToNearestDbTile();
+    void setTerrainToSelectedObjTile();
     void adjustObjPositionToTerrainMenu();
     void adjustObjRotationToTerrainMenu();
     void pickObjForPlacement();

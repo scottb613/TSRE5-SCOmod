@@ -22,6 +22,61 @@
 #include "Trk.h"
 #include "Camera.h"
 
+static QPoint snapWindowPosition(QWidget *window){
+    const int snapDistance = 10;
+    QRect moving = window->frameGeometry();
+    QPoint snappedFramePos = moving.topLeft();
+    int bestX = snapDistance + 1;
+    int bestY = snapDistance + 1;
+
+    QList<QWidget*> targets;
+    QWidget *parent = window->parentWidget();
+    if(parent != NULL)
+        targets.append(parent);
+    if(parent != NULL){
+        QList<QWidget*> siblings = parent->findChildren<QWidget*>();
+        for(int i = 0; i < siblings.size(); i++){
+            QWidget *candidate = siblings[i];
+            if(candidate == window || !candidate->isWindow() || !candidate->isVisible())
+                continue;
+            targets.append(candidate);
+        }
+    }
+
+    for(int i = 0; i < targets.size(); i++){
+        QRect target = targets[i]->frameGeometry();
+        bool verticalNear = moving.bottom() >= target.top() - snapDistance && moving.top() <= target.bottom() + snapDistance;
+        bool horizontalNear = moving.right() >= target.left() - snapDistance && moving.left() <= target.right() + snapDistance;
+        int xCandidates[4] = {
+            target.left() - moving.left(),
+            target.right() - moving.right(),
+            target.right() + 1 - moving.left(),
+            target.left() - 1 - moving.right()
+        };
+        int yCandidates[4] = {
+            target.top() - moving.top(),
+            target.bottom() - moving.bottom(),
+            target.bottom() + 1 - moving.top(),
+            target.top() - 1 - moving.bottom()
+        };
+
+        for(int j = 0; j < 4; j++){
+            int dist = qAbs(xCandidates[j]);
+            if(verticalNear && dist <= snapDistance && dist < bestX){
+                bestX = dist;
+                snappedFramePos.setX(moving.left() + xCandidates[j]);
+            }
+            dist = qAbs(yCandidates[j]);
+            if(horizontalNear && dist <= snapDistance && dist < bestY){
+                bestY = dist;
+                snappedFramePos.setY(moving.top() + yCandidates[j]);
+            }
+        }
+    }
+
+    return window->pos() + (snappedFramePos - moving.topLeft());
+}
+
 
 
 NaviWindow::NaviWindow(QWidget* parent) : QWidget(parent) {
@@ -32,6 +87,8 @@ NaviWindow::NaviWindow(QWidget* parent) : QWidget(parent) {
     this->setWindowTitle(tr("Navi Window"));
     QStringList winPos = Game::naviPos.split(","); 
     if(winPos.count() > 1) this->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
+    snapTimer.setSingleShot(true);
+    QObject::connect(&snapTimer, SIGNAL(timeout()), this, SLOT(applyWindowSnap()));
     
     markerFiles.setStyleSheet("combobox-popup: 0;");
     markerFiles.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -335,8 +392,29 @@ void NaviWindow::hideEvent(QHideEvent *e){
     emit windowClosed();
 }
 
+void NaviWindow::moveEvent(QMoveEvent *e){
+    QWidget::moveEvent(e);
+    if(snapping)
+        return;
 
-void NaviWindow::recStatus(QString statName, QString statVal ){   
+    snapTimer.start(120);
+}
+
+void NaviWindow::applyWindowSnap(){
+    if(snapping)
+        return;
+
+    QPoint snapped = snapWindowPosition(this);
+    if(snapped == pos())
+        return;
+
+    snapping = true;
+    move(snapped);
+    snapping = false;
+}
+
+
+void NaviWindow::recStatus(QString statName, QString statVal ){
     //qDebug() << "status: " << statVal;
     // this->status1->setText(QString(statVal));
 //    if(statName.contains("camRot")) pRot.setText(statVal);

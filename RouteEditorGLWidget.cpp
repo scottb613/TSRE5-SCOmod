@@ -1256,7 +1256,9 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
                 }
                 break;
             case Qt::Key_F:
-                if(event->modifiers() & Qt::ShiftModifier)
+                if(event->modifiers() & Qt::ControlModifier)
+                    setTerrainToSelectedObjTile();
+                else if(event->modifiers() & Qt::ShiftModifier)
                     smoothTerrainToObj();
                 else
                     setTerrainToObj();
@@ -2168,6 +2170,30 @@ void RouteEditorGLWidget::smoothTerrainToObj(){
         route->smoothTerrainToTrackObj((WorldObj*)selectedObj, defaultPaintBrush);
     else
         route->smoothTerrainToTrackObj((WorldObj*)lastSelectedObj, defaultPaintBrush);
+    Undo::StateEnd();
+}
+
+void RouteEditorGLWidget::setTerrainToNearestDbTile(){
+    if(route == NULL)
+        return;
+
+    Undo::StateBegin();
+    route->setTerrainToNearestDbTile((int)camera->pozT[0], (int)camera->pozT[1], aktPointerPos, defaultPaintBrush);
+    Undo::StateEnd();
+}
+
+void RouteEditorGLWidget::setTerrainToSelectedObjTile(){
+    if(route == NULL || selectedObj == NULL)
+        return;
+    if(selectedObj->typeObj != GameObj::worldobj)
+        return;
+
+    WorldObj *obj = (WorldObj*)selectedObj;
+    if(obj->type != "trackobj" && obj->type != "dyntrack")
+        return;
+
+    Undo::StateBegin();
+    route->setTerrainToTrackObjTile(obj, defaultPaintBrush, (int)camera->pozT[0], (int)camera->pozT[1]);
     Undo::StateEnd();
 }
 

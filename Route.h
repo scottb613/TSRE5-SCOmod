@@ -114,6 +114,8 @@ public:
     bool resetTerrainTextureOnTile(int x, int y, int &filesDeleted, int &filesFailed);
     void setTerrainToTrackObj(WorldObj* obj, Brush* brush);
     void smoothTerrainToTrackObj(WorldObj* obj, Brush* brush);
+    int setTerrainToNearestDbTile(int x, int y, float *pos, Brush* brush);
+    int setTerrainToTrackObjTile(WorldObj* obj, Brush* brush, int tileX, int tileZ);
     int getTileObjCount(int x, int z);
     int getTileHiddenObjCount(int x, int z);
     int getStartTileX();

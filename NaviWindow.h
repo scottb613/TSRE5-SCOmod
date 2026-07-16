@@ -40,6 +40,7 @@ public slots:
 
 
     void recStatus(QString statName, QString statVal );       
+    void applyWindowSnap();
     
     
 signals:
@@ -53,6 +54,7 @@ signals:
     
 protected:
     void hideEvent(QHideEvent *e);
+    void moveEvent(QMoveEvent *e);
     
 private:
     QComboBox markerFiles;
@@ -94,6 +96,8 @@ private:
     QMap<QString, Coords*> mkrFiles;
     QMap<QString, LatitudeLongitudeCoordinate*> mkrPlaces;
     QString jumpType = "";
+    bool snapping = false;
+    QTimer snapTimer;
 };
 
 #endif	/* NAVIWINDOW_H */

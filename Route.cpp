@@ -1538,6 +1538,77 @@ void Route::smoothTerrainToTrackObj(WorldObj* obj, Brush* brush){
     }
 }
 
+int Route::setTerrainToNearestDbTile(int x, int y, float *pos, Brush* brush){
+    if(pos == NULL || brush == NULL)
+        return 0;
+
+    TDB *bestDb = NULL;
+    float bestTpos[3];
+    float bestDist = 99999;
+
+    TDB *dbs[2] = { this->trackDB, this->roadDB };
+    for(int i = 0; i < 2; i++){
+        if(dbs[i] == NULL)
+            continue;
+
+        float playerT[2] = { (float)x, (float)y };
+        float sample[3];
+        Vec3::copy(sample, pos);
+        float tpos[3];
+        int dist = dbs[i]->findNearestPositionOnTDB(playerT, sample, NULL, tpos);
+        if(dist >= 0 && dist < bestDist){
+            bestDist = dist;
+            bestDb = dbs[i];
+            bestTpos[0] = tpos[0];
+            bestTpos[1] = tpos[1];
+            bestTpos[2] = tpos[2];
+        }
+    }
+
+    if(bestDb == NULL || bestDist > Game::snapableRadius)
+        return 0;
+
+    QVector<float> points;
+    points.reserve(8192);
+    int sections = bestDb->getVectorSectionPointsForTile(x, y, (int)bestTpos[0], points);
+    if(sections <= 0 || points.length() < 6)
+        return 0;
+
+    Game::terrainLib->setTerrainToTrackObj(brush, points.data(), points.length(), x, y, NULL, 0);
+    return sections;
+}
+
+int Route::setTerrainToTrackObjTile(WorldObj* obj, Brush* brush, int tileX, int tileZ){
+    if(obj == NULL || brush == NULL)
+        return 0;
+    if(obj->typeObj != WorldObj::worldobj)
+        return 0;
+    if(obj->type != "trackobj" && obj->type != "dyntrack")
+        return 0;
+
+    TDB *db = this->trackDB;
+    if(this->tsection->isRoadShape(obj->sectionIdx))
+        db = this->roadDB;
+    if(db == NULL)
+        return 0;
+
+    float pos[3] = { obj->position[0], obj->position[1], obj->position[2] };
+    float playerT[2] = { (float)obj->x, (float)obj->y };
+    float tpos[3];
+    int dist = db->findNearestPositionOnTDB(playerT, pos, NULL, tpos);
+    if(dist < 0 || dist > Game::snapableRadius)
+        return 0;
+
+    QVector<float> points;
+    points.reserve(8192);
+    int sections = db->getVectorSectionPointsForTile(tileX, tileZ, (int)tpos[0], points);
+    if(sections <= 0 || points.length() < 6)
+        return 0;
+
+    Game::terrainLib->setTerrainToTrackObj(brush, points.data(), points.length(), tileX, tileZ, NULL, 0);
+    return sections;
+}
+
 ActivityObject* Route::getActivityObject(int id){
     if(currentActivity == NULL)
         return NULL;

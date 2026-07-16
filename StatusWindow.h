@@ -35,6 +35,7 @@ public slots:
     void cameraLockButtonAction();
     void cameraTerrainButtonAction();
     void objectSelectedButtonAction();
+    void applyWindowSnap();
 
 
 signals:
@@ -44,6 +45,7 @@ signals:
 
 protected:
     void hideEvent(QHideEvent *e);
+    void moveEvent(QMoveEvent *e);
 
 
 
@@ -66,6 +68,8 @@ private:
     QString statY;
     QString statS;
     QString statR;
+    bool snapping = false;
+    QTimer snapTimer;
     ///
 
 };

@@ -110,6 +110,7 @@ public:
     void getVectorSectionPoints(int x, int y, int uid, QVector<float> &ptr);
     void getVectorSectionPoints(int x, int y, int nId, int sId, QVector<float> &ptr);
     int getVectorSectionPointsForTile(int x, int z, QVector<float> &ptr);
+    int getVectorSectionPointsForTile(int x, int z, int nodeId, QVector<float> &ptr);
     void getVectorSectionLine(float * &buffer, int &len, int x, int y, int uid, bool useOffset = false);
     void moveItemsFrom2to1(int id2, int id1);
     int appendToJunction(int junctionId, int eId, int idx);
