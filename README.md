@@ -35,6 +35,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added a Windows executable icon and `AddShortcutDesktop.cmd` helper.
 - Added build fixes for current MSYS2/MinGW tooling.
 - Added Restore Last Session on the startup screen to reopen the last route, camera view, and editor window layout.
+- Added a high-resolution branded startup splash and scaled loader/about display so the banner is not cropped.
 - Converted the Status Window into a compact clickable control panel.
 - Updated startup and editor titlebars to identify the build as `TSRE SCOmod v0.3`.
 - Fixed F3 OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
@@ -66,6 +67,8 @@ The Status Window is now a compact clickable control panel instead of only a pas
 The selected-object readout now shows useful broad categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking that selected-object button clears the current selection.
 
 The startup screen and main editor window titlebars now identify the build as `TSRE SCOmod v0.3`.
+
+The startup, consist-loader, and About screens now scale the high-resolution SCOmod splash image into the loader banner area instead of showing a top-left crop. The packaged splash includes the Beast of Burden Locomotive Works logo, a centered photorealistic track scene, the TSRE mark, and a small credit for Piotr Gadecki.
 
 ## F3 Map Loading
 

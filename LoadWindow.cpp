@@ -31,12 +31,13 @@ LoadWindow::LoadWindow() {
 
     QLabel* myLabel = new QLabel("");
     myLabel->setContentsMargins(0,0,0,0);
+    myLabel->setFixedSize(600, 200);
     QLabel* myLabel2 = new QLabel("Choose folder containing 'Global' and 'Routes': ");
     myLabel2->setContentsMargins(5,0,0,0);
     QLabel* myLabel3 = new QLabel("Select route above or enter name for new route: ");
     myLabel3->setContentsMargins(5,0,0,0);
     
-    myLabel->setPixmap(QPixmap::fromImage(*myImage));
+    myLabel->setPixmap(QPixmap::fromImage(*myImage).scaled(myLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
     browse = new QPushButton("Browse");
     connect(browse, SIGNAL (released()), this, SLOT (handleBrowseButton()));

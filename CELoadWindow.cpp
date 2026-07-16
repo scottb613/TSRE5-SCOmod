@@ -23,12 +23,13 @@ CELoadWindow::CELoadWindow() {
 
     QLabel* myLabel = new QLabel("");
     myLabel->setContentsMargins(0,0,0,0);
+    myLabel->setFixedSize(600, 200);
     //QLabel* myLabel2 = new QLabel("Choose folder containing 'Trains': ");
     //myLabel2->setContentsMargins(5,0,0,0);
     QLabel* myLabel3 = new QLabel("Choose folder containing 'Trains' above, or select recent below: ");
     myLabel3->setContentsMargins(5,0,0,0);
     
-    myLabel->setPixmap(QPixmap::fromImage(*myImage));
+    myLabel->setPixmap(QPixmap::fromImage(*myImage).scaled(myLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
     browse = new QPushButton("Browse");
     connect(browse, SIGNAL (released()), this, SLOT (handleBrowseButton()));

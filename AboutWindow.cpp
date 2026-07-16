@@ -22,6 +22,7 @@ AboutWindow::AboutWindow(QWidget* parent) : QWidget(parent) {
 
     QLabel* myLabel = new QLabel("");
     myLabel->setContentsMargins(0,0,0,0);   
+    myLabel->setFixedSize(600, 200);
     
     QLabel* myLabel2 = new QLabel("<b>User guide</b> <a href=\"http://koniec.org/tsre5/\"><b>http://koniec.org/tsre5.</b></a>");
     myLabel2->setOpenExternalLinks(true);
@@ -34,7 +35,7 @@ AboutWindow::AboutWindow(QWidget* parent) : QWidget(parent) {
     myLabel3->setContentsMargins(5,0,0,0);
   
     
-    myLabel->setPixmap(QPixmap::fromImage(*myImage));
+    myLabel->setPixmap(QPixmap::fromImage(*myImage).scaled(myLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
     QPushButton* browse = new QPushButton("Close");
     connect(browse, SIGNAL (released()), this, SLOT (close()));

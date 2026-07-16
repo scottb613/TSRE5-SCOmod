@@ -15,12 +15,17 @@ Primary source files edited
   - Ensured route loading uses the route-name column.
   - Added Restore Last Session startup button and AppData lastSession.json restore handling.
   - Updated the startup window titlebar to TSRE SCOmod v0.3 branding.
+  - Scaled the high-resolution startup splash into the loader banner area instead of displaying a cropped top-left image.
 
 - TSRE5-Trainsim.Com-Fork-master/LoadWindow.h
   - Added Restore Last Session slot, button, and startup button layout helpers.
 
 - TSRE5-Trainsim.Com-Fork-master/CELoadWindow.cpp
   - Removed the obsolete seasonal-editing startup reset.
+  - Scaled the high-resolution consist-loader splash into the loader banner area instead of displaying a cropped top-left image.
+
+- TSRE5-Trainsim.Com-Fork-master/AboutWindow.cpp
+  - Scaled the high-resolution about/startup splash into the window banner area instead of displaying a cropped top-left image.
 
 - TSRE5-Trainsim.Com-Fork-master/Route.cpp
   - Added/updated tile-level autopaint operations.

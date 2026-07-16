@@ -20,6 +20,7 @@ Highlights:
 - startup guard to prevent multiple TSRE instances
 - fixed route-selection table refresh when switching MSTS roots
 - Restore Last Session button for reopening the last route, camera view, and editor layout
+- high-resolution branded startup splash with scaled loader/about display
 - clickable Status Window control panel for common editor state toggles
 - useful selected-object status readout with click-to-clear selection
 - TSRE SCOmod v0.3 startup and editor titlebar branding

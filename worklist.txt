@@ -33,6 +33,7 @@ Highlights
 - Added a Windows executable icon and `AddShortcutDesktop.cmd` helper.
 - Added build fixes for current MSYS2/MinGW tooling.
 - Added Restore Last Session on the startup screen to reopen the last route, camera view, and editor window layout.
+- Added a high-resolution branded startup splash and scaled loader/about display so the banner is not cropped.
 - Converted the Status Window into a compact clickable control panel.
 - Updated the startup and editor titlebars to identify the build as TSRE SCOmod v0.3.
 - Fixed F3 OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
@@ -58,6 +59,8 @@ The old Status Window was mostly a passive readout. I changed it into a compact 
 The button colors now show state at a glance: active/on states are highlighted, neutral states stay dark, and terrain-brush direction uses different colors for plus and minus. The selected-object readout is now useful as well, showing broad selection categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking the selected-object button clears the current selection.
 
 I also updated the visible program titlebars so the startup screen and main editor window identify the build as TSRE SCOmod v0.3 instead of the older Trainsim.Com Fork version string.
+
+The startup, consist-loader, and About screens now scale the high-resolution SCOmod splash image into the loader banner area instead of showing a top-left crop. The packaged splash includes the Beast of Burden Locomotive Works logo, a centered photorealistic track scene, the TSRE mark, and a small credit for Piotr Gadecki. A no-credit copy and credited copy are kept in the local content folder as source artwork.
 
 F3 map loading
 
