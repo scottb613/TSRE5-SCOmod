@@ -37,6 +37,9 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added Restore Last Session on the startup screen to reopen the last route, camera view, and editor window layout.
 - Converted the Status Window into a compact clickable control panel.
 - Updated startup and editor titlebars to identify the build as `TSRE SCOmod v0.3`.
+- Fixed F3 OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
+- Hardened F3 OSM Vector Map loading so failed network replies do not crash the editor.
+- Set downloaded map imagery resolution to 4096 for clearer per-tile map output.
 
 ## Downloads
 
@@ -63,6 +66,14 @@ The Status Window is now a compact clickable control panel instead of only a pas
 The selected-object readout now shows useful broad categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking that selected-object button clears the current selection.
 
 The startup screen and main editor window titlebars now identify the build as `TSRE SCOmod v0.3`.
+
+## F3 Map Loading
+
+The packaged build now includes the current OpenSSL 3 runtime DLLs needed by the MSYS2/Qt network stack. This fixes OSM Vector Map HTTPS loads that failed with TLS initialization errors before any OSM data was received.
+
+The OSM loader also treats failed HTTPS/HTTP/empty/non-XML replies as no-data responses instead of parsing them as valid map data, avoiding crash-to-desktop behavior on bad network replies.
+
+The default downloaded map imagery resolution is now 4096 for clearer per-tile F3 map output.
 
 ## Seasonal TERRTEX Painting
 

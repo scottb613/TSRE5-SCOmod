@@ -23,6 +23,9 @@ Highlights:
 - clickable Status Window control panel for common editor state toggles
 - useful selected-object status readout with click-to-clear selection
 - TSRE SCOmod v0.3 startup and editor titlebar branding
+- F3 OSM Vector Map HTTPS/runtime fix with OpenSSL 3 DLLs
+- safer F3 OSM network failure handling to avoid crash-to-desktop
+- downloaded map imagery resolution set to 4096
 - embedded TSRE icon in the Windows executable
 - AddShortcutDesktop.cmd helper for creating a desktop shortcut
 
@@ -37,5 +40,8 @@ After TSRE closes normally, it writes lastSession.json under the user's AppData 
 
 Status window note:
 The Status Window now works as a compact clickable control panel for common editor states. The selected-object button reports the current broad selection type and clears the current selection when clicked.
+
+F3 map note:
+OSM Vector Map loading now includes the current OpenSSL 3 runtime DLLs and guards against failed HTTPS/HTTP/empty/non-XML replies. The package default mapImageResolution is 4096 for clearer per-tile map output.
 
 Run TSRE5.exe from this folder, or run AddShortcutDesktop.cmd to create a desktop shortcut.

@@ -139,6 +139,15 @@ Primary source files edited
   - Added forest-region view toggle state.
   - Removed the old seasonal-editing startup warning, generated settings-file hint, and settings parser hook.
   - Updated application name/version branding to TSRE SCOmod v0.3.
+  - Updated generated default mapImageResolution setting to 4096.
+
+- TSRE5-Trainsim.Com-Fork-master/MapDataOSM.cpp
+  - Hardened F3 OSM Vector Map network handling for TLS/HTTP/empty/non-XML failures.
+  - Applied the TLS configuration before starting the HTTPS request.
+  - Avoided blocking event-loop delay on failed OSM requests.
+
+- TSRE5-Trainsim.Com-Fork-master/settings.txt
+  - Set packaged/default mapImageResolution to 4096.
   - Added Restore Last Session window/camera restore state.
   - Added shared AppData/TSRE JSON path helpers for session and route preset state.
 

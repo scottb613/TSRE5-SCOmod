@@ -35,6 +35,9 @@ Highlights
 - Added Restore Last Session on the startup screen to reopen the last route, camera view, and editor window layout.
 - Converted the Status Window into a compact clickable control panel.
 - Updated the startup and editor titlebars to identify the build as TSRE SCOmod v0.3.
+- Fixed F3 OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
+- Hardened F3 OSM Vector Map loading so failed network replies do not crash the editor.
+- Set downloaded map imagery resolution to 4096 for clearer per-tile map output.
 
 Test branch, forked from Eric's TSRE master branch:
 
@@ -55,6 +58,14 @@ The old Status Window was mostly a passive readout. I changed it into a compact 
 The button colors now show state at a glance: active/on states are highlighted, neutral states stay dark, and terrain-brush direction uses different colors for plus and minus. The selected-object readout is now useful as well, showing broad selection categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking the selected-object button clears the current selection.
 
 I also updated the visible program titlebars so the startup screen and main editor window identify the build as TSRE SCOmod v0.3 instead of the older Trainsim.Com Fork version string.
+
+F3 map loading
+
+I fixed an F3 OSM Vector Map loading failure that was showing up as a no-connection message followed by a crash to desktop. The log showed TLS initialization failures before TSRE ever received valid OSM data. The test package now includes the current OpenSSL 3 runtime DLLs required by the MSYS2/Qt network stack.
+
+The OSM loader was also hardened so failed HTTPS/HTTP/empty/non-XML replies are treated as no-data responses instead of being parsed as valid map data. That should return control to the editor instead of crashing.
+
+The packaged map imagery resolution is now set to 4096. The OSM vector loader still requests the tile area in four smaller quadrants, but the final per-tile rendered map image is controlled by mapImageResolution. 4096 gives a much clearer tile map than the old 512 default.
 
 
 Cut and embankment terrain conforming

@@ -1450,7 +1450,7 @@ void Game::CreateNewSettingsFile(){
     out << "ignoreMissingGlobalShapes = true  // false shows only track/road shapes present in Global\\Shapes  \n " ; 
     out << "leaveTrackShapeAfterDelete = false // Use only when deleting track/road but keeping TDB lines  \n " ; 
     out << "maxAutoPlacement = 999            // max distance in meters for auto-placement  \n " ; 
-    out << "mapImageResolution = 512          // Image resolution for downloaded map imagery  \n " ; 
+    out << "mapImageResolution = 4096         // Image resolution for downloaded map imagery  \n " ;
     out << "numRecentItems = 15               // Length of recently used items list  \n " ; 
     out << "preloadTextures = \"rock.ace\"      // supports ace, bmp, dds, png files in TERRTEX folder  \n " ; 
     out << "sigOffset = 2.5                   // offset for signal object placement  \n " ; 

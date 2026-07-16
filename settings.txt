@@ -47,7 +47,7 @@ loadAllWFiles = false            // true loads the entire route for error checki
 
 
 //// Route Editor File Management Tokens
-autoFix = true                   // repair TDB anomalies
+autoFix = false                  // repair TDB anomalies
 deepunderground = -100           // flag pieces that aren't on the terrain
 deleteTrWatermarks = true        // removes detail not used by ORTS
 deleteViewDbSpheres = true       // removes detail not used by ORTS
@@ -64,7 +64,7 @@ defaultMoveStep = 0.25
 ignoreMissingGlobalShapes = true  // false shows only track/road shapes present in Global\Shapes
 leaveTrackShapeAfterDelete = false // Use only when deleting track/road but keeping TDB lines
 maxAutoPlacement = 999            // max distance in meters for auto-placement
-mapImageResolution = 512          // Image resolution for downloaded map imagery
+mapImageResolution = 4096         // Image resolution for downloaded map imagery
 numRecentItems = 15               // Length of recently used items list
 preloadTextures = "rock.ace"      // supports ace, bmp, dds, png files in TERRTEX folder
 sigOffset = 2.5                   // offset for signal object placement

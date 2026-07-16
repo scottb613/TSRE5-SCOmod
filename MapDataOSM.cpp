@@ -541,7 +541,7 @@ void MapDataOSM::load(){
 }
 
 void MapDataOSM::get(LatitudeLongitudeCoordinate* min, LatitudeLongitudeCoordinate* max){
-    QNetworkAccessManager* mgr = new QNetworkAccessManager();
+    QNetworkAccessManager* mgr = new QNetworkAccessManager(this);
     connect(mgr, SIGNAL(finished(QNetworkReply*)), this, SLOT(isData(QNetworkReply*)));
     // the HTTP request
     //// EFO Factor this out to a variable in case the string changes?
@@ -563,34 +563,42 @@ void MapDataOSM::get(LatitudeLongitudeCoordinate* min, LatitudeLongitudeCoordina
     +","
     +QString::number(max->Latitude)
     ) ) );
-    mgr->get(req);
-    
     QSslConfiguration config = QSslConfiguration::defaultConfiguration();
     config.setProtocol(QSsl::TlsV1_2);
     req.setSslConfiguration(config);
+    mgr->get(req);
 }
 
 void MapDataOSM::isData(QNetworkReply* r){
     QByteArray data = r->readAll();
-    qDebug() << "data " << data.length();    
+    qDebug() << "data " << data.length();
     //QString aaa;
     //for (byte d : data) {
     //    aaa += QChar(d);
     //}
     //qDebug() << aaa;
     
-    if(data.length()< 100){
-        //"No data from the network..." label
-        emit statusInfo(QString("No data from the network..."));
-        // 5 seconds, warning time.
-        QTime cTime = QTime::currentTime().addSecs(5);  
-        while (QTime::currentTime() < cTime){
-            QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+    bool replyOk = true;
+    if(r->error() != QNetworkReply::NoError){
+        qWarning() << "OSM network error:" << r->errorString();
+        replyOk = false;
+    }
+    QVariant statusCode = r->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+    if(statusCode.isValid() && statusCode.toInt() >= 400){
+        qWarning() << "OSM HTTP error:" << statusCode.toInt();
+        replyOk = false;
+    }
+    if(data.length() < 100 || !data.trimmed().startsWith("<?xml")){
+        replyOk = false;
+    }
+
+    if(!replyOk){
+        loadCount++;
+        if(loadCount >= totalLoadCount){
+            emit statusInfo(QString("Load"));
+        } else {
+            emit statusInfo(QString("No data [")+QString::number(loadCount)+"/"+QString::number(totalLoadCount)+"]");
         }
-        //End delay
-        r->close();
-        //"Load" label
-        emit statusInfo(QString("Load"));
     } else {
         loadData(&data);
         loadCount++;
@@ -601,6 +609,7 @@ void MapDataOSM::isData(QNetworkReply* r){
             emit statusInfo(QString("Wait [")+QString::number(loadCount)+"/"+QString::number(totalLoadCount)+"] ...");
         }
     }
+    r->deleteLater();
 }
 
 void MapDataOSM::loadData(QByteArray* data){
