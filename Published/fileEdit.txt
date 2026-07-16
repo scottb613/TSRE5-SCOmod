@@ -14,7 +14,7 @@ Primary source files edited
   - Fixed route-selection table refresh when switching MSTS root folders.
   - Ensured route loading uses the route-name column.
   - Added Restore Last Session startup button and AppData lastSession.json restore handling.
-  - Updated the startup window titlebar to TSRE SCOmod v0.3 branding.
+  - Updated the startup window titlebar to TSRE SCOmod v0.4 branding.
   - Scaled the high-resolution startup splash into the loader banner area instead of displaying a cropped top-left image.
 
 - TSRE5-Trainsim.Com-Fork-master/LoadWindow.h
@@ -143,7 +143,7 @@ Primary source files edited
   - Updated default/editor settings used by smoother startup and route editing.
   - Added forest-region view toggle state.
   - Removed the old seasonal-editing startup warning, generated settings-file hint, and settings parser hook.
-  - Updated application name/version branding to TSRE SCOmod v0.3.
+  - Updated application name/version branding to TSRE SCOmod v0.4.
   - Updated generated default mapImageResolution setting to 4096.
 
 - TSRE5-Trainsim.Com-Fork-master/MapDataOSM.cpp
@@ -240,3 +240,4 @@ Project files edited
 
 - TSRE5-Trainsim.Com-Fork-master/nbproject/qt-Release_x64.pro
   - Added explicit Windows resource file reference for the TSRE executable icon.
+

@@ -39,7 +39,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added a high-resolution branded startup splash and scaled loader/about display so the banner is not cropped.
 - Converted the Status Window into a compact clickable control panel.
 - Added gentle delayed snapping for the Status and Navi windows.
-- Updated startup and editor titlebars to identify the build as `TSRE SCOmod v0.3`.
+- Updated startup and editor titlebars to identify the build as `TSRE SCOmod v0.4`.
 - Fixed F3 OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened F3 OSM Vector Map loading so failed network replies do not crash the editor.
 - Set downloaded map imagery resolution to 4096 for clearer per-tile map output.
@@ -63,3 +63,4 @@ The ZIP also includes `LICENSE.md` and `THIRD-PARTY-NOTICES.txt`. TSRE5-SCOmod f
 ## Status
 
 This is not an official TSRE release. It is a working route-editor improvement branch for testing and discussion.
+
