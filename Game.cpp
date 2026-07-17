@@ -42,7 +42,7 @@
 //////// Version
 //////////////////////////////////
 
-QString Game::AppVersion = "v0.4";  // over-ride from main.cpp
+QString Game::AppVersion = "v0.5";  // over-ride from main.cpp
 
 
 bool Game::ServerMode = false;
@@ -179,6 +179,7 @@ bool Game::autoGeoTerrain = false;
 bool Game::useSuperelevation = false;
 
 bool Game::soundEnabled = false;
+bool Game::scoSoundEnabled = true;
 
 int Game::AASamples = 0;
 bool Game::AARemoveBorder = false;
@@ -885,6 +886,13 @@ void Game::load() {
             else
                 soundEnabled = false; 
         }
+
+        if(setname =="scosoundenabled"){
+            if((setval == "true") or (setval == "1") or (setval == "on"))
+                scoSoundEnabled = true;
+            else
+                scoSoundEnabled = false;
+        }
         
         if(setname =="cameraspeedmin"){
             cameraSpeedMin = setval.toFloat();
@@ -1414,6 +1422,7 @@ void Game::CreateNewSettingsFile(){
     out << "shadowMapSize = 2048  \n " ; 
     out << "shadowsEnabled = false          // affects performance if true  \n " ; 
     out << "soundEnabled = false          \n " ; 
+    out << "scoSoundEnabled = true         // SCOmod editor UI sounds: click, buzz, chirp  \n " ;
     out << "startapp = r                    // r=Route Edit   c=Consist Edit   s=Shapeviewer    \n " ; 
     out << "systemTheme = false             // setting to true uses your Windows pallete  \n " ; 
     out << "unsafemode = false              // Only set to true for risky features  \n " ; 

@@ -1,153 +1,193 @@
-// TSRE Trainsim.Com Fork v0.8.005u
-// In this file, there are two comment marks in use -- # and // -- Both work the same  
+// TSRE SCOmod v0.4 settings
+// Both # and // can be used for comments.
+// Recommended public uiScale range: 1.00 to 1.25. Scott's 32" 2K setup uses 1.15.
 
 
-//// System Tokens (affects all modules)
+//// General / System
 
-consoleOutput = false          // displays log output in realtime in command window
-debugOutput = false            // enables extended logging detail
-fullscreen = false             // Prevents screen from being maximized
-imageSubstitution = true       // allow for ACE or DDS to be shown if missing DDS or ACE
-imageUpgrade = true            // show DDS if available, false uses shapefile defined texture only
-logfiledays = 20               // delete files older than X days
-logfilemax = 50000             // keep only X logs
-mainWindow = 100, 100          // X, Y of main windows and load window
-mainWindowLayout = "PWTS"      // Order of windows: P = Properties, T = Tools W = World
-maxObjLag = 10 
-mouseSpeed = 0.1
+consoleOutput = false             // display log output in realtime in the command window
+debugOutput = false               // enable extended logging detail
+fullscreen = false                // start maximized/fullscreen
+soundEnabled = false              // legacy TSRE sound support
+scoSoundEnabled = true            // SCOmod editor UI sounds: click, buzz, chirp
+startapp = r                      // r = Route Editor, c = Consist Editor, s = Shape Viewer
+systemTheme = false               // true uses your Windows palette
+unsafemode = false                // only enable for risky/advanced features
+useImperial = on                  // convert some display values from metric
+usenNumPad = true
+useWorkingDir = false             // false saves logs to the TSRE folder
+warningBox = true                 // warn before exiting without saving
+
+
+//// Logging
+
+logfiledays = 20                  // delete logs older than X days
+logfilemax = 50000                // keep only X logs
+
+
+//// Startup / Route Selection
+
+// gameRoot = ""                  // your MSTS/ORTS "Train Simulator" folder
+// routeName = ""                 // route name to skip route selection menu
+createNewIfNotExist = true        // create routeName if it does not already exist
+// startTileX = ""                // optional start location
+// startTileY = ""                // optional start location
+
+geoPath = e:/SRTM                 // drive/folder containing HGT files
+loadActivities = true             // check route activities for errors
+loadAllWFiles = false             // true loads the entire route for error checking; slower on large routes
+
+// routeMergeString = ""          // merge route offsets, e.g. "IRM:0:0:0"
+// routeMergeTDB = false          // set true to merge TDBs
+// routeMergeTerrain = false      // set true to overwrite overlapping terrain heights
+// routeMergeTerrtex = false      // set true to overwrite overlapping terrain textures
+
+
+//// UI / Windows / Scaling
+
+mainWindow = 100, 100             // X, Y of main window and load window
+mainWindowLayout = "PWTS"         // window order: P = Properties, T = Tools, W = World
+naviWindow = 50, 50               // X, Y of Navigation window
+statusWindow = 0, 100             // X, Y of Status window
+toolsHidden = false               // only show the viewport
+uiScale = 1.15                    // global editor UI font/panel scale; 1.00 to 1.25 recommended
+
+
+//// Camera / Viewport
+
+cameraFov = 35
+cameraSpeedMax = 40               // camera movement with SHIFT
+cameraSpeedMin = 1                // camera movement with CTRL
+cameraSpeedStd = 3                // camera movement normal
+cameraStickToTerrain = true       // stop camera from going underground, toggled with "/" key
+lockCamera = false                // same as pressing "." while moving the camera
+mouseSpeed = 0.1                  // mouse look/pan speed
+
+
+//// Rendering / Performance
+
+AASamples = 0
+allowObjLag = 10
+imageSubstitution = true          // allow ACE or DDS substitution if one is missing
+imageUpgrade = true               // prefer DDS if available; false uses shape-defined texture only
+maxObjLag = 10
+MSTSshadows = false               // simplified shadows when true
+newSymbols = true                 // true uses newer TSRE symbols; false uses older pyramids
+objectLod = 3000                  // 2000 is plenty for most routes
+railProfile = 0.7175, 0.7895      // rail edges for dynamic track display
 shadowLowMapSize = 1024
 shadowMapSize = 2048
-shadowsEnabled = false          // affects performance if true
-soundEnabled = false        
-startapp = r                    // r=Route Edit   c=Consist Edit   s=Shapeviewer  
-systemTheme = false             // setting to true uses your Windows pallete
-unsafemode = false              // Only set to true for risky features
-useImperial = on                // Converts some display values from metric
-usenNumPad = true           
-useWorkingDir = false           // false saves logs to the TSRE folder
-warningBox = true               // Warn before exiting without a save
-
-
-//// Route Editor Startup Tokens
-// gameRoot = ""             // your ORTS Content drive/folder
-// routeName = ""            // add route name to skip route selection menu
-createNewIfNotExist = true       // Create routeName if not already present
-// startTileX = ""                  // optional start location
-// startTileY = ""                  // optional start location
-
-geoPath = e:/SRTM                // Drive and folder housing HGT files
-loadActivities = true            // Check route activities for errors
-loadAllWFiles = false            // true loads the entire route for error checking; slower on large routes
-// routeMergeString = ""          // For merging a second route with offsets X Y Z applied  e.g. "IRM:0:0:0"
-// routeMergeTDB = false            // set to true to merge TDBs
-// routeMergeTerrain = false        // set to true to overwrite overlapping terrain heights
-// routeMergeTerrtex = false        // set to true to overwrite overlapping terrain textures
-#season = "Spring"               // Requires seasonalEditing, winter/autumn/spring/summer/night
-#seasonalEditing = on            // 
-
-
-//// Route Editor File Management Tokens
-autoFix = false                  // repair TDB anomalies
-deepunderground = -100           // flag pieces that aren't on the terrain
-deleteTrWatermarks = true        // removes detail not used by ORTS
-deleteViewDbSpheres = true       // removes detail not used by ORTS
-legacySupport = false            // enable retention of ViewDBSphere and VDBID when true 
-listfiles = true                 // create lists of files used/unused on exit
-objectsToRemove = ""             // Requires listfiles and LoadAllWFiles, comma separated list of shapes
-routeRebuildTDB = true           // Requires unsafemode
-sortTileObjects = true           // Orders items by detail level on save 
-
-
-//// Route Editor Editing Preset Tokens
-defaultElevationBox = 0
-defaultMoveStep = 0.25
-ignoreMissingGlobalShapes = true  // false shows only track/road shapes present in Global\Shapes
-leaveTrackShapeAfterDelete = false // Use only when deleting track/road but keeping TDB lines
-maxAutoPlacement = 999            // max distance in meters for auto-placement
-mapImageResolution = 4096         // Image resolution for downloaded map imagery
-numRecentItems = 15               // Length of recently used items list
-preloadTextures = "rock.ace"      // supports ace, bmp, dds, png files in TERRTEX folder
-sigOffset = 2.5                   // offset for signal object placement
-snapableRadius = 20               // max distance to snap to nearest object
-snapableOnlyRot = false           // false allows free rotation
-terrainBrushColor = "#1B2E29"
-terrainBrushIntensity = 70
-terrainBrushSize = 25
-terrainCut = 2
-terrainEmbankment = 2 
-terrainRadius = 9 
-terrainSize = 1 
+shadowsEnabled = false            // affects performance if true
 textureQuality = 1
-trackElevationMaxPm = 100         // maximum grade permille 
-useOnlyPositiveQuaternions = false 
+tileLod = 1                       // tiles in each direction to load
 useQuadTree = true
-useTdbEmptyItems = true           // Preserves node numbering when deleting items from TDB
-writeEnabled = true               // set to false for read-only
-writeTDB = true                   // set to false to manually decide what to add to TDB via Z key
 
 
-//// Route Editor MapBox Tokens
-// imageMapsUrl = https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/{lon},{lat},{zoom}/{res}x{res}?access_token=
-// imageMapsZoomOffset = -1         /// required for MapBox
-// MapAPIKey = {your API key}
+//// View Overlays / Markers
 
-//// Route Editor Google Maps Tokens
-// imageMapsUrl = http://maps.googleapis.com/maps/api/staticmap?center={lat},{lon}&zoom={zoom}&size={res}x{res}&maptype=satellite&key=
-// MapAPIKey = {your API key}
-
-
-//// Route Editor Viewport Tokens
-AASamples = 0
-allowObjLag = 10                   
-cameraFov = 35 
-cameraSpeedMax = 40                // Camera movement with SHIFT
-cameraSpeedMin = 1                 // Camera movement with CTRL
-cameraSpeedStd = 3                 // Camera movement normal
-cameraStickToTerrain = true        // Stop camera from going underground, toggled with "/" key
 fogColor =
 fogDensity =
-hudEnabled = false                //  
+hudEnabled = false
 hudScale = 1                      // HUD text scale
-uiScale = 1.15                    // Global editor UI font/panel scale; 1.00 to 1.25 recommended
-lockCamera = false                 // same as hitting the . when moving about with the camera, can be unset
-markerHeight = 10                 // Height of the marker stick
-markerLines = true                // Show markers when route loads
-markerText = 2.5                  // Text size for marker text
-MSTSshadows = false               // dumb down shadows when true
-naviWindow = 50, 50               // X, Y of Navigation window for RE
-newSymbols = true                 // default is true, false uses the older TSRE pyramids
-objectLod = 3000                  // 2000 is plenty for most purposes
+markerHeight = 10                 // height of marker sticks
+markerLines = true                // show marker lines when route loads
+markerText = 2.5                  // marker text size
 oglDefaultLineWidth = 1           // width of standard lines
-railProfile = 0.7175, 0.7895      // rail edges for dynamic track
-renderTrItems = false             // Show the black markers for TrItems
+renderTrItems = false             // show black TrItem markers
 sectionLineHeight = 5.0           // grey section line height
 selectedColor = #B612FF           // object selection line color
 selectedWidth = 2                 // object selection line width
 selectedTerrColor = #FFB612       // terrain selection line color
 selectedTerrWidth = 4             // terrain selection line width
-skyColor =  #E0FFFF
-statusWindow=0,100                // X, Y of Status Window
-tileLod = 1                       // tiles in each direction to load
-toolsHidden = false               // only show the viewport
+skyColor = #E0FFFF
 useSuperelevation = false         // apply superelevation when rendering curves
 viewCompass = false               // show compass at top center
 viewMarkers = true                // view markers selected in Navi window
-wireLineHeight = 6.8              // yellow TDB line height
+wireLineHeight = 6.8              // yellow TDB/RDB line height
 
 
-//// Route Editor Multi-User Tokens
+//// Object Editing / Placement
+
+defaultElevationBox = 0
+defaultMoveStep = 0.25
+ignoreMissingGlobalShapes = true  // false shows only track/road shapes present in Global\Shapes
+leaveTrackShapeAfterDelete = false // use only when deleting track/road but keeping TDB lines
+maxAutoPlacement = 999            // max distance in meters for auto-placement
+numRecentItems = 15               // length of recently used items list
+sigOffset = 2.5                   // offset for signal object placement
+snapableRadius = 20               // max distance to snap to nearest object
+snapableOnlyRot = false           // false allows free rotation
+trackElevationMaxPm = 100         // maximum grade in permille
+useOnlyPositiveQuaternions = false
+useTdbEmptyItems = true           // preserve node numbering when deleting TDB items
+writeEnabled = true               // set false for read-only
+writeTDB = true                   // set false to manually add to TDB via Z key
+
+
+//// Terrain Editing / F2 Brush Defaults
+
+terrainBrushColor = "#1B2E29"
+terrainBrushIntensity = 70
+terrainBrushSize = 25
+terrainCut = 2
+terrainEmbankment = 2
+terrainRadius = 9
+terrainSize = 1
+
+
+//// Terrain Texture / Seasonal Paint
+
+preloadTextures = "rock.ace"      // supports ace, bmp, dds, png files in TERRTEX folder
+
+
+//// Map / F3 Imagery
+
+mapImageResolution = 4096         // downloaded map imagery resolution
+
+// MapBox:
+// imageMapsUrl = https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/{lon},{lat},{zoom}/{res}x{res}?access_token=
+// imageMapsZoomOffset = -1       // required for MapBox
+// MapAPIKey = {your API key}
+
+// Google Maps:
+// imageMapsUrl = http://maps.googleapis.com/maps/api/staticmap?center={lat},{lon}&zoom={zoom}&size={res}x{res}&maptype=satellite&key=
+// MapAPIKey = {your API key}
+
+
+//// Route File Cleanup / Maintenance
+
+autoFix = false                   // repair TDB anomalies
+deepunderground = -100            // flag pieces that are not on terrain
+deleteTrWatermarks = true         // remove detail not used by ORTS
+deleteViewDbSpheres = true        // remove detail not used by ORTS
+legacySupport = false             // retain ViewDBSphere and VDBID when true
+listfiles = true                  // create lists of files used/unused on exit
+objectsToRemove = ""              // requires listfiles and loadAllWFiles; comma-separated shapes
+routeRebuildTDB = true            // requires unsafemode
+sortTileObjects = true            // order items by detail level on save
+
+
+//// Advanced / Network / Multi-User
+
 # fpsLimit = 59
-# playerMode =                       
-# proceduralTracks = true           
-# serverAuth = yes                  
+# playerMode =
+# proceduralTracks = true
+# serverAuth = yes
 # serverLogin = yes@yes.com
-# useNetworkEng = false             
+# useNetworkEng = false
 
 
-//// Consist Editor Tokens
-ceWindowLayout = "cu1"               // C - Consists, 1 = Main List,  2 = Second List, 
-colorConView = "#a2a2a2"              
-colorShapeView = "#a2a2a2"           
-includeFolder = "openrails"          // Optional override for OpenRailsCZSK Project
-loadConsists = true                  // set to false to skip loading consists
-ortsEngEnable = true                 // Give precedence to settings in /OpenRails folders
+//// Consist Editor
+
+ceWindowLayout = "cu1"            // C = Consists, 1 = Main List, 2 = Second List
+colorConView = "#a2a2a2"
+colorShapeView = "#a2a2a2"
+includeFolder = "openrails"       // optional override for OpenRailsCZSK Project
+loadConsists = true               // set false to skip loading consists
+ortsEngEnable = true              // give precedence to settings in /OpenRails folders
+
+
+//// Legacy / Disabled
+
+# season = "Spring"               // disabled in SCOmod; use the F2 Texture Set selector
+# seasonalEditing = on            // disabled in SCOmod; use the F2 Texture Set selector

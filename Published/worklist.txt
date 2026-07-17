@@ -44,7 +44,8 @@ Highlights
 - Added [global] [uiScale] support for larger editor fonts and proportionally wider panels.
 - Added [global] sound feedback with standardized [SCOclick.wav], [SCObuzz.wav], and [SCOchirp.wav] files.
 - Added [status window] [Place Guard] validation to prevent spammed objects with automatic undo, and respective feedback.
-- Updated [global] title bar to identify the build as [TSRE SCOmod v0.4].
+- Updated [global] title bar to identify the build as [TSRE SCOmod v0.5].
+- Reworked [F12] Settings Editor to save the active settings.txt with timestamp backups, organized tabs, dark striped rows, key assignments, and full-sentence tooltips.
 - Fixed [F3] OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened [F3] OSM Vector Map loading so failed network replies do not crash the editor.
 - Set [F3] downloaded map imagery resolution to 4096 for clearer per-tile map output.
@@ -70,7 +71,7 @@ The button colors now show state at a glance: active/on states are highlighted, 
 
 For v0.4, I also added gentle delayed snapping for the Status and Navi windows. The snap only triggers when a floating window is very close to another window edge, waits briefly until dragging pauses, and uses the visible window frame so the windows touch cleanly rather than overlapping.
 
-I also updated the visible program titlebars so the startup screen and main editor window identify the build as TSRE SCOmod v0.4 instead of the older Trainsim.Com Fork version string.
+I also updated the visible program titlebars so the startup screen and main editor window identify the build as TSRE SCOmod v0.5 instead of the older Trainsim.Com Fork version string.
 
 The startup, consist-loader, and About screens now scale the high-resolution SCOmod splash image into the loader banner area instead of showing a top-left crop. The packaged splash includes the Beast of Burden Locomotive Works logo, a centered photorealistic track scene, the TSRE mark, and a small credit for Piotr Gadecki. A no-credit copy and credited copy are kept in the local content folder as source artwork.
 
@@ -114,6 +115,12 @@ I added light sound feedback for editor actions while keeping the sounds separat
 - `SCOchirp.wav` plays only for deliberate user-commanded mode/status changes, such as Status Window button presses or keyboard shortcuts that change the active edit mode.
 
 Passive status refreshes do not play sounds. This avoids double audio when the editor merely updates button states after a placement or automatic mode change.
+
+Settings editor cleanup
+
+For v0.5, I reworked the F12 Settings Editor so it follows the same organization as the cleaned settings.txt file. The old broad tabs have been replaced with practical sections such as General, Logging, Startup, UI, Camera, Rendering, Overlays, Objects, Terrain, Map, Cleanup, Advanced, and Consist. The Settings screen now saves directly to the active settings.txt file instead of writing settings.txt.new, and it creates a timestamped backup before overwriting the existing file.
+
+The visible comment clutter was removed from the rows and replaced with full-sentence tooltips on the labels and controls. I also added a Key Assignments tab with a two-column, striped table so shortcuts are easier to scan inside the editor. The Settings Editor now uses the same dark visual treatment as the rest of the SCOmod interface.
 
 F3 map loading
 
@@ -309,11 +316,11 @@ Potential future protection:
 
 Packaging/versioning
 
-The current public test package is v0.4:
+The current public test package is v0.5:
 
-dist/tsre-scomod-v0.4.zip
+dist/tsre-scomod-v0.5.zip
 
-The current v0.4 package includes the selected-object Ctrl+F tile conform tool, gentle delayed snapping for the Status/Navi windows, global UI scaling, and Place Guard validation with status-panel/audio feedback.
+The current v0.5 package includes the selected-object Ctrl+F tile conform tool, gentle delayed snapping for the Status/Navi windows, global UI scaling, Place Guard validation with status-panel/audio feedback, and the reorganized F12 Settings Editor.
 
 Known-good source and runtime snapshots were also saved locally before the seasonal texture work was expanded, so there is a clean rollback point if needed.
 

@@ -175,7 +175,7 @@ Primary source files edited
   - Updated default/editor settings used by smoother startup and route editing.
   - Added forest-region view toggle state.
   - Removed the old seasonal-editing startup warning, generated settings-file hint, and settings parser hook.
-  - Updated application name/version branding to TSRE SCOmod v0.4.
+  - Updated application name/version branding to TSRE SCOmod v0.5.
   - Updated generated default mapImageResolution setting to 4096.
   - Added global uiScale default, parser, bounds, and generated settings-file comment.
 
@@ -188,6 +188,8 @@ Primary source files edited
   - Set packaged/default mapImageResolution to 4096.
   - Added Restore Last Session window/camera restore state.
   - Added shared AppData/TSRE JSON path helpers for session and route preset state.
+  - Reorganized the packaged settings file into readable SCOmod sections.
+  - Added current SCOmod defaults for uiScale, mouseSpeed, mapImageResolution, and SCOmod sound feedback.
 
 - TSRE5-Trainsim.Com-Fork-master/Game.h
   - Added declaration for forest-region view toggle state.
@@ -228,6 +230,15 @@ Primary source files edited
 - TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
   - Removed the old visible Season/Seasonal Editing settings rows from the Settings panel.
   - Removed the obsolete seasonal-editing settings lookup.
+  - Changed the Settings Editor save button to write active settings.txt instead of settings.txt.new.
+  - Added timestamped settings.txt backups before overwrite.
+  - Reworked the Settings Editor tabs to match the organized settings.txt categories.
+  - Added dark striped settings rows and moved row comments into full-sentence tooltips.
+  - Added a Key Assignments tab with a striped two-column shortcut reference.
+  - Added dialog support for current SCOmod settings such as uiScale, scoSoundEnabled, mainWindow, and decimal mouseSpeed.
+
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.h
+  - Added Settings Editor helper declarations for active settings saving, timestamped backups, tooltips, and key assignment display.
 
 - TSRE5-Trainsim.Com-Fork-master/ProceduralMstsDyntrack.cpp
   - Updated procedural dynamic track texture selection to follow the active season directly with normal-texture fallback.
