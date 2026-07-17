@@ -49,35 +49,6 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Hardened F3 OSM Vector Map loading so failed network replies do not crash the editor.
 - Set downloaded map imagery resolution to 4096 for clearer per-tile map output.
 
-## Place Guard
-
-Place Guard validates object placement after TSRE performs its normal placement action. Rejected placements are automatically undone, the Status Window's Place Guard button flashes `ERROR` for three seconds, and `SCO_buzz.wav` plays. Accepted placements play `SCOclick.wav`.
-
-Current validation rules:
-
-- All guarded placements must finish on the camera tile or one immediately adjacent tile.
-- Track-linked interactives, including signals and other track/road database items, must be started with the pointer within 3 meters of the target track or road database line.
-- Track-linked interactives must finish within 10 meters of the sampled database elevation.
-- Normal scenery/static objects must land on loaded terrain and within 1 meter above or below the terrain surface.
-- Track objects and dynamic track are allowed a wider edit tolerance: 50 meters below terrain to 100 meters above terrain.
-- Turning Place Guard off from the Status Window restores legacy placement behavior.
-
-## UI Scaling
-
-The editor now supports a global `uiScale` setting. The packaged setting uses `uiScale = 1.15`; `1.00` to `1.25` is the recommended range. This scales the main editor font, menus/dropdowns, startup screen, F2/F3 style panels, object list side panel, Status Window, and Navi Window.
-
-## Object Search And Sounds
-
-The right-side object panel now has `ALL` defaults for Tracks, Roads, and Other. Choosing a specific value in one of those three filters resets the others to `ALL`, and the search box only searches inside the active filter. The `Reset` button clears the search box, returns the filters to `ALL`, and repopulates the full object list.
-
-Sound feedback is intentionally separated:
-
-- `SCOclick.wav` plays after successful guarded object placement.
-- `SCObuzz.wav` plays after Place Guard rejects and undoes a placement.
-- `SCOchirp.wav` plays for deliberate user-commanded mode/status changes.
-
-Passive status refreshes stay silent to avoid duplicate sounds after placement or automatic state changes.
-
 ## Downloads
 
 Executable test builds are intended to be published on the GitHub Releases page, not committed directly into the source tree.

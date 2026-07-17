@@ -63,7 +63,7 @@ Status window control panel
 
 The old Status Window was mostly a passive readout. I changed it into a compact clickable control panel while keeping roughly the same footprint. It now shows and controls common editing states such as Select, Place New, Rotate, Translate, Resize, AutoTDB, Stick To Terrain, Terrain Brush direction, Camera lock, and Camera Terrain lock.
 
-The button colors now show state at a glance: active/on states are highlighted, neutral states stay dark, and terrain-brush direction uses different colors for plus and minus. The selected-object readout is now useful as well, showing broad selection categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking the selected-object button clears the current selection.
+The button colors now show state at a glance: active/on states are highlighted, neutral states stay dark, and terrain-brush direction uses different colors for plus and minus. The selected-object type readout is now useful as well, showing broad selection categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking the selected object type on the Status Window clears the current selection.
 
 For v0.4, I also added gentle delayed snapping for the Status and Navi windows. The snap only triggers when a floating window is very close to another window edge, waits briefly until dragging pauses, and uses the visible window frame so the windows touch cleanly rather than overlapping.
 
