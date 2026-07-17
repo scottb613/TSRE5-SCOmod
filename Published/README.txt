@@ -14,6 +14,7 @@ Highlights:
 - improved track cuts and embankments
 - adjusted F-tool track-width behavior for practical 1/2/3 sizing
 - Shift+F terrain smoothing pass
+- selected-object Ctrl+F tile conforming for selected track/road objects
 - tile-level track, road, and water autopaint
 - real shoreline/water-edge terrain painting
 - route and tile terrtex paint reset tools
@@ -30,6 +31,9 @@ Highlights:
 - Restore Last Session button for reopening the last route, camera view, and editor layout
 - high-resolution branded startup splash with scaled loader/about display
 - clickable Status Window control panel for common editor state toggles
+- gentle delayed snapping for the Status and Navi windows
+- global uiScale support for larger editor fonts and proportionally wider panels
+- Place Guard validation with automatic undo, red status-panel error flash, and click/buzz WAV feedback
 - useful selected-object status readout with click-to-clear selection
 - TSRE SCOmod v0.4 startup and editor titlebar branding
 - F3 OSM Vector Map HTTPS/runtime fix with OpenSSL 3 DLLs
@@ -49,6 +53,23 @@ After TSRE closes normally, it writes lastSession.json under the user's AppData 
 
 Status window note:
 The Status Window now works as a compact clickable control panel for common editor states. The selected-object button reports the current broad selection type and clears the current selection when clicked.
+
+UI scaling note:
+The editor now supports a global uiScale setting. The packaged setting uses uiScale = 1.15. The recommended range is 1.00 to 1.25. This scales the main editor font, menus/dropdowns, startup screen, F2/F3 style panels, object list side panel, Status Window, and Navi Window.
+
+Place Guard note:
+Place Guard validates object placement after TSRE performs its normal placement action. Rejected placements are automatically undone, the Status Window Place Guard button flashes ERROR for three seconds, and SCO_buzz.wav plays. Accepted placements play SCOclick.wav.
+
+Current Place Guard rules:
+- all guarded placements must finish on the camera tile or one immediately adjacent tile
+- track-linked interactives, including signals and other track/road database items, must be started with the pointer within 3 meters of the target track or road database line
+- track-linked interactives must finish within 10 meters of the sampled database elevation
+- normal scenery/static objects must land on loaded terrain and within 1 meter above or below the terrain surface
+- track objects and dynamic track are allowed a wider edit tolerance: 50 meters below terrain to 100 meters above terrain
+- turning Place Guard off from the Status Window restores legacy placement behavior
+
+v0.4 note:
+Ctrl+F now requires one selected track or road object and conforms only that object's database vector where it crosses the current tile. The Status and Navi windows now use a gentle delayed snap against nearby window frame edges. v0.4 also includes global UI scaling and Place Guard placement validation.
 
 F3 map note:
 OSM Vector Map loading now includes the current OpenSSL 3 runtime DLLs and guards against failed HTTPS/HTTP/empty/non-XML replies. The package default mapImageResolution is 4096 for clearer per-tile map output.

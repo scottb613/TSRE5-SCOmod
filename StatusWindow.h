@@ -35,7 +35,9 @@ public slots:
     void cameraLockButtonAction();
     void cameraTerrainButtonAction();
     void objectSelectedButtonAction();
+    void placeGuardButtonAction();
     void applyWindowSnap();
+    void clearGuardError();
 
 
 signals:
@@ -63,12 +65,15 @@ private:
     QPushButton status9;
     QPushButton status10;
     QPushButton status11;
+    QPushButton status12;
 
     QString statG;
     QString statY;
     QString statS;
     QString statR;
+    QString lastGuardStatus = "Place Guard: ON";
     bool snapping = false;
+    bool guardErrorActive = false;
     QTimer snapTimer;
     ///
 

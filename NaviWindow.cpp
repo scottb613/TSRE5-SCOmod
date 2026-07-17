@@ -22,6 +22,10 @@
 #include "Trk.h"
 #include "Camera.h"
 
+static int scaledUiSize(int base){
+    return qRound(base * qMax(1.0f, Game::uiScale));
+}
+
 static QPoint snapWindowPosition(QWidget *window){
     const int snapDistance = 10;
     QRect moving = window->frameGeometry();
@@ -82,8 +86,8 @@ static QPoint snapWindowPosition(QWidget *window){
 NaviWindow::NaviWindow(QWidget* parent) : QWidget(parent) {
     this->setWindowFlags(Qt::WindowType::Tool);
     //this->setWindowFlags(Qt::WindowStaysOnTopHint);
-    this->setFixedWidth(300);
-    this->setFixedHeight(180);
+    this->setFixedWidth(scaledUiSize(300));
+    this->setFixedHeight(scaledUiSize(180));
     this->setWindowTitle(tr("Navi Window"));
     QStringList winPos = Game::naviPos.split(","); 
     if(winPos.count() > 1) this->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());

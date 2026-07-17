@@ -37,6 +37,8 @@ Highlights
 - Added a high-resolution branded startup splash and scaled loader/about display so the banner is not cropped.
 - Converted the Status Window into a compact clickable control panel.
 - Added gentle delayed snapping for the Status and Navi windows.
+- Added global UI scaling with a `uiScale` settings value for larger editor fonts and proportionally wider side panels.
+- Added Place Guard validation for object placement, including automatic undo, red status-panel error flash, and click/buzz WAV feedback.
 - Updated the startup and editor titlebars to identify the build as TSRE SCOmod v0.4.
 - Fixed F3 OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened F3 OSM Vector Map loading so failed network replies do not crash the editor.
@@ -65,6 +67,29 @@ For v0.4, I also added gentle delayed snapping for the Status and Navi windows. 
 I also updated the visible program titlebars so the startup screen and main editor window identify the build as TSRE SCOmod v0.4 instead of the older Trainsim.Com Fork version string.
 
 The startup, consist-loader, and About screens now scale the high-resolution SCOmod splash image into the loader banner area instead of showing a top-left crop. The packaged splash includes the Beast of Burden Locomotive Works logo, a centered photorealistic track scene, the TSRE mark, and a small credit for Piotr Gadecki. A no-credit copy and credited copy are kept in the local content folder as source artwork.
+
+UI scaling
+
+For v0.4, I added a global `uiScale` setting so the editor can be made easier to read on modern high-resolution monitors. The packaged setting currently uses:
+
+`uiScale = 1.15`
+
+The recommended range is roughly 1.00 to 1.25. The setting scales the application font, menu/dropdown controls, startup screen, F2/F3 style panels, object list side panel, Status Window, and Navi Window. The side panels now widen with the scale value so the larger text has room to breathe. A value of 1.00 should keep the editor close to the older TSRE look, while 1.15 is a useful middle ground on a large 2K monitor.
+
+Place Guard
+
+For v0.4, I added a Place Guard system to catch the most common accidental object-placement mistakes after TSRE performs its normal placement operation. The idea is to leave the old placement workflow intact, then validate what was just created. If the placement fails validation, TSRE automatically undoes the placement, flashes the Place Guard button red with `ERROR` for three seconds, and plays `SCO_buzz.wav`. If the placement passes validation, TSRE plays `SCOclick.wav`.
+
+The current rules are:
+
+- All guarded placements must finish on the camera tile or one of the eight immediately adjacent tiles. Anything farther away is rejected as a likely long-distance miscast.
+- Track-linked interactive objects, such as signals and other track/road database items, must be started with the pointer within 3 meters of the target track or road database line. This prevents clicking far away and having TSRE silently place the item on some distant nearest database point.
+- Track-linked interactive objects must also finish near their database elevation. TSRE samples the nearest database height around the placed object and rejects the placement if the object height is more than 10 meters away from that database height.
+- Normal scenery/static objects must be placed on loaded terrain and within 1 meter above or below the terrain surface.
+- Track objects and dynamic track are allowed a wider terrain-height tolerance because they can legitimately be above or below local terrain during editing. They are currently accepted from 50 meters below terrain to 100 meters above terrain.
+- If Place Guard is turned off from the Status Window, these checks are bypassed and TSRE uses the normal legacy placement behavior.
+
+This is intentionally a guardrail, not a new placement engine. It should catch the route-damaging mistakes: objects cast into the sky, objects dropped below terrain, and interactives being thrown onto a far-away database line.
 
 F3 map loading
 
@@ -264,7 +289,7 @@ The current public test package is v0.4:
 
 dist/tsre-scomod-v0.4.zip
 
-The current v0.4 package includes the selected-object Ctrl+F tile conform tool and gentle delayed snapping for the Status/Navi windows.
+The current v0.4 package includes the selected-object Ctrl+F tile conform tool, gentle delayed snapping for the Status/Navi windows, global UI scaling, and Place Guard validation with status-panel/audio feedback.
 
 Known-good source and runtime snapshots were also saved locally before the seasonal texture work was expanded, so there is a clean rollback point if needed.
 

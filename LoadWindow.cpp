@@ -40,17 +40,22 @@ LoadWindow::LoadWindow() {
     myLabel->setPixmap(QPixmap::fromImage(*myImage).scaled(myLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
     browse = new QPushButton("Browse");
+    browse->setMinimumHeight(24);
     connect(browse, SIGNAL (released()), this, SLOT (handleBrowseButton()));
     load = new QPushButton("Load");
+    load->setMinimumHeight(24);
     load->setStyleSheet(QString("background-color: ")+Game::StyleGreenButton);
     connect(load, SIGNAL (released()), this, SLOT (routeLoad()));
     neww = new QPushButton("New");
+    neww->setMinimumHeight(24);
     neww->setStyleSheet(QString("background-color: ")+Game::StyleYellowButton);
     connect(neww, SIGNAL (released()), this, SLOT (setNewRoute()));
     restoreLast = new QPushButton("Restore Last Session");
+    restoreLast->setMinimumHeight(24);
     restoreLast->setStyleSheet(QString("background-color: ")+Game::StyleGreenButton);
     connect(restoreLast, SIGNAL (released()), this, SLOT (restoreLastSession()));
     exit = new QPushButton("Exit");
+    exit->setMinimumHeight(24);
     exit->setStyleSheet(QString("background-color: ")+Game::StyleRedButton);
 
     

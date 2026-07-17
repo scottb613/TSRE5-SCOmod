@@ -32,27 +32,34 @@ Primary source files edited
   - Shared track/road tile vector painting path.
   - Added water-edge tile painting and reset-tile/reset-route paint support.
   - Added route-level season object refresh for procedural forest regions.
+  - Added selected-object Ctrl+F tile conform helper for selected track/road objects.
 
 - TSRE5-Trainsim.Com-Fork-master/Route.h
   - Added declarations for new route paint/reset helpers.
   - Added declaration for season object refresh.
+  - Added declaration for selected-object Ctrl+F tile conform helper.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
   - Added menu entries and event hookups for tile autopaint/reset commands.
   - Added Shift+F terrain smoothing handling.
+  - Added Ctrl+F handling for selected track/road tile conforming.
   - Added camera state export/restore support for Restore Last Session.
   - Added Status Window command handling for clickable editor-state buttons.
   - Added richer selected-object status labels and clear-selection handling.
+  - Added Place Guard post-placement validation, automatic undo on rejected placements, and click/buzz WAV playback.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
   - Added declarations for new editor actions/helpers.
+  - Added selected track/road tile conform action declaration.
   - Added Restore Last Session camera state declaration.
   - Added Status Window command slot declaration.
+  - Added Place Guard validation and placement sound helper declarations.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
   - Added AppData lastSession.json writing on normal editor close.
   - Added main/Navi/Status window geometry restore handling.
   - Connected the Status Window control-panel commands to the editor widget.
+  - Added global UI scaling for menu/dropdown controls and side panel widths.
 
 - TSRE5-Trainsim.Com-Fork-master/Camera.cpp
   - Added camera terrain-lock setter used by the clickable Status Window.
@@ -64,9 +71,20 @@ Primary source files edited
   - Converted passive status readouts into clickable button controls.
   - Added state-aware button colors for editor modes and terrain-brush direction.
   - Added selected-object clear button and Camera Free / Camera Terrain Free labels.
+  - Added gentle delayed window snapping to nearby window frame edges.
+  - Added Place Guard button state, red ERROR flash, and automatic restoration of the prior guard label.
+  - Applied global UI scaling to Status Window dimensions and button sizing.
 
 - TSRE5-Trainsim.Com-Fork-master/StatusWindow.h
   - Added Status Window command signal and button action slots.
+  - Added timer-based snap state/slot.
+  - Added Place Guard error-flash state.
+
+- TSRE5-Trainsim.Com-Fork-master/NaviWindow.cpp
+  - Added gentle delayed window snapping to nearby window frame edges.
+
+- TSRE5-Trainsim.Com-Fork-master/NaviWindow.h
+  - Added timer-based snap state/slot.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
   - Added private Restore Last Session save/restore helpers.
@@ -145,6 +163,7 @@ Primary source files edited
   - Removed the old seasonal-editing startup warning, generated settings-file hint, and settings parser hook.
   - Updated application name/version branding to TSRE SCOmod v0.4.
   - Updated generated default mapImageResolution setting to 4096.
+  - Added global uiScale default, parser, bounds, and generated settings-file comment.
 
 - TSRE5-Trainsim.Com-Fork-master/MapDataOSM.cpp
   - Hardened F3 OSM Vector Map network handling for TLS/HTTP/empty/non-XML failures.
@@ -161,12 +180,15 @@ Primary source files edited
   - Removed the obsolete seasonal-editing settings flag declaration.
   - Added Restore Last Session window/camera restore state declarations.
   - Added shared AppData/TSRE JSON path helper declarations.
+  - Added global uiScale declaration.
 
 - TSRE5-Trainsim.Com-Fork-master/TDB.cpp
   - Touched during track/road vector paint investigation and shared paint path work.
+  - Added helper to extract one track/road database vector's points clipped to a specific tile.
 
 - TSRE5-Trainsim.Com-Fork-master/TDB.h
   - Touched during track/road vector paint investigation and shared paint path work.
+  - Added declaration for tile-clipped single-vector point extraction.
 
 - TSRE5-Trainsim.Com-Fork-master/PolyForestObj.cpp
   - Updated forest generation behavior for stutter reduction.
@@ -240,4 +262,5 @@ Project files edited
 
 - TSRE5-Trainsim.Com-Fork-master/nbproject/qt-Release_x64.pro
   - Added explicit Windows resource file reference for the TSRE executable icon.
+  - Added WinMM link library for Place Guard WAV playback.
 

@@ -35,3 +35,4 @@ LIBS += -lopengl32
 LIBS += -lglu32
 LIBS += -lfreeglut
 LIBS += -lopenal
+LIBS += -lwinmm

@@ -175,6 +175,7 @@ public:
     
     static bool hudEnabled;
     static float hudScale;
+    static float uiScale;
     
     static bool markerLines;
     static bool seasonalEditing;

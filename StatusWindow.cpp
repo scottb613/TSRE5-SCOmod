@@ -17,6 +17,10 @@
 #include "RouteEditorGLWidget.h"
 #include "ShapeLib.h"
 
+static int scaledUiSize(int base){
+    return qRound(base * qMax(1.0f, Game::uiScale));
+}
+
 static QPoint snapWindowPosition(QWidget *window){
     const int snapDistance = 10;
     QRect moving = window->frameGeometry();
@@ -75,8 +79,8 @@ static QPoint snapWindowPosition(QWidget *window){
 StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     this->setWindowFlags(Qt::WindowType::Tool);
     //this->setWindowFlags(Qt::WindowStaysOnTopHint);
-    this->setFixedWidth(300);
-    this->setFixedHeight(180);
+    this->setFixedWidth(scaledUiSize(300));
+    this->setFixedHeight(scaledUiSize(205));
     this->setWindowTitle(tr("Status Window"));
     QStringList winPos = Game::statusPos.split(",");
     if(winPos.count() > 1) this->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
@@ -101,11 +105,12 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     vbox->setContentsMargins(3,0,1,0);
     QList<QPushButton*> buttons;
     buttons << &status0 << &status1 << &status2 << &status3 << &status4 << &status5
-            << &status6 << &status7 << &status8 << &status9 << &status10 << &status11;
+            << &status6 << &status7 << &status8 << &status9 << &status10 << &status11
+            << &status12;
     for(int i = 0; i < buttons.size(); i++){
         buttons[i]->setFlat(false);
         buttons[i]->setFocusPolicy(Qt::NoFocus);
-        buttons[i]->setFixedHeight(21);
+        buttons[i]->setFixedHeight(scaledUiSize(21));
         buttons[i]->setContentsMargins(0,0,0,0);
     }
     status10.setFlat(true);
@@ -122,6 +127,7 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     vbox->addWidget(&status5,4,1);
     vbox->addWidget(&status10,5,0);
     vbox->addWidget(&status11,5,1);
+    vbox->addWidget(&status12,6,0,1,2);
 
     v->addItem(vbox);
 
@@ -134,7 +140,7 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     {
      statG = "QPushButton { background-color: green; color: white; border: 1px solid #777; padding: 1px; } QPushButton:pressed { background-color: #006000; }";
      statY = "QPushButton { background-color: yellow; color: black; border: 1px solid #777; padding: 1px; } QPushButton:pressed { background-color: #d0d000; }";
-     statS = "QPushButton { background-color: black; color: white; border: 1px solid #777; padding: 1px; } QPushButton:pressed { background-color: #303030; }";
+     statS = "QPushButton { background-color: #202020; color: white; border: 1px solid #777; padding: 1px; } QPushButton:pressed { background-color: #3a3a3a; }";
      statR = "QPushButton { background-color: red; color: black; border: 1px solid #777; padding: 1px; } QPushButton:pressed { background-color: #b00000; }";
     }
     else
@@ -156,6 +162,7 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     QObject::connect(&status0, SIGNAL(released()), this, SLOT(cameraLockButtonAction()));
     QObject::connect(&status5, SIGNAL(released()), this, SLOT(cameraTerrainButtonAction()));
     QObject::connect(&status11, SIGNAL(released()), this, SLOT(objectSelectedButtonAction()));
+    QObject::connect(&status12, SIGNAL(released()), this, SLOT(placeGuardButtonAction()));
 
 }
 
@@ -241,20 +248,35 @@ void StatusWindow::objectSelectedButtonAction(){
     emit statusCommand("clearselect");
 }
 
+void StatusWindow::placeGuardButtonAction(){
+    emit statusCommand("guard");
+}
+
+void StatusWindow::clearGuardError(){
+    guardErrorActive = false;
+    status12.setText(lastGuardStatus);
+    if(lastGuardStatus.endsWith("ON"))
+        status12.setStyleSheet(statS);
+    else
+        status12.setStyleSheet(statY);
+}
+
 void StatusWindow::recStatus(QString statName, QString statVal ){
     // These get emitted from REGLW triggers and update here
-    if(statName.contains("camera"))    { statVal.replace("Camera Unlocked", "Camera: Free"); statVal.replace("Camera Locked", "Camera: Locked"); status0.setText(statVal); if(statVal.endsWith("Locked")) status0.setStyleSheet(statG); else status0.setStyleSheet(statS);  }
-    if(statName.contains("autotdb"))   { status1.setText(statVal); if(statVal.endsWith("ON")) status1.setStyleSheet(statG); else status1.setStyleSheet(statY);  }
-    if(statName.contains("brush"))     { status2.setText(statVal); if(statVal.endsWith("+")) status2.setStyleSheet(statG); else status2.setStyleSheet(statY); }
+    if(statName.contains("guarderror")) { guardErrorActive = true; status12.setText("ERROR"); status12.setStyleSheet(statR); QTimer::singleShot(3000, this, SLOT(clearGuardError())); return; }
+    if(statName.contains("camera"))    { statVal.replace("Camera Unlocked", "Camera: FREE"); statVal.replace("Camera Locked", "Camera: LOCK"); statVal.replace("Camera FREE", "Camera: FREE"); statVal.replace("Camera LOCK", "Camera: LOCK"); status0.setText(statVal); if(statVal.endsWith("LOCK")) status0.setStyleSheet(statY); else status0.setStyleSheet(statS);  }
+    if(statName.contains("autotdb"))   { status1.setText(statVal); if(statVal.endsWith("ON")) status1.setStyleSheet(statS); else status1.setStyleSheet(statY);  }
+    if(statName.contains("brush"))     { status2.setText(statVal); if(statVal.endsWith("+")) status2.setStyleSheet(statG); else if(statVal.endsWith("-")) status2.setStyleSheet(statY); else status2.setStyleSheet(statS); }
     if(statName.contains("resize"))    { status3.setText(statVal); if(statVal.endsWith("ON")) status3.setStyleSheet(statY); else status3.setStyleSheet(statS);  }
     if(statName.contains("select"))    { status4.setText(statVal); if(statVal.endsWith("ON")) status4.setStyleSheet(statG); else status4.setStyleSheet(statS);  }
 
-    if(statName.contains("camterr"))   { statVal.replace("Cam Terrain Unlocked", "Camera Terrain: Free"); statVal.replace("Cam Terrain Locked", "Camera Terrain: Locked"); status5.setText(statVal); if(statVal.endsWith("Locked")) status5.setStyleSheet(statG); else status5.setStyleSheet(statY);  }
-    if(statName.contains("stickterr")) { statVal.replace("StickToTerrain", "Stick To Terrain"); status6.setText(statVal); if(statVal.endsWith("ON")) status6.setStyleSheet(statG); else status6.setStyleSheet(statY);  }
+    if(statName.contains("camterr"))   { statVal.replace("Cam Terrain Unlocked", "Camera Terrain: FREE"); statVal.replace("Cam Terrain Locked", "Camera Terrain: LOCK"); statVal.replace("Cam Terrain FREE", "Camera Terrain: FREE"); statVal.replace("Cam Terrain LOCK", "Camera Terrain: LOCK"); status5.setText(statVal); if(statVal.endsWith("LOCK")) status5.setStyleSheet(statS); else status5.setStyleSheet(statY);  }
+    if(statName.contains("stickterr")) { statVal.replace("StickToTerrain", "Stick To Terrain"); status6.setText(statVal); if(statVal.endsWith("ON")) status6.setStyleSheet(statS); else status6.setStyleSheet(statY);  }
     if(statName.contains("rotate"))    { status7.setText(statVal); if(statVal.endsWith("ON")) status7.setStyleSheet(statY); else status7.setStyleSheet(statS);  }
     if(statName.contains("translate")) { status8.setText(statVal); if(statVal.endsWith("ON")) status8.setStyleSheet(statY); else status8.setStyleSheet(statS);  }
     if(statName.contains("place"))     { statVal.replace("Place:", "Place New:"); status9.setText(statVal); if(statVal.endsWith("ON")) status9.setStyleSheet(statG); else status9.setStyleSheet(statS);  }
-    if(statName.contains("timer"))     { status10.setText(statVal + "m elapsed without Save"); if(statVal.toInt() > 10) status10.setStyleSheet(statY); else status10.setStyleSheet(statS);  }
+    if(statName.contains("timer"))     { status10.setText(statVal + "m Since Save"); if(statVal.toInt() > 10) status10.setStyleSheet(statY); else status10.setStyleSheet(statS);  }
     if(statName.contains("object"))    { if(statVal.size() > 0) {status11.setText(statVal + " Selected"); status11.setStyleSheet(statY); } else {status11.setText(""); status11.setStyleSheet(statS);}  }
+    if(statName.contains("guard"))     { lastGuardStatus = statVal; if(guardErrorActive) return; status12.setText(statVal); if(statVal.endsWith("ON")) status12.setStyleSheet(statS); else status12.setStyleSheet(statY);  }
 }
 

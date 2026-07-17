@@ -39,10 +39,29 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added a high-resolution branded startup splash and scaled loader/about display so the banner is not cropped.
 - Converted the Status Window into a compact clickable control panel.
 - Added gentle delayed snapping for the Status and Navi windows.
+- Added global `uiScale` support for larger editor fonts and proportionally wider panels.
+- Added Place Guard validation with automatic undo, red status-panel error flash, and click/buzz WAV feedback.
 - Updated startup and editor titlebars to identify the build as `TSRE SCOmod v0.4`.
 - Fixed F3 OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened F3 OSM Vector Map loading so failed network replies do not crash the editor.
 - Set downloaded map imagery resolution to 4096 for clearer per-tile map output.
+
+## Place Guard
+
+Place Guard validates object placement after TSRE performs its normal placement action. Rejected placements are automatically undone, the Status Window's Place Guard button flashes `ERROR` for three seconds, and `SCO_buzz.wav` plays. Accepted placements play `SCOclick.wav`.
+
+Current validation rules:
+
+- All guarded placements must finish on the camera tile or one immediately adjacent tile.
+- Track-linked interactives, including signals and other track/road database items, must be started with the pointer within 3 meters of the target track or road database line.
+- Track-linked interactives must finish within 10 meters of the sampled database elevation.
+- Normal scenery/static objects must land on loaded terrain and within 1 meter above or below the terrain surface.
+- Track objects and dynamic track are allowed a wider edit tolerance: 50 meters below terrain to 100 meters above terrain.
+- Turning Place Guard off from the Status Window restores legacy placement behavior.
+
+## UI Scaling
+
+The editor now supports a global `uiScale` setting. The packaged setting uses `uiScale = 1.15`; `1.00` to `1.25` is the recommended range. This scales the main editor font, menus/dropdowns, startup screen, F2/F3 style panels, object list side panel, Status Window, and Navi Window.
 
 ## Downloads
 

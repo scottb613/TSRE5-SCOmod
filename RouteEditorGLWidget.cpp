@@ -16,6 +16,13 @@
 #include <QMessageBox>
 #include <QJsonObject>
 #include <math.h>
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <mmsystem.h>
+#endif
 #include "GLUU.h"
 #include "SFile.h"
 #include "ReadFile.h"
@@ -187,8 +194,8 @@ void RouteEditorGLWidget::timerEvent(QTimerEvent * event) {
        }
 
         /// try to send camera status every half second or so?
-        if (Game::lockCamera) emit updStatus(QString("camera"), QString("Camera Locked")); else emit updStatus(QString("camera"), QString("Camera Unlocked"));
-        if (Game::cameraStickToTerrain) emit updStatus(QString("camterr"), QString("Cam Terrain Locked")); else emit updStatus(QString("camterr"), QString("Cam Terrain Unlocked"));
+        if (Game::lockCamera) emit updStatus(QString("camera"), QString("Camera LOCK")); else emit updStatus(QString("camera"), QString("Camera FREE"));
+        if (Game::cameraStickToTerrain) emit updStatus(QString("camterr"), QString("Cam Terrain LOCK")); else emit updStatus(QString("camterr"), QString("Cam Terrain FREE"));
 
         if(autoAddToTDB == true) emit updStatus(QString("autotdb"), QString("AutoTDB: ON")); else emit updStatus(QString("autotdb"), QString("AutoTDB: OFF"));  /// EFO Added to
         if(Game::writeTDB == false) emit updStatus(QString("autotdb"), QString("WriteTDB: OFF"));   /// EFO Added to
@@ -199,8 +206,13 @@ void RouteEditorGLWidget::timerEvent(QTimerEvent * event) {
 
         if(toolEnabled == "placeTool") emit updStatus(QString("place"), QString("Place: ON")); else emit updStatus(QString("place"), QString("Place: OFF"));  /// EFO Added to
         if(toolEnabled == "selectTool") emit updStatus(QString("select"), QString("Select: ON")); else emit updStatus(QString("select"), QString("Select: OFF"));  /// EFO Added to
+        if(placeGuardEnabled) emit updStatus(QString("guard"), QString("Place Guard: ON")); else emit updStatus(QString("guard"), QString("Place Guard: OFF"));
 
-        if(defaultPaintBrush->direction == 1) emit updStatus(QString("brushdir"), QString("Terrain Brush: +")); else emit updStatus(QString("brushdir"), QString("Terrain Brush: -"));  /// EFO Added to
+        if(toolEnabled == "heightTool") {
+            if(defaultPaintBrush->direction == 1) emit updStatus(QString("brushdir"), QString("Terrain Brush: +")); else emit updStatus(QString("brushdir"), QString("Terrain Brush: -"));  /// EFO Added to
+        } else {
+            emit updStatus(QString("brushdir"), QString("Terrain Brush: OFF"));
+        }
 
         /// Try to capture player cam rotation
 
@@ -1028,6 +1040,81 @@ void RouteEditorGLWidget::drawPointer() {
     }
 }
 
+bool RouteEditorGLWidget::pointerNearPlacementDb(Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ) {
+    if (item == NULL || pointerPos == NULL)
+        return true;
+
+    if (WorldObj::isTrackObj(item->type) == 0)
+        return true;
+
+    float sample[3];
+    Vec3::copy(sample, pointerPos);
+    float dbHeight = 0;
+    return route->findNearestDbHeight(pointerTileX, pointerTileZ, sample, 3.0f, dbHeight);
+}
+
+bool RouteEditorGLWidget::validatePlacement(WorldObj* obj, Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ) {
+    if (!placeGuardEnabled || obj == NULL || camera == NULL)
+        return true;
+
+    if (qAbs(obj->x - (int)camera->pozT[0]) > 1 || qAbs(obj->y - (int)camera->pozT[1]) > 1)
+        return false;
+
+    if (!pointerNearPlacementDb(item, pointerPos, pointerTileX, pointerTileZ))
+        return false;
+
+    if (item != NULL && WorldObj::isTrackObj(item->type) != 0) {
+        float sample[3];
+        Vec3::copy(sample, obj->position);
+        float dbHeight = 0;
+        if (!route->findNearestDbHeight(obj->x, obj->y, sample, 10.0f, dbHeight))
+            return false;
+        return qAbs(obj->position[1] - dbHeight) <= 10.0f;
+    }
+
+    Terrain *terrain = Game::terrainLib->getTerrainByXY(obj->x, obj->y, false);
+    if (terrain == NULL || !terrain->loaded)
+        return false;
+
+    float ground = Game::terrainLib->getHeight(obj->x, obj->y, obj->position[0], obj->position[2]);
+    float delta = obj->position[1] - ground;
+
+    if (obj->typeID == WorldObj::trackobj || obj->typeID == WorldObj::dyntrack)
+        return delta <= 100.0f && delta >= -50.0f;
+
+    return delta <= 1.0f && delta >= -1.0f;
+}
+
+void RouteEditorGLWidget::rejectPlacement() {
+    if (selectedObj != NULL)
+        selectedObj->unselect();
+
+    setSelectedObj(NULL);
+    Undo::StateEnd();
+    Undo::UndoLast();
+    mouseLPressed = false;
+    showPlacementGuardError();
+}
+
+void RouteEditorGLWidget::playPlacementSound(QString fileName) {
+#ifdef Q_OS_WIN
+    QString soundPath = QCoreApplication::applicationDirPath() + "/content/" + fileName;
+    if (QFile::exists(soundPath))
+        ::PlaySoundW(reinterpret_cast<const wchar_t*>(soundPath.utf16()), NULL, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+#else
+    Q_UNUSED(fileName);
+#endif
+}
+
+void RouteEditorGLWidget::showPlacementSuccess() {
+    playPlacementSound("SCOclick.wav");
+}
+
+void RouteEditorGLWidget::showPlacementGuardError() {
+    playPlacementSound("SCO_buzz.wav");
+    emit updStatus(QString("guarderror"), QString("ERROR"));
+}
+
 void RouteEditorGLWidget::resizeGL(int w, int h) {
     //gluu->m_proj.setToIdentity();
     //gluu->m_proj.perspective(45.0f, GLfloat(w) / h, 0.01f, 100.0f);
@@ -1381,6 +1468,8 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
     if (!route->loaded) return;
     m_lastPos = event->pos();
     m_lastPos *= Game::PixelRatio;
+    mousex = m_lastPos.x();
+    mousey = m_lastPos.y();
     mouseClick = true;  // if(Game::debugOutput) qDebug() << "REGLW 1260";
     if ((event->button()) == Qt::RightButton) {
         mouseRPressed = true;
@@ -1410,6 +1499,10 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             Undo::StateBeginIfNotExist();
 
             if(Game::deepUnderground) aktPointerPos[1] = std::max(aktPointerPos[1],Game::deepUnderground);
+            int placementTileX = (int)camera->pozT[0];
+            int placementTileZ = (int)camera->pozT[1];
+            float placementPointer[3];
+            Vec3::copy(placementPointer, aktPointerPos);
             lastNewObjPosT[0] = camera->pozT[0];
             lastNewObjPosT[1] = camera->pozT[1];
             lastNewObjPos[0] = aktPointerPos[0];
@@ -1418,8 +1511,16 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             float *q = Quat::create();
             Quat::copy(q, this->placeRot);
             setSelectedObj(route->placeObject((int) camera->pozT[0], (int) camera->pozT[1], aktPointerPos, q, placeElev)); if(Game::debugOutput) qDebug() << "REGLW 1294";
-            if (selectedObj != NULL)
+            if (selectedObj == NULL)
+                showPlacementGuardError();
+            if (selectedObj != NULL && !validatePlacement((WorldObj*)selectedObj, route->ref->selected, placementPointer, placementTileX, placementTileZ)) {
+                rejectPlacement();
+                return;
+            }
+            if (selectedObj != NULL) {
+                showPlacementSuccess();
                 selectedObj->select();
+            }
         }
         if (toolEnabled == "autoPlaceSimpleTool") {
             if (selectedObj != NULL) {
@@ -1429,6 +1530,10 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                         route->addToTDBIfNotExist((WorldObj*) selectedObj);
             }
             Undo::StateBeginIfNotExist();
+            int placementTileX = (int)camera->pozT[0];
+            int placementTileZ = (int)camera->pozT[1];
+            float placementPointer[3];
+            Vec3::copy(placementPointer, aktPointerPos);
             lastNewObjPosT[0] = camera->pozT[0];
             lastNewObjPosT[1] = camera->pozT[1];
             lastNewObjPos[0] = aktPointerPos[0];
@@ -1440,8 +1545,16 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             if (keyShiftEnabled)
                 mode = 2;
             setSelectedObj(route->autoPlaceObject((int) camera->pozT[0], (int) camera->pozT[1], aktPointerPos, mode));
-            if (selectedObj != NULL)
+            if (selectedObj == NULL)
+                showPlacementGuardError();
+            if (selectedObj != NULL && !validatePlacement((WorldObj*)selectedObj, route->ref->selected, placementPointer, placementTileX, placementTileZ)) {
+                rejectPlacement();
+                return;
+            }
+            if (selectedObj != NULL) {
+                showPlacementSuccess();
                 selectedObj->select();
+            }
         }
         if (toolEnabled == "selectTool") {
             if (!translateTool && !rotateTool && !resizeTool)
@@ -1794,6 +1907,10 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
         Game::cameraStickToTerrain = !Game::cameraStickToTerrain;
         return;
     }
+    if(name == "guard"){
+        placeGuardEnabled = !placeGuardEnabled;
+        return;
+    }
     if(name == "clearselect"){
         if(selectedObj != NULL){
             selectedObj->unselect();
@@ -1898,6 +2015,10 @@ void RouteEditorGLWidget::editPaste() {
             //qDebug() << "EditPaste selectedObj->unselect";
             if (selectedObj != NULL)
                 selectedObj->unselect();
+            int placementTileX = (int)camera->pozT[0];
+            int placementTileZ = (int)camera->pozT[1];
+            float placementPointer[3];
+            Vec3::copy(placementPointer, aktPointerPos);
             lastNewObjPosT[0] = camera->pozT[0];
             lastNewObjPosT[1] = camera->pozT[1];
             lastNewObjPos[0] = aktPointerPos[0];
@@ -1912,13 +2033,22 @@ void RouteEditorGLWidget::editPaste() {
                     //qDebug() << "EditPaste setSelectedObj";
                     setSelectedObj(groupObj);
                 } else {
+                    Ref::RefItem* refInfo = copyPasteObj->getRefInfo();
                     //qDebug() << "EditPaste object";
                     float *q = Quat::create();
                     Quat::copy(q, copyPasteObj->qDirection);
-                    setSelectedObj(route->placeObject((int) camera->pozT[0], (int) camera->pozT[1], aktPointerPos, q, 0, copyPasteObj->getRefInfo()));
+                    setSelectedObj(route->placeObject((int) camera->pozT[0], (int) camera->pozT[1], aktPointerPos, q, 0, refInfo));
+                    if (selectedObj == NULL)
+                        showPlacementGuardError();
                     //qDebug() << "EditPaste setSelectedObj";
-                    if (selectedObj != NULL)
+                    if (selectedObj != NULL && !validatePlacement((WorldObj*)selectedObj, refInfo, placementPointer, placementTileX, placementTileZ)) {
+                        rejectPlacement();
+                        return;
+                    }
+                    if (selectedObj != NULL) {
+                        showPlacementSuccess();
                         selectedObj->select();
+                    }
                 }
             }
         }

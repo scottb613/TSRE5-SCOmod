@@ -76,6 +76,27 @@
 #include "PropertiesHazard.h"
 #include "SettingsDialog.h"
 
+static int scaledUiSize(int base){
+    return qRound(base * qMax(1.0f, Game::uiScale));
+}
+
+static void tuneScaledPanel(QWidget *panel){
+    QFont panelFont = panel->font();
+    if(panelFont.pointSizeF() > 0)
+        panelFont.setPointSizeF(panelFont.pointSizeF() * 1.08);
+    panel->setFont(panelFont);
+
+    QList<QWidget*> widgets = panel->findChildren<QWidget*>();
+    for(int i = 0; i < widgets.size(); i++){
+        QWidget *widget = widgets[i];
+        widget->setFont(panelFont);
+        if(qobject_cast<QPushButton*>(widget) != NULL ||
+           qobject_cast<QLineEdit*>(widget) != NULL ||
+           qobject_cast<QComboBox*>(widget) != NULL ||
+           qobject_cast<QCheckBox*>(widget) != NULL)
+            widget->setMinimumHeight(scaledUiSize(20));
+    }
+}
 
 
 RouteEditorWindow::RouteEditorWindow() {
@@ -131,11 +152,11 @@ RouteEditorWindow::RouteEditorWindow() {
     
     box = new QWidget(this);
     box2 = new QWidget(this);
-    box->setFixedWidth(250);
+    box->setFixedWidth(scaledUiSize(250));
     box->setWindowTitle("Tools Window");
     box2->setWindowFilePath("Properties Window");
-    box2->setMaximumWidth(160);
-    box2->setMinimumWidth(160);
+    box2->setMaximumWidth(scaledUiSize(190));
+    box2->setMinimumWidth(scaledUiSize(190));
     //box2->setMaximumWidth(250);
     //box2->setMinimumWidth(250);
     QHBoxLayout *mainLayout2 = new QHBoxLayout; 
@@ -170,6 +191,7 @@ RouteEditorWindow::RouteEditorWindow() {
     //mainLayout3->addWidget(terrainTools);
     //mainLayout3->setAlignment(naviBox, Qt::AlignBottom);
     box2->setLayout(mainLayout3);
+    tuneScaledPanel(box2);
 
     glWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     
@@ -203,6 +225,15 @@ RouteEditorWindow::RouteEditorWindow() {
     
     this->setCentralWidget(remain);
     setWindowTitle(Game::AppName+" "+Game::AppVersion+" Route Editor");
+    QFont menuFont = menuBar()->font();
+    if(menuFont.pointSizeF() > 0)
+        menuFont.setPointSizeF(menuFont.pointSizeF() * qMax(1.0f, Game::uiScale));
+    menuBar()->setFont(menuFont);
+    menuBar()->setStyleSheet(QString("QMenuBar::item { padding: %1px %2px; } QMenu::item { padding: %1px %3px; min-height: %4px; }")
+                             .arg(scaledUiSize(3))
+                             .arg(scaledUiSize(5))
+                             .arg(scaledUiSize(18))
+                             .arg(scaledUiSize(18)));
     
     // MENUBAR
     // EFO -- modifying many keystroke shortcuts to eliminate overlaps    
@@ -897,7 +928,7 @@ void RouteEditorWindow::showToolsObjectAndTerrain(bool show){
         objTools->show();
         objectsAndTerrainAction->setChecked(true);
         terrainTools->show();
-        box->setFixedWidth(500);
+        box->setFixedWidth(scaledUiSize(500));
     } else {
         hideShowToolWidget(false);
     }
@@ -981,7 +1012,7 @@ void RouteEditorWindow::hideAllTools(){
     geoAction->setChecked(false);
     activityAction->setChecked(false);
     objectsAndTerrainAction->setChecked(false);
-    box->setFixedWidth(250);
+    box->setFixedWidth(scaledUiSize(250));
 }
 
 void RouteEditorWindow::showProperties(GameObj* obj){

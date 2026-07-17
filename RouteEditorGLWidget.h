@@ -184,6 +184,12 @@ protected:
 private:
     void setupVertexAttribs();
     void setSelectedObj(GameObj* o);
+    bool validatePlacement(WorldObj* obj, Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);
+    bool pointerNearPlacementDb(Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);
+    void playPlacementSound(QString fileName);
+    void showPlacementSuccess();
+    void showPlacementGuardError();
+    void rejectPlacement();
     QBasicTimer timer;
     unsigned long long int lastTime;
     unsigned long long int timeNow;
@@ -208,6 +214,7 @@ private:
     bool selection = false;
     int mousex, mousey;
     GameObj* selectedObj = NULL;
+    bool placeGuardEnabled = true;
     GameObj* StartObject = NULL;
     GameObj* EndObject = NULL;    
     GameObj* lastSelectedObj = NULL;

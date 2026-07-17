@@ -143,6 +143,7 @@ bool Game::proceduralTracks = false;
 bool Game::fullscreen = false;
 bool Game::hudEnabled = false;
 float Game::hudScale = 1.0;
+float Game::uiScale = 1.20f;
 bool Game::markerLines = false;
 
 bool Game::loadAllWFiles = false;
@@ -954,6 +955,13 @@ void Game::load() {
         if(setname =="hudscale"){
             hudScale = setval.toFloat();
         }
+        if(setname =="uiscale"){
+            uiScale = setval.toFloat();
+            if(uiScale < 0.75f)
+                uiScale = 0.75f;
+            if(uiScale > 1.50f)
+                uiScale = 1.50f;
+        }
 
         if(setname =="season"){
             // Disabled for SCOmod: seasonal display is controlled live from the
@@ -1494,7 +1502,8 @@ void Game::CreateNewSettingsFile(){
     out << "// fogDensity =  \n " ; 
     out << "hudEnabled = false                //  \n " ; 
     out << "hudScale = 1                      // HUD text scale  \n " ; 
-    out << "lockCamera = true                 // same as hitting the . when moving about with the camera, can be unset  \n " ; 
+    out << "uiScale = 1.20                    // Global editor UI font/panel scale; 1.00 to 1.25 recommended  \n " ; 
+    out << "lockCamera = false                // same as hitting the . when moving about with the camera, can be unset  \n " ; 
     out << "markerHeight = 10                 // Height of the marker stick  \n " ; 
     out << "markerLines = true                // Show markers when route loads  \n " ; 
     out << "markerText = 2.5                  // Text size for marker text  \n " ; 
