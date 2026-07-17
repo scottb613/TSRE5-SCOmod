@@ -1,4 +1,4 @@
-TSRE5-SCOmod Test Build v0.5
+TSRE5-SCOmod Test Build
 
 This package contains the TSRE5 executable and runtime files from the terrain/editor improvement work.
 
@@ -6,7 +6,7 @@ License and source:
 TSRE5-SCOmod is distributed under the GNU General Public License version 3, following the original TSRE5 project by Piotr Gadecki / GokuMK and Eric's Trainsim.Com fork. See LICENSE.md.
 
 Source code for this build is available at:
-https://github.com/scottb613/TSRE5-SCOmod/tree/tsre-scomod-wip
+https://github.com/scottb613/TSRE5-SCOmod
 
 Bundled runtime DLLs remain under their respective upstream licenses. See THIRD-PARTY-NOTICES.txt.
 
@@ -35,7 +35,7 @@ Highlights:
 - global uiScale support for larger editor fonts and proportionally wider panels
 - Place Guard validation with automatic undo, red status-panel error flash, and click/buzz WAV feedback
 - useful selected-object status readout with click-to-clear selection
-- TSRE SCOmod v0.5 startup and editor titlebar branding
+- TSRE SCOmod startup and editor titlebar branding
 - F12 Settings Editor cleanup with active settings.txt saving, timestamp backups, organized tabs, dark striped rows, key assignments, and full-sentence tooltips
 - F3 OSM Vector Map HTTPS/runtime fix with OpenSSL 3 DLLs
 - safer F3 OSM network failure handling to avoid crash-to-desktop
@@ -72,8 +72,7 @@ Current Place Guard rules:
 Settings editor note:
 The F12 Settings Editor now follows the same organization as the cleaned settings.txt file. Saving writes the active settings.txt file instead of settings.txt.new, with a timestamped backup created first. Help text is now shown as full-sentence tooltips, and the Key Assignments tab provides a two-column shortcut reference.
 
-v0.5 note:
-Ctrl+F now requires one selected track or road object and conforms only that object's database vector where it crosses the current tile. The Status and Navi windows use a gentle delayed snap against nearby window frame edges. v0.5 also includes global UI scaling, Place Guard placement validation, and the reorganized F12 Settings Editor.
+Ctrl+F now requires one selected track or road object and conforms only that object's database vector where it crosses the current tile. The Status and Navi windows use a gentle delayed snap against nearby window frame edges. This work also includes global UI scaling, Place Guard placement validation, and the reorganized F12 Settings Editor.
 
 F3 map note:
 OSM Vector Map loading now includes the current OpenSSL 3 runtime DLLs and guards against failed HTTPS/HTTP/empty/non-XML replies. The package default mapImageResolution is 4096 for clearer per-tile map output.

@@ -6,10 +6,6 @@ This branch is based on Eric's `TSRE8.006 baseline` from the `master` branch of 
 
 The goal is not to replace Eric's main TSRE work. This is a test branch for debugging, experimentation, and evaluation, with the hope that useful pieces can eventually be reviewed and folded upstream.
 
-## Branches
-
-- `tsre-scomod-stable` is the stable/rescue branch, currently tagged `v0.4`.
-- `tsre-scomod-wip` is the current work-in-progress branch with the latest tested local changes tagged `v0.5`.
 
 ## Highlights
 
@@ -44,7 +40,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added global `uiScale` support for larger editor fonts and proportionally wider panels.
 - Added editor sound feedback with standardized `SCOclick.wav`, `SCObuzz.wav`, and `SCOchirp.wav` files.
 - Added Place Guard validation with automatic undo, red status-panel error flash, and click/buzz WAV feedback.
-- Updated startup and editor titlebars to identify the build as `TSRE SCOmod v0.5`.
+- Updated startup and editor titlebars to identify the build as `TSRE SCOmod`.
 - Reworked the F12 Settings Editor with active `settings.txt` saving, timestamp backups, organized tabs, dark striped rows, a Key Assignments tab, and full-sentence tooltips.
 - Fixed F3 OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened F3 OSM Vector Map loading so failed network replies do not crash the editor.
