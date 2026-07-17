@@ -1110,8 +1110,12 @@ void RouteEditorGLWidget::showPlacementSuccess() {
     playPlacementSound("SCOclick.wav");
 }
 
+void RouteEditorGLWidget::showModeChange() {
+    playPlacementSound("SCOchirp.wav");
+}
+
 void RouteEditorGLWidget::showPlacementGuardError() {
-    playPlacementSound("SCO_buzz.wav");
+    playPlacementSound("SCObuzz.wav");
     emit updStatus(QString("guarderror"), QString("ERROR"));
 }
 
@@ -1182,6 +1186,7 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
             resizeTool = false;
             translateTool = false;
             rotateTool = false;
+            showModeChange();
 
             break;
 
@@ -1191,29 +1196,35 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
               resizeTool = false;
               translateTool = false;
               rotateTool = false;
+              showModeChange();
             break;
 
         case Qt::Key_R:
             enableTool("selectTool");
             rotateTool = true;
+            showModeChange();
             break;
         case Qt::Key_T:
             enableTool("selectTool");
             translateTool = true;
+            showModeChange();
             break;
         case Qt::Key_Y:
             enableTool("selectTool");
             resizeTool = true;
+            showModeChange();
             break;
         case Qt::Key_Q:
             if (keyControlEnabled)
             {
                 autoAddToTDB = !autoAddToTDB;
+                showModeChange();
                 break;
             }
             else if (keyShiftEnabled)
             {
                 stickPointerToTerrain = !stickPointerToTerrain;
+                showModeChange();
                 break;
             }
             else
@@ -1222,6 +1233,7 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
                 resizeTool = false;
                 translateTool = false;
                 rotateTool = false;
+                showModeChange();
             }
             break;
         case Qt::Key_Home:
@@ -1835,50 +1847,61 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
     if(name == "select"){
         if(toolEnabled == "selectTool" && !resizeTool && !rotateTool && !translateTool){
             enableTool("");
+            showModeChange();
             return;
         }
         enableTool("selectTool");
         selectToolSelect();
+        showModeChange();
         return;
     }
     if(name == "place"){
         if(toolEnabled == "placeTool"){
             enableTool("");
+            showModeChange();
             return;
         }
         enableTool("placeTool");
+        showModeChange();
         return;
     }
     if(name == "rotate"){
         if(toolEnabled == "selectTool" && rotateTool){
             selectToolSelect();
+            showModeChange();
             return;
         }
         enableTool("selectTool");
         selectToolRotate();
+        showModeChange();
         return;
     }
     if(name == "translate"){
         if(toolEnabled == "selectTool" && translateTool){
             selectToolSelect();
+            showModeChange();
             return;
         }
         enableTool("selectTool");
         selectToolTranslate();
+        showModeChange();
         return;
     }
     if(name == "resize"){
         if(toolEnabled == "selectTool" && resizeTool){
             selectToolSelect();
+            showModeChange();
             return;
         }
         enableTool("selectTool");
         selectToolScale();
+        showModeChange();
         return;
     }
     if(name == "autotdb"){
         if(Game::writeTDB)
             autoAddToTDB = !autoAddToTDB;
+        showModeChange();
         return;
     }
     if(name == "stickterr"){
@@ -1886,6 +1909,7 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
             placeToolStickAll();
         else
             placeToolStickTerrain();
+        showModeChange();
         return;
     }
     if(name == "brushdir"){
@@ -1895,20 +1919,24 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
             toolBrushDirectionDown();
         else
             toolBrushDirectionUp();
+        showModeChange();
         return;
     }
     if(name == "camera"){
         Game::lockCamera = !Game::lockCamera;
         if(camera != NULL)
             camera->setLockYaxis(Game::lockCamera);
+        showModeChange();
         return;
     }
     if(name == "camterr"){
         Game::cameraStickToTerrain = !Game::cameraStickToTerrain;
+        showModeChange();
         return;
     }
     if(name == "guard"){
         placeGuardEnabled = !placeGuardEnabled;
+        showModeChange();
         return;
     }
     if(name == "clearselect"){

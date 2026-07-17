@@ -187,6 +187,7 @@ private:
     bool validatePlacement(WorldObj* obj, Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);
     bool pointerNearPlacementDb(Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);
     void playPlacementSound(QString fileName);
+    void showModeChange();
     void showPlacementSuccess();
     void showPlacementGuardError();
     void rejectPlacement();

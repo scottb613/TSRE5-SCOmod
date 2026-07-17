@@ -47,13 +47,14 @@ Primary source files edited
   - Added Status Window command handling for clickable editor-state buttons.
   - Added richer selected-object status labels and clear-selection handling.
   - Added Place Guard post-placement validation, automatic undo on rejected placements, and click/buzz WAV playback.
+  - Added chirp WAV feedback for deliberate user-commanded mode/status changes while leaving passive status refreshes silent.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
   - Added declarations for new editor actions/helpers.
   - Added selected track/road tile conform action declaration.
   - Added Restore Last Session camera state declaration.
   - Added Status Window command slot declaration.
-  - Added Place Guard validation and placement sound helper declarations.
+  - Added Place Guard validation, placement sound, and mode-change sound helper declarations.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
   - Added AppData lastSession.json writing on normal editor close.
@@ -82,9 +83,19 @@ Primary source files edited
 
 - TSRE5-Trainsim.Com-Fork-master/NaviWindow.cpp
   - Added gentle delayed window snapping to nearby window frame edges.
+  - Matched Navi Window colors to the darker Status Window style.
+  - Changed pointer readout fields from disabled to read-only so values remain readable.
 
 - TSRE5-Trainsim.Com-Fork-master/NaviWindow.h
   - Added timer-based snap state/slot.
+
+- TSRE5-Trainsim.Com-Fork-master/ObjTools.cpp
+  - Added right-side object panel search reset button.
+  - Added ALL defaults for Tracks/Roads/Other filters.
+  - Made Tracks/Roads/Other filters mutually exclusive and constrained search to the active filter.
+
+- TSRE5-Trainsim.Com-Fork-master/ObjTools.h
+  - Added object-panel search reset/filter helper declarations and Reset button state.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
   - Added private Restore Last Session save/restore helpers.

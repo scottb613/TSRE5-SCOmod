@@ -14,7 +14,7 @@ logfilemax = 50000             // keep only X logs
 mainWindow = 100, 100          // X, Y of main windows and load window
 mainWindowLayout = "PWTS"      // Order of windows: P = Properties, T = Tools W = World
 maxObjLag = 10 
-mouseSpeed = 1.0
+mouseSpeed = 0.1
 shadowLowMapSize = 1024
 shadowMapSize = 2048
 shadowsEnabled = false          // affects performance if true

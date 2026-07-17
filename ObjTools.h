@@ -27,8 +27,10 @@ public slots:
     void routeLoaded(Route * a);
     void refClassSelected(const QString & text);
     void refTrackSelected(const QString & text);
+    void refRoadSelected(const QString & text);
     void refOtherSelected(const QString & text);
     void refSearchSelected(const QString & text);
+    void resetObjectSearch();
     void refListSelected(QListWidgetItem * item);
     void lastItemsListSelected(QListWidgetItem * item);
     void selectToolEnabled(bool val);
@@ -79,6 +81,7 @@ private:
     QComboBox refTrack;
     QComboBox refRoad;
     QComboBox refOther;
+    QPushButton resetSearchButton;
     Ref::RefItem itemRef;
     std::deque<Ref::RefItem*> lastItemsPtr;
     QVector<Ref::RefItem*> currentItemList;
@@ -101,6 +104,11 @@ private:
     QLineEdit autoSnapableRadius;
     QComboBox autoPlacementRotType;
     QComboBox autoPlacementTarget;
+
+    void resetCategoryCombos(QComboBox* keepActive);
+    void populateObjectListForKey(QString key, QString searchText = QString());
+    void populateAllObjectList(QString searchText = QString());
+    QString activeCategoryKey() const;
     
 };
 

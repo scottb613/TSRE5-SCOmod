@@ -37,7 +37,10 @@ Highlights
 - Added a high-resolution branded startup splash and scaled loader/about display so the banner is not cropped.
 - Converted the Status Window into a compact clickable control panel.
 - Added gentle delayed snapping for the Status and Navi windows.
+- Matched the Navi Window color/readability scheme to the darker Status Window style.
+- Improved right-side object panel searching with `ALL` category defaults, mutually exclusive Tracks/Roads/Other filters, and a `Reset` search button.
 - Added global UI scaling with a `uiScale` settings value for larger editor fonts and proportionally wider side panels.
+- Added editor sound feedback with standardized `SCOclick.wav`, `SCObuzz.wav`, and `SCOchirp.wav` files.
 - Added Place Guard validation for object placement, including automatic undo, red status-panel error flash, and click/buzz WAV feedback.
 - Updated the startup and editor titlebars to identify the build as TSRE SCOmod v0.4.
 - Fixed F3 OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
@@ -68,6 +71,14 @@ I also updated the visible program titlebars so the startup screen and main edit
 
 The startup, consist-loader, and About screens now scale the high-resolution SCOmod splash image into the loader banner area instead of showing a top-left crop. The packaged splash includes the Beast of Burden Locomotive Works logo, a centered photorealistic track scene, the TSRE mark, and a small credit for Piotr Gadecki. A no-credit copy and credited copy are kept in the local content folder as source artwork.
 
+Navi window and object search cleanup
+
+The Navi Window now uses the same darker visual treatment as the Status Window. The pointer readout fields were changed from disabled fields to read-only fields, which keeps them protected from editing but avoids the dimmed gray text that made pointer values harder to read.
+
+The right-side object panel search was also tightened up. The Tracks, Roads, and Other category dropdowns now include `ALL` as their default value. Selecting a real category in one of those three dropdowns resets the other two to `ALL`, so only one category filter is active at a time. Search text is then applied inside that active category instead of searching the entire library and ignoring the category choice.
+
+The new `Reset` button beside Search clears the search text, sets Tracks/Roads/Other back to `ALL`, and repopulates the full object list. This should make it much faster to narrow down track pieces, road pieces, signals, forests, sound regions, route-shapes-directory objects, or other TSRE object categories without losing track of which bucket is being searched.
+
 UI scaling
 
 For v0.4, I added a global `uiScale` setting so the editor can be made easier to read on modern high-resolution monitors. The packaged setting currently uses:
@@ -78,7 +89,7 @@ The recommended range is roughly 1.00 to 1.25. The setting scales the applicatio
 
 Place Guard
 
-For v0.4, I added a Place Guard system to catch the most common accidental object-placement mistakes after TSRE performs its normal placement operation. The idea is to leave the old placement workflow intact, then validate what was just created. If the placement fails validation, TSRE automatically undoes the placement, flashes the Place Guard button red with `ERROR` for three seconds, and plays `SCO_buzz.wav`. If the placement passes validation, TSRE plays `SCOclick.wav`.
+For v0.4, I added a Place Guard system to catch the most common accidental object-placement mistakes after TSRE performs its normal placement operation. The idea is to leave the old placement workflow intact, then validate what was just created. If the placement fails validation, TSRE automatically undoes the placement, flashes the Place Guard button red with `ERROR` for three seconds, and plays `SCObuzz.wav`. If the placement passes validation, TSRE plays `SCOclick.wav`.
 
 The current rules are:
 
@@ -90,6 +101,16 @@ The current rules are:
 - If Place Guard is turned off from the Status Window, these checks are bypassed and TSRE uses the normal legacy placement behavior.
 
 This is intentionally a guardrail, not a new placement engine. It should catch the route-damaging mistakes: objects cast into the sky, objects dropped below terrain, and interactives being thrown onto a far-away database line.
+
+Sound feedback
+
+I added light sound feedback for editor actions while keeping the sounds separated so they do not stomp on each other unnecessarily:
+
+- `SCOclick.wav` plays only after a successful guarded object placement.
+- `SCObuzz.wav` plays only after a Place Guard placement failure.
+- `SCOchirp.wav` plays only for deliberate user-commanded mode/status changes, such as Status Window button presses or keyboard shortcuts that change the active edit mode.
+
+Passive status refreshes do not play sounds. This avoids double audio when the editor merely updates button states after a placement or automatic mode change.
 
 F3 map loading
 

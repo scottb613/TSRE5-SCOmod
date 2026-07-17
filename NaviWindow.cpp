@@ -169,13 +169,13 @@ NaviWindow::NaviWindow(QWidget* parent) : QWidget(parent) {
     vbox->addWidget(&pzBox,  0,6);
 
     
-    pxBox.setEnabled(false);
-    pyBox.setEnabled(false);   
-    pzBox.setEnabled(false);
+    pxBox.setReadOnly(true);
+    pyBox.setReadOnly(true);
+    pzBox.setReadOnly(true);
     
     if(Game::convertUnitD != 'm')
     {
-      pyBoxx.setEnabled(false);    
+      pyBoxx.setReadOnly(true);
       vbox->addWidget(&pyBoxx, 0,7);
     }
 
@@ -213,6 +213,27 @@ NaviWindow::NaviWindow(QWidget* parent) : QWidget(parent) {
     v->addWidget(jumpButton);
     //vbox->addStretch(1);
     this->setLayout(v);
+
+    QString darkField = "QLineEdit { background-color: #202020; color: white; border: 1px solid #555; padding: 1px; } "
+                        "QLineEdit:read-only { background-color: #202020; color: white; }";
+    QString darkCombo = "QComboBox { background-color: #303030; color: white; border: 1px solid #555; padding: 1px; } "
+                        "QComboBox QAbstractItemView { background-color: #202020; color: white; selection-background-color: #9a5a00; }";
+    QString darkButton = "QPushButton { background-color: #202020; color: white; border: 1px solid #777; padding: 1px; } "
+                         "QPushButton:pressed { background-color: #3a3a3a; }";
+    QString darkLabel = "QLabel { color: white; }";
+    this->setStyleSheet("QWidget { background-color: #303030; color: white; }");
+    QList<QLineEdit*> lineEdits;
+    lineEdits << &txBox << &tyBox << &latBox << &lonBox << &xBox << &yBox << &zBox
+              << &pxBox << &pyBox << &pyBoxx << &pzBox;
+    for(int i = 0; i < lineEdits.size(); i++)
+        lineEdits[i]->setStyleSheet(darkField);
+    markerFiles.setStyleSheet(darkCombo + " combobox-popup: 0;");
+    markerList.setStyleSheet(darkCombo + " combobox-popup: 0;");
+    jumpButton->setStyleSheet(darkButton);
+    tileInfo.setStyleSheet(darkLabel);
+    QList<QLabel*> labels = findChildren<QLabel*>();
+    for(int i = 0; i < labels.size(); i++)
+        labels[i]->setStyleSheet(darkLabel);
     
     QObject::connect(&txBox, SIGNAL(textEdited(QString)),
                       this, SLOT(xyChanged(QString)));

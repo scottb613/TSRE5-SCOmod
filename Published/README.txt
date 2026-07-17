@@ -32,7 +32,10 @@ Highlights:
 - high-resolution branded startup splash with scaled loader/about display
 - clickable Status Window control panel for common editor state toggles
 - gentle delayed snapping for the Status and Navi windows
+- darker Navi Window styling with readable pointer values
+- improved right-side object search with ALL category defaults and Reset
 - global uiScale support for larger editor fonts and proportionally wider panels
+- separated sound feedback: SCOclick, SCObuzz, and SCOchirp
 - Place Guard validation with automatic undo, red status-panel error flash, and click/buzz WAV feedback
 - useful selected-object status readout with click-to-clear selection
 - TSRE SCOmod v0.4 startup and editor titlebar branding
@@ -53,6 +56,12 @@ After TSRE closes normally, it writes lastSession.json under the user's AppData 
 
 Status window note:
 The Status Window now works as a compact clickable control panel for common editor states. The selected-object button reports the current broad selection type and clears the current selection when clicked.
+
+Object search note:
+The right-side object panel now uses ALL defaults for Tracks, Roads, and Other. Choosing a specific value in one of those three filters resets the others to ALL, and the search box searches only inside the active filter. The Reset button clears search text, restores the filters to ALL, and repopulates the full object list.
+
+Sound note:
+Sound feedback is intentionally separated. SCOclick.wav plays after successful guarded object placement. SCObuzz.wav plays after Place Guard rejects and undoes a placement. SCOchirp.wav plays only for deliberate user-commanded mode/status changes, such as Status Window buttons or keyboard shortcuts. Passive status refreshes stay silent to avoid duplicate sounds.
 
 UI scaling note:
 The editor now supports a global uiScale setting. The packaged setting uses uiScale = 1.15. The recommended range is 1.00 to 1.25. This scales the main editor font, menus/dropdowns, startup screen, F2/F3 style panels, object list side panel, Status Window, and Navi Window.

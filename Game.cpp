@@ -103,7 +103,7 @@ float Game::cameraFov = 55.0f;
 float Game::cameraSpeedMin = 1.0;
 float Game::cameraSpeedStd = 3.0;
 float Game::cameraSpeedMax = 40.0;
-float Game::mouseSpeed = 1.0;
+float Game::mouseSpeed = 0.1;
 bool Game::cameraStickToTerrain = false;
 bool Game::mstsShadows = false;
 
@@ -1409,7 +1409,7 @@ void Game::CreateNewSettingsFile(){
     out << "//mainWindow = 100, 100          // X, Y of main windows and load window \n " ; 
     out << "mainWindowLayout = \"PWTS\"      // Order of windows: P = Properties, T = Tools W = World \n " ; 
     out << "maxObjLag = 10  \n " ; 
-    out << "mouseSpeed = 1.0  \n " ; 
+    out << "mouseSpeed = 0.1  \n " ; 
     out << "shadowLowMapSize = 1024  \n " ; 
     out << "shadowMapSize = 2048  \n " ; 
     out << "shadowsEnabled = false          // affects performance if true  \n " ; 

@@ -21,26 +21,38 @@
 #include "TRitem.h"
 #include <QMapIterator>
 
+static int scaledUiSize(int base){
+    return qRound(base * qMax(1.0f, Game::uiScale));
+}
+
 ObjTools::ObjTools(QString name)
     : QWidget(){
     //QRadioButton *radio1 = new QRadioButton(tr("&Radio button 1"));
     //QRadioButton *radio2 = new QRadioButton(tr("R&adio button 2"));
     //QRadioButton *radio3 = new QRadioButton(tr("Ra&dio button 3"));
-    setFixedWidth(250);
+    setFixedWidth(scaledUiSize(250));
+    QFont objectPanelFont = font();
+    if(objectPanelFont.pointSizeF() > 0)
+        objectPanelFont.setPointSizeF(objectPanelFont.pointSizeF() * 1.12);
+    setFont(objectPanelFont);
     buttonTools["selectTool"] = new QPushButton("Select", this);
     buttonTools["placeTool"] = new QPushButton("Place New", this);
-    buttonTools["autoPlaceSimpleTool"] = new QPushButton("Auto Placement", this);
+    buttonTools["autoPlaceSimpleTool"] = new QPushButton("Auto Place", this);
     QMapIterator<QString, QPushButton*> i(buttonTools);
     while (i.hasNext()) {
         i.next();
         i.value()->setCheckable(true);
+        i.value()->setMinimumHeight(scaledUiSize(20));
     }
     
     QPushButton *advancedPlacenentButton = new QPushButton("...", this);
+    advancedPlacenentButton->setMinimumHeight(scaledUiSize(20));
     advancedPlacenentButton->setCheckable(true);
     QObject::connect(advancedPlacenentButton, SIGNAL(toggled(bool)), this, SLOT(advancedPlacementButtonEnabled(bool)));
     QPushButton *resetRotationButton = new QPushButton("Reset Place Rot", this);
+    resetRotationButton->setMinimumHeight(scaledUiSize(20));
     QPushButton *autoPlacementDeleteLast = new QPushButton("Delete last placed objects", this);
+    autoPlacementDeleteLast->setMinimumHeight(scaledUiSize(20));
     QObject::connect(autoPlacementDeleteLast, SIGNAL(released()), this, SLOT(autoPlacementDeleteLastEnabled()));
     
     //searchBox = new QLineEdit(this);
@@ -60,7 +72,23 @@ ObjTools::ObjTools(QString name)
     vlist->addRow("Tracks:",&refTrack);
     vlist->addRow("Roads:",&refRoad);
     vlist->addRow("Other:",&refOther);
-    vlist->addRow("Search:",&searchBox);
+    QHBoxLayout *searchLayout = new QHBoxLayout;
+    searchLayout->setSpacing(2);
+    searchLayout->setContentsMargins(0,0,0,0);
+    searchLayout->addWidget(&searchBox, 1);
+    resetSearchButton.setText("Reset");
+    resetSearchButton.setMinimumHeight(scaledUiSize(20));
+    resetSearchButton.setFont(objectPanelFont);
+    searchLayout->addWidget(&resetSearchButton);
+    vlist->addRow("Search:",searchLayout);
+    QList<QComboBox*> comboBoxes;
+    comboBoxes << &refClass << &refTrack << &refRoad << &refOther;
+    for(int cb = 0; cb < comboBoxes.size(); cb++){
+        comboBoxes[cb]->setFont(objectPanelFont);
+        comboBoxes[cb]->setMinimumHeight(scaledUiSize(20));
+    }
+    searchBox.setFont(objectPanelFont);
+    searchBox.setMinimumHeight(scaledUiSize(20));
     vbox->addItem(vlist);
     vbox->addWidget(&refList);
     QGridLayout *vlist3 = new QGridLayout;
@@ -74,6 +102,7 @@ ObjTools::ObjTools(QString name)
     vlist3->addWidget(buttonTools["autoPlaceSimpleTool"],row,0);
     vlist3->addWidget(&autoPlacementLength,row,1);
     autoPlacementLength.setText("50");
+    autoPlacementLength.setMinimumHeight(scaledUiSize(20));
 //    QDoubleValidator* doubleValidator = new QDoubleValidator(-999, 999, 6, this); 
 //    QDoubleValidator* doubleValidator1 = new QDoubleValidator(1, 999, 6, this); 
     QDoubleValidator* doubleValidator = new QDoubleValidator(-Game::maxAutoPlacement, Game::maxAutoPlacement, 6, this); 
@@ -165,13 +194,17 @@ ObjTools::ObjTools(QString name)
     vbox->addWidget(label2);
     vbox->addWidget(&lastItems);
 
-    lastItems.setMinimumHeight(Game::numRecentItems*16);
-    lastItems.setMaximumHeight(Game::numRecentItems*16);
+    lastItems.setFont(objectPanelFont);
+    lastItems.setMinimumHeight(Game::numRecentItems*scaledUiSize(16));
+    lastItems.setMaximumHeight(Game::numRecentItems*scaledUiSize(16));
     //QSizePolicy* sizePolicy = new QSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
     //astItems.setSizePolicy(*sizePolicy);
     //) QSizePolicy::MinimumExpanding);
     //lastItems.setMaximumHeight(999);
     refList.setMinimumHeight(250);
+    refList.setFont(objectPanelFont);
+    refList.setUniformItemSizes(true);
+    refList.setSpacing(1);
     refList.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     refClass.setStyleSheet("combobox-popup: 0;");
     refTrack.setStyleSheet("combobox-popup: 0;");
@@ -188,13 +221,16 @@ ObjTools::ObjTools(QString name)
                       this, SLOT(refTrackSelected(QString)));
     
     QObject::connect(&refRoad, SIGNAL(activated(QString)),
-                      this, SLOT(refTrackSelected(QString)));
+                      this, SLOT(refRoadSelected(QString)));
     
     QObject::connect(&refOther, SIGNAL(activated(QString)),
                       this, SLOT(refOtherSelected(QString)));
     
     QObject::connect(&searchBox, SIGNAL(textEdited(QString)),
                       this, SLOT(refSearchSelected(QString)));
+
+    QObject::connect(&resetSearchButton, SIGNAL(released()),
+                      this, SLOT(resetObjectSearch()));
     
     QObject::connect(&refList, SIGNAL(itemClicked(QListWidgetItem*)),
                       this, SLOT(refListSelected(QListWidgetItem*)));
@@ -300,18 +336,19 @@ void ObjTools::routeLoaded(Route* a){
     }
     hash.sort(Qt::CaseInsensitive);
     hash.removeDuplicates();    
+    refTrack.addItem("ALL");
     refTrack.addItems(hash);
     refTrack.setMaxVisibleItems(35);
     refTrack.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     hash2.sort(Qt::CaseInsensitive);
     hash2.removeDuplicates();
+    refRoad.addItem("ALL");
     refRoad.addItems(hash2);
     refRoad.setMaxVisibleItems(35);
     refRoad.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     //refTrack.s .sortItems(Qt::AscendingOrder);
         
-    refTrack.setCurrentText("a1t");
-    refTrackSelected("a1t");
+    refTrack.setCurrentText("ALL");
 
     if(Game::trackDB->loaded)  ///  EFO wrapping this in an IF because the TDB not existing causes a dump without warning
     {
@@ -423,6 +460,7 @@ void ObjTools::routeLoaded(Route* a){
     item.type = "ruler";
     route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(item);
     
+    refOther.addItem("ALL");
     refOther.addItem("Signals");
     refOther.addItem("Forests");
     refOther.addItem("Sound Sources");
@@ -479,19 +517,70 @@ void ObjTools::routeLoaded(Route* a){
             }
         }
     
+    resetObjectSearch();
 }
 
 void ObjTools::refClassSelected(const QString & text){
+    populateObjectListForKey(text);
+}
+
+void ObjTools::refSearchSelected(const QString & text){
+    QString key = activeCategoryKey();
+    if(key.length() > 0)
+        populateObjectListForKey(key, text);
+    else
+        populateAllObjectList(text);
+}
+
+void ObjTools::resetObjectSearch(){
+    resetCategoryCombos(NULL);
+    searchBox.clear();
+    populateAllObjectList();
+}
+
+void ObjTools::resetCategoryCombos(QComboBox* keepActive){
+    bool oldTrack = refTrack.blockSignals(true);
+    bool oldRoad = refRoad.blockSignals(true);
+    bool oldOther = refOther.blockSignals(true);
+
+    if(keepActive != &refTrack)
+        refTrack.setCurrentText("ALL");
+    if(keepActive != &refRoad)
+        refRoad.setCurrentText("ALL");
+    if(keepActive != &refOther)
+        refOther.setCurrentText("ALL");
+
+    refTrack.blockSignals(oldTrack);
+    refRoad.blockSignals(oldRoad);
+    refOther.blockSignals(oldOther);
+}
+
+QString ObjTools::activeCategoryKey() const{
+    if(refTrack.currentText() != "ALL")
+        return QString("#TDB#") + refTrack.currentText();
+    if(refRoad.currentText() != "ALL")
+        return QString("#TDB#") + refRoad.currentText();
+    if(refOther.currentText() != "ALL")
+        return QString("#TSRE#") + refOther.currentText().toLower();
+    return QString();
+}
+
+void ObjTools::populateObjectListForKey(QString key, QString searchText){
     refList.clear();
     currentItemList.clear();
-    for (int it = 0; it < route->ref->refItems[text].size(); ++it ){
-        new QListWidgetItem ( route->ref->refItems[text][it].description, &refList, it );
-        currentItemList.push_back(&route->ref->refItems[text][it]);
+    int idx = 0;
+
+    for (int it = 0; it < route->ref->refItems[key].size(); ++it ){
+        Ref::RefItem* item = &route->ref->refItems[key][it];
+        if(searchText.length() > 0 && !item->description.contains(searchText, Qt::CaseInsensitive))
+            continue;
+        new QListWidgetItem ( item->description, &refList, idx++ );
+        currentItemList.push_back(item);
     }
     refList.sortItems(Qt::AscendingOrder);
 }
 
-void ObjTools::refSearchSelected(const QString & text){
+void ObjTools::populateAllObjectList(QString searchText){
     refList.clear();
     currentItemList.clear();
     QMapIterator<QString, QVector<Ref::RefItem>> i(route->ref->refItems);
@@ -499,10 +588,11 @@ void ObjTools::refSearchSelected(const QString & text){
     while (i.hasNext()) {
         i.next();
         for (int it = 0; it < i.value().size(); ++it ){
-            if(i.value()[it].description.contains(text, Qt::CaseInsensitive)){
-                new QListWidgetItem ( i.value()[it].description, &refList, idx++ );
-                currentItemList.push_back((Ref::RefItem*)&i.value()[it]);
-            }
+            Ref::RefItem* item = (Ref::RefItem*)&i.value()[it];
+            if(searchText.length() > 0 && !item->description.contains(searchText, Qt::CaseInsensitive))
+                continue;
+            new QListWidgetItem ( item->description, &refList, idx++ );
+            currentItemList.push_back(item);
         }
     }
     refList.sortItems(Qt::AscendingOrder);
@@ -510,24 +600,29 @@ void ObjTools::refSearchSelected(const QString & text){
 
 void ObjTools::refTrackSelected(const QString & text){
 
-    refList.clear();
-    currentItemList.clear();
-    for (int it = 0; it < route->ref->refItems[QString("#TDB#")+text].size(); ++it ){
-        new QListWidgetItem ( route->ref->refItems[QString("#TDB#")+text][it].description, &refList, it );
-        currentItemList.push_back(&route->ref->refItems[QString("#TDB#")+text][it]);
-    }
-    refList.sortItems(Qt::AscendingOrder);
+    resetCategoryCombos(text == "ALL" ? NULL : &refTrack);
+    if(text == "ALL")
+        refSearchSelected(searchBox.text());
+    else
+        populateObjectListForKey(QString("#TDB#")+text, searchBox.text());
+}
+
+void ObjTools::refRoadSelected(const QString & text){
+
+    resetCategoryCombos(text == "ALL" ? NULL : &refRoad);
+    if(text == "ALL")
+        refSearchSelected(searchBox.text());
+    else
+        populateObjectListForKey(QString("#TDB#")+text, searchBox.text());
 }
 
 void ObjTools::refOtherSelected(const QString & text){
 
-    refList.clear();
-    currentItemList.clear();
-    for (int it = 0; it < route->ref->refItems[QString("#TSRE#")+text.toLower()].size(); ++it ){
-        new QListWidgetItem ( route->ref->refItems[QString("#TSRE#")+text.toLower()][it].description, &refList, it );
-        currentItemList.push_back(&route->ref->refItems[QString("#TSRE#")+text.toLower()][it]);
-    }
-    refList.sortItems(Qt::AscendingOrder);
+    resetCategoryCombos(text == "ALL" ? NULL : &refOther);
+    if(text == "ALL")
+        refSearchSelected(searchBox.text());
+    else
+        populateObjectListForKey(QString("#TSRE#")+text.toLower(), searchBox.text());
 }
 
 void ObjTools::refListSelected(QListWidgetItem * item){

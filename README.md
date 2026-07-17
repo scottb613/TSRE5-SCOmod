@@ -39,7 +39,10 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added a high-resolution branded startup splash and scaled loader/about display so the banner is not cropped.
 - Converted the Status Window into a compact clickable control panel.
 - Added gentle delayed snapping for the Status and Navi windows.
+- Matched the Navi Window color/readability scheme to the darker Status Window style.
+- Improved right-side object panel searching with `ALL` category defaults, mutually exclusive Tracks/Roads/Other filters, and a `Reset` search button.
 - Added global `uiScale` support for larger editor fonts and proportionally wider panels.
+- Added editor sound feedback with standardized `SCOclick.wav`, `SCObuzz.wav`, and `SCOchirp.wav` files.
 - Added Place Guard validation with automatic undo, red status-panel error flash, and click/buzz WAV feedback.
 - Updated startup and editor titlebars to identify the build as `TSRE SCOmod v0.4`.
 - Fixed F3 OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
@@ -62,6 +65,18 @@ Current validation rules:
 ## UI Scaling
 
 The editor now supports a global `uiScale` setting. The packaged setting uses `uiScale = 1.15`; `1.00` to `1.25` is the recommended range. This scales the main editor font, menus/dropdowns, startup screen, F2/F3 style panels, object list side panel, Status Window, and Navi Window.
+
+## Object Search And Sounds
+
+The right-side object panel now has `ALL` defaults for Tracks, Roads, and Other. Choosing a specific value in one of those three filters resets the others to `ALL`, and the search box only searches inside the active filter. The `Reset` button clears the search box, returns the filters to `ALL`, and repopulates the full object list.
+
+Sound feedback is intentionally separated:
+
+- `SCOclick.wav` plays after successful guarded object placement.
+- `SCObuzz.wav` plays after Place Guard rejects and undoes a placement.
+- `SCOchirp.wav` plays for deliberate user-commanded mode/status changes.
+
+Passive status refreshes stay silent to avoid duplicate sounds after placement or automatic state changes.
 
 ## Downloads
 
