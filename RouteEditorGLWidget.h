@@ -125,6 +125,7 @@ public slots:
     void smoothTerrainToObj();
     void setTerrainToNearestDbTile();
     void setTerrainToSelectedObjTile();
+    void selectAllTerrainPatchesOnSelectedTile();
     void adjustObjPositionToTerrainMenu();
     void adjustObjRotationToTerrainMenu();
     void pickObjForPlacement();
@@ -191,6 +192,7 @@ private:
     void showPlacementSuccess();
     void showPlacementGuardError();
     void rejectPlacement();
+    bool suppressNextEnableToolSound = false;
     QBasicTimer timer;
     unsigned long long int lastTime;
     unsigned long long int timeNow;

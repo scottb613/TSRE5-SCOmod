@@ -3463,6 +3463,15 @@ bool Terrain::select(int value){
     return true;
 }
 
+bool Terrain::selectAllPatches(){
+    selected = true;
+    for (int i = 0; i < 256; i++) {
+        selectedPatchs[i] = true;
+    }
+    reloadLines();
+    return true;
+}
+
 bool Terrain::unselect(){
     for (int i = 0; i < 256; i++) {
         selectedPatchs[i] = false;

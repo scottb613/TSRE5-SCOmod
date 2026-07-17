@@ -1097,6 +1097,8 @@ void RouteEditorGLWidget::rejectPlacement() {
 }
 
 void RouteEditorGLWidget::playPlacementSound(QString fileName) {
+    if(!Game::scoSoundEnabled)
+        return;
 #ifdef Q_OS_WIN
     QString soundPath = QCoreApplication::applicationDirPath() + "/content/" + fileName;
     if (QFile::exists(soundPath))
@@ -1127,6 +1129,14 @@ void RouteEditorGLWidget::resizeGL(int w, int h) {
 void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
     Game::currentShapeLib = currentShapeLib;
     if (!route->loaded) return;
+
+    if(event->key() == Qt::Key_A
+            && event->modifiers().testFlag(Qt::AltModifier)){
+        selectAllTerrainPatchesOnSelectedTile();
+        event->accept();
+        return;
+    }
+
     camera->keyDown(event);
 
     Undo::StateBeginIfNotExist();
@@ -1180,7 +1190,6 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
             }
         }
             break;
-
         /// EFO Added to
         case Qt::Key_Escape:
             resizeTool = false;
@@ -1192,6 +1201,7 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
 
         /// EFO Added to
         case Qt::Key_E:
+              suppressNextEnableToolSound = true;
               enableTool("selectTool");
               resizeTool = false;
               translateTool = false;
@@ -1200,16 +1210,19 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
             break;
 
         case Qt::Key_R:
+            suppressNextEnableToolSound = true;
             enableTool("selectTool");
             rotateTool = true;
             showModeChange();
             break;
         case Qt::Key_T:
+            suppressNextEnableToolSound = true;
             enableTool("selectTool");
             translateTool = true;
             showModeChange();
             break;
         case Qt::Key_Y:
+            suppressNextEnableToolSound = true;
             enableTool("selectTool");
             resizeTool = true;
             showModeChange();
@@ -1228,7 +1241,9 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
                 break;
             }
             else
-            {   enableTool("placeTool");
+            {
+                suppressNextEnableToolSound = true;
+                enableTool("placeTool");
                 /// EFO Added to
                 resizeTool = false;
                 translateTool = false;
@@ -1834,6 +1849,7 @@ void RouteEditorGLWidget::mouseMoveEvent(QMouseEvent *event) {
 
 void RouteEditorGLWidget::enableTool(QString name) {
     if(Game::debugOutput) qDebug() << name;
+    bool changed = toolEnabled != name;
     toolEnabled = name;
     //if(toolEnabled == "placeTool" || toolEnabled == "selectTool" || toolEnabled == "autoPlaceSimpleTool"){
     resizeTool = false;
@@ -1841,15 +1857,25 @@ void RouteEditorGLWidget::enableTool(QString name) {
     rotateTool = false;
     //}
     emit sendMsg("toolEnabled", name);
+    if(changed){
+        if(suppressNextEnableToolSound)
+            suppressNextEnableToolSound = false;
+        else
+            showModeChange();
+    } else {
+        suppressNextEnableToolSound = false;
+    }
 }
 
 void RouteEditorGLWidget::statusPanelCommand(QString name) {
     if(name == "select"){
         if(toolEnabled == "selectTool" && !resizeTool && !rotateTool && !translateTool){
+            suppressNextEnableToolSound = true;
             enableTool("");
             showModeChange();
             return;
         }
+        suppressNextEnableToolSound = true;
         enableTool("selectTool");
         selectToolSelect();
         showModeChange();
@@ -1857,10 +1883,12 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
     }
     if(name == "place"){
         if(toolEnabled == "placeTool"){
+            suppressNextEnableToolSound = true;
             enableTool("");
             showModeChange();
             return;
         }
+        suppressNextEnableToolSound = true;
         enableTool("placeTool");
         showModeChange();
         return;
@@ -1871,6 +1899,7 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
             showModeChange();
             return;
         }
+        suppressNextEnableToolSound = true;
         enableTool("selectTool");
         selectToolRotate();
         showModeChange();
@@ -1882,6 +1911,7 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
             showModeChange();
             return;
         }
+        suppressNextEnableToolSound = true;
         enableTool("selectTool");
         selectToolTranslate();
         showModeChange();
@@ -1893,6 +1923,7 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
             showModeChange();
             return;
         }
+        suppressNextEnableToolSound = true;
         enableTool("selectTool");
         selectToolScale();
         showModeChange();
@@ -2353,6 +2384,13 @@ void RouteEditorGLWidget::setTerrainToSelectedObjTile(){
     Undo::StateBegin();
     route->setTerrainToTrackObjTile(obj, defaultPaintBrush, (int)camera->pozT[0], (int)camera->pozT[1]);
     Undo::StateEnd();
+}
+
+void RouteEditorGLWidget::selectAllTerrainPatchesOnSelectedTile(){
+    if(selectedObj == NULL || selectedObj->typeObj != GameObj::terrainobj)
+        return;
+
+    ((Terrain*)selectedObj)->selectAllPatches();
 }
 
 void RouteEditorGLWidget::adjustObjPositionToTerrainMenu(){

@@ -48,6 +48,7 @@ Primary source files edited
   - Added richer selected-object status labels and clear-selection handling.
   - Added Place Guard post-placement validation, automatic undo on rejected placements, and click/buzz WAV playback.
   - Added chirp WAV feedback for deliberate user-commanded mode/status changes while leaving passive status refreshes silent.
+  - Added Alt+A selected-terrain-tile patch selection shortcut before camera movement handling.
 
 - TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
   - Added declarations for new editor actions/helpers.
@@ -109,10 +110,12 @@ Primary source files edited
   - Added Mirror Seasons support for terrain texture painting.
   - Added opposite-season placeholder patch creation when painting with Mirror Seasons off, using route or bundled SCOmod terrain.ace fallbacks.
   - Removed terrain paint blocking/copy behavior from the old seasonal-editing workaround.
+  - Added select-all-patches helper for selected terrain tiles.
 
 - TSRE5-Trainsim.Com-Fork-master/Terrain.h
   - Added declarations/state for terrain conforming, paint, reset, and texture helpers.
   - Added seasonal TERRTEX path helpers, texture resolver declarations, terrain texture rebinding, and mirror paint helper declaration.
+  - Added select-all-patches method declaration for selected terrain tiles.
 
 - TSRE5-Trainsim.Com-Fork-master/TerrainTools.cpp
   - Added terrain paint presets UI.

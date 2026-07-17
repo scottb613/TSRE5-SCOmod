@@ -142,6 +142,7 @@ public:
     void setPatchFlags(int x, int z, float posx, float posz, int val);
     bool select(int value);
     bool select(int value, bool oneMore);
+    bool selectAllPatches();
     bool unselect();
     void resetPatchTexCoords(int uu = -1);
     void pushContextMenuActions(QMenu *menu);
