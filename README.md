@@ -8,7 +8,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 
 ## Branches
 
-- `tsre-scomod-stable` is the stable/rescue branch, currently tagged `v0.2`.
+- `tsre-scomod-stable` is the stable/rescue branch, currently tagged `v0.3`.
 - `tsre-scomod-wip` is the current work-in-progress branch with the latest tested local changes.
 
 ## Highlights
