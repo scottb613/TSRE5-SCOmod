@@ -189,6 +189,7 @@ void RouteEditorGLWidget::timerEvent(QTimerEvent * event) {
        if(Game::resetTools == true)
        {
            // qDebug() << " fake signal ";
+            suppressNextEnableToolSound = true;
             emit enableTool("selectTool");
             Game::resetTools = false;
        }
@@ -1137,6 +1138,47 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
         return;
     }
 
+    if(event->modifiers() == Qt::NoModifier){
+        if(event->isAutoRepeat()){
+            switch(event->key()){
+                case Qt::Key_E:
+                case Qt::Key_Q:
+                case Qt::Key_R:
+                case Qt::Key_T:
+                case Qt::Key_Y:
+                    event->accept();
+                    return;
+                default:
+                    break;
+            }
+        }
+
+        switch(event->key()){
+            case Qt::Key_E:
+                statusPanelCommand("select");
+                event->accept();
+                return;
+            case Qt::Key_Q:
+                statusPanelCommand("place");
+                event->accept();
+                return;
+            case Qt::Key_R:
+                statusPanelCommand("rotate");
+                event->accept();
+                return;
+            case Qt::Key_T:
+                statusPanelCommand("translate");
+                event->accept();
+                return;
+            case Qt::Key_Y:
+                statusPanelCommand("resize");
+                event->accept();
+                return;
+            default:
+                break;
+        }
+    }
+
     camera->keyDown(event);
 
     Undo::StateBeginIfNotExist();
@@ -1201,31 +1243,13 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
 
         /// EFO Added to
         case Qt::Key_E:
-              suppressNextEnableToolSound = true;
-              enableTool("selectTool");
-              resizeTool = false;
-              translateTool = false;
-              rotateTool = false;
-              showModeChange();
             break;
 
         case Qt::Key_R:
-            suppressNextEnableToolSound = true;
-            enableTool("selectTool");
-            rotateTool = true;
-            showModeChange();
             break;
         case Qt::Key_T:
-            suppressNextEnableToolSound = true;
-            enableTool("selectTool");
-            translateTool = true;
-            showModeChange();
             break;
         case Qt::Key_Y:
-            suppressNextEnableToolSound = true;
-            enableTool("selectTool");
-            resizeTool = true;
-            showModeChange();
             break;
         case Qt::Key_Q:
             if (keyControlEnabled)
@@ -1242,13 +1266,6 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
             }
             else
             {
-                suppressNextEnableToolSound = true;
-                enableTool("placeTool");
-                /// EFO Added to
-                resizeTool = false;
-                translateTool = false;
-                rotateTool = false;
-                showModeChange();
             }
             break;
         case Qt::Key_Home:

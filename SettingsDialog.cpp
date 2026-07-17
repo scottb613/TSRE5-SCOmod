@@ -577,6 +577,8 @@ void SettingsDialog::setupUi() {
     addRow(l, "oglDefaultLineWidth", "number", "OGL Line Width", "");
     addRow(l, "renderTrItems", "bool", "Render Tr Items", "");
     addRow(l, "sectionLineHeight", "number", "Section Line Height", "");
+    addRow(l, "fogColor", "color", "Fog Color", "");
+    addRow(l, "fogDensity", "string", "Fog Density", "");
     addRow(l, "selectedColor", "color", "Selected Color", "");
     addRow(l, "selectedWidth", "number", "Selected Width", "");
     addRow(l, "selectedTerrColor", "color", "Selected Terrain Color", "");
@@ -617,12 +619,8 @@ void SettingsDialog::setupUi() {
     createScrollTab(l, tabs, "Map");
     addRow(l, "mapImageResolution", "number", "Map Resolution", "");
     addRow(l, "mapengine", "string", "Map Engine", "");
-    addRow(l, "MapboximageMapsUrl", "string", "Mapbox URL", "");
-    addRow(l, "MapboximageMapsZoomOffset", "number", "Mapbox Zoom Offset", "");
-    addRow(l, "MapboxMapAPIKey", "string", "Mapbox API Key", "");
-    addRow(l, "GoogleimageMapsUrl", "string", "Google URL", "");
-    addRow(l, "GoogleMapAPIKey", "string", "Google API Key", "");
     addRow(l, "imageMapsUrl", "string", "Image Maps URL", "");
+    addRow(l, "imageMapsZoomOffset", "number", "Image Maps Zoom Offset", "");
     addRow(l, "MapAPIKey", "string", "General Map API Key", "");
 
     createScrollTab(l, tabs, "Cleanup");
@@ -799,10 +797,20 @@ void SettingsDialog::save(const QString& filename) {
 
     out << "\n\n//// Map / F3 Imagery\n\n";
     writeSetting(out, "mapImageResolution", "4096", "downloaded map imagery resolution");
+    writeOptionalSetting(out, "mapengine", "", "optional map imagery provider selector");
     out << "\n";
     writeOptionalSetting(out, "imageMapsUrl", "", "custom imagery URL, use {lat}, {lon}, {zoom}, {res}", false);
     writeOptionalSetting(out, "imageMapsZoomOffset", "-1", "required for MapBox");
     writeOptionalSetting(out, "MapAPIKey", "", "your API key");
+    out << "\n";
+    out << "// MapBox example:\n";
+    out << "// imageMapsUrl = https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/{lon},{lat},{zoom}/{res}x{res}?access_token=\n";
+    out << "// imageMapsZoomOffset = -1       // required for MapBox\n";
+    out << "// MapAPIKey = {your API key}\n";
+    out << "\n";
+    out << "// Google Maps example:\n";
+    out << "// imageMapsUrl = http://maps.googleapis.com/maps/api/staticmap?center={lat},{lon}&zoom={zoom}&size={res}x{res}&maptype=satellite&key=\n";
+    out << "// MapAPIKey = {your API key}\n";
 
     out << "\n\n//// Route File Cleanup / Maintenance\n\n";
     writeSetting(out, "autoFix", "false", "repair TDB anomalies");
@@ -950,11 +958,17 @@ void SettingsDialog::loadSettings() {
         if (cp == -1) cp = val.indexOf(" //");
         if (cp != -1) val = val.left(cp).trimmed();
         val.remove("\"");
-        fileValueMap[key] = val;
-        fileActiveMap[key] = activeLine;
+        bool hasExisting = fileValueMap.contains(key);
+        bool existingActive = fileActiveMap.value(key, false);
+        bool shouldStore = !hasExisting || activeLine || !existingActive;
 
-        if (valueWidgetMap.contains(key)) {
-            updateWidgetValue(key, val);
+        if (shouldStore) {
+            fileValueMap[key] = val;
+            fileActiveMap[key] = activeLine;
+
+            if (valueWidgetMap.contains(key)) {
+                updateWidgetValue(key, val);
+            }
         }
     }
     file.close();

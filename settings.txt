@@ -143,6 +143,7 @@ preloadTextures = "rock.ace"      // supports ace, bmp, dds, png files in TERRTE
 //// Map / F3 Imagery
 
 mapImageResolution = 4096         // downloaded map imagery resolution
+// mapengine =                    // optional map imagery provider selector
 
 // MapBox:
 // imageMapsUrl = https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/{lon},{lat},{zoom}/{res}x{res}?access_token=
