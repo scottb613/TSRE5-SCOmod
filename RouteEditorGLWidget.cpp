@@ -189,7 +189,6 @@ void RouteEditorGLWidget::timerEvent(QTimerEvent * event) {
        if(Game::resetTools == true)
        {
            // qDebug() << " fake signal ";
-            suppressNextEnableToolSound = true;
             emit enableTool("selectTool");
             Game::resetTools = false;
        }
@@ -1119,13 +1118,16 @@ void RouteEditorGLWidget::showModeChange() {
     playPlacementSound("SCOchirp.wav");
 }
 
+void RouteEditorGLWidget::userModeChangeSound() {
+    showModeChange();
+}
+
 void RouteEditorGLWidget::showPlacementGuardError() {
     playPlacementSound("SCObuzz.wav");
     emit updStatus(QString("guarderror"), QString("ERROR"));
 }
 
 void RouteEditorGLWidget::flexResult(bool success) {
-    suppressNextEnableToolSound = true;
     if(success)
         showPlacementSuccess();
     else
@@ -1880,8 +1882,6 @@ void RouteEditorGLWidget::mouseMoveEvent(QMouseEvent *event) {
 
 void RouteEditorGLWidget::enableTool(QString name) {
     if(Game::debugOutput) qDebug() << name;
-    QString oldTool = toolEnabled;
-    bool changed = oldTool != name;
     toolEnabled = name;
     //if(toolEnabled == "placeTool" || toolEnabled == "selectTool" || toolEnabled == "autoPlaceSimpleTool"){
     resizeTool = false;
@@ -1889,25 +1889,15 @@ void RouteEditorGLWidget::enableTool(QString name) {
     rotateTool = false;
     //}
     emit sendMsg("toolEnabled", name);
-    if(changed){
-        if(suppressNextEnableToolSound)
-            suppressNextEnableToolSound = false;
-        else if(name != "FlexTool" && !(oldTool == "FlexTool" && name == "selectTool"))
-            showModeChange();
-    } else {
-        suppressNextEnableToolSound = false;
-    }
 }
 
 void RouteEditorGLWidget::statusPanelCommand(QString name) {
     if(name == "select"){
         if(toolEnabled == "selectTool" && !resizeTool && !rotateTool && !translateTool){
-            suppressNextEnableToolSound = true;
             enableTool("");
             showModeChange();
             return;
         }
-        suppressNextEnableToolSound = true;
         enableTool("selectTool");
         selectToolSelect();
         showModeChange();
@@ -1915,12 +1905,10 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
     }
     if(name == "place"){
         if(toolEnabled == "placeTool"){
-            suppressNextEnableToolSound = true;
             enableTool("");
             showModeChange();
             return;
         }
-        suppressNextEnableToolSound = true;
         enableTool("placeTool");
         showModeChange();
         return;
@@ -1931,7 +1919,6 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
             showModeChange();
             return;
         }
-        suppressNextEnableToolSound = true;
         enableTool("selectTool");
         selectToolRotate();
         showModeChange();
@@ -1943,7 +1930,6 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
             showModeChange();
             return;
         }
-        suppressNextEnableToolSound = true;
         enableTool("selectTool");
         selectToolTranslate();
         showModeChange();
@@ -1955,7 +1941,6 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
             showModeChange();
             return;
         }
-        suppressNextEnableToolSound = true;
         enableTool("selectTool");
         selectToolScale();
         showModeChange();

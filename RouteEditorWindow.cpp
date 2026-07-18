@@ -527,6 +527,9 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(objTools, SIGNAL(enableTool(QString)),
                       glWidget, SLOT(enableTool(QString)));
 
+    QObject::connect(objTools, SIGNAL(userModeChanged()),
+                      glWidget, SLOT(userModeChangeSound()));
+
     QObject::connect(objTools, SIGNAL(requestMainFocus()),
                       glWidget, SLOT(focusEditor()));
     

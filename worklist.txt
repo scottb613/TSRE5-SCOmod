@@ -50,7 +50,7 @@ Highlights
 - Fixed [F3] OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened [F3] OSM Vector Map loading so failed network replies do not crash the editor.
 - Set [F3] downloaded map imagery resolution to 4096 for clearer per-tile map output.
-- Added [dynamic track] GokuMK Flex improvements that replace the old straight-curve-straight-only Flex workflow with multi-section dynamic-track solving, improved graded/elevation joins based on solved path length, hidden debug popup behavior, fallback dynamic-track textures, and proper success/error sound feedback.
+- Added [dynamic track] GokuMK Flex improvements that replace the old straight-curve-straight-only Flex workflow with multi-section dynamic-track solving, improved graded/elevation joins based on solved path length, hidden debug popup behavior, fallback dynamic-track textures, and proper success/error sound feedback. The new [dynamic track] supports a full "S-Curve" connections.
 
 
 Test branch, forked from Eric's TSRE master branch:

@@ -65,6 +65,7 @@ public:
 public slots:
     void cleanup();
     void enableTool(QString name);
+    void userModeChangeSound();
     void setPaintBrush(Brush* brush);
     void jumpTo(PreciseTileCoordinate*);
     void jumpTo(float *posT, float *pos);
@@ -194,7 +195,6 @@ private:
     void showPlacementSuccess();
     void showPlacementGuardError();
     void rejectPlacement();
-    bool suppressNextEnableToolSound = false;
     QBasicTimer timer;
     unsigned long long int lastTime;
     unsigned long long int timeNow;

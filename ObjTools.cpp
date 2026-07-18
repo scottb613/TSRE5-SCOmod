@@ -692,6 +692,7 @@ void ObjTools::selectToolEnabled(bool val){
     }
     else
         emit enableTool("");
+    emit userModeChanged();
 }
 
 void ObjTools::placeToolEnabled(bool val){
@@ -702,6 +703,7 @@ void ObjTools::placeToolEnabled(bool val){
     }
     else
         emit enableTool("");
+    emit userModeChanged();
 }
 
 void ObjTools::autoPlacementButtonEnabled(bool val){
@@ -709,6 +711,7 @@ void ObjTools::autoPlacementButtonEnabled(bool val){
         emit enableTool("autoPlaceSimpleTool");
     else
         emit enableTool("");
+    emit userModeChanged();
 }
 
 void ObjTools::resetRotationButtonEnabled(){

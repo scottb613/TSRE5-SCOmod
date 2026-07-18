@@ -61,6 +61,7 @@ public slots:
     
 signals:
     void enableTool(QString name);
+    void userModeChanged();
     void requestMainFocus();
 
     void sendMsg(QString name);
