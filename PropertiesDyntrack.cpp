@@ -379,14 +379,17 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
     p2[1] = p[1];
     p2[2] = p[2];
     
-    float* dyntrackData[10];
+    float dyntrackData[10];
     float elev = 0;
     
     bool success = Flex::AutoFlex(dobj->x, dobj->y, (float*)p1, x, z, (float*)p2, (float*)dyntrackData, elev);
     if(Game::debugOutput) qDebug() << "flex2" << elev;
-    dobj->set("dyntrackdata", (float*)dyntrackData);
-    dobj->setElevation(elev);
-    this->showObj(dobj);
+    emit flexResult(success);
+    if(success){
+        dobj->set("dyntrackdata", (float*)dyntrackData);
+        dobj->setElevation(elev);
+        this->showObj(dobj);
+    }
     emit enableTool("selectTool");
 }
 

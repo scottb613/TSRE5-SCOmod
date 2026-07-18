@@ -41,6 +41,7 @@ Highlights
 - Added [status/navi window] gentle delayed snapping.
 - Matched the [navi window] color/readability scheme to the darker Status Window style.
 - Improved [object Panel] searching with [ALL] category defaults, enforced mutually exclusive Tracks/Roads/Other category filters for searches, and a [Reset] search button.
+- Improved [object Panel] Scale Rail grouping so family/type categories contain the individual lengths, radii, and variants.
 - Added [global] [uiScale] support for larger editor fonts and proportionally wider panels.
 - Added [global] sound feedback with standardized [SCOclick.wav], [SCObuzz.wav], and [SCOchirp.wav] files.
 - Added [status window] [Place Guard] validation to prevent spammed objects with automatic undo, and respective feedback.
@@ -49,6 +50,7 @@ Highlights
 - Fixed [F3] OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened [F3] OSM Vector Map loading so failed network replies do not crash the editor.
 - Set [F3] downloaded map imagery resolution to 4096 for clearer per-tile map output.
+- Added [dynamic track] GokuMK Flex improvements that replace the old straight-curve-straight-only Flex workflow with multi-section dynamic-track solving, improved graded/elevation joins based on solved path length, hidden debug popup behavior, fallback dynamic-track textures, and proper success/error sound feedback.
 
 
 Test branch, forked from Eric's TSRE master branch:
@@ -82,6 +84,8 @@ The Navi Window now uses the same darker visual treatment as the Status Window. 
 The right-side object panel search was also tightened up. The Tracks, Roads, and Other category dropdowns now include `ALL` as their default value. Selecting a real category in one of those three dropdowns resets the other two to `ALL`, so only one category filter is active at a time. Search text is then applied inside that active category instead of searching the entire library and ignoring the category choice.
 
 The new `Reset` button beside Search clears the search text, sets Tracks/Roads/Other back to `ALL`, and repopulates the full object list. This should make it much faster to narrow down track pieces, road pieces, signals, forests, sound regions, route-shapes-directory objects, or other TSRE object categories without losing track of which bucket is being searched.
+
+Scale Rail categories now stop at the functional family/type portion of each filename. For example, pieces are grouped under `sr1t`, `sr1t Crv`, `sr1t Str`, `sr1t Swt`, `sr2t Tun`, or `sr4t Crv`, while lengths, radii, weather variants, and side suffixes remain individual pieces inside the category. This prevents the Scale Rail selector from becoming a separate category for every track file.
 
 UI scaling
 
@@ -129,6 +133,17 @@ I fixed an F3 OSM Vector Map loading failure that was showing up as a no-connect
 The OSM loader was also hardened so failed HTTPS/HTTP/empty/non-XML replies are treated as no-data responses instead of being parsed as valid map data. That should return control to the editor instead of crashing.
 
 The packaged map imagery resolution is now set to 4096. The OSM vector loader still requests the tile area in four smaller quadrants, but the final per-tile rendered map image is controlled by mapImageResolution. 4096 gives a much clearer tile map than the old 512 default.
+
+
+Dynamic track Flex improvements
+
+I pulled in and adapted GokuMK's newer Flex work from his TSRE5/TSRE5vc code as the starting point for improving TSRE dynamic track editing. Credit for the underlying Flex direction belongs to Goku. The old TSRE Flex workflow was basically limited to the familiar straight-curve-straight dynamic track arrangement, which could be useful but also awkward when trying to join track cleanly, especially where grades or more complex alignment changes were involved.
+
+The updated Flex path now supports a richer multi-section dynamic-track solve. In practical terms, the Flex button can create a best-effort connection with more than the old simple straight/curve/straight shape, giving the editor a better foundation for smoother dynamic track joins. I also adjusted the elevation calculation so the grade uses the solved dynamic-track path length when available instead of relying only on the straight-line endpoint distance. That should help Flex joins behave more sensibly when the endpoints are at different elevations.
+
+The old Flex diagnostic graph window is now hidden by default because it was more distracting than helpful during normal route work. A settings flag remains available for debugging if it is ever needed again. I also added packaged fallback dynamic-track textures so test routes that lack the usual dynamic-track texture files can still display the procedural track in TSRE instead of showing missing-texture behavior. The visual dynamic-track rendering in TSRE is still only an editor preview; Open Rails remains the real runtime judge for final track appearance and behavior.
+
+Flex now uses the SCOmod sound rules as well. The Flex button itself no longer chirps just because it arms the internal tool, and the automatic return to Select after a Flex attempt no longer chirps over the result. A completed Flex connection gets the normal success click, while a failed Flex attempt gets the error buzz.
 
 
 Cut and embankment terrain conforming

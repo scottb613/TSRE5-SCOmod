@@ -129,6 +129,9 @@ public:
     static QColor *colorConView;
     static QColor *colorShapeView;
     static bool consoleOutput;
+    static bool flexLogEnabled;
+    static bool flexLogCandidates;
+    static QString flexLogFile;
     static int fpsLimit;
     static bool ortsEngEnable;
     static bool sortTileObjects;
@@ -155,6 +158,7 @@ public:
     static bool autoGeoTerrain;
     static bool useSuperelevation;
     static bool soundEnabled;
+    static bool scoSoundEnabled;
     static bool fullscreen;
             
     static float fogDensity;// = 0.7;
@@ -243,6 +247,7 @@ public:
     static int maxAutoPlacement;
     static int imageMapsZoomOffset;
     static float railProfile[];
+    static bool flexDebugWindow;
     static QString convertUnitS;
     static float convertSpeed;
 

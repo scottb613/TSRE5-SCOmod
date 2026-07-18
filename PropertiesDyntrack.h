@@ -41,6 +41,7 @@ public slots:
 signals:
     void enableTool(QString val);
     void setMoveStep(float val);
+    void flexResult(bool success);
     
 private:
     QCheckBox chSect[5];

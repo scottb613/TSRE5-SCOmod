@@ -1,4 +1,4 @@
-/*  This file is part of TSRE5.
+﻿/*  This file is part of TSRE5.
  *
  *  TSRE5 - train sim game engine and MSTS/OR Editors. 
  *  Copyright (C) 2016 Piotr Gadecki <pgadecki@gmail.com>
@@ -20,8 +20,9 @@ class QPen;
 class Flex {
 public:
 
-    static bool NewFlex(int x, int z, float *p, float *q, float * dyntrackSections);
-    static bool AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2, float* dyntrackSections, float &elev);
+    static bool NewFlexDeprecatedStaged(int x, int z, float *p, float *q, float * dyntrackSections);
+    static bool NewFlex(int x1, int z1, float *p1, float *q1, int x2, int z2, float *p2, float *q2, float * dyntrackSections, float preferredMinCurveRadius = 0.0f);
+    static bool AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2, float* dyntrackSections, float &elev, float preferredMinCurveRadius = 0.0f);
 private:
     static int FlexStage;
     static float FlexP0[3];

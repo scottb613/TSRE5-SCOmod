@@ -37,7 +37,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Fixed `load` route-selection table refresh when switching MSTS root folders.
 - Added `windows` executable icon and `AddShortcutDesktop.cmd` helper.
 - Added `restore last session` on the `load` screen to reopen the last route, camera view, and editor window layout.
-- Added `load` high-resolution branded splash and scaled loader/about display so the banner is not cropped, with contributor credit for Trainsim.com/Open Rails beneath the TSRE mark.
+- Added `load` high-resolution branded splash and scaled loader/about display so the banner is not cropped.
 - Converted the `status window` into a compact clickable control panel.
 - Added `status/navi window` gentle delayed snapping.
 - Matched the `navi window` color/readability scheme to the darker Status Window style.
@@ -51,6 +51,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Fixed `F3` OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened `F3` OSM Vector Map loading so failed network replies do not crash the editor.
 - Set `F3` downloaded map imagery resolution to 4096 for clearer per-tile map output.
+- Added `dynamic track` GokuMK Flex improvements that replace the old straight-curve-straight-only Flex workflow with multi-section dynamic-track solving, improved graded/elevation joins based on solved path length, hidden debug popup behavior, fallback dynamic-track textures, and proper success/error sound feedback.
 
 ## Downloads
 

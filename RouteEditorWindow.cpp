@@ -300,7 +300,6 @@ RouteEditorWindow::RouteEditorWindow() {
     editMenu->addAction(pasteAction);
     editMenu->addSeparator();
     selectAction = new QAction(tr("&Select Tool"), this); 
-    selectAction->setShortcut(QKeySequence("E"));
     QObject::connect(selectAction, SIGNAL(triggered()), glWidget, SLOT(editSelect()));
     editMenu->addAction(selectAction);
     // View
@@ -527,6 +526,9 @@ RouteEditorWindow::RouteEditorWindow() {
     
     QObject::connect(objTools, SIGNAL(enableTool(QString)),
                       glWidget, SLOT(enableTool(QString)));
+
+    QObject::connect(objTools, SIGNAL(requestMainFocus()),
+                      glWidget, SLOT(focusEditor()));
     
     QObject::connect(terrainTools, SIGNAL(enableTool(QString)),
                       glWidget, SLOT(enableTool(QString)));   
@@ -550,14 +552,11 @@ RouteEditorWindow::RouteEditorWindow() {
                 it, SLOT(msg(QString, QString)));
     }
     
-    QObject::connect(objProperties["Dyntrack"], SIGNAL(enableTool(QString)),
-                      glWidget, SLOT(enableTool(QString)));
-    
     QObject::connect(glWidget, SIGNAL(flexData(int, int, float*)),
                       objProperties["Dyntrack"], SLOT(flexData(int, int, float*)));
-    
-    QObject::connect(objProperties["Dyntrack"], SIGNAL(enableTool(QString)),
-                      glWidget, SLOT(enableTool(QString)));
+
+    QObject::connect(objProperties["Dyntrack"], SIGNAL(flexResult(bool)),
+                      glWidget, SLOT(flexResult(bool)));
     
     QObject::connect(objProperties["ActivityObject"], SIGNAL(sendMsg(QString)),
                       glWidget, SLOT(msg(QString)));

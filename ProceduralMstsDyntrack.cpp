@@ -1,4 +1,4 @@
-/*  This file is part of TSRE5.
+﻿/*  This file is part of TSRE5.
  *
  *  TSRE5 - train sim game engine and MSTS/OR Editors. 
  *  Copyright (C) 2016 Piotr Gadecki <pgadecki@gmail.com>
@@ -8,26 +8,134 @@
  *  See LICENSE.md or https://www.gnu.org/licenses/gpl.html
  */
 
-#include <QFileInfo>
 #include "ProceduralMstsDyntrack.h"
 #include "Game.h"
 #include "Vector2f.h"
+
 #include "Vector3f.h"
 #include "OglObj.h"
 
-void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection> &sections) {
-    float* pd = new float[55000];
-    float* sk = new float[55000];
+#include <algorithm>
+#include <cmath>
+#include <vector>
 
-    /// 0.717500 
-    float railtopInner = 0.7175;
-    float railtopOuter = 0.7895;
-    if((Game::railProfile[0] > 0) and (Game::railProfile[1] > 0))
-    { 
+#include <QCoreApplication>
+#include <QFileInfo>
+
+namespace {
+
+QString dyntrackTexturePath(const QString &fileName) {
+    const QString routePath = (Game::root + "/routes/" + Game::route + "/textures/" + fileName).toLower();
+    if (QFileInfo::exists(routePath))
+        return routePath;
+
+    const QString contentPath = QCoreApplication::applicationDirPath() + "/content/dyntrack/" + fileName.toLower();
+    if (QFileInfo::exists(contentPath))
+        return contentPath;
+
+    const QString templatePath = QCoreApplication::applicationDirPath() + "/tsre_assets/templateRoute_0.6/textures/" + fileName.toLower();
+    if (QFileInfo::exists(templatePath))
+        return templatePath;
+
+    return routePath;
+}
+
+}
+
+void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection> &sections) {
+    constexpr int kMaxFloats = 55000;
+    constexpr int kPdPerStraight = 54;
+    constexpr int kSkPerStraight = 270;
+    constexpr int kPdPerCurveStep = 54;
+    constexpr int kSkPerCurveStep = 324;
+    constexpr float kDefaultCurveStep = 0.03f;
+    constexpr float kMaxCenterlineLen = 2048.0f;
+
+    float railtopInner = 0.7175f;
+    float railtopOuter = 0.7895f;
+    if ((Game::railProfile[0] > 0) && (Game::railProfile[1] > 0)) {
         railtopInner = Game::railProfile[0];
         railtopOuter = Game::railProfile[1];
     }
-    
+
+    // Trim incoming sections to a single-tile length budget to avoid generating runaway geometry.
+    QVector<TSection> trimmed;
+    trimmed.reserve(sections.size());
+    float remaining = kMaxCenterlineLen;
+    for (int i = 0; i < sections.size(); i++) {
+        float segLen = sections[i].getDlugosc();
+        if (segLen < 1e-4f)
+            continue;
+        if (remaining <= 0.0f)
+            break;
+        if (segLen <= remaining + 1e-4f) {
+            trimmed.push_back(sections[i]);
+            remaining -= segLen;
+            continue;
+        }
+
+        TSection s = sections[i];
+        if (s.type == 0) {
+            s.size = remaining;
+            s.angle = remaining;
+        } else if (s.type == 1 && s.radius > 0.1f) {
+            float sign = (s.angle >= 0.0f) ? 1.0f : -1.0f;
+            float newAngle = sign * (remaining / s.radius);
+            s.angle = newAngle;
+            s.size = newAngle;
+        } else {
+            break;
+        }
+        trimmed.push_back(s);
+        break;
+    }
+
+    // Choose a curve subdivision step that fits within the fixed VBO budget.
+    int straightCount = 0;
+    float totalAbsAngle = 0.0f;
+    for (int i = 0; i < trimmed.size(); i++) {
+        if (trimmed[i].type == 0) {
+            straightCount++;
+            continue;
+        }
+        if (trimmed[i].type == 1 && trimmed[i].radius > 0.1f && std::fabs(trimmed[i].angle) > 1e-6f)
+            totalAbsAngle += std::fabs(trimmed[i].angle);
+    }
+
+    int nMax = (kMaxFloats - (kSkPerStraight * straightCount)) / kSkPerCurveStep;
+    if (nMax < 0)
+        nMax = 0;
+
+    auto requiredSteps = [&](float step) {
+        int total = 0;
+        for (int i = 0; i < trimmed.size(); i++) {
+            if (trimmed[i].type != 1 || trimmed[i].radius <= 0.1f)
+                continue;
+            float a = std::fabs(trimmed[i].angle);
+            if (a < 1e-6f)
+                continue;
+            total += (int)std::ceil(a / step);
+        }
+        return total;
+    };
+
+    float curveStep = kDefaultCurveStep;
+    if (nMax > 0) {
+        float minStep = (totalAbsAngle > 0.0f) ? (totalAbsAngle / (float)nMax) : kDefaultCurveStep;
+        curveStep = std::max(kDefaultCurveStep, minStep);
+        // Compensate for ceil() and any numerical edge cases.
+        for (int it = 0; it < 32; it++) {
+            if (requiredSteps(curveStep) <= nMax)
+                break;
+            curveStep *= 1.05f;
+        }
+    }
+
+    std::vector<float> pdBuf(kMaxFloats);
+    std::vector<float> skBuf(kMaxFloats);
+    float* pd = pdBuf.data();
+    float* sk = skBuf.data();
+
     int ptr = 0;
     int str = 0;
     
@@ -44,15 +152,20 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
     GLUU *gluu = GLUU::get();
     float alpha = -gluu->alphaTest;
     
-    for (int i = 0; i < sections.size(); i++) {
+    bool bufferTrimmed = false;
+    for (int i = 0; i < trimmed.size(); i++) {
         //if (sections[i].sectIdx > 100000000) continue;
         //prosta
-        if (sections[i].type == 0) {
+        if (trimmed[i].type == 0) {
+            if ((ptr + kPdPerStraight) > kMaxFloats || (str + kSkPerStraight) > kMaxFloats) {
+                bufferTrimmed = true;
+                break;
+            }
             //podklady
 
             b.set(2.5, 0.0);
             b.rotate(offrot, 0);
-            a1.set(0.0, sections[i].angle);
+            a1.set(0.0, trimmed[i].angle);
             a1.rotate(offrot, 0);
 
             pd[ptr++] = offpos.x + b.x;
@@ -82,7 +195,7 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
             pd[ptr++] = 1.0;
             pd[ptr++] = 0.0;
             pd[ptr++] = 0.862000;
-            pd[ptr++] = -1.0 + 0.2 * sections[i].angle;
+            pd[ptr++] = -1.0 + 0.2 * trimmed[i].angle;
             pd[ptr++] = alpha;
 
             pd[ptr++] = offpos.x + b.x + a1.x;
@@ -92,7 +205,7 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
             pd[ptr++] = 1.0;
             pd[ptr++] = 0.0;
             pd[ptr++] = -0.139000;
-            pd[ptr++] = -1.0 + 0.2 * sections[i].angle;
+            pd[ptr++] = -1.0 + 0.2 * trimmed[i].angle;
             pd[ptr++] = alpha;
 
             pd[ptr++] = offpos.x + b.x;
@@ -112,7 +225,7 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
             pd[ptr++] = 1.0;
             pd[ptr++] = 0.0;
             pd[ptr++] = 0.862000;
-            pd[ptr++] = -1.0 + 0.2 * sections[i].angle;
+            pd[ptr++] = -1.0 + 0.2 * trimmed[i].angle;
             pd[ptr++] = alpha;
             //szyny
 
@@ -444,34 +557,38 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
             offpos.y += a1.y;
         }
         //krzywa
-        if(sections[i].type==1){
+        if(trimmed[i].type==1){
             float kierunek = 1;
-            if(sections[i].angle > 0){
+            if(trimmed[i].angle > 0){
                 kierunek = -1;
             }
             float aa = 0;
             float angle;
             float angle2;
-            for(angle = 0, angle2 = 0; angle2>sections[i].angle*kierunek; angle-=0.03*kierunek,angle2-=0.03){
-                if(sections[i].angle*kierunek-angle2<-0.03) 
-                    aa = -0.03*kierunek;
+            for(angle = 0, angle2 = 0; angle2>trimmed[i].angle*kierunek; angle-=curveStep*kierunek,angle2-=curveStep){
+                if ((ptr + kPdPerCurveStep) > kMaxFloats || (str + kSkPerCurveStep) > kMaxFloats) {
+                    bufferTrimmed = true;
+                    break;
+                }
+                if(trimmed[i].angle*kierunek-angle2<-curveStep) 
+                    aa = -curveStep*kierunek;
                 else 
-                    aa = (sections[i].angle*kierunek-angle2)*kierunek;
+                    aa = (trimmed[i].angle*kierunek-angle2)*kierunek;
                 //podklady
                 b1.set(-2.5, 0.0);
                 a1.set(2.5, 0.0);
                 a.set(-2.5, 0.0);
                 b.set(2.5, 0.0);
-                a1.rotate(angle, sections[i].radius*kierunek);
-                b1.rotate(angle, sections[i].radius*kierunek);           
-                a.rotate(angle+aa, sections[i].radius*kierunek);
-                b.rotate(angle+aa, sections[i].radius*kierunek);
+                a1.rotate(angle, trimmed[i].radius*kierunek);
+                b1.rotate(angle, trimmed[i].radius*kierunek);           
+                a.rotate(angle+aa, trimmed[i].radius*kierunek);
+                b.rotate(angle+aa, trimmed[i].radius*kierunek);
                 a1.rotate(offrot, 0);
                 b1.rotate(offrot, 0);
                 a.rotate(offrot, 0);
                 b.rotate(offrot, 0);
                 dl.set(0.0, 0.0);
-                dl.rotate(aa, sections[i].radius*kierunek); 
+                dl.rotate(aa, trimmed[i].radius*kierunek); 
                 float dlugosc = dl.getDlugosc();
                     
                 pd[ptr++] = offpos.x+a1.x;  pd[ptr++] = 0.2; pd[ptr++] = offpos.y+a1.y;
@@ -512,10 +629,10 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
                 for( int jj = 0; jj < 2; jj++){
                     a.set(tx.x, 0.0);
                     b.set(ty.x, 0.0);
-                    tx.rotate(angle, sections[i].radius*kierunek);
-                    ty.rotate(angle, sections[i].radius*kierunek);
-                    a.rotate(angle+aa, sections[i].radius*kierunek);
-                    b.rotate(angle+aa, sections[i].radius*kierunek);
+                    tx.rotate(angle, trimmed[i].radius*kierunek);
+                    ty.rotate(angle, trimmed[i].radius*kierunek);
+                    a.rotate(angle+aa, trimmed[i].radius*kierunek);
+                    b.rotate(angle+aa, trimmed[i].radius*kierunek);
                     a.rotate(offrot, 0);
                     b.rotate(offrot, 0);      
                     tx.rotate(offrot, 0); 
@@ -555,8 +672,8 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
                 ///
                 tx.set(railtopInner, 0.0);
                 a.set(tx.x, 0.0);
-                tx.rotate(angle, sections[i].radius*kierunek);
-                a.rotate(angle+aa, sections[i].radius*kierunek);
+                tx.rotate(angle, trimmed[i].radius*kierunek);
+                a.rotate(angle+aa, trimmed[i].radius*kierunek);
                 a.rotate(offrot, 0); 
                 tx.rotate(offrot, 0); 
                     sk[str++] = offpos.x+tx.x; sk[str++] = 0.325; sk[str++] = offpos.y+tx.y;
@@ -590,8 +707,8 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
                     sk[str++] = alpha;
                 tx.set(-railtopInner, 0.0);
                 a.set(tx.x, 0.0);
-                tx.rotate(angle, sections[i].radius*kierunek);
-                a.rotate(angle+aa, sections[i].radius*kierunek);
+                tx.rotate(angle, trimmed[i].radius*kierunek);
+                a.rotate(angle+aa, trimmed[i].radius*kierunek);
                 a.rotate(offrot, 0); 
                 tx.rotate(offrot, 0); 
                     sk[str++] = offpos.x+tx.x; sk[str++] = 0.2; sk[str++] = offpos.y+tx.y;
@@ -626,8 +743,8 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
 
                 tx.set(-railtopOuter, 0.0);
                 a.set(tx.x, 0.0);
-                tx.rotate(angle, sections[i].radius*kierunek);
-                a.rotate(angle+aa, sections[i].radius*kierunek);
+                tx.rotate(angle, trimmed[i].radius*kierunek);
+                a.rotate(angle+aa, trimmed[i].radius*kierunek);
                 a.rotate(offrot, 0); 
                 tx.rotate(offrot, 0); 
 
@@ -663,8 +780,8 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
 
                 tx.set(railtopOuter, 0.0);
                 a.set(tx.x, 0.0);
-                tx.rotate(angle, sections[i].radius*kierunek);
-                a.rotate(angle+aa, sections[i].radius*kierunek);
+                tx.rotate(angle, trimmed[i].radius*kierunek);
+                a.rotate(angle+aa, trimmed[i].radius*kierunek);
                 a.rotate(offrot, 0); 
                 tx.rotate(offrot, 0); 
 
@@ -698,42 +815,23 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
                     sk[str++] = 0.069; sk[str++] = 0.002;
                     sk[str++] = alpha;
             }
+            if (bufferTrimmed)
+                break;
             a.set(0.0, 0.0);
-            a.rotate(sections[i].angle, sections[i].radius*kierunek);
+            a.rotate(trimmed[i].angle, trimmed[i].radius*kierunek);
             a.rotate(offrot, 0);
             offpos.x+=a.x; offpos.y+=a.y;
-            offrot+=sections[i].angle;
+            offrot+=trimmed[i].angle;
         }
     }
+    Q_UNUSED(bufferTrimmed);
     //qDebug() << ptr << "" << str;
     
-    QString resPath = Game::root + "/routes/" + Game::route + "/textures";
-    QString seasonPath = "";    
-    if(Game::seasonalEditing)
-    {
-        
-        /// EFO block to grab season path and render snow
-        
-        if((Game::TextureFlags[Game::season]) != 0)
-            seasonPath = "/" + Game::season.toLower();
-
-        if(Game::season.toLower() == "winter" || Game::season.toLower() == "autumnsnown" || Game::season.toLower() == "wintersnow" || Game::season.toLower() == "springsnow" ){
-            if(Game::TextureFlags["snow"] != 0)
-                seasonPath = "/snow";
-        }
-        
-        if(!QFileInfo::exists(resPath.toLower() + seasonPath + "/acleantrack1.ace"))
-            seasonPath = "";        
-    
-        /// end EFO block to grab season path and render snow                        
-    }
-    
-    
-    QString* texturePath = new QString(resPath.toLower() + seasonPath + "/acleantrack1.ace");  // EFO added seasonPath
+    QString* texturePath = new QString(dyntrackTexturePath("acleantrack1.ace"));
     shape.push_back(new OglObj());
     shape.push_back(new OglObj());
     shape[0]->setMaterial(texturePath);
-    texturePath = new QString(resPath.toLower() + seasonPath + "/acleantrack2.ace");  // EFO added seasonPath
+    texturePath = new QString(dyntrackTexturePath("acleantrack2.ace"));
     shape[1]->setMaterial(texturePath);
     shape[0]->init(pd, ptr, RenderItem::VNTA, GL_TRIANGLES );
     shape[1]->init(sk, str, RenderItem::VNTA, GL_TRIANGLES );
@@ -764,8 +862,5 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
     
     shape[0]->setBound(bound);
     shape[1]->setBound(bound);
-    
-    delete[] pd;
-    delete[] sk;
     
 }

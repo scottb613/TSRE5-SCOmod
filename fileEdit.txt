@@ -94,6 +94,7 @@ Primary source files edited
   - Added right-side object panel search reset button.
   - Added ALL defaults for Tracks/Roads/Other filters.
   - Made Tracks/Roads/Other filters mutually exclusive and constrained search to the active filter.
+  - Grouped Scale Rail track categories by family/type instead of individual dimensions, radii, and variants.
 
 - TSRE5-Trainsim.Com-Fork-master/ObjTools.h
   - Added object-panel search reset/filter helper declarations and Reset button state.
@@ -242,6 +243,40 @@ Primary source files edited
 
 - TSRE5-Trainsim.Com-Fork-master/ProceduralMstsDyntrack.cpp
   - Updated procedural dynamic track texture selection to follow the active season directly with normal-texture fallback.
+  - Added packaged fallback dynamic-track texture lookup for routes missing local dynamic-track texture files.
+
+- TSRE5-Trainsim.Com-Fork-master/Flex.cpp
+  - Adapted GokuMK's newer Flex dynamic-track solving work for SCOmod testing.
+  - Added multi-section dynamic-track solve behavior beyond the old straight-curve-straight-only Flex workflow.
+  - Updated Flex elevation handling to use solved path length when available for smoother graded joins.
+
+- TSRE5-Trainsim.Com-Fork-master/Flex.h
+  - Added Flex helper declarations used by the adapted GokuMK Flex workflow.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesDyntrack.cpp
+  - Hid the old Flex debug graph during normal editor use.
+  - Added Flex result reporting so completed Flex connections use click feedback and failed attempts use buzz feedback.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesDyntrack.h
+  - Added Flex result signal used by the route editor widget.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
+  - Connected dynamic-track Flex result feedback to the main editor widget.
+  - Connected object-list selection focus return so shortcut keys continue working after right-side object list selections.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
+  - Suppressed Flex internal tool-change chirps so only deliberate operator mode changes chirp.
+  - Stopped overlapping SCO UI sounds before playing the next click, buzz, or chirp.
+  - Added focus return slot for right-side object list selections.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
+  - Added focus return slot for object-list selection handling.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+  - Added Flex debug-window setting support.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.h
+  - Added Flex debug-window setting state.
 
 - TSRE5-Trainsim.Com-Fork-master/TransferObj.cpp
   - Updated transfer texture selection to use the active seasonal texture folder with root fallback.

@@ -268,6 +268,9 @@ ObjTools::ObjTools(QString name)
     
     QObject::connect(&lastItems, SIGNAL(itemClicked(QListWidgetItem*)),
                       this, SLOT(lastItemsListSelected(QListWidgetItem*)));
+
+    refList.setFocusPolicy(Qt::NoFocus);
+    lastItems.setFocusPolicy(Qt::NoFocus);
     
     lastItems.setContextMenuPolicy(Qt::CustomContextMenu);
     QObject::connect(&lastItems, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(showLastItemsContextMenu(QPoint)));
@@ -671,12 +674,14 @@ void ObjTools::refListSelected(QListWidgetItem * item){
         route->ref->selected = NULL;
     }
     lastItems.clearSelection();
+    emit requestMainFocus();
 }
 
 void ObjTools::lastItemsListSelected(QListWidgetItem * item){
     refList.clearSelection();
     if(Game::debugOutput) qDebug() << "ObjTools506:" << item->type() << " " << item->text();
     route->ref->selected = lastItemsPtr[item->type()];
+    emit requestMainFocus();
 }
 
 void ObjTools::selectToolEnabled(bool val){

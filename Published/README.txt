@@ -1,81 +1,75 @@
-TSRE5-SCOmod Test Build
+# TSRE5-SCOmod
 
-This package contains the TSRE5 executable and runtime files from the terrain/editor improvement work.
+TSRE5-SCOmod is an experimental improvement branch of the TSRE5 Trainsim.com fork, focused on practical route-editor improvements for MSTS and Open Rails route building.
 
-License and source:
-TSRE5-SCOmod is distributed under the GNU General Public License version 3, following the original TSRE5 project by Piotr Gadecki / GokuMK and Eric's Trainsim.Com fork. See LICENSE.md.
+This branch is based on Eric's `TSRE8.006 baseline` from the `master` branch of `eric-from-trainsim/TSRE5-Trainsim.Com-Fork`.
 
-Source code for this build is available at:
-https://github.com/scottb613/TSRE5-SCOmod
+The goal is not to replace Eric's main TSRE work. This is a test branch for debugging, experimentation, and evaluation, with the hope that useful pieces can eventually be reviewed and folded upstream.
 
-Bundled runtime DLLs remain under their respective upstream licenses. See THIRD-PARTY-NOTICES.txt.
+## Branches
 
-Highlights:
-- improved track cuts and embankments
-- adjusted F-tool track-width behavior for practical 1/2/3 sizing
-- Shift+F terrain smoothing pass
-- selected-object Ctrl+F tile conforming for selected track/road objects
-- tile-level track, road, and water autopaint
-- real shoreline/water-edge terrain painting
-- route and tile terrtex paint reset tools
-- F2 terrain paint presets saved per route
-- 0-360 degree terrain texture rotation control
-- F2 seasonal selector: Summer/Spring/Autumn/Winter/Night
-- seasonal fallback refresh for terrain, objects, transfers, dynamic track, and forests
-- Mirror Season option for paired default/snow TERRTEX painting
-- old settings-file season/seasonalEditing controls disabled
-- texture paint resolution protection for 1024 terrtex files
-- forest/object stutter mitigation pass
-- startup guard to prevent multiple TSRE instances
-- fixed route-selection table refresh when switching MSTS roots
-- Restore Last Session button for reopening the last route, camera view, and editor layout
-- high-resolution branded startup splash with scaled loader/about display
-- clickable Status Window control panel for common editor state toggles
-- gentle delayed snapping for the Status and Navi windows
-- global uiScale support for larger editor fonts and proportionally wider panels
-- Place Guard validation with automatic undo, red status-panel error flash, and click/buzz WAV feedback
-- useful selected-object status readout with click-to-clear selection
-- TSRE SCOmod startup and editor titlebar branding
-- F12 Settings Editor cleanup with active settings.txt saving, timestamp backups, organized tabs, dark striped rows, key assignments, and full-sentence tooltips
-- F3 OSM Vector Map HTTPS/runtime fix with OpenSSL 3 DLLs
-- safer F3 OSM network failure handling to avoid crash-to-desktop
-- downloaded map imagery resolution set to 4096
-- embedded TSRE icon in the Windows executable
-- AddShortcutDesktop.cmd helper for creating a desktop shortcut
+- `tsre-scomod-stable` is the stable/rescue branch, currently tagged `v0.4`.
+- `tsre-scomod-wip` is the current work-in-progress branch with the latest tested local changes, currently tagged `v0.5`.
 
-See worklist.txt for the full forum-style summary.
-See fileEdit.txt for the code/project file edit ledger.
+## Highlights
 
-Seasonal TERRTEX note:
-TERRTEX painting only writes to default TERRTEX and TERRTEX/SNOW. Mirror Season applies the same brush/autopaint trace to the paired side, but only when a matching paired source texture exists. No matching snow/default texture means no mirror paint for that stroke. With Mirror Season off, TSRE still creates safe terrain.ace placeholders on the opposite side when needed so one-season painting does not leave blank tiles.
+- Added `code` build fixes for current MSYS2/MinGW tooling.
+- Improved `F` terrain conforming for track cuts and embankments.
+- Adjusted `F` track-width behavior so the 1/2/3 settings are more practical.
+- Added `Shift+F` terrain smoothing pass for selected track/ruler objects.
+- Added `Ctrl+F` selected-object tile-level terrain conforming for track/road objects.
+- Added `Alt+A` selected terrain tile patch selection for selecting all 256 terrain patches on the current tile.
+- Added `F2` `Conform DB` height brush mode for grade-following spot terrain cleanup along track and road databases.
+- Added `autopaint` tile-level tools for track, roads, and water.
+- Added `autopaint` water shoreline/water-edge terrain painting based on terrain/water contour detection.
+- Added `F2` TERRTEX route and tile reset tools for returning painted terrain tiles to `terrain.ace`.
+- Added `F2` route-local terrain paint presets for texture, brush size, intensity, brush shape, and rotation.
+- Added `F2` 0-360 degree terrain texture rotation control for seamless directional textures.
+- Added `F2` seasonal selector for Summer, Spring, Autumn, Winter, and Night.
+- Added `global` seasonal fallback refresh for terrain, route objects, transfers, dynamic track, and forest/polyforest geometry.
+- Fixed `global` fixed transfer object reload behavior when switching from Winter back to Summer.
+- Added `F2` `Mirror Season` button for paired default/snow TERRTEX painting with matching paired textures required.
+- Disabled `global` the old settings-file `season` / `seasonalEditing` controls so the `F2` selector is the active seasonal control.
+- Fixed `global` Protected editable TERRTEX 1024x1024 files from accidental downsampling while painting.
+- Added `view` `Forest Regions Toggle` stutter mitigation and a View menu toggle for Forest Regions.
+- Fixed `global` texture cache invalidation bug that caused severe lag and wrong texture reuse on large populated routes.
+- Added `load` single-instance protection.
+- Fixed `load` route-selection table refresh when switching MSTS root folders.
+- Added `windows` executable icon and `AddShortcutDesktop.cmd` helper.
+- Added `restore last session` on the `load` screen to reopen the last route, camera view, and editor window layout.
+- Added `load` high-resolution branded splash and scaled loader/about display so the banner is not cropped.
+- Converted the `status window` into a compact clickable control panel.
+- Added `status/navi window` gentle delayed snapping.
+- Matched the `navi window` color/readability scheme to the darker Status Window style.
+- Improved `object Panel` searching with `ALL` category defaults, enforced mutually exclusive Tracks/Roads/Other category filters for searches, and a `Reset` search button.
+- Improved `object Panel` Scale Rail grouping so family/type categories contain the individual lengths, radii, and variants.
+- Added `global` `uiScale` support for larger editor fonts and proportionally wider panels.
+- Added `global` sound feedback with standardized `SCOclick.wav`, `SCObuzz.wav`, and `SCOchirp.wav` files.
+- Added `status window` `Place Guard` validation to prevent spammed objects with automatic undo, and respective feedback.
+- Reworked `F12` Settings Editor with active `settings.txt` saving, timestamped backups, organized tabs, dark striped rows, key assignments, full-sentence tooltips, and preserved map API settings.
+- Updated `global` title bar to identify the build as `TSRE SCOmod v0.5`.
+- Fixed `F3` OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
+- Hardened `F3` OSM Vector Map loading so failed network replies do not crash the editor.
+- Set `F3` downloaded map imagery resolution to 4096 for clearer per-tile map output.
+- Added `dynamic track` GokuMK Flex improvements that replace the old straight-curve-straight-only Flex workflow with multi-section dynamic-track solving, improved graded/elevation joins based on solved path length, hidden debug popup behavior, fallback dynamic-track textures, and proper success/error sound feedback.
 
-Startup restore note:
-After TSRE closes normally, it writes lastSession.json under the user's AppData TSRE folder. The startup screen's Restore Last Session button reloads the last route, main/Navi/Status window positions, and camera view. Route paint preset JSON files are also stored under the AppData TSRE folder in route-specific subfolders.
+## Downloads
 
-Status window note:
-The Status Window now works as a compact clickable control panel for common editor states. The selected-object button reports the current broad selection type and clears the current selection when clicked.
+Executable test builds are intended to be published on the GitHub Releases page, not committed directly into the source tree.
 
-UI scaling note:
-The editor now supports a global uiScale setting. The packaged setting uses uiScale = 1.15. The recommended range is 1.00 to 1.25. This scales the main editor font, menus/dropdowns, startup screen, F2/F3 style panels, object list side panel, Status Window, and Navi Window.
+Download the current test ZIP from Releases when available. Keep this copy separate from any production TSRE install.
 
-Place Guard note:
-Place Guard validates object placement after TSRE performs its normal placement action. Rejected placements are automatically undone, the Status Window Place Guard button flashes ERROR for three seconds, and SCO_buzz.wav plays. Accepted placements play SCOclick.wav.
+The ZIP includes `AddShortcutDesktop.cmd`, which can create a desktop shortcut for the packaged `TSRE5.exe`.
 
-Current Place Guard rules:
-- all guarded placements must finish on the camera tile or one immediately adjacent tile
-- track-linked interactives, including signals and other track/road database items, must be started with the pointer within 3 meters of the target track or road database line
-- track-linked interactives must finish within 10 meters of the sampled database elevation
-- normal scenery/static objects must land on loaded terrain and within 1 meter above or below the terrain surface
-- track objects and dynamic track are allowed a wider edit tolerance: 50 meters below terrain to 100 meters above terrain
-- turning Place Guard off from the Status Window restores legacy placement behavior
+The ZIP also includes `LICENSE.md` and `THIRD-PARTY-NOTICES.txt`. TSRE5-SCOmod follows the original TSRE5 GPLv3 license; bundled runtime DLLs remain under their respective upstream licenses.
 
-Settings editor note:
-The F12 Settings Editor now follows the same organization as the cleaned settings.txt file. Saving writes the active settings.txt file instead of settings.txt.new, with a timestamped backup created first. Help text is now shown as full-sentence tooltips, and the Key Assignments tab provides a two-column shortcut reference.
+## Documentation
 
-Ctrl+F now requires one selected track or road object and conforms only that object's database vector where it crosses the current tile. The Status and Navi windows use a gentle delayed snap against nearby window frame edges. This work also includes global UI scaling, Place Guard placement validation, and the reorganized F12 Settings Editor.
+- `worklist.txt` contains the longer forum-style summary of the work.
+- `fileEdit.txt` lists the code/project files touched during the work.
+- `Published/` contains the release-facing README and copied summaries used for package/release notes.
 
-F3 map note:
-OSM Vector Map loading now includes the current OpenSSL 3 runtime DLLs and guards against failed HTTPS/HTTP/empty/non-XML replies. The package default mapImageResolution is 4096 for clearer per-tile map output.
+## Status
 
-Run TSRE5.exe from this folder, or run AddShortcutDesktop.cmd to create a desktop shortcut.
+This is not an official TSRE release. It is a working route-editor improvement branch for testing and discussion.
 

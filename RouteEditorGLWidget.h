@@ -113,6 +113,8 @@ public slots:
     void setCameraObject(GameObj* obj);
     void setMoveStep(float val);
     void statusPanelCommand(QString name);
+    void flexResult(bool success);
+    void focusEditor();
     void paintToolObj();
     void paintToolObjSelected();
     void paintToolTDB();

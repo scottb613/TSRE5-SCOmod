@@ -75,6 +75,7 @@ MSTSshadows = false               // simplified shadows when true
 newSymbols = true                 // true uses newer TSRE symbols; false uses older pyramids
 objectLod = 3000                  // 2000 is plenty for most routes
 railProfile = 0.7175, 0.7895      // rail edges for dynamic track display
+flexDebugWindow = false           // show the old Flex solver debug window
 shadowLowMapSize = 1024
 shadowMapSize = 2048
 shadowsEnabled = false            // affects performance if true

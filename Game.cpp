@@ -126,6 +126,9 @@ int Game::newRouteX = -5000;
 int Game::newRouteZ = 15000;
 
 bool Game::consoleOutput = false;
+bool Game::flexLogEnabled = false;
+bool Game::flexLogCandidates = false;
+QString Game::flexLogFile = "";
 int Game::fpsLimit = 0;
 bool Game::ortsEngEnable = true;
 bool Game::sortTileObjects = true;
@@ -254,6 +257,7 @@ int   Game::pyramid = 5;
 int   Game::maxAutoPlacement = 999;
 int   Game::imageMapsZoomOffset = 0;
 float Game::railProfile[] = {0.7175, 0.7895};
+bool Game::flexDebugWindow = false;
 
 float Game::convertDistance = 1;  /// EFO will set to feet = 3.28084 if useImperial is set to true;
 QString Game::convertUnitD = " m";
@@ -1030,11 +1034,15 @@ void Game::load() {
                  qDebug() << "Symbol = false";
              }
         }       
+        if(setname =="flexdebugwindow")
+            flexDebugWindow = ((setval == "true") or (setval == "1") or (setval == "on"));
         if(setname =="railprofile")
         {             
                 QStringList railList = setval.split(",");
-                railProfile[0] = railList[0].toDouble();
-                railProfile[1] = railList[1].toDouble();
+                if(railList.length() >= 2){
+                    railProfile[0] = railList[0].toDouble();
+                    railProfile[1] = railList[1].toDouble();
+                }
         }
         
         if(setname =="useimperial"){
@@ -1522,6 +1530,7 @@ void Game::CreateNewSettingsFile(){
     out << "objectLod = 3000                  // 2000 is plenty for most purposes   \n " ; 
     out << "oglDefaultLineWidth = 1           // width of standard lines  \n " ; 
     out << "railProfile = 0.7175, 0.7895      // rail edges for dynamic track  \n " ; 
+    out << "flexDebugWindow = false           // show the old Flex solver debug window  \n " ; 
     out << "renderTrItems = false             // Show the black markers for TrItems  \n " ; 
     out << "sectionLineHeight = 5.0           // grey section line height   \n " ; 
     out << "selectedColor = #B612FF           // object selection line color  \n " ; 

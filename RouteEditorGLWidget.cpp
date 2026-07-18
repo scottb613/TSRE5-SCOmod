@@ -1102,8 +1102,10 @@ void RouteEditorGLWidget::playPlacementSound(QString fileName) {
         return;
 #ifdef Q_OS_WIN
     QString soundPath = QCoreApplication::applicationDirPath() + "/content/" + fileName;
-    if (QFile::exists(soundPath))
+    if (QFile::exists(soundPath)) {
+        ::PlaySoundW(NULL, NULL, 0);
         ::PlaySoundW(reinterpret_cast<const wchar_t*>(soundPath.utf16()), NULL, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+    }
 #else
     Q_UNUSED(fileName);
 #endif
@@ -1120,6 +1122,18 @@ void RouteEditorGLWidget::showModeChange() {
 void RouteEditorGLWidget::showPlacementGuardError() {
     playPlacementSound("SCObuzz.wav");
     emit updStatus(QString("guarderror"), QString("ERROR"));
+}
+
+void RouteEditorGLWidget::flexResult(bool success) {
+    suppressNextEnableToolSound = true;
+    if(success)
+        showPlacementSuccess();
+    else
+        showPlacementGuardError();
+}
+
+void RouteEditorGLWidget::focusEditor() {
+    setFocus();
 }
 
 void RouteEditorGLWidget::resizeGL(int w, int h) {
@@ -1866,7 +1880,8 @@ void RouteEditorGLWidget::mouseMoveEvent(QMouseEvent *event) {
 
 void RouteEditorGLWidget::enableTool(QString name) {
     if(Game::debugOutput) qDebug() << name;
-    bool changed = toolEnabled != name;
+    QString oldTool = toolEnabled;
+    bool changed = oldTool != name;
     toolEnabled = name;
     //if(toolEnabled == "placeTool" || toolEnabled == "selectTool" || toolEnabled == "autoPlaceSimpleTool"){
     resizeTool = false;
@@ -1877,7 +1892,7 @@ void RouteEditorGLWidget::enableTool(QString name) {
     if(changed){
         if(suppressNextEnableToolSound)
             suppressNextEnableToolSound = false;
-        else
+        else if(name != "FlexTool" && !(oldTool == "FlexTool" && name == "selectTool"))
             showModeChange();
     } else {
         suppressNextEnableToolSound = false;
