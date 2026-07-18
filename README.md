@@ -37,11 +37,12 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Fixed `load` route-selection table refresh when switching MSTS root folders.
 - Added `windows` executable icon and `AddShortcutDesktop.cmd` helper.
 - Added `restore last session` on the `load` screen to reopen the last route, camera view, and editor window layout.
-- Added `load` high-resolution branded splash and scaled loader/about display so the banner is not cropped.
+- Added `load` high-resolution branded splash and scaled loader/about display so the banner is not cropped, with contributor credit for Trainsim.com/Open Rails beneath the TSRE mark.
 - Converted the `status window` into a compact clickable control panel.
 - Added `status/navi window` gentle delayed snapping.
 - Matched the `navi window` color/readability scheme to the darker Status Window style.
 - Improved `object Panel` searching with `ALL` category defaults, enforced mutually exclusive Tracks/Roads/Other category filters for searches, and a `Reset` search button.
+- Improved `object Panel` Scale Rail grouping so family/type categories contain the individual lengths, radii, and variants.
 - Added `global` `uiScale` support for larger editor fonts and proportionally wider panels.
 - Added `global` sound feedback with standardized `SCOclick.wav`, `SCObuzz.wav`, and `SCOchirp.wav` files.
 - Added `status window` `Place Guard` validation to prevent spammed objects with automatic undo, and respective feedback.

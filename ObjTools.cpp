@@ -25,6 +25,37 @@ static int scaledUiSize(int base){
     return qRound(base * qMax(1.0f, Game::uiScale));
 }
 
+static QString tdbCategoryLabel(const QString& filename, bool roadShape){
+    if(filename.startsWith("SR_", Qt::CaseInsensitive)){
+        const QString scaleName = filename.mid(3);
+        if(roadShape){
+            const int separator = scaleName.indexOf('_');
+            const QString family = (separator > 0 ? scaleName.left(separator) : scaleName);
+            return family.isEmpty() ? QString("Scale Road") : QString("Scale Road ") + family;
+        }
+
+        QRegularExpression railTracks("^((?:\\d+[tx])|xt)([A-Za-z]+)", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpressionMatch match = railTracks.match(scaleName);
+        if(match.hasMatch()){
+            const QString prefix = QString("sr") + match.captured(1).toLower();
+            const QString descriptor = match.captured(2);
+            return descriptor.isEmpty() ? prefix : prefix + " " + descriptor;
+        }
+
+        const int separator = scaleName.indexOf('_');
+        const QString family = (separator > 0 ? scaleName.left(separator) : scaleName);
+        return family.isEmpty() ? QString("Scale Rail") : QString("Scale Rail ") + family;
+    }
+
+    return filename.left(3).toLower();
+}
+
+static QString tdbCategoryKey(const QString& label, bool roadShape){
+    QString key = label.toLower();
+    key.replace(QRegularExpression("[^a-z0-9]+"), "_");
+    return QString("#TDB#%1/%2").arg(roadShape ? "road" : "track", key);
+}
+
 ObjTools::ObjTools(QString name)
     : QWidget(){
     //QRadioButton *radio1 = new QRadioButton(tr("&Radio button 1"));
@@ -283,7 +314,6 @@ void ObjTools::routeLoaded(Route* a){
     route->snapableOnlyRotation = Game::snapableOnlyRot;
        
     QStringList hash;
-    QStringList hash2;
     QMapIterator<QString, QVector<Ref::RefItem>> i(route->ref->refItems);
     while (i.hasNext()) {
         i.next();
@@ -298,7 +328,8 @@ void ObjTools::routeLoaded(Route* a){
     TrackShape * track;
 
     hash.clear();
-    hash2.clear();
+    QMap<QString, QString> trackCategoryKeys;
+    QMap<QString, QString> roadCategoryKeys;
 
     QDir globalShapes(Game::root+"/global/shapes");
     QStringList globalShapesList;
@@ -312,21 +343,19 @@ void ObjTools::routeLoaded(Route* a){
         if(track->dyntrack) continue;
         if(Game::ignoreMissingGlobalShapes)
             if(!globalShapesList.contains(track->filename, Qt::CaseInsensitive)) continue;
-        if(track->roadshape){
-            hash2.append(track->filename.left(3).toLower());
-        } else {
-            //i++;
-            //if(track->filename.left(3).toLower() == "a1t")
-            //    a1ti = i;
-            hash.append(track->filename.left(3).toLower());
-        }
+        const QString categoryLabel = tdbCategoryLabel(track->filename, track->roadshape);
+        const QString categoryKey = tdbCategoryKey(categoryLabel, track->roadshape);
+        if(track->roadshape)
+            roadCategoryKeys.insert(categoryLabel, categoryKey);
+        else
+            trackCategoryKeys.insert(categoryLabel, categoryKey);
         Ref::RefItem item;
         item.filename.push_back(track->filename);
         item.description = track->filename;
         item.clas = "";
         item.type = "trackobj";
         item.value = track->id;
-        route->ref->refItems[QString("#TDB#")+track->filename.left(3).toLower()].push_back(item);
+        route->ref->refItems[categoryKey].push_back(item);
         //qDebug() << QString::fromStdString(it->first) << " " << it->second.size();
         //if(types[hash] != 1){
         //    refTrack.addItem(QString::fromStdString(hash));//, QVariant(QString::fromStdString(hash)));
@@ -334,16 +363,18 @@ void ObjTools::routeLoaded(Route* a){
         //}
       //std::cout << " " << it->first << ":" << it->second;
     }
-    hash.sort(Qt::CaseInsensitive);
-    hash.removeDuplicates();    
     refTrack.addItem("ALL");
-    refTrack.addItems(hash);
+    for(QMapIterator<QString, QString> category(trackCategoryKeys); category.hasNext(); ){
+        category.next();
+        refTrack.addItem(category.key(), category.value());
+    }
     refTrack.setMaxVisibleItems(35);
     refTrack.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    hash2.sort(Qt::CaseInsensitive);
-    hash2.removeDuplicates();
     refRoad.addItem("ALL");
-    refRoad.addItems(hash2);
+    for(QMapIterator<QString, QString> category(roadCategoryKeys); category.hasNext(); ){
+        category.next();
+        refRoad.addItem(category.key(), category.value());
+    }
     refRoad.setMaxVisibleItems(35);
     refRoad.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     //refTrack.s .sortItems(Qt::AscendingOrder);
@@ -521,6 +552,7 @@ void ObjTools::routeLoaded(Route* a){
 }
 
 void ObjTools::refClassSelected(const QString & text){
+    resetCategoryCombos(NULL);
     populateObjectListForKey(text);
 }
 
@@ -528,14 +560,19 @@ void ObjTools::refSearchSelected(const QString & text){
     QString key = activeCategoryKey();
     if(key.length() > 0)
         populateObjectListForKey(key, text);
+    else if(refClass.currentText().length() > 0)
+        populateObjectListForKey(refClass.currentText(), text);
     else
-        populateAllObjectList(text);
+        refList.clear();
 }
 
 void ObjTools::resetObjectSearch(){
     resetCategoryCombos(NULL);
     searchBox.clear();
-    populateAllObjectList();
+    if(refClass.currentText().length() > 0)
+        populateObjectListForKey(refClass.currentText());
+    else
+        refList.clear();
 }
 
 void ObjTools::resetCategoryCombos(QComboBox* keepActive){
@@ -557,9 +594,9 @@ void ObjTools::resetCategoryCombos(QComboBox* keepActive){
 
 QString ObjTools::activeCategoryKey() const{
     if(refTrack.currentText() != "ALL")
-        return QString("#TDB#") + refTrack.currentText();
+        return refTrack.currentData().toString();
     if(refRoad.currentText() != "ALL")
-        return QString("#TDB#") + refRoad.currentText();
+        return refRoad.currentData().toString();
     if(refOther.currentText() != "ALL")
         return QString("#TSRE#") + refOther.currentText().toLower();
     return QString();
@@ -604,7 +641,7 @@ void ObjTools::refTrackSelected(const QString & text){
     if(text == "ALL")
         refSearchSelected(searchBox.text());
     else
-        populateObjectListForKey(QString("#TDB#")+text, searchBox.text());
+        populateObjectListForKey(refTrack.currentData().toString(), searchBox.text());
 }
 
 void ObjTools::refRoadSelected(const QString & text){
@@ -613,7 +650,7 @@ void ObjTools::refRoadSelected(const QString & text){
     if(text == "ALL")
         refSearchSelected(searchBox.text());
     else
-        populateObjectListForKey(QString("#TDB#")+text, searchBox.text());
+        populateObjectListForKey(refRoad.currentData().toString(), searchBox.text());
 }
 
 void ObjTools::refOtherSelected(const QString & text){
