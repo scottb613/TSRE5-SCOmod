@@ -1115,7 +1115,7 @@ void RouteEditorGLWidget::showPlacementSuccess() {
 }
 
 void RouteEditorGLWidget::showModeChange() {
-    playPlacementSound("SCOchirp.wav");
+    playPlacementSound("SCOpress.wav");
 }
 
 void RouteEditorGLWidget::userModeChangeSound() {
@@ -1128,10 +1128,22 @@ void RouteEditorGLWidget::showPlacementGuardError() {
 }
 
 void RouteEditorGLWidget::flexResult(bool success) {
-    if(success)
+    if(success) {
+        // Flex changes the generated sections, so rebuild this object's TDB
+        // entry before reporting success. Normal track joins use this same
+        // database path; leaving the old Dyntrack section cached produces
+        // endpoint gaps and duplicate-looking TDB markers.
+        if(route != NULL && selectedObj != NULL &&
+           selectedObj->typeObj == GameObj::worldobj &&
+           ((WorldObj*)selectedObj)->type == "dyntrack") {
+            WorldObj* dyntrack = (WorldObj*)selectedObj;
+            route->removeTrackFromTDB(dyntrack);
+            route->addToTDB(dyntrack);
+        }
         showPlacementSuccess();
-    else
+    } else {
         showPlacementGuardError();
+    }
 }
 
 void RouteEditorGLWidget::focusEditor() {

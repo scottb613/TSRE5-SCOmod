@@ -56,6 +56,15 @@ static QString tdbCategoryKey(const QString& label, bool roadShape){
     return QString("#TDB#%1/%2").arg(roadShape ? "road" : "track", key);
 }
 
+static bool isDynamicTrackRefGroup(const QString& key, const QVector<Ref::RefItem>& items){
+    if(key.contains("dyntrack", Qt::CaseInsensitive) || key.contains("dynamic", Qt::CaseInsensitive))
+        return true;
+    for(const Ref::RefItem& item : items)
+        if(item.type.compare("dyntrack", Qt::CaseInsensitive) == 0)
+            return true;
+    return false;
+}
+
 ObjTools::ObjTools(QString name)
     : QWidget(){
     //QRadioButton *radio1 = new QRadioButton(tr("&Radio button 1"));
@@ -66,6 +75,12 @@ ObjTools::ObjTools(QString name)
     if(objectPanelFont.pointSizeF() > 0)
         objectPanelFont.setPointSizeF(objectPanelFont.pointSizeF() * 1.12);
     setFont(objectPanelFont);
+    setStyleSheet(
+        "QCheckBox { color: white; }"
+        "QCheckBox::indicator { width: 13px; height: 13px; background-color: #202020; border: 1px solid #b0b0b0; }"
+        "QCheckBox::indicator:hover { border: 1px solid #f08200; }"
+        "QCheckBox::indicator:checked { background-color: #f08200; border: 1px solid #f08200; }"
+    );
     buttonTools["selectTool"] = new QPushButton("Select", this);
     buttonTools["placeTool"] = new QPushButton("Place New", this);
     buttonTools["autoPlaceSimpleTool"] = new QPushButton("Auto Place", this);
@@ -92,8 +107,19 @@ ObjTools::ObjTools(QString name)
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
+    auto addRule = [vbox]() {
+        QWidget *ruleRow = new QWidget;
+        ruleRow->setFixedHeight(7);
+        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
+        ruleLayout->setContentsMargins(6,3,6,3);
+        QFrame *rule = new QFrame;
+        rule->setFixedHeight(1);
+        rule->setStyleSheet("background-color: #565656; border: none;");
+        ruleLayout->addWidget(rule);
+        vbox->addWidget(ruleRow);
+    };
     QLabel *label1 = new QLabel("Objects:");
-    label1->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label1->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label1->setContentsMargins(3,0,0,0);
     vbox->addWidget(label1);
     QFormLayout *vlist = new QFormLayout;
@@ -122,6 +148,7 @@ ObjTools::ObjTools(QString name)
     searchBox.setMinimumHeight(scaledUiSize(20));
     vbox->addItem(vlist);
     vbox->addWidget(&refList);
+    addRule();
     QGridLayout *vlist3 = new QGridLayout;
     vlist3->setSpacing(2);
     vlist3->setContentsMargins(3,0,1,0);    
@@ -212,11 +239,12 @@ ObjTools::ObjTools(QString name)
     vbox->addWidget(&advancedPlacementWidget);
     advancedPlacementWidget.hide();
     
-    stickToTDB.setText("Stick To Target");
+    stickToTDB.setText("Stick Target");
     stickToTDB.setChecked(false);
     //vbox->addWidget(&stickToTDB);
-    QLabel *label2 = new QLabel("Recent items:");
-    label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    addRule();
+    QLabel *label2 = new QLabel("Recent Items:");
+    label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label2->setContentsMargins(3,0,0,0);
     //refClasssetMargin(0);
     //refTrack->sets >setMargin(0);
@@ -289,6 +317,13 @@ ObjTools::ObjTools(QString name)
     
     QObject::connect(&stickToTDB, SIGNAL(stateChanged(int)),
                       this, SLOT(stickToTDBEnabled(int)));
+
+    // Sound only for an actual button activation. Programmatic checked-state
+    // updates do not emit clicked(), so they remain silent.
+    const QList<QPushButton*> panelButtons = findChildren<QPushButton*>();
+    for(QPushButton *button : panelButtons)
+        QObject::connect(button, SIGNAL(clicked()),
+                         this, SIGNAL(userModeChanged()), Qt::UniqueConnection);
 }
 
 ObjTools::~ObjTools() {
@@ -324,7 +359,10 @@ void ObjTools::routeLoaded(Route* a){
     }
     hash.sort(Qt::CaseInsensitive);
     hash.removeDuplicates();
-    refClass.addItems(hash);
+    for(const QString& key : hash){
+        const bool dynamicTrack = isDynamicTrackRefGroup(key, route->ref->refItems[key]);
+        refClass.addItem(dynamicTrack ? "<Dynamic Track>" : key, key);
+    }
     refClass.setMaxVisibleItems(35);
     refClass.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
@@ -556,7 +594,10 @@ void ObjTools::routeLoaded(Route* a){
 
 void ObjTools::refClassSelected(const QString & text){
     resetCategoryCombos(NULL);
-    populateObjectListForKey(text);
+    QString key = refClass.currentData().toString();
+    if(key.isEmpty())
+        key = text;
+    populateObjectListForKey(key);
 }
 
 void ObjTools::refSearchSelected(const QString & text){
@@ -564,7 +605,7 @@ void ObjTools::refSearchSelected(const QString & text){
     if(key.length() > 0)
         populateObjectListForKey(key, text);
     else if(refClass.currentText().length() > 0)
-        populateObjectListForKey(refClass.currentText(), text);
+        populateObjectListForKey(refClass.currentData().toString().isEmpty() ? refClass.currentText() : refClass.currentData().toString(), text);
     else
         refList.clear();
 }
@@ -573,7 +614,7 @@ void ObjTools::resetObjectSearch(){
     resetCategoryCombos(NULL);
     searchBox.clear();
     if(refClass.currentText().length() > 0)
-        populateObjectListForKey(refClass.currentText());
+        populateObjectListForKey(refClass.currentData().toString().isEmpty() ? refClass.currentText() : refClass.currentData().toString());
     else
         refList.clear();
 }
@@ -610,11 +651,12 @@ void ObjTools::populateObjectListForKey(QString key, QString searchText){
     currentItemList.clear();
     int idx = 0;
 
+    const bool dynamicTrack = isDynamicTrackRefGroup(key, route->ref->refItems[key]);
     for (int it = 0; it < route->ref->refItems[key].size(); ++it ){
         Ref::RefItem* item = &route->ref->refItems[key][it];
         if(searchText.length() > 0 && !item->description.contains(searchText, Qt::CaseInsensitive))
             continue;
-        new QListWidgetItem ( item->description, &refList, idx++ );
+        new QListWidgetItem ( dynamicTrack ? "Dynamic Track" : item->description, &refList, idx++ );
         currentItemList.push_back(item);
     }
     refList.sortItems(Qt::AscendingOrder);
@@ -692,7 +734,6 @@ void ObjTools::selectToolEnabled(bool val){
     }
     else
         emit enableTool("");
-    emit userModeChanged();
 }
 
 void ObjTools::placeToolEnabled(bool val){
@@ -703,7 +744,6 @@ void ObjTools::placeToolEnabled(bool val){
     }
     else
         emit enableTool("");
-    emit userModeChanged();
 }
 
 void ObjTools::autoPlacementButtonEnabled(bool val){
@@ -711,7 +751,6 @@ void ObjTools::autoPlacementButtonEnabled(bool val){
         emit enableTool("autoPlaceSimpleTool");
     else
         emit enableTool("");
-    emit userModeChanged();
 }
 
 void ObjTools::resetRotationButtonEnabled(){
@@ -726,9 +765,11 @@ void ObjTools::itemSelected(Ref::RefItem* item){     /// EFO Item selected on th
     if(Game::debugOutput)
     {QString selectedFilename = item->currentFilename;
     if(Game::debugOutput) qDebug() << "ObjTools548:" << "selected: " << selectedFilename;    
-    }   
+    }
     QString text;
-    if(item->description.length() > 1) 
+    if(item->type.compare("dyntrack", Qt::CaseInsensitive) == 0)
+        text = "Dynamic Track";
+    else if(item->description.length() > 1)
         text = item->description;
     else if (item->getShapeName().length() > 1)
         text = item->getShapeName();

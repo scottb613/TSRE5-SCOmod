@@ -18,9 +18,13 @@
 #include "Coords.h"
 #include "HeightWindow.h"
 
+static int scaledUiSize(int base){
+    return qRound(base * qMax(1.0f, Game::uiScale));
+}
+
 GeoTools::GeoTools(QString name)
     : QWidget(){
-    setFixedWidth(250);
+    setFixedWidth(scaledUiSize(250));
     int row = 0;
     
     buttonTools["mapTileShowTool"] = new QPushButton("Show/Hide Map", this);

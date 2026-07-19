@@ -86,6 +86,8 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     if(winPos.count() > 1) this->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
     snapTimer.setSingleShot(true);
     QObject::connect(&snapTimer, SIGNAL(timeout()), this, SLOT(applyWindowSnap()));
+    guardErrorTimer.setSingleShot(true);
+    QObject::connect(&guardErrorTimer, SIGNAL(timeout()), this, SLOT(clearGuardError()));
 
 
     /// EFO New
@@ -263,7 +265,7 @@ void StatusWindow::clearGuardError(){
 
 void StatusWindow::recStatus(QString statName, QString statVal ){
     // These get emitted from REGLW triggers and update here
-    if(statName.contains("guarderror")) { guardErrorActive = true; status12.setText("ERROR"); status12.setStyleSheet(statR); QTimer::singleShot(3000, this, SLOT(clearGuardError())); return; }
+    if(statName.contains("guarderror")) { guardErrorActive = true; status12.setText("ERROR"); status12.setStyleSheet(statR); guardErrorTimer.start(3000); return; }
     if(statName.contains("camera"))    { statVal.replace("Camera Unlocked", "Camera: FREE"); statVal.replace("Camera Locked", "Camera: LOCK"); statVal.replace("Camera FREE", "Camera: FREE"); statVal.replace("Camera LOCK", "Camera: LOCK"); status0.setText(statVal); if(statVal.endsWith("LOCK")) status0.setStyleSheet(statY); else status0.setStyleSheet(statS);  }
     if(statName.contains("autotdb"))   { status1.setText(statVal); if(statVal.endsWith("ON")) status1.setStyleSheet(statS); else status1.setStyleSheet(statY);  }
     if(statName.contains("brush"))     { status2.setText(statVal); if(statVal.endsWith("+")) status2.setStyleSheet(statG); else if(statVal.endsWith("-")) status2.setStyleSheet(statY); else status2.setStyleSheet(statS); }

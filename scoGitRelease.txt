@@ -43,15 +43,18 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Matched the `navi window` color/readability scheme to the darker Status Window style.
 - Improved `object Panel` searching with `ALL` category defaults, enforced mutually exclusive Tracks/Roads/Other category filters for searches, and a `Reset` search button.
 - Improved `object Panel` Scale Rail grouping so family/type categories contain the individual lengths, radii, and variants.
+- Refined `object/property panels` with consistent dark controls, bold orange Title Case headings, inset category separators, orange checked states, clearer object names, and standardized button feedback.
 - Added `global` `uiScale` support for larger editor fonts and proportionally wider panels.
-- Added `global` sound feedback with standardized `SCOclick.wav`, `SCObuzz.wav`, and `SCOchirp.wav` files.
+- Added `global` sound feedback with standardized `SCOclick.wav`, `SCObuzz.wav`, and `SCOpress.wav` files.
 - Added `status window` `Place Guard` validation to prevent spammed objects with automatic undo, and respective feedback.
 - Updated `global` title bar to identify the build as `TSRE SCOmod`.
 - Reworked `F12` Settings Editor to save the active settings.txt with timestamp backups, organized tabs, dark striped rows, key assignments, and full-sentence tooltips.
 - Fixed `F3` OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened `F3` OSM Vector Map loading so failed network replies do not crash the editor.
 - Set `F3` downloaded map imagery resolution to 4096 for clearer per-tile map output.
-- Added `dynamic track` GokuMK Flex improvements that replace the old C-curve straight-curve-straight-only Flex workflow with multi-section dynamic-track solving, improved graded/elevation joins based on solved path length, hidden debug popup behavior, fallback dynamic-track textures, and proper success/error sound feedback. The new `dynamic track` supports full S-curve connections.
+- Added `dynamic track` GokuMK's Classic Flex foundation for the familiar Straight-Curve-Straight connection workflow.
+- Added `dynamic track` NextGen Flex as a separate Straight-Curve-Straight-Curve-Straight mode for compound and full S-curve connections, with Classic/NextGen selection in the Dynamic Track panel.
+- Improved `dynamic track` editing reliability with rebuilt track-database geometry after Flex, synchronized elevation data, length/curve readouts, clearer section names, consistent Dynamic Track naming, and refined success/error feedback.
 
 ## Downloads
 

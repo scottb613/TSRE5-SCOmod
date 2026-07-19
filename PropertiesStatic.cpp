@@ -19,8 +19,14 @@ PropertiesStatic::PropertiesStatic(){
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
-    infoLabel = new QLabel("Static:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    auto addRule = [vbox]() {
+        QFrame *rule = new QFrame;
+        rule->setFrameShape(QFrame::HLine);
+        rule->setFrameShadow(QFrame::Sunken);
+        vbox->addWidget(rule);
+    };
+    infoLabel = new QLabel("Object: Static Object");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     QFormLayout *vlist = new QFormLayout;
@@ -33,6 +39,7 @@ PropertiesStatic::PropertiesStatic(){
     vlist->addRow("Tile X:",&this->tX);
     vlist->addRow("Tile Z:",&this->tY);
     vbox->addItem(vlist);
+    addRule();
     QLabel * label;
     label = new QLabel("FileName:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
@@ -118,6 +125,7 @@ PropertiesStatic::PropertiesStatic(){
     posRotList->addWidget(qRot90, 3, 1);
     posRotList->addWidget(transform, 4, 0, 1, 2);
     vbox->addItem(posRotList);
+    addRule();
     
     label = new QLabel("Detail Level:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
@@ -143,6 +151,7 @@ PropertiesStatic::PropertiesStatic(){
     detailLevelView->addWidget(&enableCustomDetailLevel, 1, 0);
     detailLevelView->addWidget(&customDetailLevel, 1, 1);
     vbox->addItem(detailLevelView);
+    addRule();
     
     label = new QLabel("Flags:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
@@ -163,6 +172,7 @@ PropertiesStatic::PropertiesStatic(){
     flagslView->addWidget(copyFlags,0,0);
     flagslView->addWidget(pasteFlags,0,1);
     vbox->addItem(flagslView);
+    addRule();
     checkboxAnim.setText("Animate Object");
     checkboxTerrain.setText("Terrain Object");
     vbox->addWidget(&checkboxAnim);
@@ -181,6 +191,7 @@ PropertiesStatic::PropertiesStatic(){
     QObject::connect(&cShadowType, SIGNAL(currentIndexChanged(int)),
                       this, SLOT(cShadowTypeEdited(int)));
 
+    addRule();
     label = new QLabel("MSTS Collision:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
     label->setContentsMargins(3,0,0,0);
@@ -199,7 +210,8 @@ PropertiesStatic::PropertiesStatic(){
     QObject::connect(resetFlags, SIGNAL(released()),
                       this, SLOT(removeCollisionsEnabled()));
     vbox->addWidget(resetFlags);
-    label = new QLabel("Position & Rotation:");
+    addRule();
+    label = new QLabel("Actions:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
@@ -222,7 +234,7 @@ void PropertiesStatic::showObj(GameObj* obj){
     }
     worldObj = (WorldObj*)obj;
     
-    this->infoLabel->setText("Object: "+worldObj->type);
+    this->infoLabel->setText("Object: Static Object");
     this->fileName.setText(worldObj->fileName);
     
     this->uid.setText(QString::number(worldObj->UiD, 10));

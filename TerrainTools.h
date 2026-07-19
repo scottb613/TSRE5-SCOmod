@@ -30,6 +30,7 @@ public slots:
     void heightToolEnabled(bool val);
     void paintColorToolEnabled(bool val);
     void paintTexToolEnabled(bool val);
+    void mirrorSeasonEnabled(bool val);
     void pickTexToolEnabled(bool val);
     void putTexToolEnabled(bool val);
     void waterTerrToolEnabled(bool val);
@@ -111,6 +112,7 @@ private:
     QPushButton* presetRemove;
     
     QPushButton* colorw;
+    QPushButton* mirrorSeason;
     QPushButton* resetDefaults;
     QPushButton* resetRouteTerrtex;
     QPushButton* setPinPoint;    

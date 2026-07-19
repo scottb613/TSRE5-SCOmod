@@ -18,6 +18,17 @@
 QString PropertiesAbstract::ElevTypeName = "Permille ‰";
 
 PropertiesAbstract::PropertiesAbstract() : QWidget() {
+    setStyleSheet(
+        "QWidget { background-color: #303030; color: white; }"
+        "QPushButton { background-color: #555555; color: white; border: 1px solid #888; }"
+        "QPushButton:hover { background-color: #666666; }"
+        "QPushButton:pressed { background-color: #707070; }"
+        "QLineEdit, QComboBox { background-color: #202020; color: white; border: 1px solid #666; }"
+        "QCheckBox { color: white; }"
+        "QCheckBox::indicator { width: 13px; height: 13px; background-color: #202020; border: 1px solid #b0b0b0; }"
+        "QCheckBox::indicator:hover { border: 1px solid #f08200; }"
+        "QCheckBox::indicator:checked { background-color: #f08200; border: 1px solid #f08200; }"
+    );
     foreach (QObject *child, children()) {
         if (child->isWidgetType()) {
             child->installEventFilter(this);
@@ -223,4 +234,12 @@ void PropertiesAbstract::rtransformEnabled(){
         Undo::SinglePushWorldObjData(worldObj);
         worldObj->randomTransform(transformWindow.getTransform());
     }
+}
+
+void PropertiesAbstract::showEvent(QShowEvent *event){
+    QList<QPushButton*> buttons = findChildren<QPushButton*>();
+    foreach (QPushButton *button, buttons){
+        QObject::connect(button, SIGNAL(clicked()), this, SIGNAL(userButtonPressed()), Qt::UniqueConnection);
+    }
+    QWidget::showEvent(event);
 }

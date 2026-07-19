@@ -40,6 +40,7 @@ public slots:
     
 signals:
     void enableTool(QString val);
+    void userModeChanged();
     void setMoveStep(float val);
     void flexResult(bool success);
     
@@ -53,6 +54,10 @@ private:
     QSignalMapper dyntrackChSect;
     QSignalMapper dyntrackSect;
     QLineEdit eSectionIdx;
+    QLineEdit eLength;
+    QLineEdit eCurveCount;
+    QRadioButton flexNextGen;
+    QRadioButton flexClassic;
     
     QComboBox elevType;
     QLineEdit elevStep;

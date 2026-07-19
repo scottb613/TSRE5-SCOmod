@@ -25,9 +25,13 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+static int scaledUiSize(int base){
+    return qRound(base * qMax(1.0f, Game::uiScale));
+}
+
 TerrainTools::TerrainTools(QString name)
     : QWidget(){
-    setFixedWidth(250);
+    setFixedWidth(scaledUiSize(250));
     int row = 0;
     
     texPreview = new QPixmap(192,192);

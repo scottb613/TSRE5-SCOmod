@@ -78,6 +78,8 @@ float DynTrackObj::getElevation(){
 }
 
 void DynTrackObj::setElevation(float prom){
+    // Keep the serialized Dyntrack elevation in sync with the rotation applied below.
+    elevation = prom;
     float * q = qDirection;
     float vect[3];
     vect[0] = 0; vect[1] = 0; vect [2] = 1000;

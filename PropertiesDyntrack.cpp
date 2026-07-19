@@ -15,7 +15,8 @@
 #include "GLMatrix.h"
 
 PropertiesDyntrack::PropertiesDyntrack() {
-    buttonTools["FlexTool"] = new QPushButton("Flex", this);
+    buttonTools["FlexTool"] = new QPushButton("Auto-Flex", this);
+    buttonTools["FlexTool"]->setStyleSheet("QPushButton { background-color: #555555; color: white; border: 1px solid #888; } QPushButton:hover { background-color: #666666; } QPushButton:pressed { background-color: #707070; }");
     QMapIterator<QString, QPushButton*> i(buttonTools);
     while (i.hasNext()) {
         i.next();
@@ -25,9 +26,20 @@ PropertiesDyntrack::PropertiesDyntrack() {
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
-    
-    infoLabel = new QLabel("DynTrack:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    this->setStyleSheet(
+        "QWidget { background-color: #303030; color: white; }"
+        "QPushButton { background-color: #555555; color: white; border: 1px solid #888; }"
+        "QPushButton:hover { background-color: #666666; }"
+        "QPushButton:pressed { background-color: #707070; }"
+        "QRadioButton, QCheckBox, QLineEdit, QComboBox {"
+        " background-color: #202020; color: white; border: 1px solid #666; }"
+        "QCheckBox::indicator { width: 13px; height: 13px; background-color: #202020; border: 1px solid #b0b0b0; }"
+        "QCheckBox::indicator:hover { border: 1px solid #f08200; }"
+        "QCheckBox::indicator:checked { background-color: #f08200; border: 1px solid #f08200; }"
+    );
+
+    infoLabel = new QLabel("Object: Dynamic Track");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     QFormLayout *vlist = new QFormLayout;
@@ -37,19 +49,62 @@ PropertiesDyntrack::PropertiesDyntrack() {
     this->tX.setDisabled(true);
     this->tY.setDisabled(true);
     this->eSectionIdx.setDisabled(true);
+    this->eLength.setDisabled(true);
+    this->eCurveCount.setDisabled(true);
     vlist->addRow("UiD:",&this->uid);
     vlist->addRow("Tile X:",&this->tX);
     vlist->addRow("Tile Z:",&this->tY);
-    vlist->addRow("TrackShape:",&this->eSectionIdx);
+    vlist->addRow("Index:",&this->eSectionIdx);
+    vlist->addRow("Length:",&this->eLength);
+    vlist->addRow("Curves:",&this->eCurveCount);
     vbox->addItem(vlist);
-    
+
+    auto addRule = [vbox]() {
+        QWidget *ruleRow = new QWidget;
+        ruleRow->setFixedHeight(7);
+        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
+        ruleLayout->setContentsMargins(6,3,6,3);
+        QFrame *rule = new QFrame;
+        rule->setFixedHeight(1);
+        rule->setStyleSheet("background-color: #565656; border: none;");
+        ruleLayout->addWidget(rule);
+        vbox->addWidget(ruleRow);
+    };
+    addRule();
+
+    QLabel *flexModeLabel = new QLabel("Flex Mode:");
+    flexModeLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    flexModeLabel->setContentsMargins(3,0,0,0);
+    vbox->addWidget(flexModeLabel);
+    flexNextGen.setText("NextGen Flex S-C-S-C-S");
+    flexNextGen.setChecked(true);
+    flexNextGen.setContentsMargins(6,0,0,0);
+    flexNextGen.setToolTip("Allows the solver to use up to two curve sections for compound and S-curve connections.");
+    flexClassic.setText("Classic Flex S-C-S");
+    flexClassic.setContentsMargins(6,0,0,0);
+    flexClassic.setToolTip("Restricts the solver to a single curve between two straight sections.");
+    vbox->addWidget(&flexNextGen);
+    vbox->addWidget(&flexClassic);
+    vbox->addSpacing(3);
+    QWidget *flexButtonRow = new QWidget;
+    QHBoxLayout *flexButtonLayout = new QHBoxLayout(flexButtonRow);
+    flexButtonLayout->setSpacing(0);
+    flexButtonLayout->setContentsMargins(0,0,0,0);
+    flexButtonLayout->addStretch(1);
+    buttonTools["FlexTool"]->setMinimumWidth(125);
+    flexButtonLayout->addWidget(buttonTools["FlexTool"]);
+    flexButtonLayout->addStretch(1);
+    vbox->addWidget(flexButtonRow);
+    vbox->addSpacing(4);
+    addRule();
+
     QLabel * label2 = new QLabel("Sections:");
-    label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label2->setContentsMargins(3,0,0,0);
     vbox->addWidget(label2);
     
     
-    this->chSect[0].setText("First Straight section");
+    this->chSect[0].setText("First Straight:");
     this->chSect[0].setChecked(true);
     //this->chSect[0].setEnabled(false);// .setCheckable(false);
     vbox->addWidget(&chSect[0]);
@@ -59,7 +114,7 @@ PropertiesDyntrack::PropertiesDyntrack() {
     wSect[0].setLayout(&vSect[0]);
     vbox->addWidget(&wSect[0]);
     
-    this->chSect[1].setText("First curve");
+    this->chSect[1].setText("First Curve:");
     vbox->addWidget(&chSect[1]);
     vSect[1].setSpacing(2);
     vSect[1].setContentsMargins(3,0,3,0);
@@ -69,7 +124,7 @@ PropertiesDyntrack::PropertiesDyntrack() {
     vbox->addWidget(&wSect[1]);
     
     
-    this->chSect[2].setText("Second Straight section");
+    this->chSect[2].setText("Second Straight:");
     vbox->addWidget(&chSect[2]);
     vSect[2].setSpacing(2);
     vSect[2].setContentsMargins(3,0,3,0);
@@ -77,7 +132,7 @@ PropertiesDyntrack::PropertiesDyntrack() {
     wSect[2].setLayout(&vSect[2]);
     vbox->addWidget(&wSect[2]);
     
-    this->chSect[3].setText("Second curve");
+    this->chSect[3].setText("Second Curve:");
     vbox->addWidget(&chSect[3]);
     vSect[3].setSpacing(2);
     vSect[3].setContentsMargins(3,0,3,0);
@@ -87,7 +142,7 @@ PropertiesDyntrack::PropertiesDyntrack() {
     vbox->addWidget(&wSect[3]);
     
     
-    this->chSect[4].setText("Third Straight section");
+    this->chSect[4].setText("Third Straight:");
     vbox->addWidget(&chSect[4]);
     vSect[4].setSpacing(2);
     vSect[4].setContentsMargins(3,0,3,0);
@@ -95,10 +150,9 @@ PropertiesDyntrack::PropertiesDyntrack() {
     wSect[4].setLayout(&vSect[4]);
     vbox->addWidget(&wSect[4]);
     
-    vbox->addWidget(buttonTools["FlexTool"]);
-    
+    addRule();
     QLabel *label = new QLabel("Elevation:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -195,6 +249,8 @@ PropertiesDyntrack::~PropertiesDyntrack() {
 
 void PropertiesDyntrack::msg(QString name, QString val){
     if(name == "toolEnabled"){
+        QString flexActiveStyle = "QPushButton { background-color: #f08200; color: #202020; border: 1px solid #666; } QPushButton:pressed { background-color: #c46600; }";
+        QString flexInactiveStyle = "QPushButton { background-color: #202020; color: white; border: 1px solid #666; } QPushButton:pressed { background-color: #3a3a3a; }";
         QMapIterator<QString, QPushButton*> i(buttonTools);
         while (i.hasNext()) {
             i.next();
@@ -202,9 +258,13 @@ void PropertiesDyntrack::msg(QString name, QString val){
                 continue;
             i.value()->blockSignals(true);
             i.value()->setChecked(false);
+            i.value()->setStyleSheet(flexInactiveStyle);
         }
-        if(buttonTools[val] != NULL)
+        if(buttonTools[val] != NULL){
             buttonTools[val]->setChecked(true);
+            if(val == "FlexTool")
+                buttonTools[val]->setStyleSheet(flexActiveStyle);
+        }
         i.toFront();
         while (i.hasNext()) {
             i.next();
@@ -222,7 +282,7 @@ void PropertiesDyntrack::showObj(GameObj* obj){
     }
     worldObj = (WorldObj*)obj;
     dobj = (DynTrackObj*)obj;
-    this->infoLabel->setText("Object: "+dobj->type);
+    this->infoLabel->setText("Object: Dynamic Track");
     
     this->uid.setText(QString::number(dobj->UiD, 10));
     this->tX.setText(QString::number(dobj->x, 10));
@@ -231,6 +291,21 @@ void PropertiesDyntrack::showObj(GameObj* obj){
         this->eSectionIdx.setText("");
     else
         this->eSectionIdx.setText(QString::number(dobj->sectionIdx, 10));
+
+    float totalLength = 0.0f;
+    int curveCount = 0;
+    for (int i = 0; i < 5; i++) {
+        if (dobj->sections[i].sectIdx > 100000000)
+            continue;
+        if (dobj->sections[i].type == 1) {
+            totalLength += fabs(dobj->sections[i].a * dobj->sections[i].r);
+            curveCount++;
+        } else {
+            totalLength += fabs(dobj->sections[i].a);
+        }
+    }
+    this->eLength.setText(QString::number(totalLength, 'f', 2) + " m");
+    this->eCurveCount.setText(QString::number(curveCount));
     
     for (int i = 0; i < 5; i++) {
         if(dobj->sections[i].sectIdx > 1000000){
@@ -361,7 +436,6 @@ bool PropertiesDyntrack::support(GameObj* obj){
 
 void PropertiesDyntrack::flexEnabled(){
     emit enableTool("FlexTool");
-    
 }
 
 void PropertiesDyntrack::flexData(int x, int z, float* p){
@@ -382,14 +456,14 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
     float dyntrackData[10];
     float elev = 0;
     
-    bool success = Flex::AutoFlex(dobj->x, dobj->y, (float*)p1, x, z, (float*)p2, (float*)dyntrackData, elev);
+    bool success = Flex::AutoFlex(dobj->x, dobj->y, (float*)p1, x, z, (float*)p2, (float*)dyntrackData, elev, 0.0f, flexClassic.isChecked());
     if(Game::debugOutput) qDebug() << "flex2" << elev;
-    emit flexResult(success);
     if(success){
         dobj->set("dyntrackdata", (float*)dyntrackData);
         dobj->setElevation(elev);
         this->showObj(dobj);
     }
+    emit flexResult(success);
     emit enableTool("selectTool");
 }
 

@@ -19,6 +19,7 @@
 #include <QStringList>
 #include <QSharedMemory>
 #include <QMessageBox>
+#include <QFontInfo>
 #include <iostream>
 #include "Game.h"
 #include "RouteEditorWindow.h"
@@ -400,6 +401,14 @@ int main(int argc, char *argv[]){
 //        Game::StyleRedText = "#FF5555";
 
     }
+
+    QFont appFont = app.font();
+    appFont.setFamily("Segoe UI");
+    qreal appPointSize = QFontInfo(appFont).pointSizeF();
+    if(appPointSize <= 0)
+        appPointSize = 9.0;
+    appFont.setPointSizeF(appPointSize * Game::uiScale);
+    app.setFont(appFont);
 
     Game::InitAssets();
     

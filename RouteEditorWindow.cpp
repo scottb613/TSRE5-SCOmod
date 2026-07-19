@@ -551,6 +551,8 @@ RouteEditorWindow::RouteEditorWindow() {
         if(it == NULL) continue;
         QObject::connect(it, SIGNAL(enableTool(QString)),
             glWidget, SLOT(enableTool(QString)));   
+        QObject::connect(it, SIGNAL(userButtonPressed()),
+            glWidget, SLOT(userModeChangeSound()));
         QObject::connect(glWidget, SIGNAL(sendMsg(QString, QString)), 
                 it, SLOT(msg(QString, QString)));
     }
@@ -560,7 +562,7 @@ RouteEditorWindow::RouteEditorWindow() {
 
     QObject::connect(objProperties["Dyntrack"], SIGNAL(flexResult(bool)),
                       glWidget, SLOT(flexResult(bool)));
-    
+
     QObject::connect(objProperties["ActivityObject"], SIGNAL(sendMsg(QString)),
                       glWidget, SLOT(msg(QString)));
     

@@ -27,9 +27,13 @@
 #include "UnsavedDialog.h"
 #include "Trk.h"
 
+static int scaledUiSize(int base){
+    return qRound(base * qMax(1.0f, Game::uiScale));
+}
+
 ActivityTools::ActivityTools(QString name)
     : QWidget(){
-    setFixedWidth(250);
+    setFixedWidth(scaledUiSize(250));
     cSeason.setStyleSheet("combobox-popup: 0;");
     cSeason.addItem("Spring",0);
     cSeason.addItem("Summer",1);

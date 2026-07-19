@@ -44,8 +44,11 @@ public slots:
     
 signals:
     void enableTool(QString);
+    void userButtonPressed();
     
 protected:
+    void showEvent(QShowEvent *event) override;
+
     static QString ElevTypeName;
     
     QLabel *infoLabel;    

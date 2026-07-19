@@ -511,7 +511,7 @@ private:
 
 } // namespace
 
-bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2, float* dyntrackSections, float &elev, float preferredMinCurveRadius){
+bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2, float* dyntrackSections, float &elev, float preferredMinCurveRadius, bool classicMode){
     TDB* tdb = Game::trackDB;
     qDebug() <<"flex "<< x1 << " " << z1 << " " << p1[0] << " " << p1[1] << " " << p1[2];
     qDebug() <<"flex "<< x2 << " " << z2 << " " << p2[0] << " " << p2[1] << " " << p2[2];
@@ -528,7 +528,7 @@ bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2, float*
 
     float *p22 = Vec3::clone(p2);
 
-    bool success = Flex::NewFlex(x1, z1, p1, (float*)q1, x2, z2, p2, (float*)q2, dyntrackSections, preferredMinCurveRadius);
+    bool success = Flex::NewFlex(x1, z1, p1, (float*)q1, x2, z2, p2, (float*)q2, dyntrackSections, preferredMinCurveRadius, classicMode);
 
     p22[0] +=  2048*(x2 - x1);
     p22[2] +=  2048*(z2 - z1);
@@ -763,7 +763,7 @@ bool Flex::NewFlexDeprecatedStaged(int x, int z, float* p, float* q, float * dyn
     return true;
 }
 
-bool Flex::NewFlex(int x1, int z1, float *p1, float *q1, int x2, int z2, float *p2, float *q2, float * dyntrackSections, float preferredMinCurveRadius){
+bool Flex::NewFlex(int x1, int z1, float *p1, float *q1, int x2, int z2, float *p2, float *q2, float * dyntrackSections, float preferredMinCurveRadius, bool classicMode){
     for (int i = 0; i < 10; i++)
         dyntrackSections[i] = 0.0f;
 
@@ -951,6 +951,9 @@ bool Flex::NewFlex(int x1, int z1, float *p1, float *q1, int x2, int z2, float *
         cand.wasTrimmed = (cand.rawLen > cand.trimmedLen + 0.05f);
         cand.meetsPreferredMin = (preferredMinCurveRadius > 0.0f) ? (cand.minRadius >= preferredMinCurveRadius - 1e-3f) : false;
 
+        if (classicMode && cand.curveCount > 1)
+            return;
+
         bool bestSoFar = (!found || betterCandidate(cand, best));
         logFlexCandidate(kind, trimmed, cand, bestSoFar);
 
@@ -1067,27 +1070,29 @@ bool Flex::NewFlex(int x1, int z1, float *p1, float *q1, int x2, int z2, float *
         }
     };
 
-    // First: try without end straights, equal radii.
-    for (float R : radii) {
-        if (R < minAllowedRadius)
-            continue;
-        solveCLC(targetPos, R, R, 0.0f, 0.0f);
-    }
-
-    // Then: full grid, still without end straights.
-    for (float R1 : radii) {
-        if (R1 < minAllowedRadius)
-            continue;
-        for (float R2 : radii) {
-            if (R2 < minAllowedRadius)
+    if (!classicMode) {
+        // First: try without end straights, equal radii.
+        for (float R : radii) {
+            if (R < minAllowedRadius)
                 continue;
-            solveCLC(targetPos, R1, R2, 0.0f, 0.0f);
+            solveCLC(targetPos, R, R, 0.0f, 0.0f);
+        }
+
+        // Then: full grid, still without end straights.
+        for (float R1 : radii) {
+            if (R1 < minAllowedRadius)
+                continue;
+            for (float R2 : radii) {
+                if (R2 < minAllowedRadius)
+                    continue;
+                solveCLC(targetPos, R1, R2, 0.0f, 0.0f);
+            }
         }
     }
 
     // Fallback: allow end straights (small discrete set), cost-penalized via scoring.
     // Also try this if the best "no-end-straights" solution self-intersects.
-    if (!found || best.selfIntersect) {
+    if (!classicMode && (!found || best.selfIntersect)) {
         for (float L0 : endStraightOptions) {
             for (float L2 : endStraightOptions) {
                 if (L0 == 0.0f && L2 == 0.0f)

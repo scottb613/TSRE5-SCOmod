@@ -75,6 +75,7 @@ private:
     bool snapping = false;
     bool guardErrorActive = false;
     QTimer snapTimer;
+    QTimer guardErrorTimer;
     ///
 
 };
