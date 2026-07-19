@@ -157,3 +157,17 @@ void Camera::keyUp(QKeyEvent * e) {
 
 void Camera::keyDown(QKeyEvent * e) {
 };
+
+void Camera::setMoveSpeedLock(int mode) {
+    moveSpeedLock = qBound(-1, mode, 1);
+    applyMoveSpeedLock();
+}
+
+void Camera::applyMoveSpeedLock() {
+    if(moveSpeedLock > 0)
+        przesx = przesz = Game::cameraSpeedMax;
+    else if(moveSpeedLock < 0)
+        przesx = przesz = Game::cameraSpeedMin;
+    else
+        przesx = przesz = Game::cameraSpeedStd;
+}

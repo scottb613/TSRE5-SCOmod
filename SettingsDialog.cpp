@@ -188,8 +188,8 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "consoleoutput") return "Shows log output in the command window while TSRE is running. Leave this off for normal use unless you are troubleshooting.";
     if (k == "debugoutput") return "Enables extra diagnostic logging. Use this only while chasing a problem because it can create noisy logs.";
     if (k == "fullscreen") return "Starts the editor maximized. Leave this off if you prefer TSRE to restore normal window placement.";
-    if (k == "soundenabled") return "Controls legacy TSRE sound support. This is separate from SCOmod interface sounds.";
-    if (k == "scosoundenabled") return "Enables SCOmod interface sounds such as placement clicks, error buzzes, and mode-change chirps.";
+    if (k == "soundenabled") return "Controls legacy TSRE sound support. This is separate from GenX interface sounds.";
+    if (k == "scosoundenabled") return "Enables GenX interface sounds such as placement clicks, error buzzes, and mode-change chirps.";
     if (k == "startapp") return "Selects the startup tool. Use r for Route Editor, c for Consist Editor, or s for Shape Viewer.";
     if (k == "systemtheme") return "Uses the Windows system palette instead of TSRE's built-in dark interface colors.";
     if (k == "unsafemode") return "Enables advanced maintenance operations that can alter route data. Keep this off unless you know a tool requires it.";
@@ -212,9 +212,8 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "routemergeterrain") return "Allows route merge operations to overwrite overlapping terrain heights.";
     if (k == "routemergeterrtex") return "Allows route merge operations to overwrite overlapping terrain texture assignments.";
     if (k == "mainwindow") return "Initial X and Y screen position for the main editor and startup window.";
-    if (k == "mainwindowlayout") return "Controls the main editor panel order. P is Properties, T is Tools, W is World, and S is Status.";
-    if (k == "naviwindow") return "Initial X and Y screen position for the Navi Window.";
-    if (k == "statuswindow") return "Initial X and Y screen position for the Status Window.";
+    if (k == "mainwindowlayout") return "Controls the main editor panel order. P is Properties, T is Tools, W is World, and C is Control Panel.";
+    if (k == "controlpanel") return "Initial X and Y screen position for the Control Panel.";
     if (k == "toolshidden") return "Starts with tool panels hidden so the viewport gets more room.";
     if (k == "uiscale") return "Scales editor fonts and panel widths. Recommended public range is 1.00 to 1.25; 1.15 works well on Scott's 32-inch 2K display.";
     if (k == "camerafov") return "Sets the camera field of view in degrees. Lower values feel more zoomed in; higher values show more peripheral view.";
@@ -223,7 +222,7 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "cameraspeedstd") return "Normal camera movement speed.";
     if (k == "camerasticktoterrain") return "Keeps the camera from dropping underground. This can also be toggled with the slash key.";
     if (k == "lockcamera") return "Locks the camera's Y axis while moving. This is the same behavior toggled with the period key.";
-    if (k == "mousespeed") return "Controls mouse look and pan sensitivity. Lower values slow the mouse down; 0.1 is a comfortable SCOmod default.";
+    if (k == "mousespeed") return "Controls mouse look and pan sensitivity. Lower values slow the mouse down; 0.1 is a comfortable GenX default.";
     if (k == "aasamples") return "Sets anti-aliasing sample count. Higher values can smooth edges but may reduce performance.";
     if (k == "allowobjlag") return "Allows object loading to spread over multiple frames to reduce stalls while moving through populated routes.";
     if (k == "imagesubstitution") return "Allows TSRE to substitute ACE or DDS textures when one version is missing.";
@@ -254,7 +253,7 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "skycolor") return "Viewport sky color used by the route editor.";
     if (k == "usesuperelevation") return "Applies superelevation when rendering curves that contain it.";
     if (k == "viewcompass") return "Shows the compass heading display at the top center of the viewport.";
-    if (k == "viewmarkers") return "Shows markers selected through the Navi Window.";
+    if (k == "viewmarkers") return "Shows markers selected through the Control Panel.";
     if (k == "viewtrlabels") return "Shows labels for track database items.";
     if (k == "wirelineheight") return "Height of yellow TDB and RDB guide lines above the ground.";
     if (k == "defaultelevationbox") return "Default elevation value used by placement/editing controls that expose an elevation box.";
@@ -277,9 +276,9 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "terraincut") return "Default cutting value for terrain shaping around track and road lines.";
     if (k == "terrainembankment") return "Default embankment value for terrain shaping around track and road lines.";
     if (k == "terrainradius") return "Default maximum radius for terrain shaping tools.";
-    if (k == "terrainsize") return "Default terrain shaping width. In SCOmod, width handling was improved for track cuts and embankments.";
+    if (k == "terrainsize") return "Default terrain shaping width. In GenX, width handling was improved for track cuts and embankments.";
     if (k == "preloadtextures") return "Comma-separated TERRTEX textures to preload. Supports ACE, BMP, DDS, and PNG entries where TSRE supports them.";
-    if (k == "mapimageresolution") return "Downloaded map image resolution for F3 map tiles. SCOmod defaults to 4096 for clearer tile imagery.";
+    if (k == "mapimageresolution") return "Downloaded map image resolution for F3 map tiles. GenX defaults to 4096 for clearer tile imagery.";
     if (k == "mapengine") return "Selects the map imagery provider setup used by the F3 map tools.";
     if (k == "mapboximagemapsurl") return "Mapbox static imagery URL template. Use only if configuring Mapbox imagery.";
     if (k == "mapboximagemapszoomoffset") return "Zoom offset for Mapbox imagery. A value of -1 is commonly required.";
@@ -408,8 +407,7 @@ QString SettingsDialog::keyAssignmentsText() const {
         "F3            Show Geo tools\n"
         "F4            Show Activity tools\n"
         "F5            Toggle Properties window\n"
-        "F6            Toggle Navi window\n"
-        "F7            Toggle Status window\n"
+        "F7            Toggle Control Panel\n"
         "F8            Toggle Errors/Messages window\n"
         "F12           Toggle Settings window\n"
         "/             Toggle Stick Camera To Terrain\n"
@@ -507,7 +505,7 @@ void SettingsDialog::setupUi() {
     addRow(l, "debugOutput", "bool", "Debug Output", "enables extended logging detail");
     addRow(l, "fullscreen", "bool", "Fullscreen", "Prevents screen from being maximized");
     addRow(l, "soundEnabled", "bool", "Sound Enabled", "");
-    addRow(l, "scoSoundEnabled", "bool", "SCOmod Sounds", "click, buzz, chirp editor feedback");
+    addRow(l, "scoSoundEnabled", "bool", "GenX Sounds", "click, buzz, chirp editor feedback");
     addRow(l, "startapp", "string", "Start App", "r=Route Edit, c=Consist Edit, s=Shapeviewer");
     addRow(l, "systemTheme", "bool", "System Theme", "true uses Windows palette");
     addRow(l, "unsafemode", "bool", "Unsafe Mode", "Only for risky features");
@@ -536,9 +534,8 @@ void SettingsDialog::setupUi() {
 
     createScrollTab(l, tabs, "UI");
     addRow(l, "mainWindow", "twonumber", "Main Window", "X, Y position");
-    addRow(l, "mainWindowLayout", "string", "Window Layout", "P = Properties, T = Tools W = World S = Status");
-    addRow(l, "naviWindow", "twonumber", "Navi Window", "X, Y position");
-    addRow(l, "statusWindow", "twonumber", "Status Window", "X, Y position");
+    addRow(l, "mainWindowLayout", "string", "Window Layout", "P = Properties, T = Tools, W = World, C = Control Panel");
+    addRow(l, "controlPanel", "twonumber", "Control Panel", "X, Y position");
     addRow(l, "toolsHidden", "bool", "Tools Hidden", "");
     addRow(l, "uiScale", "number", "UI Scale", "1.00 to 1.25 recommended");
 
@@ -673,7 +670,7 @@ void SettingsDialog::save(const QString& filename) {
 
     QTextStream out(&file);
 
-    out << "// TSRE SCOmod v0.4 settings\n";
+    out << "// TSRE GenX v0.5 settings\n";
     out << "// Both # and // can be used for comments.\n";
     out << "// Recommended public uiScale range: 1.00 to 1.25. Scott's 32\" 2K setup uses 1.15.\n\n";
 
@@ -682,7 +679,7 @@ void SettingsDialog::save(const QString& filename) {
     writeSetting(out, "debugOutput", "false", "enable extended logging detail");
     writeSetting(out, "fullscreen", "false", "start maximized/fullscreen");
     writeSetting(out, "soundEnabled", "false", "legacy TSRE sound support");
-    writeSetting(out, "scoSoundEnabled", "true", "SCOmod editor UI sounds: click, buzz, chirp");
+    writeSetting(out, "scoSoundEnabled", "true", "GenX editor UI sounds: click, buzz, chirp");
     writeSetting(out, "startapp", "r", "r = Route Editor, c = Consist Editor, s = Shape Viewer");
     writeSetting(out, "systemTheme", "false", "true uses your Windows palette");
     writeSetting(out, "unsafemode", "false", "only enable for risky/advanced features");
@@ -713,9 +710,8 @@ void SettingsDialog::save(const QString& filename) {
 
     out << "\n\n//// UI / Windows / Scaling\n\n";
     writeSetting(out, "mainWindow", "100, 100", "X, Y of main window and load window");
-    writeSetting(out, "mainWindowLayout", "PWTS", "window order: P = Properties, T = Tools, W = World", true);
-    writeSetting(out, "naviWindow", "50, 50", "X, Y of Navigation window");
-    writeSetting(out, "statusWindow", "0, 100", "X, Y of Status window");
+    writeSetting(out, "mainWindowLayout", "PWTC", "window order: P = Properties, T = Tools, W = World, C = Control Panel", true);
+    writeSetting(out, "controlPanel", "0, 100", "X, Y of Control Panel");
     writeSetting(out, "toolsHidden", "false", "only show the viewport");
     writeSetting(out, "uiScale", "1.15", "global editor UI font/panel scale; 1.00 to 1.25 recommended");
 
@@ -763,7 +759,7 @@ void SettingsDialog::save(const QString& filename) {
     writeSetting(out, "skyColor", "#E0FFFF");
     writeSetting(out, "useSuperelevation", "false", "apply superelevation when rendering curves");
     writeSetting(out, "viewCompass", "false", "show compass at top center");
-    writeSetting(out, "viewMarkers", "true", "view markers selected in Navi window");
+    writeSetting(out, "viewMarkers", "true", "view markers selected in Control Panel");
     writeSetting(out, "viewTRLabels", "false", "show track item labels");
     writeSetting(out, "wireLineHeight", "6.8", "yellow TDB/RDB line height");
 
@@ -840,8 +836,8 @@ void SettingsDialog::save(const QString& filename) {
     writeSetting(out, "ortsEngEnable", "true", "give precedence to settings in /OpenRails folders");
 
     out << "\n\n//// Legacy / Disabled\n\n";
-    out << "# season = \"Spring\"               // disabled in SCOmod; use the F2 Texture Set selector\n";
-    out << "# seasonalEditing = on            // disabled in SCOmod; use the F2 Texture Set selector\n";
+    out << "# season = \"Spring\"               // disabled in GenX; use the F2 Texture Set selector\n";
+    out << "# seasonalEditing = on            // disabled in GenX; use the F2 Texture Set selector\n";
 
     file.close();
     accept();
@@ -1006,6 +1002,7 @@ QString SettingsDialog::getGameValue(const QString& key) {
     if (key == "loadconsists") return Game::loadConsists ? "true" : "false";
     if (key == "mainwindowlayout") return Game::mainWindowLayout;
     if (key == "mainwindow") return Game::mainPos;
+    if (key == "controlpanel") return Game::statusPos;
     if (key == "cewindowlayout") return Game::ceWindowLayout;
     if (key == "playermode") return Game::playerMode ? "true" : "false";
     if (key == "usenetworkeng") return Game::useNetworkEng ? "true" : "false";

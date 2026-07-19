@@ -18,7 +18,7 @@ PropertiesPolyForest::PropertiesPolyForest() {
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     infoLabel = new QLabel("PolyForest:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     
    
@@ -33,7 +33,7 @@ PropertiesPolyForest::PropertiesPolyForest() {
     vbox->addItem(vlistt);
     
     QLabel * label = new QLabel("Texture:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QLabel * label1 = new QLabel("FileName:");
@@ -46,7 +46,7 @@ PropertiesPolyForest::PropertiesPolyForest() {
     vbox->addWidget(copyF);
     
     QLabel * label12 = new QLabel("Size:");
-    label12->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label12->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label12->setContentsMargins(3,0,0,0);
     vbox->addWidget(label12);
     QFormLayout *vlist = new QFormLayout;
@@ -75,7 +75,7 @@ PropertiesPolyForest::PropertiesPolyForest() {
     vbox->addItem(vlist);
     
     label = new QLabel("Position & Rotation:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -132,7 +132,7 @@ PropertiesPolyForest::PropertiesPolyForest() {
     vbox->addItem(posRotList);
     
     label = new QLabel("Detail Level:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->defaultDetailLevel.setDisabled(true);
@@ -157,7 +157,7 @@ PropertiesPolyForest::PropertiesPolyForest() {
     vbox->addItem(detailLevelView);
     
     label = new QLabel("Flags:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->flags.setDisabled(true);

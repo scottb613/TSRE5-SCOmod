@@ -24,6 +24,7 @@ public:
     static QLabel* newTQLabel(QString text, int width = -1);
     static QLineEdit* newQLineEdit(int width, int length);
     static QAction* newMenuCheckAction(QString desc, QWidget* window, bool checked = true);
+    static QString scoPanelStyle();
 private:
 
 };

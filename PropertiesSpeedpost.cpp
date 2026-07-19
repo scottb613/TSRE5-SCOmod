@@ -25,7 +25,7 @@ PropertiesSpeedpost::PropertiesSpeedpost() {
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     infoLabel = new QLabel("SpeedPost:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     QFormLayout *vlist = new QFormLayout;
@@ -42,7 +42,7 @@ PropertiesSpeedpost::PropertiesSpeedpost() {
     vbox->addItem(vlist);
     
     QLabel * label = new QLabel("Position:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -53,7 +53,7 @@ PropertiesSpeedpost::PropertiesSpeedpost() {
     vlist->addRow("Z:",&this->posZ);
     vbox->addItem(vlist);
     speedlabel = new QLabel("Speed:");
-    speedlabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    speedlabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     speedlabel->setContentsMargins(3,0,0,0);
     chCustomSpeed.setText("Speed instead of Number");
     vbox->addWidget(speedlabel);
@@ -72,7 +72,7 @@ PropertiesSpeedpost::PropertiesSpeedpost() {
     ptb.addItem("Both");
     ptb.setStyleSheet("combobox-popup: 0;");
     numberlabel = new QLabel("Number:");
-    numberlabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    numberlabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     numberlabel->setContentsMargins(3,0,0,0);
     chCustomNumber.setText("Number instead of Speed");
     vbox->addWidget(numberlabel);
@@ -83,7 +83,7 @@ PropertiesSpeedpost::PropertiesSpeedpost() {
     vbox->addWidget(&chNumberDot);
 
     label = new QLabel("Track Items:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *button = new QPushButton("Flip", this);
@@ -102,7 +102,7 @@ PropertiesSpeedpost::PropertiesSpeedpost() {
                       this, SLOT(bExpandEnabled()));
     
     label = new QLabel("Global settings:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(new QLabel("Max placing radius:"));
@@ -111,7 +111,7 @@ PropertiesSpeedpost::PropertiesSpeedpost() {
     QObject::connect(&eMaxPlacingDistance, SIGNAL(textEdited(QString)), this, SLOT(eMaxPlacingDistanceEnabled(QString)));
     
     label = new QLabel("Advanced:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     

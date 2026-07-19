@@ -18,7 +18,7 @@ QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setContentsMargins(0,1,1,1);
     
     infoLabel = new QLabel("Path:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     //QFormLayout *vlist = new QFormLayout;
@@ -32,7 +32,7 @@ QVBoxLayout *vbox = new QVBoxLayout;
     vbox->addWidget(&this->ePathEnd);
     
     QLabel *label = new QLabel("Main route nodes:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     

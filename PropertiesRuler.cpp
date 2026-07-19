@@ -20,7 +20,7 @@ PropertiesRuler::PropertiesRuler() {
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     infoLabel = new QLabel("Ruler:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     QFormLayout *vlist = new QFormLayout;
@@ -34,7 +34,7 @@ PropertiesRuler::PropertiesRuler() {
     vlist->addRow("Tile Z:",&this->tY);
     vbox->addItem(vlist);
     QLabel *label = new QLabel("Game Length:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -45,7 +45,7 @@ PropertiesRuler::PropertiesRuler() {
     vbox->addItem(vlist);
     
     label = new QLabel("Geo Length:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -57,7 +57,7 @@ PropertiesRuler::PropertiesRuler() {
     
     
     label = new QLabel("Average Elevation:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -96,7 +96,7 @@ PropertiesRuler::PropertiesRuler() {
     
     
     label = new QLabel("Default Settings:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     checkboxTwoPoint.setText("Only Two-Point Ruler");
@@ -110,7 +110,7 @@ PropertiesRuler::PropertiesRuler() {
     QObject::connect(&checkboxDrawPoints, SIGNAL(stateChanged(int)),
                       this, SLOT(checkboxDrawPointsEdited(int)));
     label = new QLabel("Experimental:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *button = new QPushButton("Create Road Paths");
@@ -123,7 +123,7 @@ PropertiesRuler::PropertiesRuler() {
                       this, SLOT(removeRoadPathsEdited()));
     
     label = new QLabel("Shape Template:");
-    //label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    //label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&eTemplate);

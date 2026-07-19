@@ -1,4 +1,4 @@
-TSRE SCOmod Improvements
+TSRE GenX Improvements
 
 ======================================================================================================
 
@@ -39,16 +39,16 @@ HIGHLIGHTS
 - Added [windows] executable icon and [AddShortcutDesktop.cmd] helper.
 - Added [restore last session] on the [load] screen to reopen the last route, camera view, and editor window layout.
 - Added [load] high-resolution branded splash and scaled loader/about display so the banner is not cropped.
-- Converted the [status window] into a compact clickable control panel.
-- Added [status/navi window] gentle delayed snapping.
-- Matched the [navi window] color/readability scheme to the darker Status Window style.
+- Added [Route > Open Route Folder] to open the active route directly in Windows Explorer.
+- Consolidated the former Status and Navi windows into one styled [Control Panel], toggled with [F7], with delayed edge snapping.
+- Added toggleable [Move: Fast] and [Move: Slow] Control Panel locks with sound, yellow active state, and automatic viewport focus return.
 - Improved [object Panel] searching with [ALL] category defaults, enforced mutually exclusive Tracks/Roads/Other category filters for searches, and a [Reset] search button.
 - Improved [object Panel] Scale Rail grouping so family/type categories contain the individual lengths, radii, and variants.
-- Refined [object/property panels] with consistent dark controls, bold orange Title Case headings, inset category separators, orange checked states, clearer object names, and standardized button feedback.
+- Refined [F1-F4 object/property/tool panels] with consistent dark controls, bold orange Title Case headings, inset category separators, orange checked states, clearer object names, standardized button feedback, and a cleaner terrain-texture preview/thumbnail bank.
 - Added [global] [uiScale] support for larger editor fonts and proportionally wider panels.
 - Added [global] sound feedback with standardized [SCOclick.wav], [SCObuzz.wav], and [SCOpress.wav] files.
-- Added [status window] [Place Guard] validation to prevent spammed objects with automatic undo, and respective feedback.
-- Updated [global] title bar to identify the build as [TSRE SCOmod].
+- Added [Control Panel] [Place Guard] validation to prevent spammed objects with automatic undo, and respective feedback.
+- Updated [global] title bar to identify the build as [TSRE GenX].
 - Reworked [F12] Settings Editor to save the active settings.txt with timestamp backups, organized tabs, dark striped rows, key assignments, and full-sentence tooltips.
 - Fixed [F3] OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened [F3] OSM Vector Map loading so failed network replies do not crash the editor.
@@ -220,7 +220,7 @@ Seasonal texture loading now follows an ORTS-style fallback model for route obje
 
 For TERRTEX painting, Mirror Season mirrors only between default and snow. Painting while using a non-winter/default TERRTEX set mirrors toward `TERRTEX/SNOW`; painting while using Winter/Snow mirrors back toward the default `TERRTEX` folder. The same brush/autopaint trace is applied to the paired side, but the paired side must have a matching source texture with the same filename. Default painting uses the default source texture, snow painting uses the snow source texture. No matching paired source texture means no mirror paint for that stroke.
 
-When Mirror Season is off, terrain painting still protects the opposite TERRTEX side from missing tile swatches. If painting creates a new per-tile TERRTEX patch in the active side, TSRE creates a matching placeholder patch in the paired default/snow folder only when that opposite patch does not already exist. The placeholder is copied from the route's paired-side `terrain.ace` when available, or from the bundled SCOmod content `terrain.ace` fallback. This prevents blank tiles if only one TERRTEX side has been painted, but it does not fake a mirrored texture paint.
+When Mirror Season is off, terrain painting still protects the opposite TERRTEX side from missing tile swatches. If painting creates a new per-tile TERRTEX patch in the active side, TSRE creates a matching placeholder patch in the paired default/snow folder only when that opposite patch does not already exist. The placeholder is copied from the route's paired-side `terrain.ace` when available, or from the bundled GenX content `terrain.ace` fallback. This prevents blank tiles if only one TERRTEX side has been painted, but it does not fake a mirrored texture paint.
 
 A follow-up texture-cache bug was also fixed after testing on a large populated route. Generated objects such as forest regions may reapply their same material path frequently, so TSRE now invalidates cached texture IDs only when the material path actually changes. This avoids severe stutter and wrong texture reuse while still allowing seasonal texture refreshes to bind new material paths correctly.
 
@@ -252,32 +252,39 @@ I added a startup guard so only one TSRE instance can run at a time. If TSRE is 
 
 I also fixed the route-selection startup screen. When switching MSTS root folders, the route table was clearing cell contents but not removing the existing rows, which left blank rows/cells mixed into the display. The table now resets its row count before repopulating. Route loading was also tightened so it always loads from the route-name column, even if the selected cell is in the Last Modified column.
 
-I added a proper TSRE icon to the Windows executable resource, using the icon stored in the local content folder. I also added a small AddShortcutDesktop.cmd helper, modeled after the SCO LIDEX shortcut helper, which creates a TSRE5 SCOmod desktop shortcut pointing at the local executable and using the same icon.
+I added a proper TSRE icon to the Windows executable resource, using the icon stored in the local content folder. I also added a small AddShortcutDesktop.cmd helper, modeled after the SCO LIDEX shortcut helper, which creates a TSRE GenX desktop shortcut pointing at the local executable and using the same icon.
 
 
    --- Startup Session Restore ---
 
-I added a Restore Last Session button to the first startup screen. Before a route is selected, the old full-width Exit button is now split into Restore Last Session and Exit. When TSRE closes normally, it writes a small lastSession.json file under the user's AppData TSRE folder. That file records the last route root, selected route, main window size and position, Navi/Status window positions, and the editor camera tile, position, and rotation.
+I added a Restore Last Session button to the first startup screen. Before a route is selected, the old full-width Exit button is now split into Restore Last Session and Exit. When TSRE closes normally, it writes a small lastSession.json file under the user's AppData TSRE folder. That file records the last route root, selected route, main window size and position, Control Panel position, and the editor camera tile, position, and rotation.
 
 The intent is simple: if you were deep in a route, looking at a specific trouble spot, you can restart TSRE and return to that same working context without reselecting the MSTS folder, reselecting the route, and manually flying back to the same location.
 
 
-   --- Status Window Control Panel ---
+   --- Route Folder Access ---
 
-The old Status Window was mostly a passive readout. I changed it into a compact clickable control panel while keeping roughly the same footprint. It now shows and controls common editing states such as Select, Place New, Rotate, Translate, Resize, AutoTDB, Stick To Terrain, Terrain Brush direction, Camera lock, and Camera Terrain lock.
-
-The button colors now show state at a glance: active/on states are highlighted, neutral states stay dark, and terrain-brush direction uses different colors for plus and minus. The selected-object type readout is now useful as well, showing broad selection categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking the selected object type on the Status Window clears the current selection.
-
-I also added gentle delayed snapping for the Status and Navi windows. The snap only triggers when a floating window is very close to another window edge, waits briefly until dragging pauses, and uses the visible window frame so the windows touch cleanly rather than overlapping.
-
-I also updated the visible program titlebars so the startup screen and main editor window identify the build as TSRE SCOmod instead of the older Trainsim.Com Fork title.
-
-The startup, consist-loader, and About screens now scale the high-resolution SCOmod splash image into the loader banner area instead of showing a top-left crop. The packaged splash includes the Beast of Burden Locomotive Works logo, a centered photorealistic track scene, the TSRE mark, and a small credit for Piotr Gadecki. A no-credit copy and credited copy are kept in the local content folder as source artwork.
+I added `Open Route Folder` under the Route menu, placed with the other route-level commands. It opens the active route directory directly in Windows Explorer and reports a clear warning if the route folder cannot be found.
 
 
-   --- Navi Window and Object Search Cleanup ---
+   --- Control Panel ---
 
-The Navi Window now uses the same darker visual treatment as the Status Window. The pointer readout fields were changed from disabled fields to read-only fields, which keeps them protected from editing but avoids the dimmed gray text that made pointer values harder to read.
+The old Status Window was mostly a passive readout. I changed it into a compact clickable Control Panel. It now shows and controls common editing states such as Select, Place New, Rotate, Translate, Resize, AutoTDB, Stick To Terrain, Terrain Brush direction, Camera lock, Camera Terrain lock, movement speed locks, and Place Guard. The former Navi controls are appended below these controls for marker selection, pointer/camera coordinates, latitude/longitude entry, object count, and Jump.
+
+The button colors now show state at a glance: active/on states are highlighted, neutral states stay dark, and terrain-brush direction uses different colors for plus and minus. The selected-object type readout is now useful as well, showing broad selection categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking the selected object type on the Control Panel clears the current selection.
+
+The top row adds `Move: Fast` and `Move: Slow` as mutually exclusive movement-speed locks. Each button toggles off on a second press, stays neutral when off, turns yellow while active, and plays `SCOpress.wav` only for the manual press. Focus is immediately returned to the viewport so keyboard movement works without an extra click.
+
+I also added gentle delayed snapping for the Control Panel. The snap only triggers when the panel is very close to another window edge, waits briefly until dragging pauses, and uses the visible window frame so the windows touch cleanly rather than overlapping.
+
+I also updated the visible program titlebars so the startup screen and main editor window identify the build as TSRE GenX instead of the older Trainsim.Com Fork title.
+
+The startup, consist-loader, and About screens now scale the high-resolution GenX splash image into the loader banner area instead of showing a top-left crop. The packaged splash includes the Beast of Burden Locomotive Works logo, a centered photorealistic track scene, the TSRE mark, and a small credit for Piotr Gadecki. A no-credit copy and credited copy are kept in the local content folder as source artwork.
+
+
+   --- Control Panel Navigation and Object Search Cleanup ---
+
+The former Navi controls now live inside the Control Panel and use its darker visual treatment. The pointer readout fields are read-only, which keeps them protected from editing but avoids the dimmed gray text that made pointer values harder to read. The separate Navi window, F6 action, geometry settings, and session state were removed; F7 now toggles the single Control Panel.
 
 The right-side object panel search was also tightened up. The Tracks, Roads, and Other category dropdowns now include `ALL` as their default value. Selecting a real category in one of those three dropdowns resets the other two to `ALL`, so only one category filter is active at a time. Search text is then applied inside that active category instead of searching the entire library and ignoring the category choice.
 
@@ -288,9 +295,11 @@ Scale Rail categories now stop at the functional family/type portion of each fil
 
    --- Object and Property Panel Cleanup ---
 
-I brought the normal Track property panel, Dynamic Track property panel, shared property controls, and right-side object selector into one visual language. The panels use the same dark control surfaces, bold orange Title Case category headings, orange checked states, and subtle inset horizontal separators between real work groups. This keeps dense controls readable without turning every row into a separate box.
+I brought the normal Track property panel, Dynamic Track property panel, shared property controls, right-side object selector, and F1-F4 tool panels into one visual language. The panels use the same dark control surfaces, restrained three-dimensional button treatment, bold orange Title Case category headings, orange checked states, and subtle inset horizontal separators between real work groups. This keeps dense controls readable without turning every row into a separate box.
 
 The normal Track panel now identifies the selection as `Object: Track`. Its Shape Template, Position & Rotation, Detail Level, Flags, Elevation, MSTS Collision, and Advanced headings all use the same title treatment. The Dynamic Track panel identifies the selection as `Object: Dynamic Track` and uses the same styling for Flex Mode, Sections, and Elevation.
+
+The F2 terrain texture area was reorganized around a larger primary texture preview and a compact two-column thumbnail bank. Mirror Season moved into the paint controls, and the preset, brush, and embankment groups now follow the same spacing and heading system as the other tool panels. F1 Objects, F3 Geo, and F4 Activity use the shared treatment as well.
 
 The right-side selector now follows that same style for `Objects:` and `Recent Items:`. Its checkbox treatment matches the left panels, `Stick To Target` was shortened to `Stick Target`, and subtle separators divide the object list, placement controls, and recent-item list. Dynamic-track reference groups, object-list entries, and recent items now display the consistent name `Dynamic Track` instead of internal or legacy labels such as `dyntrack` or `Dynamic track piece`.
 
@@ -303,12 +312,12 @@ I added a global `uiScale` setting so the editor can be made easier to read on m
 
 `uiScale = 1.15`
 
-The recommended range is roughly 1.00 to 1.25. The setting scales the application font, menu/dropdown controls, startup screen, [F2]/[F3] style panels, object list side panel, Status Window, and Navi Window. The side panels now widen with the scale value so the larger text has room to breathe. A value of 1.00 should keep the editor close to the older TSRE look, while 1.15 is a useful middle ground on a large 2K monitor.
+The recommended range is roughly 1.00 to 1.25. The setting scales the application font, menu/dropdown controls, startup screen, [F2]/[F3] style panels, object list side panel, and Control Panel. The side panels now widen with the scale value so the larger text has room to breathe. A value of 1.00 should keep the editor close to the older TSRE look, while 1.15 is a useful middle ground on a large 2K monitor.
 
 
    --- Window/Settings Investigation ---
 
-I checked why TSRE was not remembering some window positions. The settings file supports manual Navi/Status window positions, but live window geometry is not fully saved/restored. Current aligned values were captured into the test dist settings file.
+I checked why TSRE was not remembering some window positions. The Control Panel now has one position setting and one saved-session geometry record; legacy Status Window session data remains readable during migration.
 
 
    --- Sound Feedback ---
@@ -317,7 +326,7 @@ I added light sound feedback for editor actions while keeping the sounds separat
 
   - `SCOclick.wav` plays only after a successful guarded object placement.
   - `SCObuzz.wav` plays only after a Place Guard placement failure.
-  - `SCOpress.wav` plays for deliberate user-commanded mode/status changes and manual panel button presses, such as Status Window controls, keyboard shortcuts that change the active edit mode, property-panel buttons, and right-side object-panel buttons.
+  - `SCOpress.wav` plays for deliberate user-commanded mode/status changes and manual panel button presses, such as Control Panel controls, keyboard shortcuts that change the active edit mode, property-panel buttons, and right-side object-panel buttons.
 
 Passive status refreshes do not play sounds. This avoids double audio when the editor merely updates button states after a placement or automatic mode change.
 
@@ -333,7 +342,7 @@ The current rules are:
   - Track-linked interactive objects must also finish near their database elevation. TSRE samples the nearest database height around the placed object and rejects the placement if the object height is more than 10 meters away from that database height.
   - Normal scenery/static objects must be placed on loaded terrain and within 1 meter above or below the terrain surface.
   - Track objects and dynamic track are allowed a wider terrain-height tolerance because they can legitimately be above or below local terrain during editing. They are currently accepted from 50 meters below terrain to 100 meters above terrain.
-  - If Place Guard is turned off from the Status Window, these checks are bypassed and TSRE uses the normal legacy placement behavior.
+  - If Place Guard is turned off from the Control Panel, these checks are bypassed and TSRE uses the normal legacy placement behavior.
 
 This is intentionally a guardrail, not a new placement engine. It should catch the route-damaging mistakes: objects cast into the sky, objects dropped below terrain, and interactives being thrown onto a far-away database line.
 
@@ -342,7 +351,7 @@ This is intentionally a guardrail, not a new placement engine. It should catch t
 
 I reworked the F12 Settings Editor so it follows the same organization as the cleaned settings.txt file. The old broad tabs have been replaced with practical sections such as General, Logging, Startup, UI, Camera, Rendering, Overlays, Objects, Terrain, Map, Cleanup, Advanced, and Consist. The Settings screen now saves directly to the active settings.txt file instead of writing settings.txt.new, and it creates a timestamped backup before overwriting the existing file.
 
-The visible comment clutter was removed from the rows and replaced with full-sentence tooltips on the labels and controls. I also added a Key Assignments tab with a two-column, striped table so shortcuts are easier to scan inside the editor. The Settings Editor now uses the same dark visual treatment as the rest of the SCOmod interface.
+The visible comment clutter was removed from the rows and replaced with full-sentence tooltips on the labels and controls. I also added a Key Assignments tab with a two-column, striped table so shortcuts are easier to scan inside the editor. The Settings Editor now uses the same dark visual treatment as the rest of the GenX interface.
 
 
    --- [F3] Map Loading ---
@@ -363,7 +372,7 @@ The old Flex diagnostic graph window is hidden by default because it was more di
 
    --- NextGen Dynamic Track Flex ---
 
-NextGen is documented separately from GokuMK's Classic path because it is the broader SCOmod Dynamic Track workflow. The Dynamic Track panel now offers `NextGen Flex S-C-S-C-S` and `Classic Flex S-C-S` as explicit choices, with NextGen selected by default. The Flex action is named `Auto-Flex` so its purpose is clearer.
+NextGen is documented separately from GokuMK's Classic path because it is the broader GenX Dynamic Track workflow. The Dynamic Track panel now offers `NextGen Flex S-C-S-C-S` and `Classic Flex S-C-S` as explicit choices, with NextGen selected by default. The Flex action is named `Auto-Flex` so its purpose is clearer.
 
 NextGen can solve a Straight-Curve-Straight-Curve-Straight arrangement, allowing up to two curve sections for compound alignments and full S-curve connections. It evaluates the richer candidate set while Classic filters out solutions containing more than one curve. The elevation calculation uses the solved Dynamic Track path length when available instead of relying only on straight-line endpoint distance, which produces more sensible joins when the two endpoints are at different elevations.
 

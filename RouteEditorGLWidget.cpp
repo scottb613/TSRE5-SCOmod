@@ -1147,7 +1147,10 @@ void RouteEditorGLWidget::flexResult(bool success) {
 }
 
 void RouteEditorGLWidget::focusEditor() {
-    setFocus();
+    QWidget *editorWindow = window();
+    if(editorWindow != NULL)
+        editorWindow->activateWindow();
+    setFocus(Qt::OtherFocusReason);
 }
 
 void RouteEditorGLWidget::resizeGL(int w, int h) {
@@ -1904,6 +1907,26 @@ void RouteEditorGLWidget::enableTool(QString name) {
 }
 
 void RouteEditorGLWidget::statusPanelCommand(QString name) {
+    if(name == "movefast"){
+        cameraMoveSpeedLock = (cameraMoveSpeedLock == 1) ? 0 : 1;
+        if(camera != NULL)
+            camera->setMoveSpeedLock(cameraMoveSpeedLock);
+        emit updStatus(QString("movefast"), cameraMoveSpeedLock == 1 ? QString("ON") : QString("OFF"));
+        emit updStatus(QString("moveslow"), QString("OFF"));
+        showModeChange();
+        QTimer::singleShot(0, this, SLOT(focusEditor()));
+        return;
+    }
+    if(name == "moveslow"){
+        cameraMoveSpeedLock = (cameraMoveSpeedLock == -1) ? 0 : -1;
+        if(camera != NULL)
+            camera->setMoveSpeedLock(cameraMoveSpeedLock);
+        emit updStatus(QString("moveslow"), cameraMoveSpeedLock == -1 ? QString("ON") : QString("OFF"));
+        emit updStatus(QString("movefast"), QString("OFF"));
+        showModeChange();
+        QTimer::singleShot(0, this, SLOT(focusEditor()));
+        return;
+    }
     if(name == "select"){
         if(toolEnabled == "selectTool" && !resizeTool && !rotateTool && !translateTool){
             enableTool("");

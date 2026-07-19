@@ -356,10 +356,10 @@ void CameraFree::keyUp(QKeyEvent * e) {
             break;
         //case Qt::Key_E: // E
         case Qt::Key_Shift:
-            przesx = przesz = Game::cameraSpeedStd;
+            applyMoveSpeedLock();
             break;
         case Qt::Key_Control:
-            przesx = przesz = Game::cameraSpeedStd;
+            applyMoveSpeedLock();
             break;
         case Qt::Key_Left:    
             if(!Game::usenNumPad) break;

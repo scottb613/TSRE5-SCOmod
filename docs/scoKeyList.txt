@@ -1,4 +1,4 @@
-ROUTE EDITOR - MENU SHORTCUTS
+TSRE GenX v0.5 - ROUTE EDITOR - MENU SHORTCUTS
 Shift+Ctrl+S  Save route
 Alt+F4        Exit/close route editor
 Ctrl+Z        Undo
@@ -9,8 +9,7 @@ F2            Show Terrain tools
 F3            Show Geo tools
 F4            Show Activity tools
 F5            Toggle Properties window
-F6            Toggle Navi window
-F7            Toggle Status window
+F7            Toggle Control Panel
 F8            Toggle Errors/Messages window
 F12           Toggle Settings window
 /             Toggle Stick Camera To Terrain

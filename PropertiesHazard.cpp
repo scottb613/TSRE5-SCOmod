@@ -23,7 +23,7 @@ PropertiesHazard::PropertiesHazard() {
     vbox->setContentsMargins(0,1,1,1);
     
     infoLabel = new QLabel("Hazard:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     QFormLayout *vlist = new QFormLayout;
@@ -72,7 +72,7 @@ PropertiesHazard::PropertiesHazard() {
     
     // misc
     label = new QLabel("Misc:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
            

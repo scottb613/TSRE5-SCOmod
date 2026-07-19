@@ -21,7 +21,7 @@ PropertiesTerrain::PropertiesTerrain() {
     waterWindow = new TerrainWaterWindow2(this);
     waterWindow->hide();
     infoLabel = new QLabel("Terrain:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     QFormLayout *vlist = new QFormLayout;
@@ -41,7 +41,7 @@ PropertiesTerrain::PropertiesTerrain() {
     vbox->addWidget(bShaderEditor);
     
     QLabel* label = new QLabel("Water Level:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -57,7 +57,7 @@ PropertiesTerrain::PropertiesTerrain() {
     vbox->addWidget(bWaterEditor);
     
     label = new QLabel("Height Map:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *bHeightMapReset = new QPushButton("Reset Height ...", this);
@@ -66,7 +66,7 @@ PropertiesTerrain::PropertiesTerrain() {
     vbox->addWidget(bHeightMapReset);
     
     label = new QLabel("Selected Terrain Patch(s):");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -108,7 +108,7 @@ PropertiesTerrain::PropertiesTerrain() {
     vbox->addItem(vlist1);
     
     label = new QLabel("Texture Transformation:");
-    //label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    //label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist1 = new QGridLayout;
@@ -161,7 +161,7 @@ PropertiesTerrain::PropertiesTerrain() {
     vbox->addItem(vlist);
     
     label = new QLabel("MSTS Settings:");
-    //label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    //label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;

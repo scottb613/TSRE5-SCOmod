@@ -23,7 +23,6 @@ class TerrainTools;
 class ActivityTools;
 class NaviBox;
 class AboutWindow;
-class NaviWindow;
 class StatusWindow;
 class SettingsDialog;
 class ShapeViewWindow;
@@ -46,6 +45,7 @@ public:
     
 public slots:
     void save();
+    void openRouteFolder();
     void showRoute();
     void show();
     void createPaths();
@@ -63,7 +63,6 @@ public slots:
     void updateProperties(GameObj* obj);
     void hideShowToolWidget(bool show);
     void hideShowPropertiesWidget(bool show);
-    void hideShowNaviWidget(bool);
     void hideShowStatWidget(bool);    
     void hideShowSettingsDialog(bool);
     void hideShowShapeViewWidget(bool);
@@ -89,7 +88,6 @@ public slots:
     
     void showTerrainTreeEditr();
     void showWorldObjPivotPointsEnabled(bool show);
-    void naviWindowClosed();
     void statusWindowClosed();    
     void errorMessagesWindowClosed();
     void shapeVeiwWindowClosed();
@@ -139,6 +137,7 @@ private:
     QMenu *settingsMenu;
     
     QAction *saveAction;
+    QAction *openRouteFolderAction;
     QAction *createPathsAction;
     QAction *reloadRefAction;
     QAction *reloadMkrAction;    
@@ -155,7 +154,6 @@ private:
     QAction *terrainCameraAction;
     QAction *mstsShadowsAction;
     QAction *propertiesAction;
-    QAction *naviAction;
     QAction *statAction;
     QAction *settingsAction;    
     QAction *shapeViewAction;
@@ -184,7 +182,6 @@ private:
     QAction* vViewSnapable;
     
     AboutWindow* aboutWindow;
-    NaviWindow* naviWindow;
     StatusWindow* statusWindow;
     SettingsDialog* settingsDialog;    
     ErrorMessagesWindow* errorMessagesWindow;

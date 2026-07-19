@@ -13,10 +13,10 @@
 #include "Flex.h"
 #include "Game.h"
 #include "GLMatrix.h"
+#include "GuiFunct.h"
 
 PropertiesDyntrack::PropertiesDyntrack() {
     buttonTools["FlexTool"] = new QPushButton("Auto-Flex", this);
-    buttonTools["FlexTool"]->setStyleSheet("QPushButton { background-color: #555555; color: white; border: 1px solid #888; } QPushButton:hover { background-color: #666666; } QPushButton:pressed { background-color: #707070; }");
     QMapIterator<QString, QPushButton*> i(buttonTools);
     while (i.hasNext()) {
         i.next();
@@ -26,17 +26,7 @@ PropertiesDyntrack::PropertiesDyntrack() {
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
-    this->setStyleSheet(
-        "QWidget { background-color: #303030; color: white; }"
-        "QPushButton { background-color: #555555; color: white; border: 1px solid #888; }"
-        "QPushButton:hover { background-color: #666666; }"
-        "QPushButton:pressed { background-color: #707070; }"
-        "QRadioButton, QCheckBox, QLineEdit, QComboBox {"
-        " background-color: #202020; color: white; border: 1px solid #666; }"
-        "QCheckBox::indicator { width: 13px; height: 13px; background-color: #202020; border: 1px solid #b0b0b0; }"
-        "QCheckBox::indicator:hover { border: 1px solid #f08200; }"
-        "QCheckBox::indicator:checked { background-color: #f08200; border: 1px solid #f08200; }"
-    );
+    this->setStyleSheet(GuiFunct::scoPanelStyle());
 
     infoLabel = new QLabel("Object: Dynamic Track");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
@@ -66,7 +56,7 @@ PropertiesDyntrack::PropertiesDyntrack() {
         ruleLayout->setContentsMargins(6,3,6,3);
         QFrame *rule = new QFrame;
         rule->setFixedHeight(1);
-        rule->setStyleSheet("background-color: #565656; border: none;");
+        rule->setStyleSheet("background-color: #484848; border: none;");
         ruleLayout->addWidget(rule);
         vbox->addWidget(ruleRow);
     };
@@ -249,8 +239,6 @@ PropertiesDyntrack::~PropertiesDyntrack() {
 
 void PropertiesDyntrack::msg(QString name, QString val){
     if(name == "toolEnabled"){
-        QString flexActiveStyle = "QPushButton { background-color: #f08200; color: #202020; border: 1px solid #666; } QPushButton:pressed { background-color: #c46600; }";
-        QString flexInactiveStyle = "QPushButton { background-color: #202020; color: white; border: 1px solid #666; } QPushButton:pressed { background-color: #3a3a3a; }";
         QMapIterator<QString, QPushButton*> i(buttonTools);
         while (i.hasNext()) {
             i.next();
@@ -258,12 +246,9 @@ void PropertiesDyntrack::msg(QString name, QString val){
                 continue;
             i.value()->blockSignals(true);
             i.value()->setChecked(false);
-            i.value()->setStyleSheet(flexInactiveStyle);
         }
         if(buttonTools[val] != NULL){
             buttonTools[val]->setChecked(true);
-            if(val == "FlexTool")
-                buttonTools[val]->setStyleSheet(flexActiveStyle);
         }
         i.toFront();
         while (i.hasNext()) {

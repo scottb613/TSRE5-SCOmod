@@ -33,7 +33,6 @@
 #include "TarFile.h"
 #include "Renderer.h"
 #include "RouteEditorWindow.h"
-#include "NaviWindow.h"
 #include "StatusWindow.h"
 #include "Camera.h"
 #include "SettingsDialog.h"
@@ -56,7 +55,7 @@ SoundList *Game::soundList = NULL;
 TerrainLib *Game::terrainLib = NULL;   
 bool Game::LocalTSectionOnly = false;
 bool Game::UseWorkingDir = false;
-QString Game::AppName = "TSRE SCOmod";
+QString Game::AppName = "TSRE GenX";
 
 /// EFO New Setting for default startup option
 QString Game::startapp = "r";
@@ -73,7 +72,7 @@ bool Game::loadActivities = true;
 bool Game::loadConsists = true;
 //QString Game::route = "traska";
 //QString Game::route = "cmk";
-QString Game::mainWindowLayout = "PWTS";
+QString Game::mainWindowLayout = "PWTC";
 QString Game::ceWindowLayout = "C1";
 QString Game::ActivityToPlay = "";
 Renderer *Game::currentRenderer = NULL;
@@ -222,18 +221,12 @@ QColor *Game::terrBrushColor = new QColor("#000000");   // Default black
 
 QString Game::mainPos;   /// EFO Null handling exists
 QString Game::statusPos;  /// EFO Null handling exists
-QString Game::naviPos;  /// EFO Null handling exists
 bool Game::restoreLastSessionWindowGeometry = false;
 int Game::restoreMainX = 0;
 int Game::restoreMainY = 0;
 int Game::restoreMainW = 0;
 int Game::restoreMainH = 0;
 bool Game::restoreMainMaximized = false;
-bool Game::restoreNaviGeometry = false;
-int Game::restoreNaviX = 0;
-int Game::restoreNaviY = 0;
-int Game::restoreNaviW = 0;
-int Game::restoreNaviH = 0;
 bool Game::restoreStatusGeometry = false;
 int Game::restoreStatusX = 0;
 int Game::restoreStatusY = 0;
@@ -623,13 +616,9 @@ void Game::load() {
                 mainPos = setval;
             }
 
-            if(setname =="naviwindow") {
-                naviPos = setval;
-            }      
-
-            if(setname =="statuswindow") {
+            if(setname =="controlpanel" || setname =="statuswindow") {
                 statusPos = setval;
-            }
+            }            
 
             if(setname == "markerheight"){
                     markerHeight = setval.toInt();
@@ -976,7 +965,7 @@ void Game::load() {
         }
 
         if(setname =="season"){
-            // Disabled for SCOmod: seasonal display is controlled live from the
+            // Disabled for GenX: seasonal display is controlled live from the
             // F2 terrain texture selector so old settings files cannot override it.
         }
         
@@ -990,7 +979,7 @@ void Game::load() {
         }
   */      
         if(setname =="seasonalediting"){
-            // Disabled for SCOmod. The old global seasonal-editing mode caused
+            // Disabled for GenX. The old global seasonal-editing mode caused
             // terrain/shape confusion; seasonal preview now uses the F2 selector.
             seasonalEditing = false;
         }
@@ -1423,14 +1412,14 @@ void Game::CreateNewSettingsFile(){
     out << "logfiledays = 20               // delete files older than X days \n " ; 
     out << "logfilemax = 50000             // keep only X logs \n " ; 
     out << "//mainWindow = 100, 100          // X, Y of main windows and load window \n " ; 
-    out << "mainWindowLayout = \"PWTS\"      // Order of windows: P = Properties, T = Tools W = World \n " ; 
+    out << "mainWindowLayout = \"PWTC\"      // Order of windows: P = Properties, T = Tools, W = World, C = Control Panel \n " ; 
     out << "maxObjLag = 10  \n " ; 
     out << "mouseSpeed = 0.1  \n " ; 
     out << "shadowLowMapSize = 1024  \n " ; 
     out << "shadowMapSize = 2048  \n " ; 
     out << "shadowsEnabled = false          // affects performance if true  \n " ; 
     out << "soundEnabled = false          \n " ; 
-    out << "scoSoundEnabled = true         // SCOmod editor UI sounds: click, buzz, chirp  \n " ;
+    out << "scoSoundEnabled = true         // GenX editor UI sounds: click, buzz, chirp  \n " ;
     out << "startapp = r                    // r=Route Edit   c=Consist Edit   s=Shapeviewer    \n " ; 
     out << "systemTheme = false             // setting to true uses your Windows pallete  \n " ; 
     out << "unsafemode = false              // Only set to true for risky features  \n " ; 
@@ -1525,7 +1514,6 @@ void Game::CreateNewSettingsFile(){
     out << "markerLines = true                // Show markers when route loads  \n " ; 
     out << "markerText = 2.5                  // Text size for marker text  \n " ; 
     out << "MSTSshadows = false               // dumb down shadows when true  \n " ; 
-    out << "naviWindow = 10, 50               // X, Y of Navigation window for RE   \n " ; 
     out << "newSymbols = true                 // default is true, false uses the older TSRE pyramids   \n " ; 
     out << "objectLod = 3000                  // 2000 is plenty for most purposes   \n " ; 
     out << "oglDefaultLineWidth = 1           // width of standard lines  \n " ; 
@@ -1538,12 +1526,12 @@ void Game::CreateNewSettingsFile(){
     out << "selectedTerrColor = #FFB612       // terrain selection line color  \n " ; 
     out << "selectedTerrWidth = 4             // terrain selection line width  \n " ; 
     out << "skyColor =  #E0FFFF  \n " ; 
-    out << "statusWindow=10,400                // X, Y of Status Window  \n " ; 
+    out << "controlPanel=10,400                // X, Y of Control Panel  \n " ; 
     out << "tileLod = 1                       // tiles in each direction to load  \n " ; 
     out << "toolsHidden = false               // only show the viewport  \n " ; 
     out << "useSuperelevation = false         // apply superelevation when rendering curves  \n " ; 
     out << "viewCompass = false               // show compass at top center  \n " ; 
-    out << "viewMarkers = true                // view markers selected in Navi window  \n " ; 
+    out << "viewMarkers = true                // view markers selected in Control Panel  \n " ; 
     out << "viewTRLabels == true              // view data labels for interactives  \n " ;
     
     out << "wireLineHeight = 6.8              // yellow TDB line height  \n " ; 

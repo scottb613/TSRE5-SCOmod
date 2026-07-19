@@ -1,6 +1,6 @@
-# TSRE5-SCOmod
+# TSRE GenX
 
-TSRE5-SCOmod is an experimental improvement branch of the TSRE5 Trainsim.com fork, focused on practical route-editor improvements for MSTS and Open Rails route building.
+TSRE GenX is an experimental improvement branch of the TSRE5 Trainsim.com fork, focused on practical route-editor improvements for MSTS and Open Rails route building.
 
 This branch is based on Eric's `TSRE8.006 baseline` from the `master` branch of `eric-from-trainsim/TSRE5-Trainsim.Com-Fork`.
 
@@ -38,16 +38,16 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added `windows` executable icon and `AddShortcutDesktop.cmd` helper.
 - Added `restore last session` on the `load` screen to reopen the last route, camera view, and editor window layout.
 - Added `load` high-resolution branded splash and scaled loader/about display so the banner is not cropped.
-- Converted the `status window` into a compact clickable control panel.
-- Added `status/navi window` gentle delayed snapping.
-- Matched the `navi window` color/readability scheme to the darker Status Window style.
+- Added `Route > Open Route Folder` to open the active route directly in Windows Explorer.
+- Consolidated the former Status and Navi windows into one styled `Control Panel`, toggled with `F7`, with delayed edge snapping.
+- Added toggleable `Move: Fast` and `Move: Slow` Control Panel locks with sound, yellow active state, and automatic viewport focus return.
 - Improved `object Panel` searching with `ALL` category defaults, enforced mutually exclusive Tracks/Roads/Other category filters for searches, and a `Reset` search button.
 - Improved `object Panel` Scale Rail grouping so family/type categories contain the individual lengths, radii, and variants.
-- Refined `object/property panels` with consistent dark controls, bold orange Title Case headings, inset category separators, orange checked states, clearer object names, and standardized button feedback.
+- Refined `F1-F4 object/property/tool panels` with consistent dark controls, bold orange Title Case headings, inset category separators, orange checked states, clearer object names, standardized button feedback, and a cleaner terrain-texture preview/thumbnail bank.
 - Added `global` `uiScale` support for larger editor fonts and proportionally wider panels.
 - Added `global` sound feedback with standardized `SCOclick.wav`, `SCObuzz.wav`, and `SCOpress.wav` files.
-- Added `status window` `Place Guard` validation to prevent spammed objects with automatic undo, and respective feedback.
-- Updated `global` title bar to identify the build as `TSRE SCOmod`.
+- Added `Control Panel` `Place Guard` validation to prevent spammed objects with automatic undo, and respective feedback.
+- Updated `global` title bar to identify the build as `TSRE GenX`.
 - Reworked `F12` Settings Editor to save the active settings.txt with timestamp backups, organized tabs, dark striped rows, key assignments, and full-sentence tooltips.
 - Fixed `F3` OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened `F3` OSM Vector Map loading so failed network replies do not crash the editor.
@@ -64,7 +64,7 @@ Download the current test ZIP from Releases when available. Keep this copy separ
 
 The ZIP includes `AddShortcutDesktop.cmd`, which can create a desktop shortcut for the packaged `TSRE5.exe`.
 
-The ZIP also includes `LICENSE.md` and `THIRD-PARTY-NOTICES.txt`. TSRE5-SCOmod follows the original TSRE5 GPLv3 license; bundled runtime DLLs remain under their respective upstream licenses.
+The ZIP also includes `LICENSE.md` and `THIRD-PARTY-NOTICES.txt`. TSRE GenX follows the original TSRE5 GPLv3 license; bundled runtime DLLs remain under their respective upstream licenses.
 
 ## Documentation
 

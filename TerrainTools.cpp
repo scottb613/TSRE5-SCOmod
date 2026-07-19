@@ -32,18 +32,29 @@ static int scaledUiSize(int base){
 TerrainTools::TerrainTools(QString name)
     : QWidget(){
     setFixedWidth(scaledUiSize(250));
+    QFont panelFont = font();
+    if(panelFont.pointSizeF() > 0)
+        panelFont.setPointSizeF(panelFont.pointSizeF() * 1.12);
+    setFont(panelFont);
+    setStyleSheet(GuiFunct::scoPanelStyle());
     int row = 0;
     
-    texPreview = new QPixmap(192,192);
-    defaultTexPreview = new QPixmap(64,64);
+    texPreview = new QPixmap(160,160);
+    defaultTexPreview = new QPixmap(36,36);
     defaultTexPreview->fill(Qt::transparent);
     texPreview->fill(Qt::gray);
     texPreviewLabel = new ClickableLabel("");
     texPreviewLabel->setContentsMargins(0,0,0,0);
+    texPreviewLabel->setFixedSize(162,162);
+    texPreviewLabel->setAlignment(Qt::AlignCenter);
+    texPreviewLabel->setStyleSheet("background-color: #171717; border: 1px solid #555555;");
     texPreviewLabel->setPixmap(*texPreview);
     for(int i = 0; i < 7; i++){
         texPreviewLabels.push_back(new ClickableLabel(""));
         texPreviewLabels.back()->setContentsMargins(0,0,0,0);
+        texPreviewLabels.back()->setFixedSize(38,38);
+        texPreviewLabels.back()->setAlignment(Qt::AlignCenter);
+        texPreviewLabels.back()->setStyleSheet("background-color: #171717; border: 1px solid #4d4d4d;");
         texPreviewLabels.back()->setPixmap(*defaultTexPreview);
         texPreviewSignals.setMapping(texPreviewLabels.back(), i);
         connect(texPreviewLabels.back(), SIGNAL(clicked()), &texPreviewSignals, SLOT(map()));
@@ -123,6 +134,7 @@ TerrainTools::TerrainTools(QString name)
     vlist0->addWidget(buttonTools["paintToolColor"],row,0);
     vlist0->addWidget(buttonTools["paintToolTexture"],row,1);
     vlist0->addWidget(buttonTools["lockTexTool"],row++,2);
+    vlist0->addWidget(mirrorSeason,row++,0,1,3);
     
     QGridLayout *vlist1 = new QGridLayout;
     vlist1->setSpacing(2);
@@ -140,10 +152,21 @@ TerrainTools::TerrainTools(QString name)
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
+    auto addRule = [vbox]() {
+        QWidget *ruleRow = new QWidget;
+        ruleRow->setFixedHeight(7);
+        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
+        ruleLayout->setContentsMargins(6,3,6,3);
+        QFrame *rule = new QFrame;
+        rule->setFixedHeight(1);
+        rule->setStyleSheet("background-color: #484848; border: none;");
+        ruleLayout->addWidget(rule);
+        vbox->addWidget(ruleRow);
+    };
     
     QLabel *textureSetLabel = new QLabel("Texture Set:");
     textureSetLabel->setContentsMargins(3,0,0,0);
-    textureSetLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    textureSetLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(textureSetLabel);
 
     seasonType = new QComboBox;
@@ -155,9 +178,10 @@ TerrainTools::TerrainTools(QString name)
     seasonType->addItem("Night");
     vbox->addWidget(seasonType);
 
+    addRule();
     label0 = new QLabel("Edit Terrain Layers:");
     label0->setContentsMargins(3,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     vbox->addItem(vlist3);
     /*label0 = new QLabel("Terrain Patch:");
@@ -168,36 +192,35 @@ TerrainTools::TerrainTools(QString name)
     if(Game::serverClient == NULL){
         label0 = new QLabel("Paint Texture:");
         label0->setContentsMargins(3,0,0,0);
-        label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+        label0->setStyleSheet("QLabel { color: #d0d0d0; font-weight: bold; }");
         vbox->addWidget(label0);
         vbox->addItem(vlist0);
     }
 
-    label0 = new QLabel("Texture:");
+    addRule();
+    label0 = new QLabel("Texture Preview:");
     label0->setContentsMargins(3,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     vbox->addItem(vlist1);
 
-    vlist1 = new QGridLayout;
-    vlist1->setSpacing(0);
-    vlist1->setContentsMargins(0,0,0,0);    
-    vlist1->addWidget(texPreviewLabel, 0, 0, 3, 3);
-    vlist1->addWidget(texPreviewLabels[0], 0, 3);
-    vlist1->addWidget(texPreviewLabels[1], 1, 3);
-    vlist1->addWidget(texPreviewLabels[2], 2, 3);
-    vlist1->addWidget(texPreviewLabels[3], 3, 2);
-    vlist1->addWidget(texPreviewLabels[4], 3, 1);
-    vlist1->addWidget(texPreviewLabels[5], 3, 0);
-    vlist1->addWidget(texPreviewLabels[6], 3, 3);    
-    vbox->addItem(vlist1);
-    vbox->setAlignment(vlist1, Qt::AlignHCenter);
-    //vbox->addWidget(texPreviewLabel);
-    //vbox->setAlignment(texPreviewLabel, Qt::AlignHCenter);
+    QHBoxLayout *previewRow = new QHBoxLayout;
+    previewRow->setSpacing(4);
+    previewRow->setContentsMargins(4,1,4,1);
+    previewRow->addWidget(texPreviewLabel);
+    QGridLayout *thumbnailGrid = new QGridLayout;
+    thumbnailGrid->setSpacing(3);
+    thumbnailGrid->setContentsMargins(0,0,0,0);
+    for(int previewIndex = 0; previewIndex < 6; previewIndex++)
+        thumbnailGrid->addWidget(texPreviewLabels[previewIndex], previewIndex / 2, previewIndex % 2);
+    thumbnailGrid->addWidget(texPreviewLabels[6], 3, 0, 1, 2, Qt::AlignHCenter);
+    previewRow->addItem(thumbnailGrid);
+    previewRow->addStretch(1);
+    vbox->addItem(previewRow);
 
     QLabel *presetLabel = new QLabel("Presets:");
     presetLabel->setContentsMargins(3,0,0,0);
-    presetLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    presetLabel->setStyleSheet("QLabel { color: #d0d0d0; font-weight: bold; }");
     vbox->addWidget(presetLabel);
 
     presetCombo = new QComboBox;
@@ -214,9 +237,10 @@ TerrainTools::TerrainTools(QString name)
     vlistPreset->addWidget(presetRemove,1,2);
     vbox->addItem(vlistPreset);
 
-    QLabel *label2 = new QLabel("Brush settings:");
+    addRule();
+    QLabel *label2 = new QLabel("Brush Settings:");
     label2->setContentsMargins(3,0,0,0);
-    label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label2);
     
 
@@ -260,8 +284,6 @@ TerrainTools::TerrainTools(QString name)
     leTextureRotation->setValidator(new QIntValidator(0, 360, this));
     leTextureRotation->setText(QString::number(paintBrush->texRotationDegrees, 10));
     row = 0;
-    vlist->addWidget(GuiFunct::newQLabel("Terrtex:", labelWidth),row,0);
-    vlist->addWidget(mirrorSeason,row++,1,1,2);
     vlist->addWidget(GuiFunct::newQLabel("Color:", labelWidth),row,0);
     vlist->addWidget(colorw,row++,1,1,2);
     vlist->addWidget(GuiFunct::newQLabel("Size:", labelWidth),row,0);
@@ -313,8 +335,9 @@ TerrainTools::TerrainTools(QString name)
     resetRouteTerrtex = new QPushButton("Reset Route Terrtex Paint", this);
     setPinPoint = new QPushButton("Set Pinpoint", this);    
     
-    QLabel *label3 = new QLabel("Embankment settings:");
-    label3->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    addRule();
+    QLabel *label3 = new QLabel("Embankment Settings:");
+    label3->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label3->setContentsMargins(3,0,0,0);
     vbox->addWidget(label3);
 
@@ -355,6 +378,15 @@ TerrainTools::TerrainTools(QString name)
     
     vbox->addStretch(1);
     this->setLayout(vbox);
+
+    QList<QWidget*> controls = findChildren<QWidget*>();
+    for(int c = 0; c < controls.size(); c++){
+        controls[c]->setFont(panelFont);
+        if(qobject_cast<QPushButton*>(controls[c]) != NULL ||
+           qobject_cast<QLineEdit*>(controls[c]) != NULL ||
+           qobject_cast<QComboBox*>(controls[c]) != NULL)
+            controls[c]->setMinimumHeight(scaledUiSize(20));
+    }
     
     
     // signals
@@ -538,7 +570,8 @@ void TerrainTools::setBrushShapeIndex(int brushIndex){
         return;
     currentBrushShape = brushIndex;
     paintBrush->brushshape = &brushShapes[currentBrushShape];
-    texPreviewLabels[6]->setPixmap(QPixmap::fromImage(*paintBrush->brushshape));
+    texPreviewLabels[6]->setPixmap(QPixmap::fromImage(*paintBrush->brushshape)
+                                   .scaled(36, 36, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
 }
 
 void TerrainTools::heightToolEnabled(bool val){
@@ -1173,7 +1206,7 @@ void TerrainTools::updateTexPrev(){
             continue;
         if(i == 1){
             tlabel = texPreviewLabel;
-            res = 192;
+            res = 160;
             out = this->paintBrush->tex->getImageData(res,res);
             if(this->paintBrush->tex->bytesPerPixel == 3)
                 tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGB888)));
@@ -1181,7 +1214,7 @@ void TerrainTools::updateTexPrev(){
                 tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGBA8888)));   
         }// else {
         tlabel = texPreviewLabels[i-1];
-        res = 64;
+        res = 36;
         out = texLastItems[idx].second->getImageData(res,res);
         //}
         if(texLastItems[idx].second->bytesPerPixel == 3)

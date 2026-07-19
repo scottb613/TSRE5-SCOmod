@@ -53,6 +53,7 @@ public:
     virtual void MouseUp(QMouseEvent* e);
     virtual void keyDown(QKeyEvent * e);
     virtual void keyUp(QKeyEvent * e);
+    void setMoveSpeedLock(int mode);
     virtual void update(float fps);
     virtual void renderHud(GLUU *gluu);
     virtual void setCameraObject(GameObj* o);
@@ -61,6 +62,7 @@ public:
     int starex, starey;
     float fov;
 protected:
+    void applyMoveSpeedLock();
     float pos[3];
     float target[3];
     float up[3];
@@ -70,6 +72,7 @@ protected:
     float relativeRot[3];
     float lookAt[16];
     float przesx = 3, przesy = 1, przesz = 3;
+    int moveSpeedLock = 0;
     bool lockYaxis = false;    
     int jestcontrol;
     int lpm = 0;

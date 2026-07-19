@@ -16,9 +16,25 @@
 #include "Route.h"
 #include "RouteEditorGLWidget.h"
 #include "ShapeLib.h"
+#include "Coords.h"
+#include "GuiFunct.h"
 
 static int scaledUiSize(int base){
     return qRound(base * qMax(1.0f, Game::uiScale));
+}
+
+static QString statusButtonStyle(const QString& top, const QString& bottom,
+                                 const QString& textColor, const QString& border,
+                                 const QString& shadow){
+    return QString(
+        "QPushButton { color: %1;"
+        " background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %2, stop:1 %3);"
+        " border: 1px solid %4; border-bottom-color: %5; border-radius: 2px; padding: 1px 4px; }"
+        "QPushButton:hover { border-color: #f08200; }"
+        "QPushButton:pressed {"
+        " background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %3, stop:1 %2);"
+        " padding-top: 2px; padding-bottom: 0px; }"
+    ).arg(textColor, top, bottom, border, shadow);
 }
 
 static QPoint snapWindowPosition(QWidget *window){
@@ -80,8 +96,8 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     this->setWindowFlags(Qt::WindowType::Tool);
     //this->setWindowFlags(Qt::WindowStaysOnTopHint);
     this->setFixedWidth(scaledUiSize(300));
-    this->setFixedHeight(scaledUiSize(205));
-    this->setWindowTitle(tr("Status Window"));
+    this->setFixedHeight(scaledUiSize(440));
+    this->setWindowTitle(tr("Control Panel"));
     QStringList winPos = Game::statusPos.split(",");
     if(winPos.count() > 1) this->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
     snapTimer.setSingleShot(true);
@@ -108,7 +124,7 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     QList<QPushButton*> buttons;
     buttons << &status0 << &status1 << &status2 << &status3 << &status4 << &status5
             << &status6 << &status7 << &status8 << &status9 << &status10 << &status11
-            << &status12;
+            << &status12 << &moveFast << &moveSlow;
     for(int i = 0; i < buttons.size(); i++){
         buttons[i]->setFlat(false);
         buttons[i]->setFocusPolicy(Qt::NoFocus);
@@ -116,6 +132,14 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
         buttons[i]->setContentsMargins(0,0,0,0);
     }
     status10.setFlat(true);
+
+    QHBoxLayout *moveSpeedRow = new QHBoxLayout;
+    moveSpeedRow->setSpacing(2);
+    moveSpeedRow->setContentsMargins(3,0,1,0);
+    moveFast.setText("Move: Fast");
+    moveSlow.setText("Move: Slow");
+    moveSpeedRow->addWidget(&moveFast);
+    moveSpeedRow->addWidget(&moveSlow);
 
     vbox->addWidget(&status4,0,0);
     vbox->addWidget(&status9,0,1);
@@ -131,27 +155,100 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     vbox->addWidget(&status11,5,1);
     vbox->addWidget(&status12,6,0,1,2);
 
+    v->addItem(moveSpeedRow);
     v->addItem(vbox);
+
+    QWidget *ruleRow = new QWidget;
+    ruleRow->setFixedHeight(7);
+    QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
+    ruleLayout->setContentsMargins(6,3,6,3);
+    QFrame *rule = new QFrame;
+    rule->setFixedHeight(1);
+    rule->setStyleSheet("background-color: #484848; border: none;");
+    ruleLayout->addWidget(rule);
+    v->addWidget(ruleRow);
+
+    QLabel *markerFileLabel = new QLabel("Marker File:");
+    markerFileLabel->setContentsMargins(3,0,0,0);
+    markerFileLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    QLabel *markerLocationLabel = new QLabel("Marker Location:");
+    markerLocationLabel->setContentsMargins(3,0,0,0);
+    markerLocationLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    QLabel *positionLabel = new QLabel("Position:");
+    positionLabel->setContentsMargins(3,0,0,0);
+    positionLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    v->addWidget(markerFileLabel);
+    v->addWidget(&markerFiles);
+    v->addWidget(markerLocationLabel);
+    v->addWidget(&markerList);
+    v->addWidget(positionLabel);
+
+    markerFiles.setStyleSheet("combobox-popup: 0;");
+    markerList.setStyleSheet("combobox-popup: 0;");
+    markerFiles.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    markerList.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    QLabel *cameraPosLabel = new QLabel("Camera:");
+    QLabel *pointerPosLabel = new QLabel("Pointer:");
+    QGridLayout *positionGrid = new QGridLayout;
+    positionGrid->setSpacing(2);
+    positionGrid->setContentsMargins(3,0,1,0);
+    positionGrid->addWidget(pointerPosLabel,0,0);
+    positionGrid->addWidget(new QLabel("x"),0,1);
+    positionGrid->addWidget(&pxBox,0,2);
+    positionGrid->addWidget(new QLabel("y"),0,3);
+    positionGrid->addWidget(&pyBox,0,4);
+    positionGrid->addWidget(new QLabel("z"),0,5);
+    positionGrid->addWidget(&pzBox,0,6);
+    pxBox.setReadOnly(true);
+    pyBox.setReadOnly(true);
+    pzBox.setReadOnly(true);
+    if(Game::convertUnitD != 'm'){
+        pyBoxx.setReadOnly(true);
+        positionGrid->addWidget(&pyBoxx,0,7);
+    }
+    positionGrid->addWidget(cameraPosLabel,1,0);
+    positionGrid->addWidget(new QLabel("x"),1,1);
+    positionGrid->addWidget(&xBox,1,2);
+    positionGrid->addWidget(new QLabel("y"),1,3);
+    positionGrid->addWidget(&yBox,1,4);
+    positionGrid->addWidget(new QLabel("z"),1,5);
+    positionGrid->addWidget(&zBox,1,6);
+    v->addItem(positionGrid);
+
+    QGridLayout *coordinateGrid = new QGridLayout;
+    coordinateGrid->setSpacing(2);
+    coordinateGrid->setContentsMargins(3,0,1,0);
+    coordinateGrid->addWidget(new QLabel("X"),0,0);
+    coordinateGrid->addWidget(&txBox,0,1);
+    coordinateGrid->addWidget(new QLabel("Y"),0,2);
+    coordinateGrid->addWidget(&tyBox,0,3);
+    coordinateGrid->addWidget(new QLabel("lat"),1,0);
+    coordinateGrid->addWidget(&latBox,1,1);
+    coordinateGrid->addWidget(new QLabel("lon"),1,2);
+    coordinateGrid->addWidget(&lonBox,1,3);
+    v->addItem(coordinateGrid);
+    v->addWidget(&tileInfo);
+    QPushButton *jumpButton = new QPushButton("Jump", this);
+    jumpButton->setFocusPolicy(Qt::NoFocus);
+    v->addWidget(jumpButton);
 
 
     /// EFO end
 
     this->setLayout(v);
+    this->setStyleSheet(GuiFunct::scoPanelStyle());
+    markerFileLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    markerLocationLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    positionLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
 
-    if(Game::systemTheme == false)
-    {
-     statG = "QPushButton { background-color: green; color: white; border: 1px solid #777; padding: 1px; } QPushButton:pressed { background-color: #006000; }";
-     statY = "QPushButton { background-color: yellow; color: black; border: 1px solid #777; padding: 1px; } QPushButton:pressed { background-color: #d0d000; }";
-     statS = "QPushButton { background-color: #202020; color: white; border: 1px solid #777; padding: 1px; } QPushButton:pressed { background-color: #3a3a3a; }";
-     statR = "QPushButton { background-color: red; color: black; border: 1px solid #777; padding: 1px; } QPushButton:pressed { background-color: #b00000; }";
-    }
-    else
-    {
-     statG = "QPushButton { background-color: #55AA55; color: white; border: 1px solid #888; padding: 1px; } QPushButton:pressed { background-color: #337733; }";
-     statY = "QPushButton { background-color: #D6C94A; color: black; border: 1px solid #888; padding: 1px; } QPushButton:pressed { background-color: #aaa033; }";
-     statS = "QPushButton { background-color: #202020; color: white; border: 1px solid #666; padding: 1px; } QPushButton:pressed { background-color: #3a3a3a; }";
-     statR = "QPushButton { background-color: #CC5555; color: white; border: 1px solid #888; padding: 1px; } QPushButton:pressed { background-color: #993333; }";
-    }
+    statS = statusButtonStyle("#606060", "#414141", "white", "#707070", "#292929");
+    statG = statusButtonStyle("#48b957", "#197b25", "white", "#63cc70", "#0d4514");
+    statY = statusButtonStyle("#fff36a", "#d6c94a", "#171717", "#fff58a", "#746c21");
+    statR = statusButtonStyle("#e66c6c", "#a83d3d", "white", "#ef8989", "#5b2020");
+
+    moveFast.setStyleSheet(statS);
+    moveSlow.setStyleSheet(statS);
 
     QObject::connect(&status4, SIGNAL(released()), this, SLOT(selectButtonAction()));
     QObject::connect(&status9, SIGNAL(released()), this, SLOT(placeButtonAction()));
@@ -165,11 +262,25 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     QObject::connect(&status5, SIGNAL(released()), this, SLOT(cameraTerrainButtonAction()));
     QObject::connect(&status11, SIGNAL(released()), this, SLOT(objectSelectedButtonAction()));
     QObject::connect(&status12, SIGNAL(released()), this, SLOT(placeGuardButtonAction()));
+    QObject::connect(&moveFast, SIGNAL(released()), this, SLOT(moveFastButtonAction()));
+    QObject::connect(&moveSlow, SIGNAL(released()), this, SLOT(moveSlowButtonAction()));
+    QObject::connect(jumpButton, SIGNAL(released()), this, SLOT(jumpTileSelected()));
+    QObject::connect(&markerFiles, SIGNAL(activated(QString)), this, SLOT(mkrFilesSelected(QString)));
+    QObject::connect(&markerList, SIGNAL(activated(QString)), this, SLOT(mkrListSelected(QString)));
+    QObject::connect(&txBox, SIGNAL(textEdited(QString)), this, SLOT(xyChanged(QString)));
+    QObject::connect(&tyBox, SIGNAL(textEdited(QString)), this, SLOT(xyChanged(QString)));
+    QObject::connect(&xBox, SIGNAL(textEdited(QString)), this, SLOT(xyChanged(QString)));
+    QObject::connect(&yBox, SIGNAL(textEdited(QString)), this, SLOT(xyChanged(QString)));
+    QObject::connect(&zBox, SIGNAL(textEdited(QString)), this, SLOT(xyChanged(QString)));
+    QObject::connect(&latBox, SIGNAL(textEdited(QString)), this, SLOT(latLonChanged(QString)));
+    QObject::connect(&lonBox, SIGNAL(textEdited(QString)), this, SLOT(latLonChanged(QString)));
+    tileInfo.setText(" ");
 
 }
 
 
 StatusWindow::~StatusWindow() {
+    qDeleteAll(mkrPlaces);
 }
 
 void StatusWindow::hideEvent(QHideEvent *e){
@@ -254,6 +365,14 @@ void StatusWindow::placeGuardButtonAction(){
     emit statusCommand("guard");
 }
 
+void StatusWindow::moveFastButtonAction(){
+    emit statusCommand("movefast");
+}
+
+void StatusWindow::moveSlowButtonAction(){
+    emit statusCommand("moveslow");
+}
+
 void StatusWindow::clearGuardError(){
     guardErrorActive = false;
     status12.setText(lastGuardStatus);
@@ -280,5 +399,136 @@ void StatusWindow::recStatus(QString statName, QString statVal ){
     if(statName.contains("timer"))     { status10.setText(statVal + "m Since Save"); if(statVal.toInt() > 10) status10.setStyleSheet(statY); else status10.setStyleSheet(statS);  }
     if(statName.contains("object"))    { if(statVal.size() > 0) {status11.setText(statVal + " Selected"); status11.setStyleSheet(statY); } else {status11.setText(""); status11.setStyleSheet(statS);}  }
     if(statName.contains("guard"))     { lastGuardStatus = statVal; if(guardErrorActive) return; status12.setText(statVal); if(statVal.endsWith("ON")) status12.setStyleSheet(statS); else status12.setStyleSheet(statY);  }
+    if(statName.contains("movefast"))  { moveFast.setStyleSheet(statVal.endsWith("ON") ? statY : statS); }
+    if(statName.contains("moveslow"))  { moveSlow.setStyleSheet(statVal.endsWith("ON") ? statY : statS); }
+}
+
+void StatusWindow::latLonChanged(QString){
+    jumpType = "latlon";
+}
+
+void StatusWindow::xyChanged(QString){
+    jumpType = "xy";
+}
+
+void StatusWindow::jumpTileSelected(){
+    if(aCoords == NULL)
+        aCoords = new PreciseTileCoordinate();
+
+    bool jumped = false;
+    if(jumpType == "xy"){
+        aCoords->setWxyz(xBox.text().toInt(), yBox.text().toInt(), zBox.text().toInt());
+        aCoords->TileX = txBox.text().toInt();
+        aCoords->TileZ = tyBox.text().toInt();
+        emit jumpTo(aCoords);
+        jumped = true;
+    } else if(jumpType == "latlon"){
+        igh = Game::GeoCoordConverter->ConvertToInternal(latBox.text().toDouble(), lonBox.text().toDouble(), igh);
+        aCoords = Game::GeoCoordConverter->ConvertToTile(igh, aCoords);
+        aCoords->setWxyz();
+        aCoords->wZ = -aCoords->wZ;
+        emit jumpTo(aCoords);
+        jumped = true;
+    } else if(jumpType == "marker"){
+        LatitudeLongitudeCoordinate *place = mkrPlaces.value(markerList.currentText(), NULL);
+        if(place == NULL)
+            return;
+        igh = Game::GeoCoordConverter->ConvertToInternal(place->Latitude, place->Longitude, igh);
+        aCoords = Game::GeoCoordConverter->ConvertToTile(igh, aCoords);
+        aCoords->setWxyz();
+        aCoords->wZ = -aCoords->wZ;
+        emit jumpTo(aCoords);
+        jumped = true;
+    }
+
+    if(jumped)
+        emit requestMainFocus();
+}
+
+void StatusWindow::naviInfo(int all, int hidden){
+    if(all == objCount && hidden == objHidden)
+        return;
+    objCount = all;
+    objHidden = hidden;
+    tileInfo.setText("Objects: " + QString::number(all) + " (including " + QString::number(hidden) + " hidden)");
+}
+
+void StatusWindow::pointerInfo(float* coords){
+    pxBox.setText(QString::number(coords[0]));
+    pyBox.setText(QString::number(coords[1]));
+    pyBoxx.setText(QString::number(coords[1] * Game::convertDistance, 'f', 0) + " " + Game::convertUnitD);
+    pzBox.setText(QString::number(-coords[2]));
+}
+
+void StatusWindow::posInfo(PreciseTileCoordinate* coords){
+    if(lastX == coords->X && lastY == coords->Y && lastZ == coords->Z &&
+       lastTX == coords->TileX && lastTZ == coords->TileZ)
+        return;
+
+    lastX = coords->wX;
+    lastY = coords->wY;
+    lastZ = coords->wZ;
+    lastTX = coords->TileX;
+    lastTZ = coords->TileZ;
+    txBox.setText(QString::number(lastTX));
+    tyBox.setText(QString::number(lastTZ));
+    xBox.setText(QString::number(lastX));
+    yBox.setText(QString::number(lastY));
+    zBox.setText(QString::number(-lastZ));
+    igh = Game::GeoCoordConverter->ConvertToInternal(coords);
+    latlon = Game::GeoCoordConverter->ConvertToLatLon(igh);
+    latBox.setText(QString::number(latlon->Latitude));
+    lonBox.setText(QString::number(latlon->Longitude));
+}
+
+void StatusWindow::reloadMkrLists(){
+    if(Game::debugOutput)
+        qDebug() << "Control Panel marker list" << Game::markerFiles;
+}
+
+void StatusWindow::mkrList(QMap<QString, Coords*> list){
+    markerFiles.clear();
+    mkrFiles = list;
+    const QString routeId = Game::route.toLower() + ".mkr";
+
+    for(auto it = list.begin(); it != list.end(); ++it){
+        if(it.value() != NULL && it.value()->loaded)
+            markerFiles.addItem(it.key());
+    }
+
+    if(markerFiles.count() == 0)
+        return;
+    int routeIndex = markerFiles.findText(routeId);
+    if(routeIndex < 0)
+        routeIndex = 0;
+    markerFiles.setCurrentIndex(routeIndex);
+    mkrFilesSelected(markerFiles.itemText(routeIndex));
+}
+
+void StatusWindow::mkrFilesSelected(QString item){
+    Coords *coords = mkrFiles.value(item, NULL);
+    if(coords == NULL)
+        return;
+
+    emit sendMsg("mkrFile", item);
+    qDeleteAll(mkrPlaces);
+    mkrPlaces.clear();
+    QStringList names;
+    for(int i = 0; i < coords->markerList.size(); i++){
+        LatitudeLongitudeCoordinate *place = new LatitudeLongitudeCoordinate();
+        place->Latitude = coords->markerList[i].lat;
+        place->Longitude = coords->markerList[i].lon;
+        mkrPlaces.insert(coords->markerList[i].name, place);
+        names.append(coords->markerList[i].name);
+    }
+    names.sort(Qt::CaseInsensitive);
+    names.removeDuplicates();
+    markerList.clear();
+    markerList.addItems(names);
+    markerList.setMaxVisibleItems(25);
+}
+
+void StatusWindow::mkrListSelected(QString){
+    jumpType = "marker";
 }
 

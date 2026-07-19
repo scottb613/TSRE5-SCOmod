@@ -19,6 +19,7 @@
 #include "SpeedPostDAT.h"
 #include "SoundList.h"
 #include "TRitem.h"
+#include "GuiFunct.h"
 #include <QMapIterator>
 
 static int scaledUiSize(int base){
@@ -75,12 +76,7 @@ ObjTools::ObjTools(QString name)
     if(objectPanelFont.pointSizeF() > 0)
         objectPanelFont.setPointSizeF(objectPanelFont.pointSizeF() * 1.12);
     setFont(objectPanelFont);
-    setStyleSheet(
-        "QCheckBox { color: white; }"
-        "QCheckBox::indicator { width: 13px; height: 13px; background-color: #202020; border: 1px solid #b0b0b0; }"
-        "QCheckBox::indicator:hover { border: 1px solid #f08200; }"
-        "QCheckBox::indicator:checked { background-color: #f08200; border: 1px solid #f08200; }"
-    );
+    setStyleSheet(GuiFunct::scoPanelStyle());
     buttonTools["selectTool"] = new QPushButton("Select", this);
     buttonTools["placeTool"] = new QPushButton("Place New", this);
     buttonTools["autoPlaceSimpleTool"] = new QPushButton("Auto Place", this);
@@ -114,7 +110,7 @@ ObjTools::ObjTools(QString name)
         ruleLayout->setContentsMargins(6,3,6,3);
         QFrame *rule = new QFrame;
         rule->setFixedHeight(1);
-        rule->setStyleSheet("background-color: #565656; border: none;");
+        rule->setStyleSheet("background-color: #484848; border: none;");
         ruleLayout->addWidget(rule);
         vbox->addWidget(ruleRow);
     };

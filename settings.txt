@@ -1,4 +1,4 @@
-// TSRE SCOmod v0.4 settings
+// TSRE GenX v0.5 settings
 // Both # and // can be used for comments.
 // Recommended public uiScale range: 1.00 to 1.25. Scott's 32" 2K setup uses 1.15.
 
@@ -9,7 +9,7 @@ consoleOutput = false             // display log output in realtime in the comma
 debugOutput = false               // enable extended logging detail
 fullscreen = false                // start maximized/fullscreen
 soundEnabled = false              // legacy TSRE sound support
-scoSoundEnabled = true            // SCOmod editor UI sounds: click, buzz, chirp
+scoSoundEnabled = true            // GenX editor UI sounds: click, buzz, chirp
 startapp = r                      // r = Route Editor, c = Consist Editor, s = Shape Viewer
 systemTheme = false               // true uses your Windows palette
 unsafemode = false                // only enable for risky/advanced features
@@ -46,9 +46,8 @@ loadAllWFiles = false             // true loads the entire route for error check
 //// UI / Windows / Scaling
 
 mainWindow = 100, 100             // X, Y of main window and load window
-mainWindowLayout = "PWTS"         // window order: P = Properties, T = Tools, W = World
-naviWindow = 50, 50               // X, Y of Navigation window
-statusWindow = 0, 100             // X, Y of Status window
+mainWindowLayout = "PWTC"         // window order: P = Properties, T = Tools, W = World, C = Control Panel
+controlPanel = 0, 100             // X, Y of Control Panel
 toolsHidden = false               // only show the viewport
 uiScale = 1.15                    // global editor UI font/panel scale; 1.00 to 1.25 recommended
 
@@ -103,7 +102,7 @@ selectedTerrWidth = 4             // terrain selection line width
 skyColor = #E0FFFF
 useSuperelevation = false         // apply superelevation when rendering curves
 viewCompass = false               // show compass at top center
-viewMarkers = true                // view markers selected in Navi window
+viewMarkers = true                // view markers selected in Control Panel
 wireLineHeight = 6.8              // yellow TDB/RDB line height
 
 
@@ -191,5 +190,5 @@ ortsEngEnable = true              // give precedence to settings in /OpenRails f
 
 //// Legacy / Disabled
 
-# season = "Spring"               // disabled in SCOmod; use the F2 Texture Set selector
-# seasonalEditing = on            // disabled in SCOmod; use the F2 Texture Set selector
+# season = "Spring"               // disabled in GenX; use the F2 Texture Set selector
+# seasonalEditing = on            // disabled in GenX; use the F2 Texture Set selector

@@ -25,6 +25,11 @@ static int scaledUiSize(int base){
 GeoTools::GeoTools(QString name)
     : QWidget(){
     setFixedWidth(scaledUiSize(250));
+    QFont panelFont = font();
+    if(panelFont.pointSizeF() > 0)
+        panelFont.setPointSizeF(panelFont.pointSizeF() * 1.12);
+    setFont(panelFont);
+    setStyleSheet(GuiFunct::scoPanelStyle());
     int row = 0;
     
     buttonTools["mapTileShowTool"] = new QPushButton("Show/Hide Map", this);
@@ -42,25 +47,38 @@ GeoTools::GeoTools(QString name)
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
+    auto addRule = [vbox]() {
+        QWidget *ruleRow = new QWidget;
+        ruleRow->setFixedHeight(7);
+        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
+        ruleLayout->setContentsMargins(6,3,6,3);
+        QFrame *rule = new QFrame;
+        rule->setFixedHeight(1);
+        rule->setStyleSheet("background-color: #484848; border: none;");
+        ruleLayout->addWidget(rule);
+        vbox->addWidget(ruleRow);
+    };
         
     label0 = new QLabel("Map Layers:");
     label0->setContentsMargins(3,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     vbox->addWidget(buttonTools["mapTileShowTool"]);
     vbox->addWidget(buttonTools["mapTileLoadTool"]);
     vbox->addWidget(buttonTools["makeTileTextureTool"]);
     vbox->addWidget(buttonTools["removeTileTextureTool"]);
     
+    addRule();
     label0 = new QLabel("Terrain Heightmap:");
     label0->setContentsMargins(3,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     vbox->addWidget(buttonTools["heightTileLoadTool"]);
     
-    label0 = new QLabel("Auto tile generation:");
+    addRule();
+    label0 = new QLabel("Auto Tile Generation:");
     label0->setContentsMargins(3,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     QCheckBox *chAutoCreateTile = new QCheckBox("Create new tiles if not exist.");
     chAutoCreateTile->setChecked(Game::autoNewTiles);
@@ -69,9 +87,10 @@ GeoTools::GeoTools(QString name)
     vbox->addWidget(chAutoCreateTile);
     vbox->addWidget(chAutoGeoTerrain);
     
-    label0 = new QLabel("Tiles from marker file:");
+    addRule();
+    label0 = new QLabel("Tiles From Marker File:");
     label0->setContentsMargins(3,0,0,0);
-    //label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     vbox->addWidget(&markerFiles);
     markerFiles.setStyleSheet("combobox-popup: 0;");
@@ -92,8 +111,10 @@ GeoTools::GeoTools(QString name)
                       this, SLOT(generateTilesEnabled()));
     vbox->addWidget(generateTiles);
 
+    addRule();
     label0 = new QLabel("Distant Terrain:");
     label0->setContentsMargins(3,0,0,0);
+    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     QPushButton * checkGeodataLoFiles = new QPushButton("Check if geodata files available.", this);
     //QObject::connect(checkGeodataFiles, SIGNAL(released()),
@@ -111,6 +132,16 @@ GeoTools::GeoTools(QString name)
     
     vbox->addStretch(1);
     this->setLayout(vbox);
+
+    QList<QWidget*> controls = findChildren<QWidget*>();
+    for(int c = 0; c < controls.size(); c++){
+        controls[c]->setFont(panelFont);
+        if(qobject_cast<QPushButton*>(controls[c]) != NULL ||
+           qobject_cast<QLineEdit*>(controls[c]) != NULL ||
+           qobject_cast<QComboBox*>(controls[c]) != NULL ||
+           qobject_cast<QSpinBox*>(controls[c]) != NULL)
+            controls[c]->setMinimumHeight(scaledUiSize(20));
+    }
     
     
     // signals

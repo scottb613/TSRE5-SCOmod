@@ -212,18 +212,12 @@ public:
     static bool loadActivities;    
     static QString mainPos;
     static QString statusPos;
-    static QString naviPos;
     static bool restoreLastSessionWindowGeometry;
     static int restoreMainX;
     static int restoreMainY;
     static int restoreMainW;
     static int restoreMainH;
     static bool restoreMainMaximized;
-    static bool restoreNaviGeometry;
-    static int restoreNaviX;
-    static int restoreNaviY;
-    static int restoreNaviW;
-    static int restoreNaviH;
     static bool restoreStatusGeometry;
     static int restoreStatusX;
     static int restoreStatusY;

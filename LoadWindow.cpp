@@ -248,17 +248,9 @@ bool LoadWindow::readLastSession(){
         Game::mainPos = QString::number(Game::restoreMainX)+","+QString::number(Game::restoreMainY);
     }
 
-    QJsonObject naviWindow = root.value("naviWindow").toObject();
-    if(!naviWindow.isEmpty()){
-        Game::restoreNaviGeometry = true;
-        Game::restoreNaviX = naviWindow.value("x").toInt();
-        Game::restoreNaviY = naviWindow.value("y").toInt();
-        Game::restoreNaviW = naviWindow.value("w").toInt();
-        Game::restoreNaviH = naviWindow.value("h").toInt();
-        Game::naviPos = QString::number(Game::restoreNaviX)+","+QString::number(Game::restoreNaviY);
-    }
-
-    QJsonObject statusWindow = root.value("statusWindow").toObject();
+    QJsonObject statusWindow = root.value("controlPanel").toObject();
+    if(statusWindow.isEmpty())
+        statusWindow = root.value("statusWindow").toObject();
     if(!statusWindow.isEmpty()){
         Game::restoreStatusGeometry = true;
         Game::restoreStatusX = statusWindow.value("x").toInt();

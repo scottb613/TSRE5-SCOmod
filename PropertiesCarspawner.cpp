@@ -19,7 +19,7 @@ PropertiesCarspawner::PropertiesCarspawner() {
     vbox->setContentsMargins(0,1,1,1);
     
     infoLabel = new QLabel("Carspawner:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     QFormLayout *vlist = new QFormLayout;
@@ -46,13 +46,13 @@ PropertiesCarspawner::PropertiesCarspawner() {
     //vbox->addWidget(&this->useCustomList);
     //useCustomList.setText("Use custom car list.");
     label = new QLabel("Car List:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&this->carspawnList);
     carspawnList.setStyleSheet("combobox-popup: 0;");
     label = new QLabel("Track Items:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *bExpandSelected = new QPushButton("Expand");

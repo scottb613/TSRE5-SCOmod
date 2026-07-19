@@ -16,6 +16,7 @@
 AboutWindow::AboutWindow(QWidget* parent) : QWidget(parent) {
     this->setWindowFlags( Qt::CustomizeWindowHint );
     this->setWindowFlags(Qt::WindowType::Tool);
+    this->setWindowTitle(Game::AppName+" "+Game::AppVersion+" About");
     this->setFixedSize(600, 300);
     QImage* myImage = new QImage();
     myImage->load(QString("tsre_appdata/")+Game::AppDataVersion+"/load.png");

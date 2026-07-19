@@ -20,7 +20,7 @@ PropertiesTransfer::PropertiesTransfer() {
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     infoLabel = new QLabel("Transfer:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     
     texPreview = new QPixmap(150,150);
@@ -40,7 +40,7 @@ PropertiesTransfer::PropertiesTransfer() {
     vbox->addItem(vlistt);
     
     QLabel * label0 = new QLabel("Texture:");
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label0->setContentsMargins(3,0,0,0);
     vbox->addWidget(label0);
     QLabel * label1 = new QLabel("FileName:");
@@ -69,7 +69,7 @@ PropertiesTransfer::PropertiesTransfer() {
 //    vbox->addWidget(texPut); 
     
     QLabel * label = new QLabel("Size:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QFormLayout *vlist = new QFormLayout;
@@ -89,7 +89,7 @@ PropertiesTransfer::PropertiesTransfer() {
     
 
     label = new QLabel("Position & Rotation:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;

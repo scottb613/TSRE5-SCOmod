@@ -14,6 +14,8 @@
 #include <QJsonObject>
 #include <QFile>
 #include <QDateTime>
+#include <QDesktopServices>
+#include <QUrl>
 #include "RouteEditorGLWidget.h"
 #include "RouteEditorWindow.h"
 #include "Game.h"
@@ -52,7 +54,6 @@
 #include "PropertiesActivityPath.h"
 #include "PropertiesConsist.h"
 #include "Ref.h"
-#include "NaviWindow.h"
 #include "StatusWindow.h"
 #include "SettingsDialog.h"
 #include "ErrorMessagesWindow.h"
@@ -110,7 +111,6 @@ RouteEditorWindow::RouteEditorWindow() {
     
     shapeViewWindow = new ShapeViewWindow(this);
     aboutWindow = new AboutWindow(this);
-    naviWindow = new NaviWindow(this);
     statusWindow = new StatusWindow(this);
     settingsDialog = new SettingsDialog(this);
     
@@ -242,6 +242,9 @@ RouteEditorWindow::RouteEditorWindow() {
     saveAction->setShortcut(QKeySequence("Shift+Ctrl+S"));
     QObject::connect(saveAction, SIGNAL(triggered()), this, SLOT(save()));
 
+    openRouteFolderAction = new QAction(tr("&Open Route Folder"), this);
+    QObject::connect(openRouteFolderAction, SIGNAL(triggered()), this, SLOT(openRouteFolder()));
+
     createPathsAction = new QAction(tr("&Create Debug Paths"), this);
     QObject::connect(createPathsAction, SIGNAL(triggered()), this, SLOT(createPaths()));
     
@@ -271,6 +274,8 @@ RouteEditorWindow::RouteEditorWindow() {
     if(Game::serverClient == NULL){
         routeMenu = menuBar()->addMenu(tr("&Route"));
         routeMenu->addAction(saveAction);
+        routeMenu->addAction(openRouteFolderAction);
+        routeMenu->addSeparator();
         routeMenu->addAction(reloadRefAction);
         routeMenu->addAction(reloadMkrAction);   
         routeMenu->addAction(reloadSettingsAction);           
@@ -363,12 +368,7 @@ RouteEditorWindow::RouteEditorWindow() {
     toolsMenu->addAction(propertiesAction);
     QObject::connect(propertiesAction, SIGNAL(triggered(bool)), this, SLOT(hideShowPropertiesWidget(bool)));
 
-    naviAction = GuiFunct::newMenuCheckAction(tr("&Navi Window"), this); 
-    naviAction->setShortcut(QKeySequence("F6"));    
-    toolsMenu->addAction(naviAction);
-    QObject::connect(naviAction, SIGNAL(triggered(bool)), this, SLOT(hideShowNaviWidget(bool)));
-
-    statAction = GuiFunct::newMenuCheckAction(tr("Status &Window"), this, false); 
+    statAction = GuiFunct::newMenuCheckAction(tr("Control &Panel"), this, false); 
     statAction->setShortcut(QKeySequence("F7"));
     toolsMenu->addAction(statAction);
     QObject::connect(statAction, SIGNAL(triggered(bool)), this, SLOT(hideShowStatWidget(bool)));
@@ -449,7 +449,6 @@ RouteEditorWindow::RouteEditorWindow() {
     }
     
     if(Game::playerMode){
-        naviWindow->hide();
         statusWindow->hide();
         errorMessagesWindow->hide();
         box->hide();
@@ -484,11 +483,7 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(glWidget, SIGNAL(sendMsg(QString)), activityTools, SLOT(msg(QString)));
     QObject::connect(glWidget, SIGNAL(sendMsg(QString, QString)), activityEventWindow->eventProperties, SLOT(msg(QString, QString)));
     
-    QObject::connect(naviWindow, SIGNAL(sendMsg(QString)), glWidget, SLOT(msg(QString)));
-    QObject::connect(naviWindow, SIGNAL(sendMsg(QString, bool)), glWidget, SLOT(msg(QString, bool)));
-    QObject::connect(naviWindow, SIGNAL(sendMsg(QString, int)), glWidget, SLOT(msg(QString, int)));
-    QObject::connect(naviWindow, SIGNAL(sendMsg(QString, float)), glWidget, SLOT(msg(QString, float)));
-    QObject::connect(naviWindow, SIGNAL(sendMsg(QString, QString)), glWidget, SLOT(msg(QString, QString)));
+    QObject::connect(statusWindow, SIGNAL(sendMsg(QString, QString)), glWidget, SLOT(msg(QString, QString)));
 
 
     QObject::connect(glWidget, SIGNAL(sendMsg(QString)), shapeViewWindow, SLOT(msg(QString)));
@@ -498,16 +493,16 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(glWidget, SIGNAL(sendMsg(QString, QString)), shapeViewWindow, SLOT(msg(QString, QString)));
     
     QObject::connect(glWidget, SIGNAL(naviInfo(int, int)),
-                      naviWindow, SLOT(naviInfo(int, int)));
+                      statusWindow, SLOT(naviInfo(int, int)));
     
     QObject::connect(glWidget, SIGNAL(posInfo(PreciseTileCoordinate*)),
-                      naviWindow, SLOT(posInfo(PreciseTileCoordinate*)));
+                      statusWindow, SLOT(posInfo(PreciseTileCoordinate*)));
     
     QObject::connect(glWidget, SIGNAL(pointerInfo(float*)),
-                      naviWindow, SLOT(pointerInfo(float*)));
+                      statusWindow, SLOT(pointerInfo(float*)));
     
     QObject::connect(glWidget, SIGNAL(mkrList(QMap<QString, Coords*>)),
-                      naviWindow, SLOT(mkrList(QMap<QString, Coords*>)));
+                      statusWindow, SLOT(mkrList(QMap<QString, Coords*>)));
     
     QObject::connect(glWidget, SIGNAL(mkrList(QMap<QString, Coords*>)),
                       geoTools, SLOT(mkrList(QMap<QString, Coords*>)));
@@ -581,8 +576,10 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(glWidget, SIGNAL(setBrushTextureId(int)),
                       terrainTools, SLOT(setBrushTextureId(int)));   
     
-    QObject::connect(naviWindow, SIGNAL(jumpTo(PreciseTileCoordinate*)),
+    QObject::connect(statusWindow, SIGNAL(jumpTo(PreciseTileCoordinate*)),
                       glWidget, SLOT(jumpTo(PreciseTileCoordinate*)));
+    QObject::connect(statusWindow, SIGNAL(requestMainFocus()),
+                      glWidget, SLOT(focusEditor()));
     
     QObject::connect(glWidget, SIGNAL(itemSelected(Ref::RefItem*)),
                       objTools, SLOT(itemSelected(Ref::RefItem*)));
@@ -595,9 +592,6 @@ RouteEditorWindow::RouteEditorWindow() {
     
     QObject::connect(this, SIGNAL(exitNow()),
                       aboutWindow, SLOT(exitNow())); 
-    
-    QObject::connect(naviWindow, SIGNAL(windowClosed()),
-                      this, SLOT(naviWindowClosed())); 
     
     QObject::connect(statusWindow, SIGNAL(windowClosed()),
                       this, SLOT(statusWindowClosed()));     
@@ -674,18 +668,11 @@ RouteEditorWindow::RouteEditorWindow() {
         QObject::connect(Game::serverClient, SIGNAL(refreshObjLists()),
                       objTools, SLOT(refreshObjLists()));
     
-     /// EFO Status Update  was changed from naviWindow
-//      QObject::connect(glWidget, SIGNAL(updStatus(QString, QString)), naviWindow, SLOT(recStatus(QString, QString)));   
-//      QObject::connect(objTools, SIGNAL(updStatus(QString, QString)), naviWindow, SLOT(recStatus(QString, QString)));         
-
-      /// EFO Status Update  changed to statusWindow 
+      /// Control Panel status updates
       QObject::connect(this, SIGNAL(updStatus(QString, QString)),     statusWindow, SLOT(recStatus(QString, QString)));   
       QObject::connect(glWidget, SIGNAL(updStatus(QString, QString)), statusWindow, SLOT(recStatus(QString, QString)));   
       QObject::connect(objTools, SIGNAL(updStatus(QString, QString)), statusWindow, SLOT(recStatus(QString, QString)));         
  
-      // connects the GLWidget to the Navi window for marker update      
-//      QObject::connect(glWidget, SIGNAL(MkrFiles(mkrList(QMap<QString, Coords*> list))), naviWindow, SLOT(mkrList(QMap<QString, Coords*> list)));
-      QObject::connect(glWidget, SIGNAL(updStatus(QString, QString)), naviWindow, SLOT(recStatus(QString, QString)));
       /// EFO connect the status buttons to the other windows
       
       QObject::connect(glWidget, SIGNAL(preloadTexturesSignal()), terrainTools, SLOT(preloadTextures()));
@@ -799,15 +786,6 @@ void RouteEditorWindow::saveLastSession(){
     mainWindow["maximized"] = isMaximized();
     root["mainWindow"] = mainWindow;
 
-    QJsonObject navi;
-    QRect naviGeom = naviWindow->geometry();
-    navi["x"] = naviGeom.x();
-    navi["y"] = naviGeom.y();
-    navi["w"] = naviGeom.width();
-    navi["h"] = naviGeom.height();
-    navi["visible"] = naviWindow->isVisible();
-    root["naviWindow"] = navi;
-
     QJsonObject status;
     QRect statusGeom = statusWindow->geometry();
     status["x"] = statusGeom.x();
@@ -815,7 +793,7 @@ void RouteEditorWindow::saveLastSession(){
     status["w"] = statusGeom.width();
     status["h"] = statusGeom.height();
     status["visible"] = statusWindow->isVisible();
-    root["statusWindow"] = status;
+    root["controlPanel"] = status;
 
     root["camera"] = glWidget->getSessionCameraState();
 
@@ -835,11 +813,6 @@ void RouteEditorWindow::applyRestoredSessionGeometry(){
         Game::restoreLastSessionWindowGeometry = false;
     }
 
-    if(Game::restoreNaviGeometry && Game::restoreNaviW > 0 && Game::restoreNaviH > 0){
-        naviWindow->setGeometry(Game::restoreNaviX, Game::restoreNaviY, Game::restoreNaviW, Game::restoreNaviH);
-        Game::restoreNaviGeometry = false;
-    }
-
     if(Game::restoreStatusGeometry && Game::restoreStatusW > 0 && Game::restoreStatusH > 0){
         statusWindow->setGeometry(Game::restoreStatusX, Game::restoreStatusY, Game::restoreStatusW, Game::restoreStatusH);
         Game::restoreStatusGeometry = false;
@@ -849,6 +822,18 @@ void RouteEditorWindow::applyRestoredSessionGeometry(){
 void RouteEditorWindow::save(){
     emit sendMsg(QString("save"));
     emit updStatus(QString("stat0"),QString("Saved"));    
+}
+
+void RouteEditorWindow::openRouteFolder(){
+    QDir routeFolder(Game::root + "/routes/" + Game::route);
+    if(!routeFolder.exists()){
+        QMessageBox::warning(this, tr("Open Route Folder"),
+                             tr("The active route folder could not be found:\n%1")
+                             .arg(QDir::toNativeSeparators(routeFolder.absolutePath())));
+        return;
+    }
+
+    QDesktopServices::openUrl(QUrl::fromLocalFile(routeFolder.absolutePath()));
 }
 
 void RouteEditorWindow::reloadRef(){
@@ -1076,11 +1061,6 @@ void RouteEditorWindow::hideShowErrorMsgWidget(bool show){
     else errorMessagesWindow->hide();
 }
 
-void RouteEditorWindow::hideShowNaviWidget(bool show){
-    if(show) { naviWindow->show();  }
-    else { naviWindow->hide();  }
-}
-
 void RouteEditorWindow::hideShowStatWidget(bool show){
     if(show) { statusWindow->show();  }
     else { statusWindow->hide();  }
@@ -1162,27 +1142,14 @@ void RouteEditorWindow::showRoute(){
 
 // EFO Move windows
 void RouteEditorWindow::show(){
-//    naviWindow->move(0,800);
-//    statusWindow->move(0,500);
-    
     if(!Game::playerMode){
-        naviWindow->show();
-        QStringList winPos = Game::naviPos.split(","); 
-        
-        if(winPos.count() < 2)                
-        {            
-            const int naviTemp1 = this->x() - 300;  // left of window 
-            const int naviTemp2 = this->y() + 500;  // 500 from the top corner
-            naviWindow->move(std::max(0,naviTemp1) , std::min(naviTemp2,QApplication::primaryScreen()->geometry().bottom()-200));
-        }    
-        
-        /// EFO Status Window is only enabled if you trigger the "S" in MainWindowLayout
-        if(Game::mainWindowLayout.contains("s"))
+        /// Control Panel is enabled by C; S remains accepted for older settings.
+        if(Game::mainWindowLayout.toLower().contains("c") || Game::mainWindowLayout.toLower().contains("s"))
          {
              statusWindow->show();
              statAction->setChecked(true);
          }
-         winPos = Game::statusPos.split(","); 
+         QStringList winPos = Game::statusPos.split(","); 
         
           if(winPos.count() < 2)                
           {            
@@ -1196,12 +1163,6 @@ void RouteEditorWindow::show(){
     
     QMainWindow::show();
     applyRestoredSessionGeometry();
-}
-
-void RouteEditorWindow::naviWindowClosed(){
-    naviAction->blockSignals(true);
-    naviAction->setChecked(false);
-    naviAction->blockSignals(false);
 }
 
 void RouteEditorWindow::statusWindowClosed(){

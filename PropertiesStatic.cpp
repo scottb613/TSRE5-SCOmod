@@ -42,7 +42,7 @@ PropertiesStatic::PropertiesStatic(){
     addRule();
     QLabel * label;
     label = new QLabel("FileName:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->fileName.setDisabled(true);
@@ -62,7 +62,7 @@ PropertiesStatic::PropertiesStatic(){
     vbox->addItem(filenameList);
     
     label = new QLabel("Position & Rotation:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -128,7 +128,7 @@ PropertiesStatic::PropertiesStatic(){
     addRule();
     
     label = new QLabel("Detail Level:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->defaultDetailLevel.setDisabled(true);
@@ -154,7 +154,7 @@ PropertiesStatic::PropertiesStatic(){
     addRule();
     
     label = new QLabel("Flags:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->flags.setDisabled(true);
@@ -193,7 +193,7 @@ PropertiesStatic::PropertiesStatic(){
 
     addRule();
     label = new QLabel("MSTS Collision:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&eCollisionFlags);
@@ -212,7 +212,7 @@ PropertiesStatic::PropertiesStatic(){
     vbox->addWidget(resetFlags);
     addRule();
     label = new QLabel("Actions:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *reload = new QPushButton("Reload", this);

@@ -34,6 +34,11 @@ static int scaledUiSize(int base){
 ActivityTools::ActivityTools(QString name)
     : QWidget(){
     setFixedWidth(scaledUiSize(250));
+    QFont panelFont = font();
+    if(panelFont.pointSizeF() > 0)
+        panelFont.setPointSizeF(panelFont.pointSizeF() * 1.12);
+    setFont(panelFont);
+    setStyleSheet(GuiFunct::scoPanelStyle());
     cSeason.setStyleSheet("combobox-popup: 0;");
     cSeason.addItem("Spring",0);
     cSeason.addItem("Summer",1);
@@ -69,8 +74,19 @@ ActivityTools::ActivityTools(QString name)
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
+    auto addRule = [vbox]() {
+        QWidget *ruleRow = new QWidget;
+        ruleRow->setFixedHeight(7);
+        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
+        ruleLayout->setContentsMargins(6,3,6,3);
+        QFrame *rule = new QFrame;
+        rule->setFixedHeight(1);
+        rule->setStyleSheet("background-color: #484848; border: none;");
+        ruleLayout->addWidget(rule);
+        vbox->addWidget(ruleRow);
+    };
     QLabel *label = new QLabel("Activity List:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&actShow);
@@ -79,8 +95,9 @@ ActivityTools::ActivityTools(QString name)
     actShow.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     vbox->addWidget(newActButton);
     
+    addRule();
     label = new QLabel("Player:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&cService);
@@ -91,8 +108,9 @@ ActivityTools::ActivityTools(QString name)
     QObject::connect(actServiceOpen, SIGNAL(released()), this, SLOT(actServiceOpenEnabled()));
     vbox->addWidget(actServiceOpen);
     
+    addRule();
     label = new QLabel("Traffic:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&cTraffic);
@@ -103,16 +121,18 @@ ActivityTools::ActivityTools(QString name)
     QObject::connect(actTrafficOpen, SIGNAL(released()), this, SLOT(actTrafficOpenEnabled()));
     vbox->addWidget(actTrafficOpen);
     
+    addRule();
     label = new QLabel("Timetable:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *actTimetableOpen = new QPushButton("Open Timetable Editor");
     QObject::connect(actTimetableOpen, SIGNAL(released()), this, SLOT(actTimetableOpenEnabled()));
     vbox->addWidget(actTimetableOpen);
     
+    addRule();
     label = new QLabel("Paths:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&cPath);
@@ -136,8 +156,9 @@ ActivityTools::ActivityTools(QString name)
     vlist1->addWidget(actPathsRefreshList,1,1,1,3);
     vbox->addItem(vlist1);    
    
+    addRule();
     label = new QLabel("Activity Objects List:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&consists);
@@ -167,8 +188,9 @@ ActivityTools::ActivityTools(QString name)
     vlist1->addWidget(conFilesRefresh,2,1,1,3);
     vbox->addItem(vlist1);
     
+    addRule();
     label = new QLabel("Restricted Speed Zones List:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&speedZones);
@@ -191,8 +213,9 @@ ActivityTools::ActivityTools(QString name)
     vlist1->addWidget(actZoneDeleteAll,0,3);
     vbox->addItem(vlist1);
     
+    addRule();
     label = new QLabel("Failed Signals List:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&failedSignals);
@@ -216,32 +239,36 @@ ActivityTools::ActivityTools(QString name)
     vlist1->addWidget(actFailedSignalDeleteAll,0,3);
     vbox->addItem(vlist1);
     
+    addRule();
     label = new QLabel("Events:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *actEventsOpen = new QPushButton("Open Event Editor");
     QObject::connect(actEventsOpen, SIGNAL(released()), this, SLOT(actEventsOpenEnabled()));
     vbox->addWidget(actEventsOpen);
     
+    addRule();
     label = new QLabel("Activity Info:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *actSettingsOpen = new QPushButton("Open Settings ...");
     QObject::connect(actSettingsOpen, SIGNAL(released()), this, SLOT(actSettingsOpenEnabled()));
     vbox->addWidget(actSettingsOpen);
     
+    addRule();
     label = new QLabel("Experimental:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *actPlayButton = new QPushButton("Play: Don't use!");
     QObject::connect(actPlayButton, SIGNAL(released()), this, SLOT(actPlayEnabled()));
     vbox->addWidget(actPlayButton);
     
+    addRule();
     label = new QLabel("General:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *actSaveButton = new QPushButton("Save Activities");
@@ -355,6 +382,16 @@ ActivityTools::ActivityTools(QString name)
     
     vbox->addStretch(1);
     this->setLayout(vbox);    
+
+    QList<QWidget*> controls = findChildren<QWidget*>();
+    for(int c = 0; c < controls.size(); c++){
+        controls[c]->setFont(panelFont);
+        if(qobject_cast<QPushButton*>(controls[c]) != NULL ||
+           qobject_cast<QLineEdit*>(controls[c]) != NULL ||
+           qobject_cast<QComboBox*>(controls[c]) != NULL ||
+           qobject_cast<QTimeEdit*>(controls[c]) != NULL)
+            controls[c]->setMinimumHeight(scaledUiSize(20));
+    }
     
     //QObject::connect(&consists, SIGNAL(itemClicked(QListWidgetItem*)),
     //                  this, SLOT(itemsSelected(QListWidgetItem*)));

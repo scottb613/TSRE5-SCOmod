@@ -22,7 +22,7 @@ PropertiesLevelCr::PropertiesLevelCr() {
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     infoLabel = new QLabel("LevelCr:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     QFormLayout *vlist = new QFormLayout;
@@ -37,7 +37,7 @@ PropertiesLevelCr::PropertiesLevelCr() {
     vbox->addItem(vlist);
     
     QLabel * label = new QLabel("Position:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -49,7 +49,7 @@ PropertiesLevelCr::PropertiesLevelCr() {
     vbox->addItem(vlist);
     
     label = new QLabel("Filename:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     fileName.setDisabled(true);
@@ -57,7 +57,7 @@ PropertiesLevelCr::PropertiesLevelCr() {
     vbox->addWidget(&fileName);
     
     label = new QLabel("Level Crossing Sensitivity:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     //QFormLayout *vlist = new QFormLayout;
@@ -73,7 +73,7 @@ PropertiesLevelCr::PropertiesLevelCr() {
     QObject::connect(&eMinActDist, SIGNAL(textEdited(QString)), this, SLOT(eMinActDistEnabled(QString)));
     //vbox->addItem(vlist);
     label = new QLabel("Level Crossing Timing:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     //vlist = new QFormLayout;
@@ -94,7 +94,7 @@ PropertiesLevelCr::PropertiesLevelCr() {
     //vbox->addItem(vlist);
 
     label = new QLabel("More Options:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     //vlist = new QFormLayout;
@@ -115,7 +115,7 @@ PropertiesLevelCr::PropertiesLevelCr() {
     chSilentHax.setText("Silent crossing MSTS HAX");
     
     label = new QLabel("Track Items:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     
@@ -125,7 +125,7 @@ PropertiesLevelCr::PropertiesLevelCr() {
                       this, SLOT(bDeleteSelectedEnabled()));
     
     label = new QLabel("Sound File:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     cSoundType.addItem("DEFAULT");
@@ -139,7 +139,7 @@ PropertiesLevelCr::PropertiesLevelCr() {
 
     
     label = new QLabel("Global settings:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(new QLabel("Max placing radius:"));

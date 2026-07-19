@@ -28,7 +28,7 @@ PropertiesSignal::PropertiesSignal() {
     vbox->setContentsMargins(0,1,1,1);
     
     infoLabel = new QLabel("Signal:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     QFormLayout *vlist = new QFormLayout;
@@ -60,7 +60,7 @@ PropertiesSignal::PropertiesSignal() {
     chFlipShape.setChecked(true);
     vbox->addWidget(&chFlipShape);
     label = new QLabel("SubObjects:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     button = new QPushButton("Show list", this);
@@ -68,7 +68,7 @@ PropertiesSignal::PropertiesSignal() {
     connect(button, SIGNAL(released()), this, SLOT(showSubObjList()));
     
     label = new QLabel("Position & Rotation:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -135,7 +135,7 @@ PropertiesSignal::PropertiesSignal() {
     // EFO adding StaticDetailLevel to Signals
     
     label = new QLabel("Detail Level:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->defaultDetailLevel.setDisabled(true);
@@ -162,7 +162,7 @@ PropertiesSignal::PropertiesSignal() {
     /// EFO End adding StaticDetailLevel to Signal
     
     label = new QLabel("Flags:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->flags.setDisabled(true);
@@ -199,7 +199,7 @@ PropertiesSignal::PropertiesSignal() {
                       this, SLOT(cShadowTypeEdited(int)));
     
     label = new QLabel("Advanced:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *hacks = new QPushButton("Hacks", this);

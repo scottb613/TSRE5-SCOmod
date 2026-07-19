@@ -22,7 +22,7 @@ PropertiesSoundRegion::PropertiesSoundRegion() {
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     infoLabel = new QLabel("SoundRegion:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     QFormLayout *vlist = new QFormLayout;
@@ -37,7 +37,7 @@ PropertiesSoundRegion::PropertiesSoundRegion() {
     vbox->addItem(vlist);
     
     QLabel * label2 = new QLabel("Position:");
-    label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label2->setContentsMargins(3,0,0,0);
     vbox->addWidget(label2);
     vlist = new QFormLayout;
@@ -66,7 +66,7 @@ PropertiesSoundRegion::PropertiesSoundRegion() {
         this, SLOT(sourcesListSelected(QString)));
     
     label = new QLabel("Track Items:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     
@@ -80,7 +80,7 @@ PropertiesSoundRegion::PropertiesSoundRegion() {
                       this, SLOT(bExpandEnabled()));
     
     label = new QLabel("Global settings:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
+    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(new QLabel("Max placing radius:"));

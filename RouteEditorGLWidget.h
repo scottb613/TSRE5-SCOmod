@@ -254,6 +254,7 @@ private:
     long long int lastMousePressTime = 0;
     bool keyControlEnabled = false;
     bool keyShiftEnabled = false;
+    int cameraMoveSpeedLock = 0;
     bool keyAltEnabled = false;
     GLuint FramebufferName1 = 0;
     GLuint depthTexture1 = 0;
