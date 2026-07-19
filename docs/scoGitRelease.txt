@@ -72,4 +72,3 @@ The ZIP also includes `LICENSE.md` and `THIRD-PARTY-NOTICES.txt`. TSRE5-SCOmod f
 ## Status
 
 This is not an official TSRE release. It is a working route-editor improvement branch for testing and discussion.
-

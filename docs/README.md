@@ -27,10 +27,10 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added `F2` 0-360 degree terrain texture rotation control for seamless directional textures.
 - Added `F2` seasonal selector for Summer, Spring, Autumn, Winter, and Night.
 - Added `global` seasonal fallback refresh for terrain, route objects, transfers, dynamic track, and forest/polyforest geometry.
-- Fixed `global` fixed transfer object reload behavior when switching from Winter back to Summer.
+- Fixed `global` transfer object reload behavior when switching from Winter back to Summer.
 - Added `F2` `Mirror Season` button for paired default/snow TERRTEX painting with matching paired textures required.
 - Disabled `global` the old settings-file `season` / `seasonalEditing` controls so the `F2` selector is the active seasonal control.
-- Fixed `global` Protected editable TERRTEX 1024x1024 files from accidental downsampling while painting.
+- Protected editable TERRTEX 1024x1024 files from accidental downsampling while painting.
 - Added `view` `Forest Regions Toggle` stutter mitigation and a View menu toggle for Forest Regions.
 - Fixed `global` texture cache invalidation bug that caused severe lag and wrong texture reuse on large populated routes.
 - Added `load` single-instance protection.
@@ -46,12 +46,12 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added `global` `uiScale` support for larger editor fonts and proportionally wider panels.
 - Added `global` sound feedback with standardized `SCOclick.wav`, `SCObuzz.wav`, and `SCOchirp.wav` files.
 - Added `status window` `Place Guard` validation to prevent spammed objects with automatic undo, and respective feedback.
-- Reworked `F12` Settings Editor with active `settings.txt` saving, timestamped backups, organized tabs, dark striped rows, key assignments, full-sentence tooltips, and preserved map API settings.
-- Updated `global` title bar to identify the build as `TSRE SCOmod v0.5`.
+- Updated `global` title bar to identify the build as `TSRE SCOmod`.
+- Reworked `F12` Settings Editor to save the active settings.txt with timestamp backups, organized tabs, dark striped rows, key assignments, and full-sentence tooltips.
 - Fixed `F3` OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
 - Hardened `F3` OSM Vector Map loading so failed network replies do not crash the editor.
 - Set `F3` downloaded map imagery resolution to 4096 for clearer per-tile map output.
-- Added `dynamic track` GokuMK Flex improvements that replace the old straight-curve-straight-only Flex workflow with multi-section dynamic-track solving, improved graded/elevation joins based on solved path length, hidden debug popup behavior, fallback dynamic-track textures, and proper success/error sound feedback.
+- Added `dynamic track` GokuMK Flex improvements that replace the old C-curve straight-curve-straight-only Flex workflow with multi-section dynamic-track solving, improved graded/elevation joins based on solved path length, hidden debug popup behavior, fallback dynamic-track textures, and proper success/error sound feedback. The new `dynamic track` supports full S-curve connections.
 
 ## Downloads
 
@@ -65,9 +65,9 @@ The ZIP also includes `LICENSE.md` and `THIRD-PARTY-NOTICES.txt`. TSRE5-SCOmod f
 
 ## Documentation
 
-- `worklist.txt` contains the longer forum-style summary of the work.
-- `fileEdit.txt` lists the code/project files touched during the work.
-- `Published/` contains the release-facing README and copied summaries used for package/release notes.
+- `scoWorkList.txt` contains the detailed change summary.
+- `scoFileEdit.txt` lists the code/project files touched during the work.
+- `docs/` contains the release-facing documentation copies.
 
 ## Status
 
