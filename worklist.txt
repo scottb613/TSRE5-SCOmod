@@ -81,23 +81,23 @@ Navi window and object search cleanup
 
 The Navi Window now uses the same darker visual treatment as the Status Window. The pointer readout fields were changed from disabled fields to read-only fields, which keeps them protected from editing but avoids the dimmed gray text that made pointer values harder to read.
 
-The right-side object panel search was also tightened up. The Tracks, Roads, and Other category dropdowns now include `ALL` as their default value. Selecting a real category in one of those three dropdowns resets the other two to `ALL`, so only one category filter is active at a time. Search text is then applied inside that active category instead of searching the entire library and ignoring the category choice.
+The right-side object panel search was also tightened up. The Tracks, Roads, and Other category dropdowns now include [ALL] as their default value. Selecting a real category in one of those three dropdowns resets the other two to [ALL], so only one category filter is active at a time. Search text is then applied inside that active category instead of searching the entire library and ignoring the category choice.
 
-The new `Reset` button beside Search clears the search text, sets Tracks/Roads/Other back to `ALL`, and repopulates the full object list. This should make it much faster to narrow down track pieces, road pieces, signals, forests, sound regions, route-shapes-directory objects, or other TSRE object categories without losing track of which bucket is being searched.
+The new [Reset] button beside Search clears the search text, sets Tracks/Roads/Other back to [ALL], and repopulates the full object list. This should make it much faster to narrow down track pieces, road pieces, signals, forests, sound regions, route-shapes-directory objects, or other TSRE object categories without losing track of which bucket is being searched.
 
-Scale Rail categories now stop at the functional family/type portion of each filename. For example, pieces are grouped under `sr1t`, `sr1t Crv`, `sr1t Str`, `sr1t Swt`, `sr2t Tun`, or `sr4t Crv`, while lengths, radii, weather variants, and side suffixes remain individual pieces inside the category. This prevents the Scale Rail selector from becoming a separate category for every track file.
+Scale Rail categories now stop at the functional family/type portion of each filename. For example, pieces are grouped under [sr1t], [sr1t Crv], [sr1t Str], [sr1t Swt], [sr2t Tun], or [sr4t Crv], while lengths, radii, weather variants, and side suffixes remain individual pieces inside the category. This prevents the Scale Rail selector from becoming a separate category for every track file.
 
 UI scaling
 
-I added a global `uiScale` setting so the editor can be made easier to read on modern high-resolution monitors. The packaged setting currently uses:
+I added a global [uiScale] setting so the editor can be made easier to read on modern high-resolution monitors. The packaged setting currently uses:
 
-`uiScale = 1.15`
+[uiScale = 1.15]
 
 The recommended range is roughly 1.00 to 1.25. The setting scales the application font, menu/dropdown controls, startup screen, F2/F3 style panels, object list side panel, Status Window, and Navi Window. The side panels now widen with the scale value so the larger text has room to breathe. A value of 1.00 should keep the editor close to the older TSRE look, while 1.15 is a useful middle ground on a large 2K monitor.
 
 Place Guard
 
-I added a Place Guard system to catch the most common accidental object-placement mistakes after TSRE performs its normal placement operation. The idea is to leave the old placement workflow intact, then validate what was just created. If the placement fails validation, TSRE automatically undoes the placement, flashes the Place Guard button red with `ERROR` for three seconds, and plays `SCObuzz.wav`. If the placement passes validation, TSRE plays `SCOclick.wav`.
+I added a Place Guard system to catch the most common accidental object-placement mistakes after TSRE performs its normal placement operation. The idea is to leave the old placement workflow intact, then validate what was just created. If the placement fails validation, TSRE automatically undoes the placement, flashes the Place Guard button red with [ERROR] for three seconds, and plays [SCObuzz.wav]. If the placement passes validation, TSRE plays [SCOclick.wav].
 
 The current rules are:
 
@@ -114,9 +114,9 @@ Sound feedback
 
 I added light sound feedback for editor actions while keeping the sounds separated so they do not stomp on each other unnecessarily:
 
-- `SCOclick.wav` plays only after a successful guarded object placement.
-- `SCObuzz.wav` plays only after a Place Guard placement failure.
-- `SCOchirp.wav` plays only for deliberate user-commanded mode/status changes, such as Status Window button presses or keyboard shortcuts that change the active edit mode.
+- [SCOclick.wav] plays only after a successful guarded object placement.
+- [SCObuzz.wav] plays only after a Place Guard placement failure.
+- [SCOchirp.wav] plays only for deliberate user-commanded mode/status changes, such as Status Window button presses or keyboard shortcuts that change the active edit mode.
 
 Passive status refreshes do not play sounds. This avoids double audio when the editor merely updates button states after a placement or automatic mode change.
 
@@ -234,17 +234,17 @@ Seasonal terrain texture painting
 
 The old hidden settings-file seasonal editing workflow was replaced for terrain painting. The F2 terrain paint panel now exposes the texture set directly, using Summer, Spring, Autumn, Winter, and Night choices. Changing the texture set reloads the currently loaded terrain, object shape textures, transfer textures, dynamic track textures, and generated forest/polyforest texture bindings so the editor display matches the selected season as closely as the route's available files allow.
 
-The old startup warning, Settings-panel entries, and settings-file parser hook for the seasonal editing workaround were removed. Old `season = ...` and `seasonalEditing = ...` settings are now ignored/forced off, so older settings files cannot silently override the F2 selector. Terrain painting and dynamic-track seasonal display now follow the active F2 season selection instead of a hidden settings switch.
+The old startup warning, Settings-panel entries, and settings-file parser hook for the seasonal editing workaround were removed. Old [season = ...] and [seasonalEditing = ...] settings are now ignored/forced off, so older settings files cannot silently override the F2 selector. Terrain painting and dynamic-track seasonal display now follow the active F2 season selection instead of a hidden settings switch.
 
 I also fixed transfer-object reload behavior so switching from Winter back to Summer invalidates cached transfer geometry/materials and rebuilds transfers against the active texture set.
 
-To significantly speed up seasonal route building, I restored the F2 Mirror Season button under Brush Settings as `Terrtex: Mirror Season`. TERRTEX painting only has two real output targets: the default `TERRTEX` folder and the snow `TERRTEX/SNOW` folder. Spring, Autumn/Fall, and Night can affect display/texture lookup for route objects, but TERRTEX mirror painting does not write to Spring, Autumn, Fall, or Night terrain folders.
+To significantly speed up seasonal route building, I restored the F2 Mirror Season button under Brush Settings as [Terrtex: Mirror Season]. TERRTEX painting only has two real output targets: the default [TERRTEX] folder and the snow [TERRTEX/SNOW] folder. Spring, Autumn/Fall, and Night can affect display/texture lookup for route objects, but TERRTEX mirror painting does not write to Spring, Autumn, Fall, or Night terrain folders.
 
 Seasonal texture loading now follows an ORTS-style fallback model for route object, transfer, dynamic track, forest, and polyforest textures. When Spring, Autumn/Fall, Winter/Snow, or Night is selected, TSRE searches the matching seasonal subfolder first for each individual texture file, then falls back to the root texture folder if that file is missing. Object textures now try the active editor season first even when the old SD alternative-texture flags are missing or incomplete. The resolver also checks ACE/DDS alternatives, so a seasonal DDS can satisfy a material that originally referenced an ACE file.
 
-For TERRTEX painting, Mirror Season mirrors only between default and snow. Painting while using a non-winter/default TERRTEX set mirrors toward `TERRTEX/SNOW`; painting while using Winter/Snow mirrors back toward the default `TERRTEX` folder. The same brush/autopaint trace is applied to the paired side, but the paired side must have a matching source texture with the same filename. Default painting uses the default source texture, snow painting uses the snow source texture. No matching paired source texture means no mirror paint for that stroke.
+For TERRTEX painting, Mirror Season mirrors only between default and snow. Painting while using a non-winter/default TERRTEX set mirrors toward [TERRTEX/SNOW]; painting while using Winter/Snow mirrors back toward the default [TERRTEX] folder. The same brush/autopaint trace is applied to the paired side, but the paired side must have a matching source texture with the same filename. Default painting uses the default source texture, snow painting uses the snow source texture. No matching paired source texture means no mirror paint for that stroke.
 
-When Mirror Season is off, terrain painting still protects the opposite TERRTEX side from missing tile swatches. If painting creates a new per-tile TERRTEX patch in the active side, TSRE creates a matching placeholder patch in the paired default/snow folder only when that opposite patch does not already exist. The placeholder is copied from the route's paired-side `terrain.ace` when available, or from the bundled SCOmod content `terrain.ace` fallback. This prevents blank tiles if only one TERRTEX side has been painted, but it does not fake a mirrored texture paint.
+When Mirror Season is off, terrain painting still protects the opposite TERRTEX side from missing tile swatches. If painting creates a new per-tile TERRTEX patch in the active side, TSRE creates a matching placeholder patch in the paired default/snow folder only when that opposite patch does not already exist. The placeholder is copied from the route's paired-side [terrain.ace] when available, or from the bundled SCOmod content [terrain.ace] fallback. This prevents blank tiles if only one TERRTEX side has been painted, but it does not fake a mirrored texture paint.
 
 A follow-up texture-cache bug was also fixed after testing on a large populated route. Generated objects such as forest regions may reapply their same material path frequently, so TSRE now invalidates cached texture IDs only when the material path actually changes. This avoids severe stutter and wrong texture reuse while still allowing seasonal texture refreshes to bind new material paths correctly.
 
