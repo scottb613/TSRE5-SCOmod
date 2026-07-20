@@ -78,6 +78,7 @@ public:
     void confirmUnsafe();
 
     WorldObj* getObj(int x, int z, int id);
+    WorldObj* findWorldObjByUid(int x, int z, unsigned int uid);
     WorldObj* findNearestObj(int x, int z, float *pos);
     virtual Tile * requestTile(int x, int z, bool allowNew = true);
     void activitySelected(Activity* selected);
@@ -146,6 +147,7 @@ public:
     void toggleToTDB(WorldObj* obj);
     void addToTDBIfNotExist(WorldObj* obj);
     void addToTDB(WorldObj* obj);
+    bool placementEndpointBelongsToTrack(const WorldObj *placed, int x, int y, unsigned int uid) const;
     void newPositionTDB(WorldObj* obj);
     void linkSignal(int x, int z, float* p, WorldObj* obj);
     void actPickNewEventLocation(int x, int z, float* p);

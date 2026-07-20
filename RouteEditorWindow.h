@@ -75,6 +75,7 @@ public slots:
     void viewForestRegions(bool show);
     void viewTrackDbLines(bool show);
     void viewTsectionLines(bool show);
+    void viewGradeSymbols(bool show);
     void viewTrackItems(bool show);
     void viewPointer3d(bool show);
     void viewMarkers(bool show);
@@ -176,6 +177,7 @@ private:
     QAction* vViewForestRegions;
     QAction* vViewTrackDbLines;
     QAction* vViewTsectionLines;
+    QAction* vViewGradeSymbols;
     QAction* vViewTrackItems;
     QAction* vViewPointer3d;
     QAction* vViewMarkers;

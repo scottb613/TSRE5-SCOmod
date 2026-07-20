@@ -64,6 +64,7 @@ signals:
     void jumpTo(PreciseTileCoordinate* coords);
     void sendMsg(QString name, QString val);
     void requestMainFocus();
+    void jumpSoundRequested();
 
 protected:
     void hideEvent(QHideEvent *e);

@@ -32,6 +32,7 @@ public slots:
     void setNewRoute();
     void setLoadRoute();
     void cRecentEnabled(QString val);
+    void rootPathEntered();
 signals:
     void showMainWindow();
 private:
@@ -40,6 +41,7 @@ private:
     bool readLastSession();
     QTableWidget routeList;
     QComboBox cRecent;
+    QLabel rootStatusLabel;
     QPushButton *browse;
     QPushButton *load;
     QPushButton *neww;

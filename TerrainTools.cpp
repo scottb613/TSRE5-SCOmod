@@ -83,7 +83,7 @@ TerrainTools::TerrainTools(QString name)
         brushShapes.push_back(QImage(QString("tsre_appdata/")+Game::AppDataVersion+"/brush/"+bfile).convertToFormat(QImage::Format_Grayscale8));
     nextBrushShape();
     
-    buttonTools["heightTool"] = new QPushButton("HeightMap +", this);
+    buttonTools["heightTool"] = new QPushButton("Height +", this);
     buttonTools["pickTerrainTexTool"] = new QPushButton("Pick", this);
     buttonTools["putTerrainTexTool"] = new QPushButton("Put", this);
     buttonTools["waterTerrTool"] = new QPushButton("Water +", this);
@@ -129,7 +129,7 @@ TerrainTools::TerrainTools(QString name)
     vlist0->setSpacing(2);
     vlist0->setContentsMargins(3,0,1,0);    
     row = 0;
-    mirrorSeason = new QPushButton("Mirror Season", this);
+    mirrorSeason = new QPushButton("TERRTEX Paint: Mirror Season", this);
     mirrorSeason->setCheckable(true);
     vlist0->addWidget(buttonTools["paintToolColor"],row,0);
     vlist0->addWidget(buttonTools["paintToolTexture"],row,1);

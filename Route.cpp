@@ -836,6 +836,18 @@ WorldObj* Route::getObj(int x, int z, int id) {
 
 }
 
+WorldObj* Route::findWorldObjByUid(int x, int z, unsigned int uid) {
+    Tile *tTile = tile.value(x * 10000 + z, NULL);
+    if(tTile == NULL || tTile->loaded != 1)
+        return NULL;
+    for(auto it = tTile->obiekty.begin(); it != tTile->obiekty.end(); ++it){
+        WorldObj *obj = it->second;
+        if(obj != NULL && obj->loaded && obj->UiD == uid)
+            return obj;
+    }
+    return NULL;
+}
+
 WorldObj* Route::findNearestObj(int x, int z, float* pos){
     Game::check_coords(x, z, pos);
     Tile *tTile;
@@ -1736,6 +1748,8 @@ WorldObj* Route::placeObject(int x, int z, float* p, float* q, float elev, Ref::
     memset(endp, 0, sizeof(endp));
     endp[3] = 1;
     float firstPos[3];
+    int placementSnapNodeId = -1;
+    bool placementSnapRoad = false;
     if ((r->type == "trackobj" || r->type == "dyntrack" )) {
         if(r->type == "dyntrack"){   if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
             this->roadDB->setDefaultEnd(0);
@@ -1745,10 +1759,11 @@ WorldObj* Route::placeObject(int x, int z, float* p, float* q, float elev, Ref::
         int oldx = x;
         int oldz = z;
         Vec3::copy(firstPos, p);
-        if(this->tsection->isRoadShape(r->value))
-            this->roadDB->findPosition(x, z, p, q, endp, r->value);
+        placementSnapRoad = this->tsection->isRoadShape(r->value);
+        if(placementSnapRoad)
+            this->roadDB->findPosition(x, z, p, q, endp, r->value, &placementSnapNodeId);
         else
-            this->trackDB->findPosition(x, z, p, q, endp, r->value); // if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
+            this->trackDB->findPosition(x, z, p, q, endp, r->value, &placementSnapNodeId); // if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
         Game::check_coords(x, z, p);
         firstPos[0] -= (x-oldx)*2048;
         firstPos[2] -= (z-oldz)*2048;
@@ -1763,6 +1778,8 @@ WorldObj* Route::placeObject(int x, int z, float* p, float* q, float elev, Ref::
         if(nowy->endp == 0) nowy->endp = new float[5];
         memcpy(nowy->endp, endp, sizeof(float)*5);
         Vec3::copy(nowy->firstPosition,firstPos);
+        nowy->placementSnapNodeId = placementSnapNodeId;
+        nowy->placementSnapRoad = placementSnapRoad;
     }   
     nowy->snapped(snapableSide);
     if(nowy->typeID == nowy->sstatic){        
@@ -2426,6 +2443,14 @@ void Route::addToTDBIfNotExist(WorldObj* obj) {
     Undo::StateEnd();
     //qDebug() << "A2TDB 2115";    
     addToTDB(obj);
+}
+
+bool Route::placementEndpointBelongsToTrack(const WorldObj *placed, int x, int y, unsigned int uid) const {
+    if(placed == NULL || placed->placementSnapNodeId < 0)
+        return false;
+    TDB *database = placed->placementSnapRoad ? roadDB : trackDB;
+    return database != NULL
+            && database->endpointBelongsToTrack(placed->placementSnapNodeId, x, y, uid);
 }
 
 void Route::newPositionTDB(WorldObj* obj) {

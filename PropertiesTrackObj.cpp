@@ -20,6 +20,270 @@
 #include "Route.h"
 #include "ProceduralShape.h"
 #include "ShapeTemplates.h"
+#include "GuiFunct.h"
+#include <QScreen>
+
+static int gradeHelperScaledSize(int base){
+    return qRound(base * qMax(1.0f, Game::uiScale));
+}
+
+static QString gradeHelperStateStyle(const QString &background, const QString &border, const QString &text){
+    return QString(
+        "QPushButton { color: %3; background-color: %1; border: 1px solid %2;"
+        " border-radius: 2px; padding: 3px 5px; }"
+        "QPushButton:hover { border-color: #f08200; }"
+        "QPushButton:pressed { background-color: #202020; }"
+    ).arg(background, border, text);
+}
+
+static QPoint gradeHelperSnapPosition(QWidget *window){
+    const int snapDistance = 10;
+    QRect moving = window->frameGeometry();
+    QPoint snappedFramePos = moving.topLeft();
+    int bestX = snapDistance + 1;
+    int bestY = snapDistance + 1;
+
+    QList<QWidget*> targets = QApplication::topLevelWidgets();
+    QScreen *screen = QGuiApplication::screenAt(moving.center());
+    if(screen != NULL){
+        QRect available = screen->availableGeometry();
+        int xCandidates[2] = { available.left() - moving.left(), available.right() - moving.right() };
+        int yCandidates[2] = { available.top() - moving.top(), available.bottom() - moving.bottom() };
+        for(int i = 0; i < 2; ++i){
+            if(qAbs(xCandidates[i]) <= snapDistance && qAbs(xCandidates[i]) < bestX){
+                bestX = qAbs(xCandidates[i]);
+                snappedFramePos.setX(moving.left() + xCandidates[i]);
+            }
+            if(qAbs(yCandidates[i]) <= snapDistance && qAbs(yCandidates[i]) < bestY){
+                bestY = qAbs(yCandidates[i]);
+                snappedFramePos.setY(moving.top() + yCandidates[i]);
+            }
+        }
+    }
+
+    for(QWidget *targetWidget : targets){
+        if(targetWidget == window || !targetWidget->isVisible())
+            continue;
+        QRect target = targetWidget->frameGeometry();
+        bool verticalNear = moving.bottom() >= target.top() - snapDistance && moving.top() <= target.bottom() + snapDistance;
+        bool horizontalNear = moving.right() >= target.left() - snapDistance && moving.left() <= target.right() + snapDistance;
+        int xCandidates[4] = { target.left() - moving.left(), target.right() - moving.right(),
+                               target.right() + 1 - moving.left(), target.left() - 1 - moving.right() };
+        int yCandidates[4] = { target.top() - moving.top(), target.bottom() - moving.bottom(),
+                               target.bottom() + 1 - moving.top(), target.top() - 1 - moving.bottom() };
+        for(int i = 0; i < 4; ++i){
+            int distance = qAbs(xCandidates[i]);
+            if(verticalNear && distance <= snapDistance && distance < bestX){
+                bestX = distance;
+                snappedFramePos.setX(moving.left() + xCandidates[i]);
+            }
+            distance = qAbs(yCandidates[i]);
+            if(horizontalNear && distance <= snapDistance && distance < bestY){
+                bestY = distance;
+                snappedFramePos.setY(moving.top() + yCandidates[i]);
+            }
+        }
+    }
+    return window->pos() + (snappedFramePos - moving.topLeft());
+}
+
+class GradeHelperWindow : public QWidget {
+public:
+    explicit GradeHelperWindow(PropertiesTrackObj *owner)
+        : QWidget(owner->window(), Qt::Tool), owner(owner) {
+        setWindowTitle("Grade Helper");
+        setFixedWidth(gradeHelperScaledSize(300));
+        setStyleSheet(GuiFunct::scoPanelStyle());
+
+        QVBoxLayout *layout = new QVBoxLayout(this);
+        layout->setSpacing(3);
+        layout->setContentsMargins(4,4,4,4);
+        QLabel *heading = new QLabel("Grade Transition:");
+        heading->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+        layout->addWidget(heading);
+
+        QFormLayout *form = new QFormLayout;
+        form->setSpacing(3);
+        form->setContentsMargins(0,0,0,0);
+        currentGrade.setReadOnly(true);
+        nextGrade.setReadOnly(true);
+        currentGrade.setAlignment(Qt::AlignCenter);
+        nextGrade.setAlignment(Qt::AlignCenter);
+        const double maximumGrade = Game::trackElevationMaxPm / 10.0;
+        targetGrade.setRange(-maximumGrade, maximumGrade);
+        targetGrade.setDecimals(5);
+        targetGrade.setSingleStep(0.05);
+        targetGrade.setSuffix(" %");
+        stepGrade.setRange(0.001, maximumGrade);
+        stepGrade.setDecimals(5);
+        stepGrade.setSingleStep(0.05);
+        stepGrade.setSuffix(" %");
+        form->addRow("Current Grade:", &currentGrade);
+        form->addRow("Target Grade:", &targetGrade);
+        form->addRow("Step Per Piece:", &stepGrade);
+        form->addRow("Next Grade:", &nextGrade);
+        layout->addLayout(form);
+
+        QWidget *ruleRow = new QWidget;
+        ruleRow->setFixedHeight(7);
+        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
+        ruleLayout->setContentsMargins(3,3,3,3);
+        QFrame *rule = new QFrame;
+        rule->setFixedHeight(1);
+        rule->setStyleSheet("background-color: #484848; border: none;");
+        ruleLayout->addWidget(rule);
+        layout->addWidget(ruleRow);
+
+        stateButton.setFocusPolicy(Qt::NoFocus);
+        layout->addWidget(&stateButton);
+
+        snapTimer.setSingleShot(true);
+        QObject::connect(&snapTimer, &QTimer::timeout, this, [this](){
+            if(snapping)
+                return;
+            QPoint snapped = gradeHelperSnapPosition(this);
+            if(snapped != pos()){
+                snapping = true;
+                move(snapped);
+                snapping = false;
+            }
+        });
+        QObject::connect(&refreshTimer, &QTimer::timeout, this, [this](){ syncUi(); });
+        refreshTimer.start(120);
+
+        QObject::connect(&targetGrade, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [](double value){
+            if(!Game::gradeAssistEnabled && !Game::gradeAssistTargetReached)
+                Game::gradeAssistTargetPercent = (float)value;
+        });
+        QObject::connect(&stepGrade, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [](double value){
+            if(!Game::gradeAssistEnabled && !Game::gradeAssistTargetReached)
+                Game::gradeAssistStepPercent = (float)value;
+        });
+        QObject::connect(&stateButton, &QPushButton::clicked, this, [this](){
+            this->owner->userButtonPressed();
+            if(Game::gradeAssistEnabled){
+                Game::gradeAssistEnabled = false;
+                Game::gradeAssistTargetReached = false;
+                Game::gradeLockEnabled = false;
+                Game::gradeAssistNextPercent = Game::gradeAssistCurrentPercent;
+            } else if(Game::gradeAssistTargetReached){
+                Game::gradeAssistTargetReached = false;
+                Game::gradeLockEnabled = false;
+                Game::gradeAssistNextPercent = Game::gradeAssistCurrentPercent;
+            } else {
+                Game::gradeAssistTargetPercent = (float)targetGrade.value();
+                Game::gradeAssistStepPercent = (float)stepGrade.value();
+                Game::gradeAssistEnabled = true;
+                Game::gradeAssistTargetReached = false;
+                Game::gradeLockEnabled = false;
+                prepareNextGrade();
+                if(qAbs(Game::gradeAssistTargetPercent - Game::gradeAssistCurrentPercent) <= 0.0005f){
+                    Game::gradeAssistEnabled = false;
+                    Game::gradeAssistTargetReached = true;
+                    Game::gradeAssistCurrentPercent = Game::gradeAssistTargetPercent;
+                    Game::gradeAssistNextPercent = Game::gradeAssistTargetPercent;
+                    Game::gradeLockEnabled = true;
+                    Game::gradeLockedPercent = Game::gradeAssistTargetPercent;
+                } else {
+                    this->owner->activateGradeAssistPlacement();
+                }
+            }
+            syncUi();
+            this->owner->requestMainFocus();
+        });
+        syncUi();
+        layout->activate();
+        setFixedHeight(layout->sizeHint().height());
+    }
+
+    void showForGrade(float grade){
+        if(!Game::gradeAssistEnabled){
+            Game::gradeAssistCurrentPercent = grade;
+            Game::gradeAssistNextPercent = grade;
+            Game::gradeAssistTargetReached = false;
+            if(!Game::gradeAssistInitialized){
+                Game::gradeAssistTargetPercent = grade;
+                Game::gradeAssistInitialized = true;
+            }
+        }
+        syncUi();
+        if(!everShown){
+            for(QWidget *candidate : QApplication::topLevelWidgets()){
+                if(candidate != this && candidate->isVisible() && candidate->windowTitle() == "Control Panel"){
+                    QRect control = candidate->frameGeometry();
+                    setFixedWidth(candidate->width());
+                    move(control.right() + 1, control.top());
+                    break;
+                }
+            }
+            everShown = true;
+        }
+        show();
+        raise();
+        activateWindow();
+        targetGrade.setFocus();
+        targetGrade.selectAll();
+    }
+
+protected:
+    void moveEvent(QMoveEvent *event) override {
+        QWidget::moveEvent(event);
+        if(!snapping)
+            snapTimer.start(120);
+    }
+
+    void closeEvent(QCloseEvent *event) override {
+        QWidget::closeEvent(event);
+        owner->gradeHelperWindowClosed();
+        owner->requestMainFocus();
+    }
+
+private:
+    void prepareNextGrade(){
+        const float difference = Game::gradeAssistTargetPercent - Game::gradeAssistCurrentPercent;
+        const float amount = qMin(qAbs(difference), Game::gradeAssistStepPercent);
+        Game::gradeAssistNextPercent = Game::gradeAssistCurrentPercent + (difference >= 0.0f ? amount : -amount);
+    }
+
+    void syncUi(){
+        currentGrade.setText(QString::number(Game::gradeAssistCurrentPercent, 'f', 5) + " %");
+        nextGrade.setText(QString::number(Game::gradeAssistNextPercent, 'f', 5) + " %");
+        if(!targetGrade.hasFocus()){
+            targetGrade.blockSignals(true);
+            targetGrade.setValue(Game::gradeAssistTargetPercent);
+            targetGrade.blockSignals(false);
+        }
+        if(!stepGrade.hasFocus()){
+            stepGrade.blockSignals(true);
+            stepGrade.setValue(Game::gradeAssistStepPercent);
+            stepGrade.blockSignals(false);
+        }
+        const bool editingEnabled = !Game::gradeAssistEnabled && !Game::gradeAssistTargetReached;
+        targetGrade.setEnabled(editingEnabled);
+        stepGrade.setEnabled(editingEnabled);
+        if(Game::gradeAssistEnabled){
+            stateButton.setText("Grade Assist Active - Click to Stop");
+            stateButton.setStyleSheet(gradeHelperStateStyle("#a88718", "#d0ad32", "#fff9d8"));
+        } else if(Game::gradeAssistTargetReached){
+            stateButton.setText("Grade Achieved - Holding Target");
+            stateButton.setStyleSheet(gradeHelperStateStyle("#176c25", "#319344", "#f2fff4"));
+        } else {
+            stateButton.setText("Start Grade Assist");
+            stateButton.setStyleSheet(QString());
+        }
+    }
+
+    PropertiesTrackObj *owner;
+    QLineEdit currentGrade;
+    QDoubleSpinBox targetGrade;
+    QDoubleSpinBox stepGrade;
+    QLineEdit nextGrade;
+    QPushButton stateButton;
+    QTimer refreshTimer;
+    QTimer snapTimer;
+    bool snapping = false;
+    bool everShown = false;
+};
 
 PropertiesTrackObj::PropertiesTrackObj(){
     QLabel *label;
@@ -198,7 +462,7 @@ PropertiesTrackObj::PropertiesTrackObj(){
     vbox->addItem(flagslView);
     addRule();
     
-    label = new QLabel("Elevation:");
+    label = new QLabel("Grade:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
@@ -211,7 +475,7 @@ PropertiesTrackObj::PropertiesTrackObj(){
     doubleValidator1->setNotation(QDoubleValidator::StandardNotation);
     
     //‰
-    vlist->addRow("Value: ",&this->elevType);
+    vlist->addRow("Units: ",&this->elevType);
     elevType.addItem("Permille ‰");
     elevType.addItem("Percent %");
     elevType.addItem("1 in 'X' m");
@@ -239,13 +503,78 @@ PropertiesTrackObj::PropertiesTrackObj(){
     vlist->addRow(&elevPropLabel,&elevProp);
     elevProp.setValidator(doubleValidator1);
     QObject::connect(&elevProp, SIGNAL(textEdited(QString)), this, SLOT(elevPropEnabled(QString)));
-    vlist->addRow("Step:",&elevStep);
+    elevStep.setToolTip("General object movement/rotation adjustment sensitivity; this is not a grade-transition increment.");
     elevStep.setValidator(doubleValidator);
     QObject::connect(&elevStep, SIGNAL(textEdited(QString)), this, SLOT(elevStepEnabled(QString)));
     hideElevBoxes();
     elevType.setCurrentIndex(Game::DefaultElevationBox);
     showElevBox(elevType.currentText());
     vbox->addItem(vlist);
+
+    gradeOverlay.setText("Grade Overlay");
+    gradeOverlay.setChecked(Game::gradeOverlayEnabled);
+    gradeHelper.setText("Grade Helper...");
+    gradeHelper.setCheckable(true);
+    gradeHelper.setFocusPolicy(Qt::NoFocus);
+    gradeLock.setText("Lock Grade");
+    gradeLock.setCheckable(true);
+    gradeLock.setChecked(Game::gradeLockEnabled);
+    gradeLock.setFocusPolicy(Qt::NoFocus);
+
+    QHBoxLayout *gradeOverlayRow = new QHBoxLayout;
+    gradeOverlayRow->setContentsMargins(3,1,3,0);
+    gradeOverlayRow->addWidget(&gradeOverlay);
+    gradeOverlayRow->addStretch(1);
+    vbox->addLayout(gradeOverlayRow);
+
+    QHBoxLayout *gradeHelperRow = new QHBoxLayout;
+    gradeHelperRow->setContentsMargins(3,0,3,0);
+    gradeHelperRow->addWidget(&gradeHelper);
+    vbox->addLayout(gradeHelperRow);
+
+    QHBoxLayout *gradeLockRow = new QHBoxLayout;
+    gradeLockRow->setContentsMargins(3,0,3,1);
+    gradeLockRow->addWidget(&gradeLock);
+    vbox->addLayout(gradeLockRow);
+
+    QObject::connect(&gradeOverlay, &QCheckBox::toggled, [this](bool checked){
+        Game::gradeOverlayEnabled = checked;
+        ++Game::gradeOverlayRevision;
+    });
+    QObject::connect(&gradeLock, &QPushButton::toggled, [this](bool checked){
+        if(checked && trackObj == NULL){
+            gradeLock.setChecked(false);
+            return;
+        }
+        Game::gradeLockEnabled = checked;
+        if(checked){
+            Game::gradeAssistEnabled = false;
+            Game::gradeAssistTargetReached = false;
+            Game::gradeLockedPercent = currentGradePercent();
+        } else if(Game::gradeAssistTargetReached){
+            Game::gradeAssistTargetReached = false;
+        }
+        refreshGradeLockUi();
+        refreshGradeHelperUi();
+    });
+    QObject::connect(&gradeHelper, &QPushButton::toggled, this, [this](bool checked){
+        if(checked){
+            openGradeHelper();
+        } else if(gradeHelperWindow != NULL && gradeHelperWindow->isVisible()){
+            resetGradeHelper();
+            requestMainFocus();
+        }
+    });
+    QObject::connect(&gradeHelperUiTimer, &QTimer::timeout, this, [this](){
+        gradeOverlay.blockSignals(true);
+        gradeOverlay.setChecked(Game::gradeOverlayEnabled);
+        gradeOverlay.blockSignals(false);
+        refreshGradeLockUi();
+        refreshGradeHelperUi();
+    });
+    gradeHelperUiTimer.start(120);
+    refreshGradeLockUi();
+    refreshGradeHelperUi();
     addRule();
     
     
@@ -332,6 +661,8 @@ void PropertiesTrackObj::hideElevBoxes(){
 }
 
 PropertiesTrackObj::~PropertiesTrackObj() {
+    delete gradeHelperWindow;
+    gradeHelperWindow = NULL;
 }
 
 void PropertiesTrackObj::fixJNodePosnEnabled(){
@@ -453,23 +784,21 @@ void PropertiesTrackObj::showObj(GameObj* obj){
     elevType.setCurrentText(ElevTypeName);
     
     TrackObj* track = (TrackObj*)obj;
-    float * q = track->qDirection;
-    float vect[3];
-    vect[0] = 0; vect[1] = 0; vect [2] = 1000.0;
-    Vec3::transformQuat(vect, vect, q);
-    vect[1] = -vect[1];
+    float prom = qTan(track->getElevation()) * 1000.0;
      
     float oneInXm = 0.0;
-    float prog = qRadiansToDegrees(qAtan(vect[1]/1000.0));
-    float prop = vect[1]/10.0;
+    float prog = qRadiansToDegrees(qAtan(prom/1000.0));
+    float prop = prom/10.0;
 
     //if(vect[1] > 0)
-        oneInXm = 1000.0/vect[1];
-    this->elevProm.setText(QString::number(vect[1]));
+        oneInXm = qFuzzyIsNull(prom) ? 0.0 : 1000.0/prom;
+    this->elevProm.setText(QString::number(prom));
     this->elevProg.setText(QString::number(prog));
     this->elevProp.setText(QString::number(prop));
     this->elev1inXm.setText(QString::number(oneInXm));
     setStepValue(Game::DefaultMoveStep);
+    refreshGradeLockUi();
+    refreshGradeHelperUi();
     
     /*float pitch = asin(2*(q[0]*q[2] - q[1]*q[3]));
     
@@ -526,16 +855,12 @@ void PropertiesTrackObj::updateObj(GameObj* obj){
         return;
     }
     TrackObj* track = (TrackObj*)obj;
-    float * q = track->qDirection;
-     float vect[3];
-    vect[0] = 0; vect[1] = 0; vect [2] = 1000.0;
-    Vec3::transformQuat(vect, vect, q);
-    vect[1] = -vect[1];
+    float prom = qTan(track->getElevation()) * 1000.0;
      
     float oneInXm = 0.0;
-    oneInXm = 1000.0/vect[1];
-    float prog = qRadiansToDegrees(qAtan(vect[1]/1000.0));
-    float prop = vect[1]/10.0;
+    oneInXm = qFuzzyIsNull(prom) ? 0.0 : 1000.0/prom;
+    float prog = qRadiansToDegrees(qAtan(prom/1000.0));
+    float prop = prom/10.0;
        
     if(!posX.hasFocus() && !posY.hasFocus() && !posZ.hasFocus() && !quat.hasFocus()){
         this->uid.setText(QString::number(trackObj->UiD, 10));
@@ -552,12 +877,78 @@ void PropertiesTrackObj::updateObj(GameObj* obj){
                 );
     }
     if(!this->elevProm.hasFocus() && !this->elev1inXm.hasFocus() && !this->elevProg.hasFocus() && !this->elevProp.hasFocus()){
-        this->elevProm.setText(QString::number(vect[1]));
+        this->elevProm.setText(QString::number(prom));
         this->elevProg.setText(QString::number(prog));
         this->elevProp.setText(QString::number(prop));
         this->elev1inXm.setText(QString::number(oneInXm));
      }
+    refreshGradeLockUi();
+    refreshGradeHelperUi();
     eCollisionFlags.setText(QString::number(worldObj->getCollisionFlags()));
+}
+
+float PropertiesTrackObj::currentGradePercent() const{
+    if(trackObj == NULL)
+        return 0.0f;
+    return qTan(trackObj->getElevation()) * 100.0f;
+}
+
+void PropertiesTrackObj::activateGradeAssistPlacement(){
+    emit enableTool("placeTool");
+}
+
+void PropertiesTrackObj::refreshGradeLockUi(){
+    gradeLock.blockSignals(true);
+    gradeLock.setChecked(Game::gradeLockEnabled);
+    gradeLock.blockSignals(false);
+    if(Game::gradeLockEnabled){
+        gradeLock.setText(QString("Locked Grade: %1%").arg(Game::gradeLockedPercent, 0, 'f', 5));
+        gradeLock.setToolTip(QString("New track and road pieces will use a physical grade of %1%.").arg(Game::gradeLockedPercent, 0, 'f', 5));
+    } else {
+        gradeLock.setText("Lock Grade");
+        gradeLock.setToolTip("Capture the selected physical grade and apply it to newly placed track and road pieces.");
+    }
+}
+
+void PropertiesTrackObj::openGradeHelper(){
+    if(trackObj == NULL)
+        return;
+    if(gradeHelperWindow == NULL){
+        gradeHelperWindow = new GradeHelperWindow(this);
+        QObject::connect(gradeHelperWindow, &QObject::destroyed, this, [this](){
+            gradeHelperWindow = NULL;
+        });
+    }
+    gradeHelperWindow->showForGrade(currentGradePercent());
+    refreshGradeHelperUi();
+}
+
+void PropertiesTrackObj::gradeHelperWindowClosed(){
+    Game::gradeAssistEnabled = false;
+    Game::gradeAssistTargetReached = false;
+    gradeHelper.blockSignals(true);
+    gradeHelper.setChecked(false);
+    gradeHelper.blockSignals(false);
+    refreshGradeHelperUi();
+}
+
+void PropertiesTrackObj::resetGradeHelper(){
+    Game::gradeAssistEnabled = false;
+    Game::gradeAssistTargetReached = false;
+    if(gradeHelperWindow != NULL && gradeHelperWindow->isVisible())
+        gradeHelperWindow->hide();
+    gradeHelper.blockSignals(true);
+    gradeHelper.setChecked(false);
+    gradeHelper.blockSignals(false);
+    refreshGradeHelperUi();
+}
+
+void PropertiesTrackObj::refreshGradeHelperUi(){
+    gradeHelper.blockSignals(true);
+    gradeHelper.setChecked(gradeHelperWindow != NULL && gradeHelperWindow->isVisible());
+    gradeHelper.blockSignals(false);
+    gradeHelper.setText("Grade Helper...");
+    gradeHelper.setStyleSheet(QString());
 }
 
 void PropertiesTrackObj::elevPromEnabled(QString val){

@@ -22,6 +22,26 @@
 #include "GeoCoordinates.h"
 #include "TarFile.h"
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <mmsystem.h>
+#endif
+
+static void playLoadWindowSound(const QString &fileName){
+    if(!Game::scoSoundEnabled)
+        return;
+#ifdef Q_OS_WIN
+    QString soundPath = QCoreApplication::applicationDirPath() + "/content/" + fileName;
+    if(QFile::exists(soundPath)){
+        ::PlaySoundW(NULL, NULL, 0);
+        ::PlaySoundW(reinterpret_cast<const wchar_t*>(soundPath.utf16()), NULL,
+                     SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+    }
+#else
+    Q_UNUSED(fileName);
+#endif
+}
+
 LoadWindow::LoadWindow() {
     //this->setWindowFlags( Qt::CustomizeWindowHint );
     setWindowTitle(Game::AppName+" "+Game::AppVersion+" Route Editor");
@@ -32,15 +52,17 @@ LoadWindow::LoadWindow() {
     QLabel* myLabel = new QLabel("");
     myLabel->setContentsMargins(0,0,0,0);
     myLabel->setFixedSize(600, 200);
-    QLabel* myLabel2 = new QLabel("Choose folder containing 'Global' and 'Routes': ");
+    QLabel* myLabel2 = new QLabel("MSTS/ORTS Root Folder:");
     myLabel2->setContentsMargins(5,0,0,0);
+    myLabel2->setStyleSheet(QString("QLabel { color: %1; font-weight: bold; }").arg(Game::StyleMainLabel));
     QLabel* myLabel3 = new QLabel("Select route above or enter name for new route: ");
     myLabel3->setContentsMargins(5,0,0,0);
     
     myLabel->setPixmap(QPixmap::fromImage(*myImage).scaled(myLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
-    browse = new QPushButton("Browse");
+    browse = new QPushButton("Browse...");
     browse->setMinimumHeight(24);
+    browse->setFixedWidth(90);
     connect(browse, SIGNAL (released()), this, SLOT (handleBrowseButton()));
     load = new QPushButton("Load");
     load->setMinimumHeight(24);
@@ -69,16 +91,33 @@ LoadWindow::LoadWindow() {
     QVBoxLayout *mainLayout = new QVBoxLayout;
     mainLayout->addWidget(myLabel);
     mainLayout->addWidget(myLabel2);
-    mainLayout->addWidget(browse);
-    QFormLayout *recentLayout = new QFormLayout;
-    recentLayout->setContentsMargins(0,0,0,0);
+    QHBoxLayout *rootLayout = new QHBoxLayout;
+    rootLayout->setSpacing(3);
+    rootLayout->setContentsMargins(1,0,1,0);
     cRecent.setMaxVisibleItems(10);
+    cRecent.setEditable(true);
+    cRecent.setInsertPolicy(QComboBox::NoInsert);
+    cRecent.setMinimumHeight(24);
     cRecent.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    cRecent.setStyleSheet("combobox-popup: 0;");
+    cRecent.setStyleSheet(
+        "QComboBox { combobox-popup: 0; color: white; font-weight: normal; }"
+        "QComboBox QLineEdit { color: white; font-weight: normal; }");
+    cRecent.lineEdit()->setPlaceholderText("Select or browse to the Train Simulator root folder");
     QObject::connect(&cRecent, SIGNAL(activated(QString)),
                       this, SLOT(cRecentEnabled(QString)));
-    recentLayout->addRow("Recent: ", &cRecent);
-    mainLayout->addItem(recentLayout);
+    QObject::connect(cRecent.lineEdit(), SIGNAL(returnPressed()),
+                      this, SLOT(rootPathEntered()));
+    rootLayout->addWidget(&cRecent, 1);
+    rootLayout->addWidget(browse);
+    mainLayout->addItem(rootLayout);
+    rootStatusLabel.setContentsMargins(5,0,5,0);
+    rootStatusLabel.setWordWrap(true);
+    rootStatusLabel.hide();
+    mainLayout->addWidget(&rootStatusLabel);
+    routeList.setColumnCount(2);
+    routeList.setHorizontalHeaderLabels(QStringList() << "Directory Name" << "Last Modified");
+    routeList.horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    routeList.verticalHeader()->setVisible(false);
     mainLayout->addWidget(&routeList);
     
     /*nowa = new QWidget();
@@ -101,7 +140,6 @@ LoadWindow::LoadWindow() {
     
     mainLayout->setAlignment(myLabel, Qt::AlignTop);
     mainLayout->setAlignment(myLabel2, Qt::AlignTop);
-    mainLayout->setAlignment(browse, Qt::AlignTop);
     mainLayout->setAlignment(load, Qt::AlignTop);
     mainLayout->setAlignment(box, Qt::AlignBottom);
     //mainLayout->setAlignment(nowa, Qt::AlignBottom);
@@ -126,11 +164,21 @@ LoadWindow::LoadWindow() {
     if(Game::checkRoot(Game::root)){
         qDebug()<<"ok";
         updateStartupButtons(true);
-        browse->setText(Game::root);
-        browse->setStyleSheet(QString("color: ")+Game::StyleGreenText);
+        cRecent.setCurrentText(Game::root);
+        cRecent.setToolTip(Game::root);
+        rootStatusLabel.hide();
         this->listRoutes();
     } else {
         updateStartupButtons(false);
+        if(!Game::root.trimmed().isEmpty()){
+            cRecent.setCurrentText(Game::root);
+            cRecent.setStyleSheet(QString(
+                "QComboBox { combobox-popup: 0; color: %1; font-weight: normal; }"
+                "QComboBox QLineEdit { color: %1; font-weight: normal; }").arg(Game::StyleRedText));
+            rootStatusLabel.setText("Invalid root folder. Choose the Train Simulator folder containing GLOBAL and ROUTES.");
+            rootStatusLabel.setStyleSheet(QString("QLabel { color: %1; }").arg(Game::StyleRedText));
+            rootStatusLabel.show();
+        }
     }
 }
 
@@ -140,43 +188,42 @@ LoadWindow::LoadWindow() {
 
 void LoadWindow::handleBrowseButton(QString directory){
     if(directory == ""){
-        QFileDialog *fd = new QFileDialog;
-        //QTreeView *tree = fd->findChild <QTreeView*>();
-        //tree->setRootIsDecorated(true);
-        //tree->setItemsExpandable(true);
-        fd->setFileMode(QFileDialog::Directory);
-        fd->setOption(QFileDialog::ShowDirsOnly);
-        //fd->setViewMode(QFileDialog::Detail);
-        int result = fd->exec();
-        if (result)
-        {
-            directory = fd->selectedFiles()[0];
-            qDebug()<<directory;
-        }
+        QString startDirectory = Game::checkRoot(Game::root) ? Game::root : QDir::homePath();
+        directory = QFileDialog::getExistingDirectory(
+            this, "Select MSTS/ORTS Root Folder", startDirectory,
+            QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+        if(directory.isEmpty())
+            return;
     }
-    //Game::root = directory;
-    browse->setText(directory);
-    browse->setStyleSheet(QString("color: ")+Game::StyleRedText);
-    load->hide();
-    //nowa->hide();
-    neww->hide();
+
+    directory = directory.trimmed();
+    cRecent.setCurrentText(directory);
+    cRecent.setToolTip(directory);
     updateStartupButtons(false);
-    routeList.clear();
+    routeList.clearContents();
+    routeList.setRowCount(0);
     if(Game::checkRoot(directory)){
         qDebug()<<"ok";
         updateStartupButtons(true);
-        browse->setStyleSheet(QString("color: ")+Game::StyleGreenText);
+        cRecent.setStyleSheet(
+            "QComboBox { combobox-popup: 0; color: white; font-weight: normal; }"
+            "QComboBox QLineEdit { color: white; font-weight: normal; }");
+        rootStatusLabel.hide();
         Game::root = directory;
         this->listRoutes();
-        
-        int i = 0;
-        for(i = 0; i < cRecent.count(); i++){
-            if(cRecent.itemText(i) == directory.toLower())
+
+        int existing = -1;
+        for(int i = 0; i < cRecent.count(); i++){
+            if(cRecent.itemText(i).compare(directory, Qt::CaseInsensitive) == 0){
+                existing = i;
                 break;
+            }
         }
-        if(i == cRecent.count())
-            cRecent.addItem(directory.toLower());
-        
+        if(existing >= 0)
+            cRecent.removeItem(existing);
+        cRecent.insertItem(0, directory);
+        cRecent.setCurrentIndex(0);
+
         QString path;
         path = "cerecent.txt";
         QFile file(path);
@@ -189,6 +236,14 @@ void LoadWindow::handleBrowseButton(QString directory){
         }
         in.flush();
         file.close();
+    } else {
+        playLoadWindowSound("SCObuzz.wav");
+        cRecent.setStyleSheet(QString(
+            "QComboBox { combobox-popup: 0; color: %1; font-weight: normal; }"
+            "QComboBox QLineEdit { color: %1; font-weight: normal; }").arg(Game::StyleRedText));
+        rootStatusLabel.setText("Invalid root folder. Choose the Train Simulator folder containing GLOBAL and ROUTES.");
+        rootStatusLabel.setStyleSheet(QString("QLabel { color: %1; }").arg(Game::StyleRedText));
+        rootStatusLabel.show();
     }
 }
 
@@ -371,6 +426,10 @@ void LoadWindow::cRecentEnabled(QString val){
     handleBrowseButton(val);
 }
 
+void LoadWindow::rootPathEntered(){
+    handleBrowseButton(cRecent.currentText());
+}
+
 void LoadWindow::setNewRoute(){
     //qDebug() << "new";
     //this->load->setText("New");
@@ -447,8 +506,18 @@ void LoadWindow::listRoots(){
     QTextStream in(&file);
     QString line;
     while (!in.atEnd()) {
-        line = in.readLine().toLower();
-        cRecent.addItem(line);
+        line = in.readLine().trimmed();
+        if(line.isEmpty())
+            continue;
+        bool duplicate = false;
+        for(int i = 0; i < cRecent.count(); i++){
+            if(cRecent.itemText(i).compare(line, Qt::CaseInsensitive) == 0){
+                duplicate = true;
+                break;
+            }
+        }
+        if(!duplicate)
+            cRecent.addItem(line);
     }
     file.close();
 } 

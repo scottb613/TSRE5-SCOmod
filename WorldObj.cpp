@@ -312,6 +312,8 @@ WorldObj::WorldObj(const WorldObj& o) {
     Vec3::copy(position, (float*)o.position);
     Vec3::copy(placedAtPosition, (float*)o.placedAtPosition);
     Vec3::copy(firstPosition, (float*)o.firstPosition);
+    placementSnapNodeId = o.placementSnapNodeId;
+    placementSnapRoad = o.placementSnapRoad;
     Quat::copy(qDirection, (float*)o.qDirection);
     memcpy(matrix, o.matrix, sizeof(float)*16);
     staticDetailLevel = o.staticDetailLevel;

@@ -17,6 +17,7 @@
 #include <QString>
 #include <unordered_map>
 #include <QVector>
+#include <QHash>
 #include "OglObj.h"
 #include "TextObj.h"
 #include "SignalObj.h"
@@ -35,6 +36,12 @@ class SpeedPostDAT;
 
 class TDB {
 public:
+    enum GradeMarkerTransition {
+        GradeMarkerStable = 0,
+        GradeMarkerIncreasing = 1,
+        GradeMarkerDecreasing = 2,
+        GradeMarkerWarning = 3
+    };
     struct IntersectionPoint{
         float distance;
         float idx;
@@ -84,8 +91,10 @@ public:
     static void saveEmpty(bool road);
     void fillTrackAngles(int x, int z, int UiD, QMap<int, float>& angles);
     bool ifTrackExist(int x, int y, int UiD);
+    int getGradeMarkerTransition(int x, int y, int UiD);
     bool removeTrackFromTDB(int x, int y, int UiD);
     int findNearestNode(int &x, int &z, float* p, float* q, float maxD = 4, bool updatePosition = true);
+    bool endpointBelongsToTrack(int endpointId, int x, int y, unsigned int uid) const;
     int findVectorNodeBetweenTwoNodes(int first, int second);
     int joinTracks(int iendp);
     int joinVectorSections(int id1, int id2);
@@ -118,7 +127,7 @@ public:
     int newTrack(int x, int z, float* p, float* q, int* ends, int r, int sect, int uid, int* start);
     bool placeTrack(int x, int z, float* p, float* q, int sectionIdx, int uid, QVector<std::array<float, 5>> *jNodePosn = NULL);
     bool fillJNodePosn(int x, int z, int uid, QVector<std::array<float, 5>> *jNodePosn);
-    bool findPosition(int &x, int &z, float* p, float* q, float* endp, int sectionIdx);
+    bool findPosition(int &x, int &z, float* p, float* q, float* endp, int sectionIdx, int *snappedEndpointId = NULL);
     void getLines(float * &lineBuffer, int &length, float* playerT);
     void renderAll(GLUU *gluu, float * playerT, float playerRot);
     void renderLines(GLUU *gluu, float* playerT, float playerRot);
@@ -178,6 +187,9 @@ protected:
     bool isInitTrItemsDraw = false;
     bool road = false;
     int tdbId = 0;
+    QHash<QString, int> gradeMarkerTransitionCache;
+    unsigned int gradeMarkerCacheRevision = 0;
+    void rebuildGradeMarkerCache();
     ErrorMessage::SourceType tdbName = ErrorMessage::Source_TDB;
     
     float *collisionLineBuffer = NULL;

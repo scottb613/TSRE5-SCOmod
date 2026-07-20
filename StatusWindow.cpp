@@ -23,18 +23,18 @@ static int scaledUiSize(int base){
     return qRound(base * qMax(1.0f, Game::uiScale));
 }
 
-static QString statusButtonStyle(const QString& top, const QString& bottom,
+static QString statusButtonStyle(const QString& background, const QString& hoverBackground,
                                  const QString& textColor, const QString& border,
-                                 const QString& shadow){
+                                 const QString& pressedBackground){
     return QString(
         "QPushButton { color: %1;"
-        " background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %2, stop:1 %3);"
-        " border: 1px solid %4; border-bottom-color: %5; border-radius: 2px; padding: 1px 4px; }"
-        "QPushButton:hover { border-color: #f08200; }"
+        " background-color: %2;"
+        " border: 1px solid %4; border-radius: 1px; padding: 1px 4px; }"
+        "QPushButton:hover { background-color: %3; border-color: #f08200; }"
         "QPushButton:pressed {"
-        " background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %3, stop:1 %2);"
+        " background-color: %5; border-color: %4;"
         " padding-top: 2px; padding-bottom: 0px; }"
-    ).arg(textColor, top, bottom, border, shadow);
+    ).arg(textColor, background, hoverBackground, border, pressedBackground);
 }
 
 static QPoint snapWindowPosition(QWidget *window){
@@ -242,13 +242,13 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     markerLocationLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     positionLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
 
-    statS = statusButtonStyle("#606060", "#414141", "white", "#707070", "#292929");
-    statG = statusButtonStyle("#48b957", "#197b25", "white", "#63cc70", "#0d4514");
-    statY = statusButtonStyle("#fff36a", "#d6c94a", "#171717", "#fff58a", "#746c21");
-    statR = statusButtonStyle("#e66c6c", "#a83d3d", "white", "#ef8989", "#5b2020");
+    statS = statusButtonStyle("#26292c", "#303438", "#e7eaec", "#383d41", "#191b1d");
+    statG = statusButtonStyle("#176c25", "#1e8430", "#f2fff4", "#319344", "#104b1a");
+    statY = statusButtonStyle("#a88718", "#c19d1f", "#fff9d8", "#d0ad32", "#70590e");
+    statR = statusButtonStyle("#8d3030", "#a63b3b", "#fff0f0", "#bd5151", "#602020");
 
-    moveFast.setStyleSheet(statS);
-    moveSlow.setStyleSheet(statS);
+    for(int i = 0; i < buttons.size(); i++)
+        buttons[i]->setStyleSheet(statS);
 
     QObject::connect(&status4, SIGNAL(released()), this, SLOT(selectButtonAction()));
     QObject::connect(&status9, SIGNAL(released()), this, SLOT(placeButtonAction()));
@@ -441,8 +441,10 @@ void StatusWindow::jumpTileSelected(){
         jumped = true;
     }
 
-    if(jumped)
+    if(jumped){
+        emit jumpSoundRequested();
         emit requestMainFocus();
+    }
 }
 
 void StatusWindow::naviInfo(int all, int hidden){

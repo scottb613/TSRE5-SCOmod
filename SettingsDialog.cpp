@@ -670,7 +670,7 @@ void SettingsDialog::save(const QString& filename) {
 
     QTextStream out(&file);
 
-    out << "// TSRE GenX v0.5 settings\n";
+    out << "// TSRE GenX v0.6 settings\n";
     out << "// Both # and // can be used for comments.\n";
     out << "// Recommended public uiScale range: 1.00 to 1.25. Scott's 32\" 2K setup uses 1.15.\n\n";
 
@@ -769,7 +769,7 @@ void SettingsDialog::save(const QString& filename) {
     writeSetting(out, "ignoreMissingGlobalShapes", "true", "false shows only track/road shapes present in Global\\Shapes");
     writeSetting(out, "leaveTrackShapeAfterDelete", "false", "use only when deleting track/road but keeping TDB lines");
     writeSetting(out, "maxAutoPlacement", "999", "max distance in meters for auto-placement");
-    writeSetting(out, "numRecentItems", "15", "length of recently used items list");
+    writeSetting(out, "numRecentItems", "30", "length of recently used items list");
     writeSetting(out, "sigOffset", "2.5", "offset for signal object placement");
     writeSetting(out, "snapableRadius", "20", "max distance to snap to nearest object");
     writeSetting(out, "snapableOnlyRot", "false", "false allows free rotation");

@@ -16,7 +16,7 @@
 #include "Undo.h"
 #include "GuiFunct.h"
 
-QString PropertiesAbstract::ElevTypeName = "Permille ‰";
+QString PropertiesAbstract::ElevTypeName = "Percent %";
 
 PropertiesAbstract::PropertiesAbstract() : QWidget() {
     setStyleSheet(GuiFunct::scoPanelStyle());

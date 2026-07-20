@@ -1,4 +1,4 @@
-TSRE GenX Improvements
+TSRE GenX v0.6 Improvements
 
 ======================================================================================================
 
@@ -56,6 +56,15 @@ HIGHLIGHTS
 - Added [dynamic track] GokuMK's Classic Flex foundation for the familiar Straight-Curve-Straight connection workflow.
 - Added [dynamic track] NextGen Flex as a separate Straight-Curve-Straight-Curve-Straight mode for compound and full S-curve connections, with Classic/NextGen selection in the Dynamic Track panel.
 - Improved [dynamic track] editing reliability with rebuilt track-database geometry after Flex, synchronized elevation data, length/curve readouts, clearer section names, consistent Dynamic Track naming, and refined success/error feedback.
+- Improved [load] MSTS/ORTS root selection with an editable recent-root field, Browse button, path validation, inline error guidance, and duplicate-safe recent-root ordering.
+- Expanded [object Panel] Recent Items to 30 entries in a scrollable 15-row view and added [Clear Recent].
+- Changed [track properties] grade editing to open in Percent by default with clearer unit labeling.
+- Added [track properties] [Lock Grade] so newly placed track and road pieces can inherit the selected piece's physical grade.
+- Added [track properties] a dock-friendly [Grade Helper] for controlled per-piece transitions toward a target grade, with connected-piece validation and automatic rejection of invalid transition placements.
+- Added [view] toggleable Grade Symbols with an on-screen legend for steady, increasing, decreasing, and crest-warning grade states.
+- Hardened [view] Grade Symbols cache invalidation so track-database edits refresh the overlay without repeated full-database scans for non-database pieces.
+- Refined [Control Panel] button states and added `SCOchirp.wav` feedback for successful navigation jumps and completed grade transitions.
+- Added [global] orange hover highlighting to the Route Editor's top menu dropdown rows.
 
 ======================================================================================================
 
@@ -386,6 +395,55 @@ The Dynamic Track panel now reports the selected object's section index, total c
 Flex completion now updates the object first and reports success afterward. On a successful solve, TSRE removes the old Dynamic Track entry from the track database and rebuilds it from the new sections before playing the success sound. This prevents the editor from retaining stale database geometry that can appear as endpoint gaps or duplicate-looking track-database markers after Flex.
 
 Dynamic Track elevation changes now update both the applied object rotation and the serialized elevation value, keeping saved data synchronized with what is shown in the editor. Dynamic Track naming is also normalized across the property panel, reference selector, object list, and Recent Items list so the user-facing label is consistently `Dynamic Track`.
+
+
+   --- Startup Root Selection ---
+
+The startup window now presents the MSTS/ORTS root as an editable recent-root field beside a compact `Browse...` button. A path can be selected from the saved list, entered directly, or chosen from the folder dialog. TSRE validates that the selected folder contains the expected Train Simulator root structure before enabling route startup controls.
+
+Invalid paths remain visible for correction, are shown in the normal GenX error color, and display an inline explanation instead of silently clearing the route list. Valid selections move to the front of the recent-root list without case-sensitive duplicates, retain their original path casing, and immediately refresh the available route table.
+
+
+   --- Recent Object History ---
+
+The right-side Object Panel now retains up to 30 Recent Items while keeping the visible area bounded to 15 rows with a scrollbar. This provides a longer useful placement history without allowing the panel to grow excessively tall. A `Clear Recent` button resets both the displayed list and its internal item references, then returns keyboard focus to the main editor viewport.
+
+
+   --- Track Grade Editing and Lock ---
+
+Track properties now open with Percent selected as the default grade unit, while Permille, 1-in-X, and Angle remain available. The labels distinguish grade units from the general movement/rotation adjustment sensitivity so the controls are less likely to be confused.
+
+`Lock Grade` captures the selected track or road piece's physical percent grade and applies that grade to each newly placed track/road piece. The lock state and captured grade remain visible in the Track properties panel. Turning the lock off returns placement to the normal TSRE elevation behavior.
+
+
+   --- Grade Helper ---
+
+The Track properties panel now includes a separate `Grade Helper...` tool for building controlled vertical transitions one connected piece at a time. The helper shows Current Grade, Target Grade, Step Per Piece, and Next Grade in percent. It can snap beside the Control Panel or other editor windows and returns focus to the viewport when the operator starts, stops, or closes the workflow.
+
+When Grade Assist is active, TSRE verifies that the next placement is physically connected to the previously selected track/road database endpoint and that the starting grade still matches the expected current grade. A disconnected or mismatched placement is automatically rejected through the existing undo/Place Guard path. Each accepted piece receives the calculated next grade, advances by no more than the requested step, and stops exactly on the target instead of overshooting it. Reaching the target changes the helper to a holding state and enables the normal grade lock at the achieved value.
+
+The placement endpoint information used by this check is transient editor state only and is never written into route world files.
+
+
+   --- Grade Symbols Overlay ---
+
+The View menu and Track properties panel now expose the same global `Grade Symbols` toggle. When enabled, graded static track and road pieces receive square, direction-aware symbols above the track, and a viewport legend explains the four states:
+
+  - orange: steady grade
+  - cyan: grade increasing in the visible uphill direction
+  - magenta: grade decreasing in the visible uphill direction
+  - red: connected crest warning where uphill arrows converge
+
+The overlay reads live TrackObj grades while using TrackDB/RoadDB connectivity to compare only genuinely connected neighboring pieces, avoiding false transitions from nearby parallel tracks. Mirrored symbol artwork keeps the marking readable from either face of reversed/POS-NEG-swapped track pieces.
+
+The overlay cache is invalidated by grade rotation and track-database refresh operations. Missing or temporarily non-database pieces safely use the steady fallback without forcing a full database rescan every rendered frame; this keeps the optional overlay practical on populated routes.
+
+
+   --- Interface Feedback Refinements ---
+
+The startup path failure now uses `SCObuzz.wav`, while successful Control Panel navigation jumps and a Grade Helper target completion use the lighter `SCOchirp.wav`. Control Panel buttons use quieter solid dark state colors with distinct green, yellow, and red feedback, plus consistent hover and pressed states.
+
+The Route Editor's top menu dropdown rows now use the same orange `#f08200` hover selection and black selected text used across the GenX lists and combo boxes. Small Terrain Tools labels were also clarified: `HeightMap +` is now `Height +`, and the seasonal control is labeled `TERRTEX Paint: Mirror Season`.
 
 ======================================================================================================
 

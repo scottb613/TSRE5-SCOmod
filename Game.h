@@ -176,6 +176,17 @@ public:
     
     static int DefaultElevationBox;
     static float DefaultMoveStep;
+    static bool gradeOverlayEnabled;
+    static unsigned int gradeOverlayRevision;
+    static bool gradeLockEnabled;
+    static float gradeLockedPercent;
+    static bool gradeAssistInitialized;
+    static bool gradeAssistEnabled;
+    static bool gradeAssistTargetReached;
+    static float gradeAssistCurrentPercent;
+    static float gradeAssistTargetPercent;
+    static float gradeAssistStepPercent;
+    static float gradeAssistNextPercent;
     
     static bool hudEnabled;
     static float hudScale;

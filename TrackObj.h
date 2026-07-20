@@ -52,9 +52,15 @@ public:
     
 private:
     float elevation;
+    OglObj *gradeMarker = NULL;
+    OglObj *gradeMarkerMirror = NULL;
+    int gradeMarkerDirection = 99;
+    int gradeMarkerTransition = -1;
     //unsigned int collideFunction;
     bool getSimpleBorder(float* border);
     bool getBoxPoints(QVector<float> &points);
+    void renderGradeMarker(float lod, int renderMode, int selectionColor);
+    void rebuildGradeMarker(int direction, int transition);
     bool proceduralShapeInit = false;
     QVector<OglObj*> procShape;
     bool roadShape = false;

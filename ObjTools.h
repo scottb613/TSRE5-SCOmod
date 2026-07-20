@@ -31,6 +31,7 @@ public slots:
     void refOtherSelected(const QString & text);
     void refSearchSelected(const QString & text);
     void resetObjectSearch();
+    void clearRecentItems();
     void refListSelected(QListWidgetItem * item);
     void lastItemsListSelected(QListWidgetItem * item);
     void selectToolEnabled(bool val);
@@ -84,6 +85,7 @@ private:
     QComboBox refRoad;
     QComboBox refOther;
     QPushButton resetSearchButton;
+    QPushButton clearRecentButton;
     Ref::RefItem itemRef;
     std::deque<Ref::RefItem*> lastItemsPtr;
     QVector<Ref::RefItem*> currentItemList;

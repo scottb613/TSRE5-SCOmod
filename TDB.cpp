@@ -11,6 +11,7 @@
 #include "TDB.h"
 #include <QDebug>
 #include <array>
+#include <cmath>
 #include <functional>
 #include "Game.h"
 #include "ParserX.h"
@@ -32,6 +33,7 @@
 #include "ErrorMessagesLib.h"
 #include "ErrorMessage.h"
 #include "Route.h"
+#include "TrackObj.h"
 
 std::unordered_map<int, TRitem*>* TDB::StaticTrackItems;
 
@@ -633,6 +635,40 @@ int TDB::findNearestNode(int &x, int &z, float* p, float* q, float maxD, bool up
     }
     
     return nearestID;
+}
+
+bool TDB::endpointBelongsToTrack(int endpointId, int x, int y, unsigned int uid) const {
+    auto endpointIt = trackNodes.find(endpointId);
+    if(endpointIt == trackNodes.end() || endpointIt->second == NULL)
+        return false;
+
+    TRnode *endpoint = endpointIt->second;
+    if(endpoint->typ != 0 && endpoint->typ != 2)
+        return false;
+
+    const int pinCount = endpoint->TrP1 + endpoint->TrP2;
+    const int databaseY = -y;
+    for(int pin = 0; pin < pinCount; ++pin){
+        auto vectorIt = trackNodes.find(endpoint->TrPinS[pin]);
+        if(vectorIt == trackNodes.end() || vectorIt->second == NULL)
+            continue;
+        TRnode *vector = vectorIt->second;
+        if(vector->typ != 1 || vector->iTrv < 1 || vector->trVectorSection == NULL)
+            continue;
+
+        int sectionIndex = -1;
+        if(vector->TrPinS[0] == endpointId)
+            sectionIndex = 0;
+        else if(vector->TrPinS[1] == endpointId)
+            sectionIndex = vector->iTrv - 1;
+        if(sectionIndex < 0)
+            continue;
+
+        float *section = vector->trVectorSection[sectionIndex].param;
+        if((int)section[2] == x && (int)section[3] == databaseY && (unsigned int)section[4] == uid)
+            return true;
+    }
+    return false;
 }
 
 int TDB::appendTrack(int id, int* ends, int r, int sect, int uid) {
@@ -1557,12 +1593,14 @@ void TDB::nextDefaultEnd(){
     this->defaultEnd++;
 }
 
-bool TDB::findPosition(int &x, int &z, float* p, float* q, float* endp, int sectionIdx){
+bool TDB::findPosition(int &x, int &z, float* p, float* q, float* endp, int sectionIdx, int *snappedEndpointId){
     float qe[3];
     qe[0] = 0;
     qe[1] = 0;
     qe[2] = 0;
     int findValue = findNearestNode(x, z, p, (float*) &qe);
+    if(snappedEndpointId != NULL)
+        *snappedEndpointId = findValue;
     if(findValue < 0) return false;
     if(Game::debugOutput) qDebug() << "TDB1563: " << findValue;
     
@@ -1932,6 +1970,164 @@ bool TDB::ifTrackExist(int x, int y, int UiD){
     return false;
 }
 
+namespace {
+QString gradeMarkerKey(int x, int y, int uid){
+    return QString::number(x) + ':' + QString::number(y) + ':' + QString::number(uid);
+}
+
+struct GradeMarkerSample {
+    float magnitude = 0.0f;
+    float arrowX = 0.0f;
+    float arrowZ = 1.0f;
+    float worldX = 0.0f;
+    float worldZ = 0.0f;
+};
+}
+
+void TDB::rebuildGradeMarkerCache(){
+    gradeMarkerTransitionCache.clear();
+    gradeMarkerCacheRevision = Game::gradeOverlayRevision;
+    if(Game::currentRoute == NULL)
+        return;
+
+    // TrackDB/RoadDB supplies connectivity.  Live TrackObj data supplies the
+    // magnitude and the same physical uphill direction shown by the marker.
+    QHash<QString, GradeMarkerSample> grades;
+    for(int nodeId = 1; nodeId <= iTRnodes; ++nodeId){
+        TRnode *node = trackNodes[nodeId];
+        if(node == NULL || node->typ != 1)
+            continue;
+        for(int sectionId = 0; sectionId < node->iTrv; ++sectionId){
+            TRnode::TRSect &section = node->trVectorSection[sectionId];
+            const int tileX = (int)section.param[2];
+            const int tileY = -(int)section.param[3];
+            const int uid = (int)section.param[4];
+            WorldObj *obj = Game::currentRoute->findWorldObjByUid(tileX, tileY, uid);
+            if(obj == NULL || obj->type != "trackobj")
+                continue;
+
+            TrackObj *track = (TrackObj*)obj;
+            const float liveGrade = std::tan(track->getElevation()) * 100.0f;
+            int direction = liveGrade >= 0.0f ? 1 : -1;
+            if(track->endp != NULL && track->endp[3] < 0.0f)
+                direction = -direction;
+
+            float localArrow[3] = { 0.0f, 0.0f, (float)direction };
+            float worldArrow[3];
+            Vec3::transformQuat(worldArrow, localArrow, track->qDirection);
+            const float arrowLength = std::sqrt(worldArrow[0] * worldArrow[0] + worldArrow[2] * worldArrow[2]);
+
+            GradeMarkerSample sample;
+            sample.magnitude = qAbs(liveGrade);
+            if(arrowLength > 0.0001f){
+                sample.arrowX = worldArrow[0] / arrowLength;
+                sample.arrowZ = worldArrow[2] / arrowLength;
+            }
+            sample.worldX = track->x * 2048.0f + track->position[0];
+            sample.worldZ = track->y * 2048.0f + track->position[2];
+            grades.insert(gradeMarkerKey(tileX, tileY, uid), sample);
+        }
+    }
+
+    const float flatTolerance = 0.01f;
+    const float transitionTolerance = 0.05f; // percentage points
+    for(int nodeId = 1; nodeId <= iTRnodes; ++nodeId){
+        TRnode *node = trackNodes[nodeId];
+        if(node == NULL || node->typ != 1)
+            continue;
+        for(int sectionId = 0; sectionId < node->iTrv; ++sectionId){
+            TRnode::TRSect &section = node->trVectorSection[sectionId];
+            const QString key = gradeMarkerKey((int)section.param[2], -(int)section.param[3], (int)section.param[4]);
+            if(!grades.contains(key))
+                continue;
+
+            const GradeMarkerSample current = grades.value(key);
+            int transition = GradeMarkerStable;
+            if(current.magnitude > flatTolerance){
+                QVector<QString> neighborKeys;
+                const int offsets[2] = { -1, 1 };
+                for(int offset : offsets){
+                    int neighborId = sectionId + offset;
+                    while(neighborId >= 0 && neighborId < node->iTrv){
+                        TRnode::TRSect &neighborSection = node->trVectorSection[neighborId];
+                        const QString neighborKey = gradeMarkerKey((int)neighborSection.param[2], -(int)neighborSection.param[3], (int)neighborSection.param[4]);
+                        if(neighborKey != key){
+                            if(grades.contains(neighborKey))
+                                neighborKeys.push_back(neighborKey);
+                            break;
+                        }
+                        neighborId += offset;
+                    }
+                }
+
+                // Red is reserved for a real, connected crest: both visible
+                // uphill arrows point toward their shared joint.  Database
+                // traversal signs and nearby parallel tracks do not count.
+                for(const QString &neighborKey : neighborKeys){
+                    const GradeMarkerSample neighbor = grades.value(neighborKey);
+                    if(current.magnitude <= transitionTolerance || neighbor.magnitude <= transitionTolerance)
+                        continue;
+                    const float dx = neighbor.worldX - current.worldX;
+                    const float dz = neighbor.worldZ - current.worldZ;
+                    const float distance = std::sqrt(dx * dx + dz * dz);
+                    if(distance <= 0.001f)
+                        continue;
+                    const float towardNeighbor = (current.arrowX * dx + current.arrowZ * dz) / distance;
+                    const float neighborTowardCurrent = -(neighbor.arrowX * dx + neighbor.arrowZ * dz) / distance;
+                    if(towardNeighbor > 0.25f && neighborTowardCurrent > 0.25f){
+                        transition = GradeMarkerWarning;
+                        break;
+                    }
+                }
+
+                // Otherwise compare the current magnitude with the connected
+                // section physically behind it in the visible uphill direction.
+                if(transition != GradeMarkerWarning){
+                    bool foundBehind = false;
+                    float bestBehindDot = 0.0f;
+                    GradeMarkerSample behind;
+                    for(const QString &neighborKey : neighborKeys){
+                        const GradeMarkerSample neighbor = grades.value(neighborKey);
+                        const float dx = neighbor.worldX - current.worldX;
+                        const float dz = neighbor.worldZ - current.worldZ;
+                        const float distance = std::sqrt(dx * dx + dz * dz);
+                        if(distance <= 0.001f)
+                            continue;
+                        const float arrowDot = (current.arrowX * dx + current.arrowZ * dz) / distance;
+                        if(arrowDot < bestBehindDot){
+                            bestBehindDot = arrowDot;
+                            behind = neighbor;
+                            foundBehind = true;
+                        }
+                    }
+                    if(foundBehind){
+                        if(behind.magnitude <= flatTolerance){
+                            transition = GradeMarkerIncreasing;
+                        } else {
+                            const float delta = current.magnitude - behind.magnitude;
+                            if(delta > transitionTolerance)
+                                transition = GradeMarkerIncreasing;
+                            else if(delta < -transitionTolerance)
+                                transition = GradeMarkerDecreasing;
+                        }
+                    }
+                }
+            }
+
+            const int previous = gradeMarkerTransitionCache.value(key, GradeMarkerStable);
+            if(transition > previous || !gradeMarkerTransitionCache.contains(key))
+                gradeMarkerTransitionCache.insert(key, transition);
+        }
+    }
+}
+
+int TDB::getGradeMarkerTransition(int x, int y, int UiD){
+    const QString key = gradeMarkerKey(x, y, UiD);
+    if(gradeMarkerCacheRevision != Game::gradeOverlayRevision)
+        rebuildGradeMarkerCache();
+    return gradeMarkerTransitionCache.value(key, GradeMarkerStable);
+}
+
 int TDB::getNextItrNode(){
     return ++this->iTRnodes;
 }
@@ -1941,6 +2137,7 @@ void TDB::refresh() {
     isInitLines = false;
     isInitTrItemsDraw = false;
     collisionLineHash = 0;
+    ++Game::gradeOverlayRevision;
 }
 
 void TDB::renderAll(GLUU *gluu, float* playerT, float playerRot) {

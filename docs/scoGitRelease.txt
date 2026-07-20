@@ -55,6 +55,15 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added `dynamic track` GokuMK's Classic Flex foundation for the familiar Straight-Curve-Straight connection workflow.
 - Added `dynamic track` NextGen Flex as a separate Straight-Curve-Straight-Curve-Straight mode for compound and full S-curve connections, with Classic/NextGen selection in the Dynamic Track panel.
 - Improved `dynamic track` editing reliability with rebuilt track-database geometry after Flex, synchronized elevation data, length/curve readouts, clearer section names, consistent Dynamic Track naming, and refined success/error feedback.
+- Improved `load` MSTS/ORTS root selection with an editable recent-root field, Browse button, path validation, inline error guidance, and duplicate-safe recent-root ordering.
+- Expanded `object Panel` Recent Items to 30 entries in a scrollable 15-row view and added `Clear Recent`.
+- Changed `track properties` grade editing to open in Percent by default with clearer unit labeling.
+- Added `track properties` `Lock Grade` so newly placed track and road pieces can inherit the selected piece's physical grade.
+- Added `track properties` a dock-friendly `Grade Helper` for controlled per-piece transitions toward a target grade, with connected-piece validation and automatic rejection of invalid transition placements.
+- Added `view` toggleable Grade Symbols with an on-screen legend for steady, increasing, decreasing, and crest-warning grade states.
+- Hardened `view` Grade Symbols cache invalidation so track-database edits refresh the overlay without repeated full-database scans for non-database pieces.
+- Refined `Control Panel` button states and added `SCOchirp.wav` feedback for successful navigation jumps and completed grade transitions.
+- Added `global` orange hover highlighting to the Route Editor's top menu dropdown rows.
 
 ## Downloads
 

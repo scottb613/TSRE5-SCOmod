@@ -17,6 +17,7 @@
 #include "ParserX.h"
 #include "TS.h"
 #include <QDebug>
+#include <QCoreApplication>
 #include "Game.h"
 #include "TDB.h"
 #include "TrackItemObj.h"
@@ -25,6 +26,7 @@
 #include "ErrorMessagesLib.h"
 #include "ErrorMessage.h"
 #include "Renderer.h"
+#include "OglObj.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -58,6 +60,8 @@ WorldObj* TrackObj::clone(){
 }
 
 TrackObj::~TrackObj() {
+    delete gradeMarker;
+    delete gradeMarkerMirror;
 }
 
 //// EFO Adding for the track obj vs. just the TDB check as this might be safer for a track dragged without the TDB being changed
@@ -232,6 +236,8 @@ void TrackObj::setElevation(float prom){
 void TrackObj::rotate(float x, float y, float z){
     this->tRotation[0] += x;
     this->tRotation[1] += y;
+    if(x != 0)
+        ++Game::gradeOverlayRevision;
     if(matrix3x3 != NULL) matrix3x3 = NULL;
 
     qDebug() << "rot" << x << y << z;
@@ -531,7 +537,110 @@ void TrackObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
     if(selected){
         drawBox();
     }
+
+    renderGradeMarker(lod, renderMode, selectionColor);
 };
+
+void TrackObj::rebuildGradeMarker(int direction, int transition){
+    if(gradeMarker == NULL)
+        gradeMarker = new OglObj();
+    else
+        gradeMarker->deleteVBO();
+    if(gradeMarkerMirror == NULL)
+        gradeMarkerMirror = new OglObj();
+    else
+        gradeMarkerMirror->deleteVBO();
+
+    float border[6];
+    float centerZ = 0.0f;
+    if(getSimpleBorder(border))
+        centerZ = (border[4] + border[5]) * 0.5f;
+
+    const float y = 0.58f;
+    QVector<float> points;
+    QVector<float> mirrorPoints;
+    // The grade artwork is square.  Keep a fixed square footprint so track
+    // section length cannot stretch or squash the symbol.
+    const float halfSize = 2.3f;
+    const float halfWidth = halfSize;
+    const float tailZ = centerZ - direction * halfSize;
+    const float headZ = centerZ + direction * halfSize;
+    const float alpha = -GLUU::get()->alphaTest;
+    auto addVertex = [&points, alpha](float px, float py, float pz, float u, float v){
+        points << px << py << pz << u << v << alpha;
+    };
+    auto addMirrorVertex = [&mirrorPoints, alpha](float px, float py, float pz, float u, float v){
+        mirrorPoints << px << py << pz << u << v << alpha;
+    };
+
+    addVertex(-halfWidth, y, headZ, 0.0f, 0.0f);
+    addVertex(-halfWidth, y, tailZ, 0.0f, 1.0f);
+    addVertex( halfWidth, y, tailZ, 1.0f, 1.0f);
+    addVertex(-halfWidth, y, headZ, 0.0f, 0.0f);
+    addVertex( halfWidth, y, tailZ, 1.0f, 1.0f);
+    addVertex( halfWidth, y, headZ, 1.0f, 0.0f);
+
+    // The opposite face uses the user-supplied horizontal mirror artwork.
+    // Reversing only the winding guarantees coverage; the matched mirror
+    // texture keeps the G readable on POS/NEG-swapped track pieces.
+    addMirrorVertex( halfWidth, y, tailZ, 1.0f, 1.0f);
+    addMirrorVertex(-halfWidth, y, tailZ, 0.0f, 1.0f);
+    addMirrorVertex(-halfWidth, y, headZ, 0.0f, 0.0f);
+    addMirrorVertex( halfWidth, y, headZ, 1.0f, 0.0f);
+    addMirrorVertex( halfWidth, y, tailZ, 1.0f, 1.0f);
+    addMirrorVertex(-halfWidth, y, headZ, 0.0f, 0.0f);
+
+    static QString stableTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-stable.png";
+    static QString increaseTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-increase.png";
+    static QString decreaseTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-decrease.png";
+    static QString warningTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-warning.png";
+    static QString stableMirrorTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-stable-mirror.png";
+    static QString increaseMirrorTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-increase-mirror.png";
+    static QString decreaseMirrorTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-decrease-mirror.png";
+    static QString warningMirrorTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-warning-mirror.png";
+    QString *texture = &stableTexture;
+    QString *mirrorTexture = &stableMirrorTexture;
+    if(transition == TDB::GradeMarkerIncreasing){
+        texture = &increaseTexture;
+        mirrorTexture = &increaseMirrorTexture;
+    } else if(transition == TDB::GradeMarkerDecreasing){
+        texture = &decreaseTexture;
+        mirrorTexture = &decreaseMirrorTexture;
+    } else if(transition == TDB::GradeMarkerWarning){
+        texture = &warningTexture;
+        mirrorTexture = &warningMirrorTexture;
+    }
+    gradeMarker->setMaterial(texture);
+    gradeMarker->init(points.data(), points.size(), RenderItem::VT, GL_TRIANGLES);
+    gradeMarkerMirror->setMaterial(mirrorTexture);
+    gradeMarkerMirror->init(mirrorPoints.data(), mirrorPoints.size(), RenderItem::VT, GL_TRIANGLES);
+    gradeMarkerDirection = direction;
+    gradeMarkerTransition = transition;
+}
+
+void TrackObj::renderGradeMarker(float lod, int renderMode, int selectionColor){
+    if(!Game::gradeOverlayEnabled || renderMode != GLUU::RENDER_DEFAULT || selectionColor != 0)
+        return;
+    if(lod > 650.0f)
+        return;
+
+    const float gradePercent = tan(getElevation()) * 100.0f;
+    if(qAbs(gradePercent) <= 0.01f)
+        return;
+    int direction = gradePercent > 0 ? 1 : -1;
+    if(endp != NULL && endp[3] < 0)
+        direction = -direction;
+    TDB *tdb = roadShape ? Game::roadDB : Game::trackDB;
+    int transition = TDB::GradeMarkerStable;
+    if(tdb != NULL)
+        transition = tdb->getGradeMarkerTransition(x, y, UiD);
+    if(gradeMarker == NULL || gradeMarkerDirection != direction || gradeMarkerTransition != transition)
+        rebuildGradeMarker(direction, transition);
+    if(gradeMarker != NULL)
+        gradeMarker->render(0, lod);
+    if(gradeMarkerMirror != NULL)
+        gradeMarkerMirror->render(0, lod);
+}
 
 void TrackObj::fillJNodePosn(){
     TDB* tdb = Game::trackDB;

@@ -242,16 +242,26 @@ ObjTools::ObjTools(QString name)
     QLabel *label2 = new QLabel("Recent Items:");
     label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label2->setContentsMargins(3,0,0,0);
+    clearRecentButton.setText("Clear Recent");
+    clearRecentButton.setFocusPolicy(Qt::NoFocus);
+    QHBoxLayout *recentHeader = new QHBoxLayout;
+    recentHeader->setSpacing(2);
+    recentHeader->setContentsMargins(0,0,1,0);
+    recentHeader->addWidget(label2);
+    recentHeader->addStretch();
+    recentHeader->addWidget(&clearRecentButton);
     //refClasssetMargin(0);
     //refTrack->sets >setMargin(0);
     //refRoad->setMargin(0);
     //label1->setMargin(0);
-    vbox->addWidget(label2);
+    vbox->addLayout(recentHeader);
     vbox->addWidget(&lastItems);
 
     lastItems.setFont(objectPanelFont);
-    lastItems.setMinimumHeight(Game::numRecentItems*scaledUiSize(16));
-    lastItems.setMaximumHeight(Game::numRecentItems*scaledUiSize(16));
+    const int visibleRecentRows = qBound(1, Game::numRecentItems, 15);
+    lastItems.setMinimumHeight(visibleRecentRows*scaledUiSize(16));
+    lastItems.setMaximumHeight(visibleRecentRows*scaledUiSize(16));
+    lastItems.setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     //QSizePolicy* sizePolicy = new QSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
     //astItems.setSizePolicy(*sizePolicy);
     //) QSizePolicy::MinimumExpanding);
@@ -286,6 +296,8 @@ ObjTools::ObjTools(QString name)
 
     QObject::connect(&resetSearchButton, SIGNAL(released()),
                       this, SLOT(resetObjectSearch()));
+    QObject::connect(&clearRecentButton, SIGNAL(released()),
+                      this, SLOT(clearRecentItems()));
     
     QObject::connect(&refList, SIGNAL(itemClicked(QListWidgetItem*)),
                       this, SLOT(refListSelected(QListWidgetItem*)));
@@ -339,6 +351,12 @@ void ObjTools::refreshObjLists(){
     currentItemList.clear();
     
     routeLoaded(route);
+}
+
+void ObjTools::clearRecentItems(){
+    lastItems.clear();
+    lastItemsPtr.clear();
+    emit requestMainFocus();
 }
 
 void ObjTools::routeLoaded(Route* a){

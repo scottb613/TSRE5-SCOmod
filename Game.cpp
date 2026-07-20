@@ -41,7 +41,7 @@
 //////// Version
 //////////////////////////////////
 
-QString Game::AppVersion = "v0.5";  // over-ride from main.cpp
+QString Game::AppVersion = "v0.6";  // over-ride from main.cpp
 
 
 bool Game::ServerMode = false;
@@ -196,11 +196,22 @@ float Game::shadow2Bias = 0.002;
 float Game::fogColor[4] = {230.0/255.0,248.0/255,255.0/255.0, 1.0};
 float Game::skyColor[4] = {230.0/255.0,248.0/255,255.0/255.0, 1.0};
 
-int Game::DefaultElevationBox = 0;
+int Game::DefaultElevationBox = 1;
 float Game::DefaultMoveStep = 0.25;
+bool Game::gradeOverlayEnabled = false;
+unsigned int Game::gradeOverlayRevision = 1;
+bool Game::gradeLockEnabled = false;
+float Game::gradeLockedPercent = 0.0f;
+bool Game::gradeAssistInitialized = false;
+bool Game::gradeAssistEnabled = false;
+bool Game::gradeAssistTargetReached = false;
+float Game::gradeAssistCurrentPercent = 0.0f;
+float Game::gradeAssistTargetPercent = 0.0f;
+float Game::gradeAssistStepPercent = 0.25f;
+float Game::gradeAssistNextPercent = 0.0f;
 
 bool Game::seasonalEditing = false;
-int Game::numRecentItems = 11;
+int Game::numRecentItems = 30;
 bool Game::useOnlyPositiveQuaternions = false;
 
 QStringList Game::objectsToRemove;
@@ -1465,7 +1476,7 @@ void Game::CreateNewSettingsFile(){
     out << "leaveTrackShapeAfterDelete = false // Use only when deleting track/road but keeping TDB lines  \n " ; 
     out << "maxAutoPlacement = 999            // max distance in meters for auto-placement  \n " ; 
     out << "mapImageResolution = 4096         // Image resolution for downloaded map imagery  \n " ;
-    out << "numRecentItems = 15               // Length of recently used items list  \n " ; 
+    out << "numRecentItems = 30               // Length of recently used items list  \n " ;
     out << "preloadTextures = \"rock.ace\"      // supports ace, bmp, dds, png files in TERRTEX folder  \n " ; 
     out << "sigOffset = 2.5                   // offset for signal object placement  \n " ; 
     out << "snapableRadius = 20               // max distance to snap to nearest object  \n " ; 

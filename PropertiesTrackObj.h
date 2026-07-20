@@ -14,6 +14,7 @@
 #include "PropertiesAbstract.h"
 
 class TrackObj;
+class GradeHelperWindow;
 
 class PropertiesTrackObj : public PropertiesAbstract{
     Q_OBJECT
@@ -23,6 +24,7 @@ public:
     bool support(GameObj* obj);
     void showObj(GameObj* obj);
     void updateObj(GameObj* obj);
+    void activateGradeAssistPlacement();
     
 public slots:
     void enableCustomDetailLevelEnabled(int val);
@@ -41,12 +43,16 @@ public slots:
     void haxElevTDBVectorEnabled();
     void haxRemoveTDBTreeEnabled();
     void eTemplateEdited(QString val);
+    void openGradeHelper();
+    void gradeHelperWindowClosed();
+    void resetGradeHelper();
         
 signals:
     void setMoveStep(float val);
+    void requestMainFocus();
     
 private:
-    TrackObj* trackObj;
+    TrackObj* trackObj = NULL;
     QComboBox elevType;
     QLineEdit elevStep;
     QLineEdit elevProm;
@@ -57,6 +63,11 @@ private:
     QLabel elevProgLabel;
     QLabel elevPropLabel;
     QLabel elev1inXmLabel;
+    QCheckBox gradeOverlay;
+    QPushButton gradeLock;
+    QPushButton gradeHelper;
+    GradeHelperWindow *gradeHelperWindow = NULL;
+    QTimer gradeHelperUiTimer;
     QComboBox cCollisionType;
     QLineEdit eCollisionFlags;
     QLineEdit eSectionIdx;
@@ -65,6 +76,9 @@ private:
     void showElevBox(QString val);
     void setStepValue(float step);
     float getStepValue(float step);
+    float currentGradePercent() const;
+    void refreshGradeLockUi();
+    void refreshGradeHelperUi();
 };
 
 #endif	/* PROPERTIESTRACKOBJ_H */

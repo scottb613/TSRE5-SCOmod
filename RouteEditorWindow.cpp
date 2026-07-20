@@ -229,7 +229,9 @@ RouteEditorWindow::RouteEditorWindow() {
     if(menuFont.pointSizeF() > 0)
         menuFont.setPointSizeF(menuFont.pointSizeF() * qMax(1.0f, Game::uiScale));
     menuBar()->setFont(menuFont);
-    menuBar()->setStyleSheet(QString("QMenuBar::item { padding: %1px %2px; } QMenu::item { padding: %1px %3px; min-height: %4px; }")
+    menuBar()->setStyleSheet(QString("QMenuBar::item { padding: %1px %2px; } "
+                                     "QMenu::item { padding: %1px %3px; min-height: %4px; } "
+                                     "QMenu::item:selected { background-color: #f08200; color: black; }")
                              .arg(scaledUiSize(3))
                              .arg(scaledUiSize(5))
                              .arg(scaledUiSize(18))
@@ -344,6 +346,12 @@ RouteEditorWindow::RouteEditorWindow() {
     vViewTsectionLines = GuiFunct::newMenuCheckAction(tr("T&section Lines"), this); 
     viewMenu->addAction(vViewTsectionLines);
     QObject::connect(vViewTsectionLines, SIGNAL(triggered(bool)), this, SLOT(viewTsectionLines(bool)));
+    vViewGradeSymbols = GuiFunct::newMenuCheckAction(tr("&Grade Symbols"), this, false);
+    viewMenu->addAction(vViewGradeSymbols);
+    QObject::connect(vViewGradeSymbols, SIGNAL(triggered(bool)), this, SLOT(viewGradeSymbols(bool)));
+    QObject::connect(viewMenu, &QMenu::aboutToShow, this, [this](){
+        vViewGradeSymbols->setChecked(Game::gradeOverlayEnabled);
+    });
     vViewTrackItems = GuiFunct::newMenuCheckAction(tr("&TrackDB Items"), this, Game::renderTrItems); 
     viewMenu->addAction(vViewTrackItems);
     QObject::connect(vViewTrackItems, SIGNAL(triggered(bool)), this, SLOT(viewTrackItems(bool)));
@@ -566,6 +574,10 @@ RouteEditorWindow::RouteEditorWindow() {
     
     QObject::connect(objProperties["TrackObj"], SIGNAL(setMoveStep(float)),
                       glWidget, SLOT(setMoveStep(float)));
+    QObject::connect(objProperties["TrackObj"], SIGNAL(requestMainFocus()),
+                      glWidget, SLOT(focusEditor()));
+    QObject::connect(glWidget, SIGNAL(resetGradeHelperRequested()),
+                      objProperties["TrackObj"], SLOT(resetGradeHelper()));
     
     QObject::connect(objProperties["Dyntrack"], SIGNAL(setMoveStep(float)),
                       glWidget, SLOT(setMoveStep(float)));
@@ -578,6 +590,8 @@ RouteEditorWindow::RouteEditorWindow() {
     
     QObject::connect(statusWindow, SIGNAL(jumpTo(PreciseTileCoordinate*)),
                       glWidget, SLOT(jumpTo(PreciseTileCoordinate*)));
+    QObject::connect(statusWindow, SIGNAL(jumpSoundRequested()),
+                      glWidget, SLOT(userJumpSound()));
     QObject::connect(statusWindow, SIGNAL(requestMainFocus()),
                       glWidget, SLOT(focusEditor()));
     
@@ -1105,6 +1119,11 @@ void RouteEditorWindow::viewTsectionLines(bool show){
     Game::viewTsectionLines = show;
 }
 
+void RouteEditorWindow::viewGradeSymbols(bool show){
+    Game::gradeOverlayEnabled = show;
+    ++Game::gradeOverlayRevision;
+}
+
 void RouteEditorWindow::viewTrackItems(bool show){
     Game::renderTrItems = show;
 }
@@ -1195,6 +1214,7 @@ void RouteEditorWindow::viewUnselectAll(){
     vViewForestRegions->setChecked(false);
     vViewTrackDbLines->setChecked(false);
     vViewTsectionLines->setChecked(false);
+    vViewGradeSymbols->setChecked(false);
     vViewTrackItems->setChecked(false);
     vViewPointer3d->setChecked(false);
     vViewMarkers->setChecked(false);
@@ -1209,6 +1229,7 @@ void RouteEditorWindow::viewUnselectAll(){
     vViewForestRegions->triggered(false);
     vViewTrackDbLines->triggered(false);
     vViewTsectionLines->triggered(false);
+    vViewGradeSymbols->triggered(false);
     vViewTrackItems->triggered(false);
     vViewPointer3d->triggered(false);
     vViewMarkers->triggered(false);

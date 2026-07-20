@@ -41,6 +41,7 @@ class EngLib;
 class QOpenGLFunctions_3_3_Core;
 class QAction;
 class GuiGlCompass;
+class QFrame;
 
 QT_FORWARD_DECLARE_CLASS(QOpenGLShaderProgram)
 
@@ -66,6 +67,7 @@ public slots:
     void cleanup();
     void enableTool(QString name);
     void userModeChangeSound();
+    void userJumpSound();
     void setPaintBrush(Brush* brush);
     void jumpTo(PreciseTileCoordinate*);
     void jumpTo(float *posT, float *pos);
@@ -166,6 +168,7 @@ signals:
     // EFO Status Updates
     void updStatus(QString statName, QString statValue);
     void preloadTexturesSignal();
+    void resetGradeHelperRequested();
 
     
 protected:
@@ -191,11 +194,16 @@ private:
     bool validatePlacement(WorldObj* obj, Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);
     bool pointerNearPlacementDb(Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);
     void playPlacementSound(QString fileName);
+    float trackGradePercent(GameObj *obj) const;
+    bool applyGradeLockToPlacedTrack(bool previousTrackValid, int previousX, int previousY,
+                                     unsigned int previousUid, float previousGrade, bool &gradeAchieved);
     void showModeChange();
     void showPlacementSuccess();
     void showPlacementGuardError();
     void rejectPlacement();
+    void updateGradeLegendPosition();
     QBasicTimer timer;
+    QFrame *gradeLegend = NULL;
     unsigned long long int lastTime;
     unsigned long long int timeNow;
     unsigned long long int timeSaved;

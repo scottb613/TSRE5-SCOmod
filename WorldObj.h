@@ -69,6 +69,9 @@ public:
     float position[3];
     float placedAtPosition[3];
     float firstPosition[3];
+    // Transient placement data used by editor helpers; never serialized.
+    int placementSnapNodeId = -1;
+    bool placementSnapRoad = false;
     float qDirection[4];
     float matrix[16];
     int staticDetailLevel = -1;
