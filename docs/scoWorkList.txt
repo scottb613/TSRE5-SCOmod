@@ -38,7 +38,8 @@ HIGHLIGHTS
 - Fixed [load] route-selection table refresh when switching MSTS root folders.
 - Added [windows] executable icon and [AddShortcutDesktop.cmd] helper.
 - Added [restore last session] on the [load] screen to reopen the last route, camera view, and editor window layout.
-- Added [load] high-resolution branded splash and scaled loader/about display so the banner is not cropped.
+- Added [load] high-resolution branded splash artwork, scaled loader/about display, and a persistent shuffled image cycle synchronized across all splash-bearing windows in each application session.
+- Refined [load] Route Loader action buttons with consistent green, orange, and red hover/pressed feedback.
 - Added [Route > Open Route Folder] to open the active route directly in Windows Explorer.
 - Consolidated the former Status and Navi windows into one styled [Control Panel], toggled with [F7], with delayed edge snapping.
 - Added toggleable [Move: Fast] and [Move: Slow] Control Panel locks with sound, yellow active state, and automatic viewport focus return.
@@ -410,6 +411,17 @@ Dynamic Track elevation changes now update both the applied object rotation and 
 The startup window now presents the MSTS/ORTS root as an editable recent-root field beside a compact `Browse...` button. A path can be selected from the saved list, entered directly, or chosen from the folder dialog. TSRE validates that the selected folder contains the expected Train Simulator root structure before enabling route startup controls.
 
 Invalid paths remain visible for correction, are shown in the normal GenX error color, and display an inline explanation instead of silently clearing the route list. Valid selections move to the front of the recent-root list without case-sensitive duplicates, retain their original path casing, and immediately refresh the available route table.
+
+
+   --- Startup Splash Rotation ---
+
+The Route Loader, Consist Loader, and About window now share one splash image for the lifetime of each application session. The first splash request advances a persistent shuffled queue, and every later splash-bearing window in that process reuses the selected image. A new application launch advances to the next image, so each available splash receives equal time before a new shuffled cycle begins. The cycle also avoids repeating the same image across a cycle boundary when more than one image is available.
+
+Splash artwork is discovered at runtime from the active versioned `tsre_appdata` folder. Files beginning with `Splash_` are accepted in PNG, JPG, JPEG, BMP, and WebP formats. Adding, removing, or renaming a matching file automatically resets and reshuffles the queue without a code change or rebuild. The current package includes Arizona Desert, Canadian Rockies, Iowa Farmland, and Poland Overcast artwork.
+
+The queue is stored in the user's local TSRE application-data folder as `splash-cycle.json` and is written atomically. The Windows file handle is closed before replacement so repeated launch-and-close testing advances reliably instead of becoming stuck on one image.
+
+The Route Loader's Load, New, Restore Last Session, and Exit buttons also use consistent green, orange, and red action styling with explicit hover, pressed, disabled, border, and text states.
 
 
    --- Recent Object History ---

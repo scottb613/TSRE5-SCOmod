@@ -16,6 +16,11 @@
 #include <QEventLoop>
 #include <QStandardPaths>
 #include <QCryptographicHash>
+#include <QRandomGenerator>
+#include <QSaveFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 //#include <QCoreApplication>
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
@@ -299,6 +304,104 @@ QString Game::appDataDir(){
     QString path = base + "/TSRE";
     QDir().mkpath(path);
     return path;
+}
+
+QString Game::sessionSplashImagePath(){
+    static QString sessionSplashPath;
+    if(!sessionSplashPath.isEmpty())
+        return sessionSplashPath;
+
+    const QString splashDirPath = QString("tsre_appdata/") + AppDataVersion;
+    QDir splashDir(splashDirPath);
+    const QStringList nameFilters = QStringList()
+            << "Splash_*.png"
+            << "Splash_*.jpg"
+            << "Splash_*.jpeg"
+            << "Splash_*.bmp"
+            << "Splash_*.webp";
+    const QStringList splashFiles = splashDir.entryList(
+            nameFilters, QDir::Files | QDir::Readable, QDir::Name);
+
+    if(splashFiles.isEmpty()){
+        qWarning() << "No splash image matching Splash_* in" << splashDirPath;
+        return QString();
+    }
+
+    const auto shuffled = [](QStringList values){
+        for(int i = values.size() - 1; i > 0; --i){
+            const int j = QRandomGenerator::global()->bounded(i + 1);
+            qSwap(values[i], values[j]);
+        }
+        return values;
+    };
+
+    QStringList remaining;
+    const QString cycleStatePath = appDataDir() + "/splash-cycle.json";
+    QFile cycleStateFile(cycleStatePath);
+    if(cycleStateFile.open(QIODevice::ReadOnly)){
+        const QJsonObject state = QJsonDocument::fromJson(cycleStateFile.readAll()).object();
+        cycleStateFile.close();
+        QStringList storedFiles;
+        for(const QJsonValue &value : state.value("files").toArray())
+            storedFiles.append(value.toString());
+        for(const QJsonValue &value : state.value("remaining").toArray())
+            remaining.append(value.toString());
+
+        QStringList sortedStoredFiles = storedFiles;
+        sortedStoredFiles.sort();
+        QStringList sortedSplashFiles = splashFiles;
+        sortedSplashFiles.sort();
+        if(sortedStoredFiles != sortedSplashFiles)
+            remaining.clear();
+        else {
+            QStringList sortedRemaining = remaining;
+            sortedRemaining.sort();
+            sortedRemaining.removeDuplicates();
+            for(const QString &fileName : sortedRemaining){
+                if(!splashFiles.contains(fileName)){
+                    remaining.clear();
+                    break;
+                }
+            }
+        }
+    }
+
+    if(remaining.isEmpty())
+        remaining = shuffled(splashFiles);
+
+    const QString selectedFile = remaining.takeFirst();
+    if(remaining.isEmpty()){
+        remaining = shuffled(splashFiles);
+        if(remaining.size() > 1 && remaining.first() == selectedFile){
+            const int swapIndex = 1 + QRandomGenerator::global()->bounded(remaining.size() - 1);
+            qSwap(remaining[0], remaining[swapIndex]);
+        }
+    }
+
+    QJsonArray filesJson;
+    for(const QString &fileName : splashFiles)
+        filesJson.append(fileName);
+    QJsonArray remainingJson;
+    for(const QString &fileName : remaining)
+        remainingJson.append(fileName);
+    QJsonObject state;
+    state.insert("files", filesJson);
+    state.insert("remaining", remainingJson);
+
+    QSaveFile savedCycleState(cycleStatePath);
+    if(savedCycleState.open(QIODevice::WriteOnly)){
+        savedCycleState.write(QJsonDocument(state).toJson(QJsonDocument::Compact));
+        if(!savedCycleState.commit())
+            qWarning() << "Unable to save splash cycle state to" << cycleStatePath
+                       << savedCycleState.errorString();
+    } else {
+        qWarning() << "Unable to open splash cycle state" << cycleStatePath
+                   << savedCycleState.errorString();
+    }
+
+    sessionSplashPath = splashDir.filePath(selectedFile);
+    qDebug() << "Using session splash image" << sessionSplashPath;
+    return sessionSplashPath;
 }
 
 QString Game::routeAppDataDir(){

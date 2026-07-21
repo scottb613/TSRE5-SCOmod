@@ -72,6 +72,7 @@ public:
     static void load();
     static void InitAssets();
     static QString appDataDir();
+    static QString sessionSplashImagePath();
     static QString routeAppDataDir();
     static QString lastSessionFilePath();
     static QString terrainPaintPresetFilePath();

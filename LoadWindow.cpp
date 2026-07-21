@@ -42,12 +42,27 @@ static void playLoadWindowSound(const QString &fileName){
 #endif
 }
 
+static QString loadButtonStyle(const QString& background, const QString& hoverBackground,
+                               const QString& textColor, const QString& border,
+                               const QString& pressedBackground){
+    return QString(
+        "QPushButton { color: %1;"
+        " background-color: %2;"
+        " border: 1px solid %4; border-radius: 1px; padding: 1px 4px; }"
+        "QPushButton:hover { background-color: %3; border-color: #f08200; }"
+        "QPushButton:pressed {"
+        " background-color: %5; border-color: %4;"
+        " padding-top: 2px; padding-bottom: 0px; }"
+        "QPushButton:disabled { color: #858585; background-color: #3b3b3b; border-color: #4b4b4b; }"
+    ).arg(textColor, background, hoverBackground, border, pressedBackground);
+}
+
 LoadWindow::LoadWindow() {
     //this->setWindowFlags( Qt::CustomizeWindowHint );
     setWindowTitle(Game::AppName+" "+Game::AppVersion+" Route Editor");
     this->setFixedSize(600, 700);
     QImage* myImage = new QImage();
-    myImage->load(QString("tsre_appdata/")+Game::AppDataVersion+"/load.png");
+    myImage->load(Game::sessionSplashImagePath());
 
     QLabel* myLabel = new QLabel("");
     myLabel->setContentsMargins(0,0,0,0);
@@ -66,19 +81,22 @@ LoadWindow::LoadWindow() {
     connect(browse, SIGNAL (released()), this, SLOT (handleBrowseButton()));
     load = new QPushButton("Load");
     load->setMinimumHeight(24);
-    load->setStyleSheet(QString("background-color: ")+Game::StyleGreenButton);
+    const QString greenButton = loadButtonStyle("#176c25", "#1e8430", "#f2fff4", "#319344", "#104b1a");
+    const QString orangeButton = loadButtonStyle("#a85a16", "#c96d1c", "#fff4e8", "#dc802c", "#6f3a0d");
+    const QString redButton = loadButtonStyle("#8d3030", "#a63b3b", "#fff0f0", "#bd5151", "#602020");
+    load->setStyleSheet(greenButton);
     connect(load, SIGNAL (released()), this, SLOT (routeLoad()));
     neww = new QPushButton("New");
     neww->setMinimumHeight(24);
-    neww->setStyleSheet(QString("background-color: ")+Game::StyleYellowButton);
+    neww->setStyleSheet(orangeButton);
     connect(neww, SIGNAL (released()), this, SLOT (setNewRoute()));
     restoreLast = new QPushButton("Restore Last Session");
     restoreLast->setMinimumHeight(24);
-    restoreLast->setStyleSheet(QString("background-color: ")+Game::StyleGreenButton);
+    restoreLast->setStyleSheet(greenButton);
     connect(restoreLast, SIGNAL (released()), this, SLOT (restoreLastSession()));
     exit = new QPushButton("Exit");
     exit->setMinimumHeight(24);
-    exit->setStyleSheet(QString("background-color: ")+Game::StyleRedButton);
+    exit->setStyleSheet(redButton);
 
     
 

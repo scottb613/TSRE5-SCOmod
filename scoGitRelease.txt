@@ -37,7 +37,8 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Fixed `load` route-selection table refresh when switching MSTS root folders.
 - Added `windows` executable icon and `AddShortcutDesktop.cmd` helper.
 - Added `restore last session` on the `load` screen to reopen the last route, camera view, and editor window layout.
-- Added `load` high-resolution branded splash and scaled loader/about display so the banner is not cropped.
+- Added `load` high-resolution branded splash artwork, scaled loader/about display, and a persistent shuffled image cycle synchronized across all splash-bearing windows in each application session.
+- Refined `load` Route Loader action buttons with consistent green, orange, and red hover/pressed feedback.
 - Added `Route > Open Route Folder` to open the active route directly in Windows Explorer.
 - Consolidated the former Status and Navi windows into one styled `Control Panel`, toggled with `F7`, with delayed edge snapping.
 - Added toggleable `Move: Fast` and `Move: Slow` Control Panel locks with sound, yellow active state, and automatic viewport focus return.

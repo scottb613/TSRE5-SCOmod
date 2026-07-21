@@ -19,7 +19,7 @@ CELoadWindow::CELoadWindow() {
     setWindowTitle(Game::AppName+" "+Game::AppVersion+" Consist Editor");
     this->setFixedSize(600, 600);
     QImage* myImage = new QImage();
-    myImage->load(QString("tsre_appdata/")+Game::AppDataVersion+"/load.png");
+    myImage->load(Game::sessionSplashImagePath());
 
     QLabel* myLabel = new QLabel("");
     myLabel->setContentsMargins(0,0,0,0);

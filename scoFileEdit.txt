@@ -534,3 +534,25 @@ v0.6 grade, visibility, and interface follow-up
 - TSRE5-Trainsim.Com-Fork-master/UnsavedDialog.cpp
   - Applied the shared editor-panel colors, normal field font, editable/read-only border treatment, spin controls, and vertical spacing where applicable.
 
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+  - Added persistent shuffled splash-cycle discovery and state handling for runtime `Splash_*` artwork.
+  - Cached one selected image per process so every splash-bearing window stays synchronized during an application session.
+  - Closed the Windows state-file read handle before atomic replacement so the cycle advances reliably between launches.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.h
+  - Added the shared session splash-image path helper.
+
+- TSRE5-Trainsim.Com-Fork-master/LoadWindow.cpp
+  - Switched the Route Loader from the fixed `load.png` asset to the shared session splash cycle.
+  - Added consistent green, orange, and red action-button hover, pressed, disabled, border, and text states.
+
+- TSRE5-Trainsim.Com-Fork-master/CELoadWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/AboutWindow.cpp
+  - Switched the Consist Loader and About window to the shared session splash image.
+
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Arizona_Desert.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Canadian_Rockies.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Iowa_Farmland.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Poland_Overcast.png
+  - Added the four runtime-discovered v0.6 splash images and removed the obsolete fixed `load.png` asset.
+
