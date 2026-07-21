@@ -12,8 +12,10 @@
 #include "ActivityEventProperties.h"
 #include "Activity.h"
 #include "ActivityEvent.h"
+#include "GuiFunct.h"
 
 ActivityEventWindow::ActivityEventWindow(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setWindowFlags(Qt::WindowType::Tool);
     setWindowTitle(tr("Activity Events"));
     

@@ -15,8 +15,10 @@
 #include "Consist.h"
 #include "Path.h"
 #include "ActLib.h"
+#include "GuiFunct.h"
 
 ActivityServiceProperties::ActivityServiceProperties(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     //this->setMinimumHeight(400);
     setMinimumWidth(280);
     setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);

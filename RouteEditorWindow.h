@@ -92,7 +92,7 @@ public slots:
     void statusWindowClosed();    
     void errorMessagesWindowClosed();
     void shapeVeiwWindowClosed();
-    void viewUnselectAll();
+    void viewToggleAll();
     void showActivityEventEditor();
     void showActivityServiceEditor();
     void showActivityTrafficEditor();
@@ -182,6 +182,9 @@ private:
     QAction* vViewPointer3d;
     QAction* vViewMarkers;
     QAction* vViewSnapable;
+    QAction* vViewCompass;
+    QHash<QAction*, bool> savedViewSelections;
+    bool viewAllOff = false;
     
     AboutWindow* aboutWindow;
     StatusWindow* statusWindow;

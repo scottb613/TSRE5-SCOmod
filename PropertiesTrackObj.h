@@ -25,6 +25,7 @@ public:
     void showObj(GameObj* obj);
     void updateObj(GameObj* obj);
     void activateGradeAssistPlacement();
+    int gradeUnitsIndex() const;
     
 public slots:
     void enableCustomDetailLevelEnabled(int val);
@@ -59,11 +60,8 @@ private:
     QLineEdit elevProg;
     QLineEdit elevProp;
     QLineEdit elev1inXm;
-    QLabel elevPromLabel;
-    QLabel elevProgLabel;
-    QLabel elevPropLabel;
-    QLabel elev1inXmLabel;
-    QCheckBox gradeOverlay;
+    QLabel elevValueLabel;
+    QStackedWidget elevValueStack;
     QPushButton gradeLock;
     QPushButton gradeHelper;
     GradeHelperWindow *gradeHelperWindow = NULL;
@@ -72,7 +70,6 @@ private:
     QLineEdit eCollisionFlags;
     QLineEdit eSectionIdx;
     
-    void hideElevBoxes();
     void showElevBox(QString val);
     void setStepValue(float step);
     float getStepValue(float step);

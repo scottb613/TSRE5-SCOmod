@@ -21,11 +21,13 @@
 #include "MapDataUrlImage.h"
 #include <QTime>
 #include "Game.h"
+#include "GuiFunct.h"
 
 std::unordered_map<int, QImage*> MapWindow::mapTileImages;
 int MapWindow::isAlpha = 0;
 
 MapWindow::MapWindow() : QDialog() {
+    GuiFunct::applyEditorPanelStyle(this);
 
       
     mapServicesCombo.setMaximumWidth(230);

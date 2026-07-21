@@ -27,6 +27,24 @@
 #include "OglObj.h"
 #include "TextObj.h"
 
+namespace {
+QVector<float> markerLineClusterGeometry(float height){
+    QVector<float> points;
+    const float halfWidth = 0.09f;
+    const float corners[4][2] = {
+        { -halfWidth, -halfWidth },
+        { -halfWidth,  halfWidth },
+        {  halfWidth, -halfWidth },
+        {  halfWidth,  halfWidth }
+    };
+    for(int corner = 0; corner < 4; ++corner){
+        points << corners[corner][0] << 0.0f << corners[corner][1];
+        points << corners[corner][0] << height << corners[corner][1];
+    }
+    return points;
+}
+}
+
 Coords::Coords() {
     loaded = false;
 }
@@ -44,28 +62,21 @@ void Coords::render(GLUU* gluu, float * playerT, float* playerW, float playerRot
 
     gluu->setMatrixUniforms();
 
-    /// create the stick objects
-    if (simpleMarkerObjP == NULL) {
-        simpleMarkerObjP = new OglObj(); 
-        simpleMarkerObjL = new OglObj();
-        float *punkty = new float[3 * 2];
-        int ptr = 0;
-        int i = 0;
-
-        /// stick base
-        punkty[ptr++] = 0;
-        punkty[ptr++] = 0;
-        punkty[ptr++] = 0;
-        /// stick top
-        punkty[ptr++] = 0;
-        punkty[ptr++] = Game::markerHeight;   /// EFO 
-        punkty[ptr++] = 0;
-
-        simpleMarkerObjP->setMaterial(1.0, 0.0, 1.0);  /// purple
-        simpleMarkerObjP->init(punkty, ptr, RenderItem::V, GL_LINES);        
-        simpleMarkerObjL->setMaterial(0.0, 1.0, 0.0);  /// green
-        simpleMarkerObjL->init(punkty, ptr, RenderItem::V, GL_LINES);
-        delete[] punkty;
+    /// Four close vertical lines form a lightweight, visible square marker.
+    if (markerFlagObj[0] == NULL) {
+        const float markerColors[3][3] = {
+            { 0.95f, 0.45f, 0.05f },
+            { 0.05f, 0.75f, 0.85f },
+            { 0.80f, 0.20f, 0.70f }
+        };
+        const float markerHeight = Game::markerHeight * 3.0f;
+        QVector<float> markerPoints = markerLineClusterGeometry(markerHeight);
+        for(int type = 0; type < 3; ++type){
+            markerFlagObj[type] = new OglObj();
+            markerFlagObj[type]->setLineWidth(2);
+            markerFlagObj[type]->setMaterial(markerColors[type][0], markerColors[type][1], markerColors[type][2]);
+            markerFlagObj[type]->init(markerPoints.data(), markerPoints.size(), RenderItem::V, GL_LINES);
+        }
     }
     
     /// loop thru markerList one item at a time
@@ -121,11 +132,9 @@ void Coords::render(GLUU* gluu, float * playerT, float* playerW, float playerRot
                 //Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, this->trItemRData[0] + 2048*(this->trItemRData[3] - playerT[0] ), this->trItemRData[1]+2, -this->trItemRData[2] + 2048*(-this->trItemRData[4] - playerT[1]));
                 //Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, this->trItemRData[0] + 0, this->trItemRData[1]+0, -this->trItemRData[2] + 0);
                 gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
-                if(j == 0)
-                    simpleMarkerObjP->render();
-                else
-                    simpleMarkerObjL->render();
-                Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, 0, Game::markerHeight, 0);
+                const int markerType = qBound(0, markerList[i].type, 2);
+                markerFlagObj[markerType]->render();
+                Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, 0, Game::markerHeight * 3.0f, 0);
                 gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
                 txt = nameGl[markerList[i].name.toStdString()];
                 if(txt == NULL){

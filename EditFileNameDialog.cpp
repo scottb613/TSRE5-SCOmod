@@ -10,8 +10,10 @@
 
 #include "EditFileNameDialog.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 EditFileNameDialog::EditFileNameDialog() : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     //this->setFixedSize(200, 100);
     this->setWindowTitle("Edit FileName");
     this->setFixedWidth(350);

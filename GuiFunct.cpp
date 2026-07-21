@@ -94,3 +94,82 @@ QString GuiFunct::scoPanelStyle(){
         "QToolTip { color: white; background-color: #252525; border: 1px solid #777777; padding: 3px; }"
     );
 }
+
+QString GuiFunct::scoEditorPanelStyle(){
+    return scoPanelStyle() + QString(
+        "QLineEdit, QSpinBox, QDoubleSpinBox, QTimeEdit, QDateEdit, QDateTimeEdit,"
+        " QTextEdit, QPlainTextEdit, QComboBox {"
+        " background-color: #202020; color: #f2f2f2; font-weight: normal;"
+        " border: 1px solid #555555; border-top-color: #151515; border-radius: 1px; padding: 1px 3px;"
+        "}"
+        "QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QTimeEdit:disabled,"
+        " QDateEdit:disabled, QDateTimeEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled,"
+        " QComboBox:disabled { background-color: #202020; color: #f2f2f2; }"
+        "QLineEdit:enabled:!read-only, QTextEdit:enabled:!read-only, QPlainTextEdit:enabled:!read-only,"
+        " QSpinBox:enabled:!read-only, QDoubleSpinBox:enabled:!read-only, QTimeEdit:enabled:!read-only,"
+        " QDateEdit:enabled:!read-only, QDateTimeEdit:enabled:!read-only {"
+        " border: 1px solid #70590e;"
+        "}"
+        "QLineEdit:enabled:!read-only:focus, QTextEdit:enabled:!read-only:focus,"
+        " QPlainTextEdit:enabled:!read-only:focus, QSpinBox:enabled:!read-only:focus,"
+        " QDoubleSpinBox:enabled:!read-only:focus, QTimeEdit:enabled:!read-only:focus,"
+        " QDateEdit:enabled:!read-only:focus, QDateTimeEdit:enabled:!read-only:focus {"
+        " border: 1px solid #8a7116;"
+        "}"
+        "QLineEdit:read-only, QTextEdit:read-only, QPlainTextEdit:read-only, QSpinBox:read-only,"
+        " QDoubleSpinBox:read-only, QTimeEdit:read-only, QDateEdit:read-only, QDateTimeEdit:read-only {"
+        " border: 1px solid #555555; border-top-color: #151515;"
+        "}"
+        "QSpinBox, QDoubleSpinBox, QTimeEdit, QDateEdit, QDateTimeEdit { padding-right: 18px; }"
+        "QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button,"
+        " QTimeEdit::up-button, QTimeEdit::down-button, QDateEdit::up-button, QDateEdit::down-button,"
+        " QDateTimeEdit::up-button, QDateTimeEdit::down-button {"
+        " width: 16px; background-color: #414141; border-left: 1px solid #555555;"
+        "}"
+        "QSpinBox::up-button:hover, QSpinBox::down-button:hover,"
+        " QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover,"
+        " QTimeEdit::up-button:hover, QTimeEdit::down-button:hover,"
+        " QDateEdit::up-button:hover, QDateEdit::down-button:hover,"
+        " QDateTimeEdit::up-button:hover, QDateTimeEdit::down-button:hover { background-color: #555555; }"
+        "QSpinBox::up-arrow, QSpinBox::down-arrow, QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow,"
+        " QTimeEdit::up-arrow, QTimeEdit::down-arrow, QDateEdit::up-arrow, QDateEdit::down-arrow,"
+        " QDateTimeEdit::up-arrow, QDateTimeEdit::down-arrow { width: 7px; height: 7px; }"
+    );
+}
+
+void GuiFunct::applyEditorPanelStyle(QWidget *panel){
+    if(panel == NULL)
+        return;
+    panel->setStyleSheet(scoEditorPanelStyle());
+    QTimer::singleShot(0, panel, [panel](){
+        QFont fieldFont = panel->font();
+        fieldFont.setBold(false);
+        const int fieldHeight = qRound(22.0f * qMax(1.0f, Game::uiScale));
+        const int rowSpacing = qRound(3.0f * qMax(1.0f, Game::uiScale));
+
+        foreach(QLineEdit *field, panel->findChildren<QLineEdit*>()){
+            field->setFont(fieldFont);
+            field->setMinimumHeight(fieldHeight);
+        }
+        foreach(QSpinBox *field, panel->findChildren<QSpinBox*>()){
+            field->setFont(fieldFont);
+            field->setMinimumHeight(fieldHeight);
+        }
+        foreach(QDoubleSpinBox *field, panel->findChildren<QDoubleSpinBox*>()){
+            field->setFont(fieldFont);
+            field->setMinimumHeight(fieldHeight);
+        }
+        foreach(QComboBox *field, panel->findChildren<QComboBox*>()){
+            field->setFont(fieldFont);
+            field->setMinimumHeight(fieldHeight);
+        }
+        foreach(QTextEdit *field, panel->findChildren<QTextEdit*>())
+            field->setFont(fieldFont);
+        foreach(QPlainTextEdit *field, panel->findChildren<QPlainTextEdit*>())
+            field->setFont(fieldFont);
+        foreach(QFormLayout *layout, panel->findChildren<QFormLayout*>())
+            layout->setVerticalSpacing(rowSpacing);
+        foreach(QGridLayout *layout, panel->findChildren<QGridLayout*>())
+            layout->setVerticalSpacing(rowSpacing);
+    });
+}

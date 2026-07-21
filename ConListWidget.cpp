@@ -17,8 +17,10 @@
 #include "Eng.h"
 #include "EngLib.h"
 #include "OverwriteDialog.h"
+#include "GuiFunct.h"
 
 ConListWidget::ConListWidget() : QWidget(){
+    GuiFunct::applyEditorPanelStyle(this);
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);

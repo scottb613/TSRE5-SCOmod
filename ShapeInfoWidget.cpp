@@ -10,8 +10,10 @@
 
 #include "ShapeInfoWidget.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 ShapeInfoWidget::ShapeInfoWidget(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     
     QGridLayout *engInfoForm = new QGridLayout;

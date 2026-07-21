@@ -63,6 +63,7 @@ public:
 protected:
     OglObj* simpleMarkerObjP = NULL;
     OglObj* simpleMarkerObjL = NULL;
+    OglObj* markerFlagObj[3] = { NULL, NULL, NULL };
 private:
 
 };

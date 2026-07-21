@@ -1,5 +1,6 @@
 #include "SettingsDialog.h"
 #include "Game.h"
+#include "GuiFunct.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QTabWidget>
@@ -23,6 +24,7 @@
 #include <QDebug>
 
 SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setWindowTitle("TSRE5 Settings Editor");
     resize(1100, 850);
     setupUi();
@@ -488,16 +490,15 @@ void SettingsDialog::setupUi() {
     QVBoxLayout* main = new QVBoxLayout(this);
     QTabWidget* tabs = new QTabWidget(this);
     main->addWidget(tabs);
-    setStyleSheet(
+    setStyleSheet(QString(
         "QDialog, QTabWidget::pane, QScrollArea, QWidget { background-color: #303030; color: white; }"
         "QLabel { color: white; }"
-        "QLineEdit, QTextEdit { background-color: #202020; color: white; border: 1px solid #555; padding: 2px; }"
         "QRadioButton { color: white; }"
         "QPushButton { background-color: #202020; color: white; border: 1px solid #777; padding: 3px; }"
         "QPushButton:pressed { background-color: #3a3a3a; }"
         "QTabBar::tab { background-color: #202020; color: white; border: 1px solid #555; padding: 4px 10px; }"
         "QTabBar::tab:selected { background-color: #404040; }"
-    );
+    ) + GuiFunct::scoEditorPanelStyle());
     QFormLayout* l = nullptr;
 
     createScrollTab(l, tabs, "General");

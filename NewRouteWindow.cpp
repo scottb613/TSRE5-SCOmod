@@ -9,8 +9,10 @@
  */
 
 #include "NewRouteWindow.h"
+#include "GuiFunct.h"
 
 NewRouteWindow::NewRouteWindow() : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     this->setFixedSize(200, 100);
 
     QPushButton* ok = new QPushButton("OK");

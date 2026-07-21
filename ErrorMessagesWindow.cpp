@@ -15,8 +15,10 @@
 #include "ErrorMessage.h"
 #include "ErrorMessageProperties.h"
 #include "GeoCoordinates.h"
+#include "GuiFunct.h"
 
 ErrorMessagesWindow::ErrorMessagesWindow(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     brushes[(int)ErrorMessage::Type_Error] = QBrush(QColor(Game::StyleRedText));
     brushes[(int)ErrorMessage::Type_Warning] = QBrush(QColor(200,200,0));
     brushes[(int)ErrorMessage::Type_Info] = QBrush(QColor(Game::StyleGreenText));

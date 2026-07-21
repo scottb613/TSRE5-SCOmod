@@ -9,8 +9,10 @@
  */
 
 #include "ChooseFileDialog.h"
+#include "GuiFunct.h"
 
 ChooseFileDialog::ChooseFileDialog() : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     //this->setFixedWidth(300);
     items.setFixedWidth(600);
     //this->setFixedSize(300,300);

@@ -61,9 +61,15 @@ HIGHLIGHTS
 - Changed [track properties] grade editing to open in Percent by default with clearer unit labeling.
 - Added [track properties] [Lock Grade] so newly placed track and road pieces can inherit the selected piece's physical grade.
 - Added [track properties] a dock-friendly [Grade Helper] for controlled per-piece transitions toward a target grade, with connected-piece validation and automatic rejection of invalid transition placements.
-- Added [view] toggleable Grade Symbols with an on-screen legend for orange steady grades, cyan transitions, and red crest/gully warnings.
-- Hardened [view] Grade Symbols connectivity and cache handling so both ends of every piece are evaluated across vector-node boundaries without repeated full-database scans.
+- Added [view] Grade Symbols, enabled by default from the View menu, for orange steady grades, cyan transitions, and red crest/gully warnings.
+- Hardened [view] Grade Symbols connectivity and incremental world-tile cache handling so newly loaded pieces and both connected ends receive current classifications.
 - Centered [view] Grade Symbols on the actual TSECTION path midpoint and tangent so markers follow long curves instead of the shape bounding box.
+- Extended [view] Grade Symbols to Dynamic Track using the same direction, transition, and warning classifications.
+- Replaced [View > Unselect All] with [Toggle All], which temporarily hides View overlays and restores the user's prior selections while leaving Compass unchanged.
+- Refined [track properties] and Grade Helper with unit-aware values and symbols, consistent required-input borders, visible spin controls, and removal of redundant overlay controls and the introductory legend.
+- Standardized editable-field colors, fonts, borders, spin controls, and vertical spacing across editor side panels and popups while preserving the Control Panel's established appearance.
+- Changed [Control Panel > Jump] feedback to play the normal press immediately followed by the success chirp after one second.
+- Repaired [marker flags] label height initialization and replaced fragile single poles with tall, color-coded four-line marker clusters keyed to the three MKR marker types.
 - Added [right-click > Edit > Copy Info] to copy route, selection, tile, position, UID, object, grade, and other diagnostic details to the clipboard.
 - Refined [Control Panel] button states and added `SCOchirp.wav` feedback for successful navigation jumps and completed grade transitions.
 - Added [global] orange hover highlighting to the Route Editor's top menu dropdown rows.
@@ -429,7 +435,7 @@ The placement endpoint information used by this check is transient editor state 
 
    --- Grade Symbols Overlay ---
 
-The View menu and Track properties panel now expose the same global `Grade Symbols` toggle. When enabled, graded static track and road pieces receive square, direction-aware symbols above the track, and a viewport legend explains the three states:
+The View menu exposes the global `Grade Symbols` toggle. It is enabled by default, while the redundant Track properties checkbox and introductory viewport legend have been removed. When enabled, graded static track, road pieces, and Dynamic Track receive square, direction-aware symbols above the track:
 
   - orange: steady grade
   - cyan: a transition because the piece differs in grade magnitude from a connected neighbor at either end
@@ -439,7 +445,21 @@ The transition rule deliberately does not classify grades as increasing or decre
 
 Each symbol is placed at the exact distance midpoint of the ordered TSECTION path and aligned to the local path tangent. This keeps the marker centered lengthwise and on the same centerline used to draw long curves. Multi-path shapes use their declared main route when available and otherwise average valid paths. Mirrored artwork keeps the marking readable from either face of reversed/POS-NEG-swapped pieces.
 
-The overlay cache is invalidated by grade rotation and track-database refresh operations. Missing or temporarily non-database pieces safely use the steady fallback without forcing a full database rescan every rendered frame; this keeps the optional overlay practical on populated routes.
+The overlay cache is invalidated by grade rotation and track-database refresh operations. Because world tiles load incrementally, a rendered track piece missing from the cache now triggers a rebuild. This prevents later-loaded pieces and their already-visible neighbors from remaining incorrectly orange after Grade Symbols initialize at startup.
+
+
+   --- Grade and Field Interface Refinements ---
+
+The Grade Helper follows the Track properties Units selection for both target and step values. Permille, percent, 1-in-X, and angle modes use the compact `‰`, `%`, `m`, and `°` symbols. Target Grade and Step Per Piece use a subdued section-title orange border because they require operator input, while current and next-grade readouts remain neutral. Spin controls retain visible arrows, and the obsolete Grade Symbols legend and duplicate Track properties checkbox are removed.
+
+Track properties now presents its unit-specific grade value in one stacked row, eliminating the vertical gaps caused by hidden rows. Position and rotation values are explicitly read-only. A shared editor-panel style extends the same field background, normal font, editable/read-only border distinction, spin controls, and vertical spacing to the remaining object/property panels, activity tools, settings window, and editor popups. The Control Panel keeps its separate established styling.
+
+
+   --- View Toggle and Marker Visibility ---
+
+`View > Toggle All` replaces the old one-way Unselect All command. The first press remembers the current checked View actions and disables them; the next press restores exactly those selections. Compass is intentionally excluded so orientation remains available while overlays are temporarily hidden.
+
+Marker label placement is deterministic after initializing the shared TextObj height offset and keeping `setHeight()` synchronized with its render position. Point markers now use four closely spaced vertical lines arranged as a small square, colored orange, cyan, or magenta from the MKR type value. The lines extend to three times the configured marker height so labels remain above surrounding scenery, while the original black camera-facing label treatment and sizing behavior are retained.
 
 
    --- Selection Diagnostic Clipboard ---
@@ -451,7 +471,7 @@ For world objects this includes the object class and filename, UID, tile and ter
 
    --- Interface Feedback Refinements ---
 
-The startup path failure now uses `SCObuzz.wav`, while successful Control Panel navigation jumps and a Grade Helper target completion use the lighter `SCOchirp.wav`. Control Panel buttons use quieter solid dark state colors with distinct green, yellow, and red feedback, plus consistent hover and pressed states.
+The startup path failure now uses `SCObuzz.wav`, while a Grade Helper target completion uses the lighter `SCOchirp.wav`. Control Panel navigation Jump plays the normal press immediately and then the success chirp after one second. Control Panel buttons use quieter solid dark state colors with distinct green, yellow, and red feedback, plus consistent hover and pressed states.
 
 The Route Editor's top menu dropdown rows now use the same orange `#f08200` hover selection and black selected text used across the GenX lists and combo boxes. Small Terrain Tools labels were also clarified: `HeightMap +` is now `Height +`, and the seasonal control is labeled `TERRTEX Paint: Mirror Season`.
 

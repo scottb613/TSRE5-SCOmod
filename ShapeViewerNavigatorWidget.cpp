@@ -11,8 +11,10 @@
 #include "ShapeViewerNavigatorWidget.h"
 #include "ContentHierarchyInfo.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 ShapeViewerNavigatorWidget::ShapeViewerNavigatorWidget(QWidget* parent) : QWidget(parent){
+    GuiFunct::applyEditorPanelStyle(this);
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);

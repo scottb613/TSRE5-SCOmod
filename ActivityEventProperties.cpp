@@ -16,8 +16,10 @@
 #include "GameObj.h"
 #include "WorldObj.h"
 #include "OrtsWeatherChange.h"
+#include "GuiFunct.h"
 
 ActivityEventProperties::ActivityEventProperties(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     //this->setMinimumHeight(400);
     setMinimumWidth(350);
     setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);

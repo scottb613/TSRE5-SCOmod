@@ -25,6 +25,8 @@ public:
     static QLineEdit* newQLineEdit(int width, int length);
     static QAction* newMenuCheckAction(QString desc, QWidget* window, bool checked = true);
     static QString scoPanelStyle();
+    static QString scoEditorPanelStyle();
+    static void applyEditorPanelStyle(QWidget *panel);
 private:
 
 };

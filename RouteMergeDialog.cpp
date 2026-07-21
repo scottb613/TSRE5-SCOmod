@@ -1,5 +1,6 @@
 #include "routemergedialog.h"
 #include "Game.h"
+#include "GuiFunct.h"
 #include <QDialog>
 #include <QCheckBox>
 #include <QPushButton>
@@ -9,6 +10,7 @@
 
 RouteMergeDialog::RouteMergeDialog(QWidget *parent) : QDialog(parent)
 {
+    GuiFunct::applyEditorPanelStyle(this);
     setWindowTitle("Route Merge Options");
     this->setFixedSize(500, 200);
     

@@ -36,7 +36,7 @@ TerrainTools::TerrainTools(QString name)
     if(panelFont.pointSizeF() > 0)
         panelFont.setPointSizeF(panelFont.pointSizeF() * 1.12);
     setFont(panelFont);
-    setStyleSheet(GuiFunct::scoPanelStyle());
+    GuiFunct::applyEditorPanelStyle(this);
     int row = 0;
     
     texPreview = new QPixmap(160,160);

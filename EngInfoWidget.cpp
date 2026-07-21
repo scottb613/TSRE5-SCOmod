@@ -11,8 +11,10 @@
 #include "EngInfoWidget.h"
 #include "Game.h"
 #include "Eng.h"
+#include "GuiFunct.h"
 
 EngInfoWidget::EngInfoWidget(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     
     QGridLayout *engInfoForm = new QGridLayout;

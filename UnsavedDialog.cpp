@@ -9,12 +9,14 @@
  */
 
 #include "UnsavedDialog.h"
+#include "GuiFunct.h"
 
 UnsavedDialog::UnsavedDialog() : UnsavedDialog("SQC") {
 
 }
 
 UnsavedDialog::UnsavedDialog(QString buttonLayout) : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     //this->setFixedWidth(300);
     items.setFixedWidth(300);
     //this->setFixedSize(300,300);

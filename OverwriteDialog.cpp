@@ -9,8 +9,10 @@
  */
 
 #include "OverwriteDialog.h"
+#include "GuiFunct.h"
 
 OverwriteDialog::OverwriteDialog() : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     this->setFixedWidth(200);
 
     label = new QLabel("\nConsist with this file name already exist. Overwrite?\n");

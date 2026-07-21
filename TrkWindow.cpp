@@ -22,6 +22,7 @@
 #include <QImage>
 
 TrkWindow::TrkWindow() : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     setWindowFlags(Qt::WindowStaysOnTopHint);
     //QPushButton *loadButton = new QPushButton("Load", this);
     //QImage myImage(800, 800, QImage::Format_RGB888);

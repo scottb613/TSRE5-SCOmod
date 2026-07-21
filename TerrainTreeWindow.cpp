@@ -17,8 +17,10 @@
 #include <QGraphicsPixmapItem>
 #include "CoordsMkr.h"
 #include "GeoCoordinates.h"
+#include "GuiFunct.h"
 
 TerrainTreeWindow::TerrainTreeWindow() : QDialog() {
+    GuiFunct::applyEditorPanelStyle(this);
     QImage myImage(512, 512, QImage::Format_RGB888);
     imageLabel = new QLabel("");
     imageLabel->setContentsMargins(0,0,0,0);

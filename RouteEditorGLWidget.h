@@ -202,9 +202,7 @@ private:
     void showPlacementSuccess();
     void showPlacementGuardError();
     void rejectPlacement();
-    void updateGradeLegendPosition();
     QBasicTimer timer;
-    QFrame *gradeLegend = NULL;
     unsigned long long int lastTime;
     unsigned long long int timeNow;
     unsigned long long int timeSaved;

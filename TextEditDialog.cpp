@@ -9,8 +9,10 @@
  */
 
 #include "TextEditDialog.h"
+#include "GuiFunct.h"
 
 TextEditDialog::TextEditDialog() : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     textBox.setMinimumHeight(200);
     textBox.setMinimumWidth(300);
     QVBoxLayout *mainLayout = new QVBoxLayout;
@@ -39,5 +41,3 @@ void TextEditDialog::ok(){
 void TextEditDialog::cancel(){
     this->close();
 }
-    
-                              

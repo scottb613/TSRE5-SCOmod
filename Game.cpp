@@ -198,7 +198,7 @@ float Game::skyColor[4] = {230.0/255.0,248.0/255,255.0/255.0, 1.0};
 
 int Game::DefaultElevationBox = 1;
 float Game::DefaultMoveStep = 0.25;
-bool Game::gradeOverlayEnabled = false;
+bool Game::gradeOverlayEnabled = true;
 unsigned int Game::gradeOverlayRevision = 1;
 bool Game::gradeLockEnabled = false;
 float Game::gradeLockedPercent = 0.0f;

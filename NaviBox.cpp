@@ -10,8 +10,10 @@
 
 #include "NaviBox.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 NaviBox::NaviBox() : QWidget(){
+    GuiFunct::applyEditorPanelStyle(this);
     QPushButton *jumpButton = new QPushButton("Jump", this);
     QLabel *xLabel = new QLabel("x", this);
     QLabel *yLabel = new QLabel("y", this);

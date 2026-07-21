@@ -14,8 +14,10 @@
 #include "ErrorMessage.h"
 #include "GeoCoordinates.h"
 #include "GameObj.h"
+#include "GuiFunct.h"
 
 ErrorMessageProperties::ErrorMessageProperties(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setFixedHeight(140);
     //setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
     

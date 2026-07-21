@@ -14,8 +14,10 @@
 #include "TexLib.h"
 #include "Texture.h"
 #include "ClickableLabel.h"
+#include "GuiFunct.h"
 
 ShapeTexturesWindow::ShapeTexturesWindow(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setWindowFlags(Qt::WindowType::Tool);
     setWindowTitle(tr("Shape Textures"));
     

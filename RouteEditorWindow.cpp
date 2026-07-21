@@ -315,9 +315,9 @@ RouteEditorWindow::RouteEditorWindow() {
     //viewMenu->addAction(toolsAction);
     //QObject::connect(toolsAction, SIGNAL(triggered(bool)), this, SLOT(hideShowToolWidget(bool)));
 
-    QAction* viewUnselectAll = new QAction(tr("&Unselect All"), this); 
-    viewMenu->addAction(viewUnselectAll);
-    QObject::connect(viewUnselectAll, SIGNAL(triggered()), this, SLOT(viewUnselectAll()));
+    QAction* viewToggleAll = new QAction(tr("&Toggle All"), this);
+    viewMenu->addAction(viewToggleAll);
+    QObject::connect(viewToggleAll, SIGNAL(triggered()), this, SLOT(viewToggleAll()));
     viewMenu->addSeparator();
     vViewWorldGrid = GuiFunct::newMenuCheckAction(tr("&World Grid"), this); 
     viewMenu->addAction(vViewWorldGrid);
@@ -365,7 +365,7 @@ RouteEditorWindow::RouteEditorWindow() {
     vViewSnapable = GuiFunct::newMenuCheckAction(tr("S&napable Points"), this, Game::viewSnapable); 
     viewMenu->addAction(vViewSnapable);
     QObject::connect(vViewSnapable, SIGNAL(triggered(bool)), this, SLOT(viewSnapable(bool)));
-    QAction* vViewCompass = GuiFunct::newMenuCheckAction(tr("&Compass"), this, Game::viewCompass); 
+    vViewCompass = GuiFunct::newMenuCheckAction(tr("&Compass"), this, Game::viewCompass);
     viewMenu->addAction(vViewCompass);
     QObject::connect(vViewCompass, SIGNAL(triggered(bool)), this, SLOT(viewCompass(bool)));
 
@@ -462,7 +462,7 @@ RouteEditorWindow::RouteEditorWindow() {
         box->hide();
         box2->hide();
         menuBar()->hide();
-        this->viewUnselectAll();
+        this->viewToggleAll();
     }
     
     if(Game::serverClient != NULL){
@@ -1203,37 +1203,28 @@ void RouteEditorWindow::shapeVeiwWindowClosed(){
     shapeViewAction->blockSignals(false);
 }
 
-void RouteEditorWindow::viewUnselectAll(){
+void RouteEditorWindow::viewToggleAll(){
+    if(!viewAllOff){
+        savedViewSelections.clear();
+        foreach(QAction *action, viewMenu->actions()){
+            if(!action->isCheckable() || action == vViewCompass)
+                continue;
+            savedViewSelections.insert(action, action->isChecked());
+            action->setChecked(false);
+            action->triggered(false);
+        }
+        viewAllOff = true;
+        return;
+    }
 
-    vViewWorldGrid->setChecked(false);
-    vViewTileGrid->setChecked(false);
-    vViewTerrainGrid->setChecked(false);
-    vViewTerrainShape->setChecked(false);
-    vShowWorldObjPivotPoints->setChecked(false);
-    vViewInteractives->setChecked(false);
-    vViewForestRegions->setChecked(false);
-    vViewTrackDbLines->setChecked(false);
-    vViewTsectionLines->setChecked(false);
-    vViewGradeSymbols->setChecked(false);
-    vViewTrackItems->setChecked(false);
-    vViewPointer3d->setChecked(false);
-    vViewMarkers->setChecked(false);
-    vViewSnapable->setChecked(false);
-
-    vViewWorldGrid->triggered(false);
-    vViewTileGrid->triggered(false);
-    vViewTerrainGrid->triggered(false);
-    vViewTerrainShape->triggered(false);
-    vShowWorldObjPivotPoints->triggered(false);
-    vViewInteractives->triggered(false);
-    vViewForestRegions->triggered(false);
-    vViewTrackDbLines->triggered(false);
-    vViewTsectionLines->triggered(false);
-    vViewGradeSymbols->triggered(false);
-    vViewTrackItems->triggered(false);
-    vViewPointer3d->triggered(false);
-    vViewMarkers->triggered(false);
-    vViewSnapable->triggered(false);
+    for(auto it = savedViewSelections.constBegin(); it != savedViewSelections.constEnd(); ++it){
+        QAction *action = it.key();
+        if(action == NULL)
+            continue;
+        action->setChecked(it.value());
+        action->triggered(it.value());
+    }
+    viewAllOff = false;
 }
 //void Window::exitNow(){
 //    this->hide();

@@ -13,9 +13,11 @@
 #include "EngLib.h"
 #include "Eng.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 
 EngListWidget::EngListWidget() : QWidget(){
+    GuiFunct::applyEditorPanelStyle(this);
     addBegButton.setText("Add Beg");
     addCurButton.setText("Add Cur");
     addEndButton.setText("Add End");

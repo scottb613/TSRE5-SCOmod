@@ -12,8 +12,10 @@
 #include <QtWidgets>
 #include <QDebug>
 #include "Game.h"
+#include "GuiFunct.h"
 
 AboutWindow::AboutWindow(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     this->setWindowFlags( Qt::CustomizeWindowHint );
     this->setWindowFlags(Qt::WindowType::Tool);
     this->setWindowTitle(Game::AppName+" "+Game::AppVersion+" About");

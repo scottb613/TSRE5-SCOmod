@@ -14,9 +14,11 @@
 #include "Game.h"
 #include "RouteEditorClient.h"
 #include "ClientInfo.h"
+#include "GuiFunct.h"
 
 
 ClientUsersWindow::ClientUsersWindow(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     brushes[0] = QBrush(QColor(Game::StyleRedText));
     brushes[1] = QBrush(QColor(200,200,0));
     brushes[2] = QBrush(QColor(Game::StyleGreenText));
@@ -93,5 +95,4 @@ void ClientUsersWindow::show(){
 void ClientUsersWindow::hideEvent(QHideEvent *e){
     emit windowClosed();
 }
-
 

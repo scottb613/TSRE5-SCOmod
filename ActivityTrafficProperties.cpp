@@ -15,8 +15,10 @@
 #include "Traffic.h"
 #include "ActivityTimetable.h"
 #include "ActLib.h"
+#include "GuiFunct.h"
 
 ActivityTrafficProperties::ActivityTrafficProperties(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setMinimumWidth(350);
     setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
         

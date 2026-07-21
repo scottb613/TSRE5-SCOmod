@@ -16,8 +16,10 @@
 #include "Service.h"
 #include "ActLib.h"
 #include "EditFileNameDialog.h"
+#include "GuiFunct.h"
 
 ActivityServiceWindow::ActivityServiceWindow(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setWindowFlags(Qt::WindowType::Tool);
     setWindowTitle(tr("Services"));
     

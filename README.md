@@ -60,9 +60,15 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Changed `track properties` grade editing to open in Percent by default with clearer unit labeling.
 - Added `track properties` `Lock Grade` so newly placed track and road pieces can inherit the selected piece's physical grade.
 - Added `track properties` a dock-friendly `Grade Helper` for controlled per-piece transitions toward a target grade, with connected-piece validation and automatic rejection of invalid transition placements.
-- Added `view` toggleable Grade Symbols for orange steady grades, cyan transitions at either connected end, and red direct crest/gully warnings.
-- Hardened `view` Grade Symbols connectivity and cache handling across vector-node and junction boundaries.
+- Added `view` Grade Symbols, enabled by default from the View menu, for orange steady grades, cyan transitions at either connected end, and red direct crest/gully warnings.
+- Hardened `view` Grade Symbols connectivity and incremental world-tile cache handling across vector-node and junction boundaries.
 - Centered `view` Grade Symbols on the actual TSECTION path midpoint and tangent so markers follow long curves.
+- Extended `view` Grade Symbols to Dynamic Track using the same direction, transition, and warning classifications.
+- Replaced View > Unselect All with `Toggle All`, which temporarily hides View overlays and restores the user's prior selections while leaving Compass unchanged.
+- Refined `track properties` and Grade Helper with unit-aware values and symbols, consistent required-input borders, visible spin controls, and removal of redundant overlay controls and the introductory legend.
+- Standardized editable-field colors, fonts, borders, spin controls, and vertical spacing across editor side panels and popups while preserving the Control Panel's established appearance.
+- Changed Control Panel `Jump` feedback to play the normal press immediately followed by the success chirp after one second.
+- Repaired `marker flags` label height initialization and replaced fragile single poles with tall, color-coded four-line marker clusters keyed to the three MKR marker types.
 - Added `right-click > Edit > Copy Info` selection diagnostics for clipboard-ready route, object, tile, position, UID, grade, and related details.
 - Refined `Control Panel` button states and added `SCOchirp.wav` feedback for successful navigation jumps and completed grade transitions.
 - Added `global` orange hover highlighting to the Route Editor's top menu dropdown rows.

@@ -15,8 +15,10 @@
 #include "Eng.h"
 #include <stdlib.h>
 #include <QDateTime>
+#include "GuiFunct.h"
 
 RandomConsist::RandomConsist(QWidget* parent) : QWidget(parent){
+    GuiFunct::applyEditorPanelStyle(this);
     setWindowFlags(Qt::WindowType::Tool);
     items.setFixedWidth(350);
     list.setFixedWidth(240);

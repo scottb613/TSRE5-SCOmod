@@ -25,10 +25,12 @@
 #include "GeoHgtFile.h"
 #include "GeoTiffFile.h"
 #include "UnsavedDialog.h"
+#include "GuiFunct.h"
 
 std::unordered_map<int, GeoTerrainFile*> HeightWindow::hqtFiles;
 
 HeightWindow::HeightWindow() : QDialog() {
+    GuiFunct::applyEditorPanelStyle(this);
     QPushButton *loadButton = new QPushButton("Load", this);
     QImage myImage(800, 800, QImage::Format_RGB888);
     //myImage->load("F:/2.png");

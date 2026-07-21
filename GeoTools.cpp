@@ -29,7 +29,7 @@ GeoTools::GeoTools(QString name)
     if(panelFont.pointSizeF() > 0)
         panelFont.setPointSizeF(panelFont.pointSizeF() * 1.12);
     setFont(panelFont);
-    setStyleSheet(GuiFunct::scoPanelStyle());
+    GuiFunct::applyEditorPanelStyle(this);
     int row = 0;
     
     buttonTools["mapTileShowTool"] = new QPushButton("Show/Hide Map", this);

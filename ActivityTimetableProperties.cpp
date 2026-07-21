@@ -19,8 +19,10 @@
 #include "ActLib.h"
 #include "ConLib.h"
 #include "Consist.h"
+#include "GuiFunct.h"
 
 ActivityTimetableProperties::ActivityTimetableProperties(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setMinimumWidth(450);
     setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
         

@@ -12,8 +12,10 @@
 #include "Game.h"
 #include "ShapeHierarchyInfo.h"
 #include "SFile.h"
+#include "GuiFunct.h"
 
 ShapeHierarchyWindow::ShapeHierarchyWindow(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setWindowFlags(Qt::WindowType::Tool);
     setWindowTitle(tr("Shape Hierarchy"));
     

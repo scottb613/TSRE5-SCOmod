@@ -11,8 +11,10 @@
 #include "ActivityTimetableWindow.h"
 #include "ActivityTimetableProperties.h"
 #include "Activity.h"
+#include "GuiFunct.h"
 
 ActivityTimetableWindow::ActivityTimetableWindow(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setWindowFlags(Qt::WindowType::Tool);
     setWindowTitle(tr("Timetable"));
     

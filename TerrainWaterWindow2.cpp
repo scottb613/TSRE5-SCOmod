@@ -13,8 +13,10 @@
 #include <QDebug>
 #include "Game.h"
 #include "Terrain.h"
+#include "GuiFunct.h"
 
 TerrainWaterWindow2::TerrainWaterWindow2(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     this->setWindowFlags(Qt::WindowType::Tool | Qt::MSWindowsFixedSizeDialogHint);
     this->setWindowTitle(tr("Water Level"));
     

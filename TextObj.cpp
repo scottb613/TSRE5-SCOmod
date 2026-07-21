@@ -62,7 +62,8 @@ void TextObj::setRotOffset(float val){
 }
 
 void TextObj::setHeight(float val){
-    textHeight = val;    
+    textHeight = val;
+    pos[1] = val;
 }
 
 void TextObj::init(){

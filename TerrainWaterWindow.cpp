@@ -9,8 +9,10 @@
  */
 
 #include "TerrainWaterWindow.h"
+#include "GuiFunct.h"
 
 TerrainWaterWindow::TerrainWaterWindow() : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     this->setFixedSize(200, 130);
 
     QPushButton* ok = new QPushButton("OK");

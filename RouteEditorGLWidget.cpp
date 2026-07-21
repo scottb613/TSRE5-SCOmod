@@ -84,43 +84,6 @@ m_zRot(0) {
 
     this->installEventFilter(this);
 
-    gradeLegend = new QFrame(this);
-    gradeLegend->setObjectName("gradeLegend");
-    gradeLegend->setAttribute(Qt::WA_TransparentForMouseEvents);
-    const float legendScale = qMax(1.0f, Game::uiScale);
-    const int legendFontSize = qRound(12.0f * legendScale);
-    const int legendTitleSize = qRound(14.0f * legendScale);
-    gradeLegend->setStyleSheet(QString(
-        "QFrame#gradeLegend { background-color: rgba(28,28,28,215); border: 1px solid #707070; border-radius: 4px; }"
-        "QLabel { color: #f0f0f0; font-size: %1px; background: transparent; border: none; }"
-        "QLabel#gradeLegendTitle { font-weight: bold; font-size: %2px; }"
-    ).arg(legendFontSize).arg(legendTitleSize));
-    QVBoxLayout *legendLayout = new QVBoxLayout(gradeLegend);
-    legendLayout->setContentsMargins(qRound(10 * legendScale), qRound(8 * legendScale),
-                                     qRound(12 * legendScale), qRound(9 * legendScale));
-    legendLayout->setSpacing(qRound(4 * legendScale));
-    QLabel *legendTitle = new QLabel("Grade Symbols", gradeLegend);
-    legendTitle->setObjectName("gradeLegendTitle");
-    legendLayout->addWidget(legendTitle);
-    QFrame *legendFrame = gradeLegend;
-    auto addLegendRow = [legendFrame, legendLayout, legendScale](const QString &color, const QString &text){
-        QHBoxLayout *row = new QHBoxLayout;
-        row->setSpacing(qRound(7 * legendScale));
-        QLabel *swatch = new QLabel(legendFrame);
-        const int swatchSize = qRound(14 * legendScale);
-        swatch->setFixedSize(swatchSize, swatchSize);
-        swatch->setStyleSheet(QString("background-color: %1; border: 1px solid rgba(255,255,255,90);").arg(color));
-        row->addWidget(swatch);
-        row->addWidget(new QLabel(text, legendFrame));
-        legendLayout->addLayout(row);
-    };
-    addLegendRow("#f28c18", "Steady Grade");
-    addLegendRow("#24c7e8", "Grade Transition");
-    addLegendRow("#f04444", "Crest/Gully Warning");
-    gradeLegend->adjustSize();
-    gradeLegend->setVisible(Game::gradeOverlayEnabled);
-    updateGradeLegendPosition();
-
 }
 
 
@@ -156,8 +119,6 @@ void RouteEditorGLWidget::cleanup() {
 
 void RouteEditorGLWidget::timerEvent(QTimerEvent * event) {
     Game::currentShapeLib = currentShapeLib;
-    if(gradeLegend != NULL && gradeLegend->isVisible() != Game::gradeOverlayEnabled)
-        gradeLegend->setVisible(Game::gradeOverlayEnabled);
     timeNow = QDateTime::currentMSecsSinceEpoch();
     if (timeNow - lastTime < 1)
         fps = 1;
@@ -1224,7 +1185,10 @@ void RouteEditorGLWidget::userModeChangeSound() {
 }
 
 void RouteEditorGLWidget::userJumpSound() {
-    playPlacementSound("SCOchirp.wav");
+    showModeChange();
+    QTimer::singleShot(1000, this, [this](){
+        playPlacementSound("SCOchirp.wav");
+    });
 }
 
 void RouteEditorGLWidget::showPlacementGuardError() {
@@ -1261,7 +1225,6 @@ void RouteEditorGLWidget::focusEditor() {
 void RouteEditorGLWidget::resizeGL(int w, int h) {
     Q_UNUSED(w);
     Q_UNUSED(h);
-    updateGradeLegendPosition();
     //gluu->m_proj.setToIdentity();
     //gluu->m_proj.perspective(45.0f, GLfloat(w) / h, 0.01f, 100.0f);
 }
@@ -2047,14 +2010,6 @@ void RouteEditorGLWidget::enableTool(QString name) {
     rotateTool = false;
     //}
     emit sendMsg("toolEnabled", name);
-}
-
-void RouteEditorGLWidget::updateGradeLegendPosition(){
-    if(gradeLegend == NULL)
-        return;
-    gradeLegend->adjustSize();
-    gradeLegend->move(qMax(10, width() - gradeLegend->width() - 12), 12);
-    gradeLegend->raise();
 }
 
 void RouteEditorGLWidget::statusPanelCommand(QString name) {

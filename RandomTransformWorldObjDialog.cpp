@@ -9,8 +9,10 @@
  */
 
 #include "RandomTransformWorldObjDialog.h"
+#include "GuiFunct.h"
 
 RandomTransformWorldObjDialog::RandomTransformWorldObjDialog() {
+    GuiFunct::applyEditorPanelStyle(this);
     transformation = new Ref::RandomTransformation();
     this->setWindowTitle("Random Transform");
     QPushButton* ok = new QPushButton("OK");

@@ -9,8 +9,10 @@
  */
 
 #include "SignalWindowLink.h"
+#include "GuiFunct.h"
 
 SignalWindowLink::SignalWindowLink() : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     this->setFixedSize(200, 60);
 
     QPushButton* ok = new QPushButton("OK");

@@ -9,8 +9,10 @@
  */
 
 #include "TransformWorldObjDialog.h"
+#include "GuiFunct.h"
 
 TransformWorldObjDialog::TransformWorldObjDialog() : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     //this->setFixedSize(200, 100);
     this->setWindowTitle("Transform");
     QPushButton* ok = new QPushButton("OK");

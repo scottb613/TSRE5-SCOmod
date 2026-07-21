@@ -12,8 +12,10 @@
 #include "Route.h"
 #include "Activity.h"
 #include "ActLib.h"
+#include "GuiFunct.h"
 
 PlayActivitySelectWindow::PlayActivitySelectWindow() : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     setFixedSize(500, 400);
     setWindowTitle("Choose Activity");
     

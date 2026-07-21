@@ -10,12 +10,14 @@
 
 
 #include "ActionChooseDialog.h"
+#include "GuiFunct.h"
 
 ActionChooseDialog::ActionChooseDialog() : ActionChooseDialog(10) {
     
 }
 
 ActionChooseDialog::ActionChooseDialog(int buttonCount) : QDialog(){
+    GuiFunct::applyEditorPanelStyle(this);
     buttonSize = buttonCount;
     //this->setFixedWidth(300);
 

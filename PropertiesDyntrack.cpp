@@ -26,7 +26,7 @@ PropertiesDyntrack::PropertiesDyntrack() {
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
-    this->setStyleSheet(GuiFunct::scoPanelStyle());
+    GuiFunct::applyEditorPanelStyle(this);
 
     infoLabel = new QLabel("Object: Dynamic Track");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");

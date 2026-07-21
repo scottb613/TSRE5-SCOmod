@@ -13,8 +13,10 @@
 #include "Eng.h"
 #include "EngLib.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 ConUnitsWidget::ConUnitsWidget() {
+    GuiFunct::applyEditorPanelStyle(this);
     QPushButton *bUp = new QPushButton("Up");
     QPushButton *bDown = new QPushButton("Down");
     QPushButton *bDel = new QPushButton("Delete");

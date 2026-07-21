@@ -411,3 +411,126 @@ Project files edited
   - Added explicit Windows resource file reference for the TSRE executable icon.
   - Added WinMM link library for Place Guard WAV playback.
 
+
+v0.6 grade, visibility, and interface follow-up
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
+  - Replaced View > Unselect All with Toggle All, preserving and restoring the user's prior View selections while excluding Compass.
+  - Kept Grade Symbols synchronized with the global default-on state through the View menu.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
+  - Added Toggle All saved-selection state and the persistent Compass action reference.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
+  - Removed the introductory Grade Symbols viewport legend.
+  - Changed Jump feedback to play the normal press immediately and the chirp after one second.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
+  - Removed obsolete Grade Symbols legend members and positioning helper.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+  - Enabled Grade Symbols by default.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp
+  - Removed the redundant Grade Symbols checkbox from Track properties.
+  - Made Grade Helper target and step values follow the selected grade units.
+  - Added compact unit symbols, subdued required-input borders, visible spin controls, consistent fonts, and neutral read-only fields.
+  - Replaced hidden unit rows with one stacked grade-value row for consistent vertical spacing.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.h
+  - Added Grade Helper unit access and stacked grade-value controls while removing obsolete overlay and hidden-row members.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.cpp
+  - Extended Grade Symbols classification to Dynamic Track.
+  - Rebuilt the transition cache when incrementally loaded track pieces are missing so cyan and red states do not remain incorrectly orange.
+
+- TSRE5-Trainsim.Com-Fork-master/DynTrackObj.cpp
+  - Added centered, tangent-aligned, direction-aware Grade Symbols using the shared orange, cyan, and red classifications and mirrored artwork.
+  - Invalidated grade-marker state after elevation changes and VBO rebuilds.
+
+- TSRE5-Trainsim.Com-Fork-master/DynTrackObj.h
+  - Added Dynamic Track Grade Symbol render objects, cached state, and helpers.
+
+- TSRE5-Trainsim.Com-Fork-master/Coords.cpp
+  - Replaced fragile single marker poles with three type-colored four-line square clusters at three times the configured marker height.
+  - Positioned the original black camera-facing marker labels at the corrected pole top.
+
+- TSRE5-Trainsim.Com-Fork-master/Coords.h
+  - Added the three reusable MKR type marker render objects.
+
+- TSRE5-Trainsim.Com-Fork-master/TextObj.cpp
+  - Kept the rendered vertical position synchronized when callers set a text height.
+
+- TSRE5-Trainsim.Com-Fork-master/TextObj.h
+  - Initialized text height to zero so marker and other labels cannot receive an undefined vertical offset.
+
+- TSRE5-Trainsim.Com-Fork-master/GuiFunct.cpp
+  - Added the shared editor-panel field style and post-construction font, height, spin-control, and vertical-spacing normalization.
+
+- TSRE5-Trainsim.Com-Fork-master/GuiFunct.h
+  - Added declarations for the shared editor-panel styling helpers.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesAbstract.cpp
+  - Applied the shared editor-panel field styling to all derived object property panels.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesDyntrack.cpp
+  - Applied the shared field styling to the Dynamic Track panel.
+
+- TSRE5-Trainsim.Com-Fork-master/ActivityTools.cpp
+  - Applied the shared field styling to Activity Tools.
+
+- TSRE5-Trainsim.Com-Fork-master/GeoTools.cpp
+  - Applied the shared field styling to Geo Tools.
+
+- TSRE5-Trainsim.Com-Fork-master/ObjTools.cpp
+  - Applied the shared field styling to Object Tools.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.cpp
+  - Applied the shared field styling to Terrain Tools.
+
+- TSRE5-Trainsim.Com-Fork-master/AboutWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActionChooseDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityEventProperties.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityEventWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityServiceProperties.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityServiceWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTimetableProperties.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTimetableWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTrafficProperties.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTrafficWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ChooseFileDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/ClientUsersWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ConInfoWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/ConListWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/ConUnitsWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/EditFileNameDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/EngInfoWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/EngListWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/ErrorMessageProperties.cpp
+- TSRE5-Trainsim.Com-Fork-master/ErrorMessagesWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/HeightWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/MapWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/NaviBox.cpp
+- TSRE5-Trainsim.Com-Fork-master/NewRouteWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/OverwriteDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/PlayActivitySelectWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/RandomConsist.cpp
+- TSRE5-Trainsim.Com-Fork-master/RandomTransformWorldObjDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/RouteMergeDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/ShapeHierarchyWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ShapeInfoWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/ShapeTexturesWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ShapeViewerNavigatorWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/SignalWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/SignalWindowLink.cpp
+- TSRE5-Trainsim.Com-Fork-master/TerrainTreeWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/TerrainWaterWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/TerrainWaterWindow2.cpp
+- TSRE5-Trainsim.Com-Fork-master/TextEditDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/TransformWorldObjDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/TrkWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/UnsafeModeDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/UnsavedDialog.cpp
+  - Applied the shared editor-panel colors, normal field font, editable/read-only border treatment, spin controls, and vertical spacing where applicable.
+

@@ -2003,18 +2003,21 @@ void TDB::rebuildGradeMarkerCache(){
             const int tileY = -(int)section.param[3];
             const int uid = (int)section.param[4];
             WorldObj *obj = Game::currentRoute->findWorldObjByUid(tileX, tileY, uid);
-            if(obj == NULL || obj->type != "trackobj")
+            if(obj == NULL || (obj->type != "trackobj" && obj->type != "dyntrack"))
                 continue;
 
-            TrackObj *track = (TrackObj*)obj;
-            const float liveGrade = std::tan(track->getElevation()) * 100.0f;
+            float liveGrade = 0.0f;
+            if(obj->type == "dyntrack")
+                liveGrade = std::tan(((DynTrackObj*)obj)->getElevation()) * 100.0f;
+            else
+                liveGrade = std::tan(((TrackObj*)obj)->getElevation()) * 100.0f;
             int direction = liveGrade >= 0.0f ? 1 : -1;
-            if(track->endp != NULL && track->endp[3] < 0.0f)
+            if(obj->endp != NULL && obj->endp[3] < 0.0f)
                 direction = -direction;
 
             float localArrow[3] = { 0.0f, 0.0f, (float)direction };
             float worldArrow[3];
-            Vec3::transformQuat(worldArrow, localArrow, track->qDirection);
+            Vec3::transformQuat(worldArrow, localArrow, obj->qDirection);
             const float arrowLength = std::sqrt(worldArrow[0] * worldArrow[0] + worldArrow[2] * worldArrow[2]);
 
             GradeMarkerSample sample;
@@ -2023,8 +2026,8 @@ void TDB::rebuildGradeMarkerCache(){
                 sample.arrowX = worldArrow[0] / arrowLength;
                 sample.arrowZ = worldArrow[2] / arrowLength;
             }
-            sample.worldX = track->x * 2048.0f + track->position[0];
-            sample.worldZ = track->y * 2048.0f + track->position[2];
+            sample.worldX = obj->x * 2048.0f + obj->position[0];
+            sample.worldZ = obj->y * 2048.0f + obj->position[2];
             grades.insert(gradeMarkerKey(tileX, tileY, uid), sample);
         }
     }
@@ -2156,7 +2159,13 @@ void TDB::rebuildGradeMarkerCache(){
 
 int TDB::getGradeMarkerTransition(int x, int y, int UiD){
     const QString key = gradeMarkerKey(x, y, UiD);
-    if(gradeMarkerCacheRevision != Game::gradeOverlayRevision)
+    // World tiles are loaded incrementally.  With Grade Symbols enabled by
+    // default, the first cache can be built before every visible TrackObj is
+    // available.  Rebuild when a newly loaded piece is missing so it and its
+    // already-cached neighbors receive their cyan/red transition state rather
+    // than permanently falling back to orange.
+    if(gradeMarkerCacheRevision != Game::gradeOverlayRevision
+            || !gradeMarkerTransitionCache.contains(key))
         rebuildGradeMarkerCache();
     return gradeMarkerTransitionCache.value(key, GradeMarkerStable);
 }

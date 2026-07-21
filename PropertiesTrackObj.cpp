@@ -93,7 +93,7 @@ public:
         : QWidget(owner->window(), Qt::Tool), owner(owner) {
         setWindowTitle("Grade Helper");
         setFixedWidth(gradeHelperScaledSize(300));
-        setStyleSheet(GuiFunct::scoPanelStyle());
+        setStyleSheet(GuiFunct::scoEditorPanelStyle());
 
         QVBoxLayout *layout = new QVBoxLayout(this);
         layout->setSpacing(3);
@@ -109,20 +109,34 @@ public:
         nextGrade.setReadOnly(true);
         currentGrade.setAlignment(Qt::AlignCenter);
         nextGrade.setAlignment(Qt::AlignCenter);
-        const double maximumGrade = Game::trackElevationMaxPm / 10.0;
-        targetGrade.setRange(-maximumGrade, maximumGrade);
-        targetGrade.setDecimals(5);
-        targetGrade.setSingleStep(0.05);
-        targetGrade.setSuffix(" %");
-        stepGrade.setRange(0.001, maximumGrade);
-        stepGrade.setDecimals(5);
-        stepGrade.setSingleStep(0.05);
-        stepGrade.setSuffix(" %");
+        const QString gradeInputStyle =
+            "QDoubleSpinBox { border: 1px solid #70590e; padding-right: 18px; }"
+            "QDoubleSpinBox:focus { border: 1px solid #8a7116; }"
+            "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {"
+            " width: 16px; background-color: #414141; border-left: 1px solid #555555; }"
+            "QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover { background-color: #555555; }"
+            "QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 7px; height: 7px; }";
+        targetGrade.setStyleSheet(gradeInputStyle);
+        stepGrade.setStyleSheet(gradeInputStyle);
+        targetGrade.setToolTip("Enter the grade you want the transition to reach.");
+        stepGrade.setToolTip("Enter the grade change to apply to each placed piece.");
         form->addRow("Current Grade:", &currentGrade);
-        form->addRow("Target Grade:", &targetGrade);
-        form->addRow("Step Per Piece:", &stepGrade);
+        form->addRow(&targetGradeLabel, &targetGrade);
+        form->addRow(&stepGradeLabel, &stepGrade);
         form->addRow("Next Grade:", &nextGrade);
         layout->addLayout(form);
+
+        QFont fieldFont = font();
+        fieldFont.setBold(false);
+        const int fieldHeight = gradeHelperScaledSize(22);
+        currentGrade.setFont(fieldFont);
+        targetGrade.setFont(fieldFont);
+        stepGrade.setFont(fieldFont);
+        nextGrade.setFont(fieldFont);
+        currentGrade.setMinimumHeight(fieldHeight);
+        targetGrade.setMinimumHeight(fieldHeight);
+        stepGrade.setMinimumHeight(fieldHeight);
+        nextGrade.setMinimumHeight(fieldHeight);
 
         QWidget *ruleRow = new QWidget;
         ruleRow->setFixedHeight(7);
@@ -151,13 +165,13 @@ public:
         QObject::connect(&refreshTimer, &QTimer::timeout, this, [this](){ syncUi(); });
         refreshTimer.start(120);
 
-        QObject::connect(&targetGrade, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [](double value){
+        QObject::connect(&targetGrade, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double value){
             if(!Game::gradeAssistEnabled && !Game::gradeAssistTargetReached)
-                Game::gradeAssistTargetPercent = (float)value;
+                Game::gradeAssistTargetPercent = displayGradeToPercent(value);
         });
-        QObject::connect(&stepGrade, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [](double value){
+        QObject::connect(&stepGrade, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double value){
             if(!Game::gradeAssistEnabled && !Game::gradeAssistTargetReached)
-                Game::gradeAssistStepPercent = (float)value;
+                Game::gradeAssistStepPercent = displayStepToPercent(value);
         });
         QObject::connect(&stateButton, &QPushButton::clicked, this, [this](){
             this->owner->userButtonPressed();
@@ -171,8 +185,8 @@ public:
                 Game::gradeLockEnabled = false;
                 Game::gradeAssistNextPercent = Game::gradeAssistCurrentPercent;
             } else {
-                Game::gradeAssistTargetPercent = (float)targetGrade.value();
-                Game::gradeAssistStepPercent = (float)stepGrade.value();
+                Game::gradeAssistTargetPercent = displayGradeToPercent(targetGrade.value());
+                Game::gradeAssistStepPercent = displayStepToPercent(stepGrade.value());
                 Game::gradeAssistEnabled = true;
                 Game::gradeAssistTargetReached = false;
                 Game::gradeLockEnabled = false;
@@ -239,6 +253,78 @@ protected:
     }
 
 private:
+    float percentToDisplayGrade(float percent) const{
+        switch(owner->gradeUnitsIndex()){
+        case 0: return percent * 10.0f;
+        case 2: return qFuzzyIsNull(percent) ? 0.0f : 100.0f / percent;
+        case 3: return qRadiansToDegrees(qAtan(percent / 100.0f));
+        default: return percent;
+        }
+    }
+
+    float displayGradeToPercent(double value) const{
+        float percent = (float)value;
+        switch(owner->gradeUnitsIndex()){
+        case 0: percent /= 10.0f; break;
+        case 2: percent = qFuzzyIsNull(percent) ? 0.0f : 100.0f / percent; break;
+        case 3: percent = qTan(qDegreesToRadians(percent)) * 100.0f; break;
+        default: break;
+        }
+        const float maximum = Game::trackElevationMaxPm / 10.0f;
+        return qBound(-maximum, percent, maximum);
+    }
+
+    float displayStepToPercent(double value) const{
+        return qAbs(displayGradeToPercent(value));
+    }
+
+    void updateTargetGradeUnits(){
+        const int units = owner->gradeUnitsIndex();
+        if(units == displayedUnits)
+            return;
+        displayedUnits = units;
+        targetGrade.blockSignals(true);
+        stepGrade.blockSignals(true);
+        targetGrade.setDecimals(5);
+        stepGrade.setDecimals(5);
+        if(units == 0){
+            targetGradeLabel.setText("Target Grade (‰):");
+            stepGradeLabel.setText("Step Per Piece (‰):");
+            targetGrade.setRange(-Game::trackElevationMaxPm, Game::trackElevationMaxPm);
+            targetGrade.setSingleStep(0.5);
+            stepGrade.setRange(0.01, Game::trackElevationMaxPm);
+            stepGrade.setSingleStep(0.5);
+        } else if(units == 2){
+            targetGradeLabel.setText("Target Grade (m):");
+            stepGradeLabel.setText("Step Per Piece (m):");
+            targetGrade.setRange(-100000.0, 100000.0);
+            targetGrade.setSingleStep(1.0);
+            stepGrade.setRange(1000.0 / Game::trackElevationMaxPm, 100000.0);
+            stepGrade.setSingleStep(1.0);
+        } else if(units == 3){
+            targetGradeLabel.setText("Target Grade (°):");
+            stepGradeLabel.setText("Step Per Piece (°):");
+            const double maximumAngle = qRadiansToDegrees(qAtan(Game::trackElevationMaxPm / 1000.0));
+            targetGrade.setRange(-maximumAngle, maximumAngle);
+            targetGrade.setSingleStep(0.05);
+            const double minimumAngle = qRadiansToDegrees(qAtan(0.001 / 100.0));
+            stepGrade.setRange(minimumAngle, maximumAngle);
+            stepGrade.setSingleStep(0.01);
+        } else {
+            targetGradeLabel.setText("Target Grade (%):");
+            stepGradeLabel.setText("Step Per Piece (%):");
+            const double maximumPercent = Game::trackElevationMaxPm / 10.0;
+            targetGrade.setRange(-maximumPercent, maximumPercent);
+            targetGrade.setSingleStep(0.05);
+            stepGrade.setRange(0.001, maximumPercent);
+            stepGrade.setSingleStep(0.05);
+        }
+        targetGrade.setValue(percentToDisplayGrade(Game::gradeAssistTargetPercent));
+        stepGrade.setValue(percentToDisplayGrade(Game::gradeAssistStepPercent));
+        targetGrade.blockSignals(false);
+        stepGrade.blockSignals(false);
+    }
+
     void prepareNextGrade(){
         const float difference = Game::gradeAssistTargetPercent - Game::gradeAssistCurrentPercent;
         const float amount = qMin(qAbs(difference), Game::gradeAssistStepPercent);
@@ -246,16 +332,17 @@ private:
     }
 
     void syncUi(){
+        updateTargetGradeUnits();
         currentGrade.setText(QString::number(Game::gradeAssistCurrentPercent, 'f', 5) + " %");
         nextGrade.setText(QString::number(Game::gradeAssistNextPercent, 'f', 5) + " %");
         if(!targetGrade.hasFocus()){
             targetGrade.blockSignals(true);
-            targetGrade.setValue(Game::gradeAssistTargetPercent);
+            targetGrade.setValue(percentToDisplayGrade(Game::gradeAssistTargetPercent));
             targetGrade.blockSignals(false);
         }
         if(!stepGrade.hasFocus()){
             stepGrade.blockSignals(true);
-            stepGrade.setValue(Game::gradeAssistStepPercent);
+            stepGrade.setValue(percentToDisplayGrade(Game::gradeAssistStepPercent));
             stepGrade.blockSignals(false);
         }
         const bool editingEnabled = !Game::gradeAssistEnabled && !Game::gradeAssistTargetReached;
@@ -275,6 +362,8 @@ private:
 
     PropertiesTrackObj *owner;
     QLineEdit currentGrade;
+    QLabel targetGradeLabel;
+    QLabel stepGradeLabel;
     QDoubleSpinBox targetGrade;
     QDoubleSpinBox stepGrade;
     QLineEdit nextGrade;
@@ -283,9 +372,12 @@ private:
     QTimer snapTimer;
     bool snapping = false;
     bool everShown = false;
+    int displayedUnits = -1;
 };
 
 PropertiesTrackObj::PropertiesTrackObj(){
+    setStyleSheet(GuiFunct::scoEditorPanelStyle());
+
     QLabel *label;
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
@@ -306,7 +398,7 @@ PropertiesTrackObj::PropertiesTrackObj(){
     infoLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(infoLabel);
     QFormLayout *vlist = new QFormLayout;
-    vlist->setSpacing(2);
+    vlist->setSpacing(3);
     vlist->setContentsMargins(3,0,3,0);
     this->uid.setDisabled(true);
     this->tX.setDisabled(true);
@@ -362,12 +454,15 @@ PropertiesTrackObj::PropertiesTrackObj(){
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
-    vlist->setSpacing(2);
+    vlist->setSpacing(3);
     vlist->setContentsMargins(3,0,3,0);
     vlist->addRow("X:",&this->posX);
     vlist->addRow("Y:",&this->posY);
     vlist->addRow("Z:",&this->posZ);
-    this->quat.setDisabled(true);
+    this->posX.setReadOnly(true);
+    this->posY.setReadOnly(true);
+    this->posZ.setReadOnly(true);
+    this->quat.setReadOnly(true);
     this->quat.setAlignment(Qt::AlignCenter);
     vlist->addRow("Rot:",&this->quat);
     vbox->addItem(vlist);
@@ -467,7 +562,7 @@ PropertiesTrackObj::PropertiesTrackObj(){
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
-    vlist->setSpacing(0);
+    vlist->setSpacing(3);
     vlist->setContentsMargins(0,0,0,0);
     QDoubleValidator* doubleValidator = new QDoubleValidator(-10000, 10000, 6, this); 
     doubleValidator->setNotation(QDoubleValidator::StandardNotation);
@@ -484,35 +579,30 @@ PropertiesTrackObj::PropertiesTrackObj(){
     QObject::connect(&elevType, SIGNAL(currentTextChanged(QString)),
                       this, SLOT(elevTypeEdited(QString)));
     
-    elevPromLabel.setText("‰");
-    vlist->addRow(&elevPromLabel,&elevProm);
     elevProm.setValidator(doubleValidator1);
     QObject::connect(&elevProm, SIGNAL(textEdited(QString)), this, SLOT(elevPromEnabled(QString)));
     //oneInXm
-    elev1inXmLabel.setText("1 in 'x' m");
-    vlist->addRow(&elev1inXmLabel,&elev1inXm);
     elev1inXm.setValidator(doubleValidator);
     QObject::connect(&elev1inXm, SIGNAL(textEdited(QString)), this, SLOT(elev1inXmEnabled(QString)));
     //º
-    elevProgLabel.setText("º");
-    vlist->addRow(&elevProgLabel,&elevProg);
     elevProg.setValidator(doubleValidator1);
     QObject::connect(&elevProg, SIGNAL(textEdited(QString)), this, SLOT(elevProgEnabled(QString)));
     //%
-    elevPropLabel.setText("%");
-    vlist->addRow(&elevPropLabel,&elevProp);
     elevProp.setValidator(doubleValidator1);
     QObject::connect(&elevProp, SIGNAL(textEdited(QString)), this, SLOT(elevPropEnabled(QString)));
+    elevValueStack.addWidget(&elevProm);
+    elevValueStack.addWidget(&elevProp);
+    elevValueStack.addWidget(&elev1inXm);
+    elevValueStack.addWidget(&elevProg);
+    elevValueStack.setContentsMargins(0,0,0,0);
+    vlist->addRow(&elevValueLabel, &elevValueStack);
     elevStep.setToolTip("General object movement/rotation adjustment sensitivity; this is not a grade-transition increment.");
     elevStep.setValidator(doubleValidator);
     QObject::connect(&elevStep, SIGNAL(textEdited(QString)), this, SLOT(elevStepEnabled(QString)));
-    hideElevBoxes();
     elevType.setCurrentIndex(Game::DefaultElevationBox);
     showElevBox(elevType.currentText());
     vbox->addItem(vlist);
 
-    gradeOverlay.setText("Grade Overlay");
-    gradeOverlay.setChecked(Game::gradeOverlayEnabled);
     gradeHelper.setText("Grade Helper...");
     gradeHelper.setCheckable(true);
     gradeHelper.setFocusPolicy(Qt::NoFocus);
@@ -520,12 +610,6 @@ PropertiesTrackObj::PropertiesTrackObj(){
     gradeLock.setCheckable(true);
     gradeLock.setChecked(Game::gradeLockEnabled);
     gradeLock.setFocusPolicy(Qt::NoFocus);
-
-    QHBoxLayout *gradeOverlayRow = new QHBoxLayout;
-    gradeOverlayRow->setContentsMargins(3,1,3,0);
-    gradeOverlayRow->addWidget(&gradeOverlay);
-    gradeOverlayRow->addStretch(1);
-    vbox->addLayout(gradeOverlayRow);
 
     QHBoxLayout *gradeHelperRow = new QHBoxLayout;
     gradeHelperRow->setContentsMargins(3,0,3,0);
@@ -537,10 +621,6 @@ PropertiesTrackObj::PropertiesTrackObj(){
     gradeLockRow->addWidget(&gradeLock);
     vbox->addLayout(gradeLockRow);
 
-    QObject::connect(&gradeOverlay, &QCheckBox::toggled, [this](bool checked){
-        Game::gradeOverlayEnabled = checked;
-        ++Game::gradeOverlayRevision;
-    });
     QObject::connect(&gradeLock, &QPushButton::toggled, [this](bool checked){
         if(checked && trackObj == NULL){
             gradeLock.setChecked(false);
@@ -566,9 +646,6 @@ PropertiesTrackObj::PropertiesTrackObj(){
         }
     });
     QObject::connect(&gradeHelperUiTimer, &QTimer::timeout, this, [this](){
-        gradeOverlay.blockSignals(true);
-        gradeOverlay.setChecked(Game::gradeOverlayEnabled);
-        gradeOverlay.blockSignals(false);
         refreshGradeLockUi();
         refreshGradeHelperUi();
     });
@@ -609,6 +686,26 @@ PropertiesTrackObj::PropertiesTrackObj(){
     
     vbox->addStretch(1);
     this->setLayout(vbox);
+
+    QFont fieldFont = font();
+    fieldFont.setBold(false);
+    const int fieldHeight = gradeHelperScaledSize(22);
+    foreach(QLineEdit *field, findChildren<QLineEdit*>()){
+        field->setFont(fieldFont);
+        field->setMinimumHeight(fieldHeight);
+    }
+    foreach(QSpinBox *field, findChildren<QSpinBox*>()){
+        field->setFont(fieldFont);
+        field->setMinimumHeight(fieldHeight);
+    }
+    foreach(QDoubleSpinBox *field, findChildren<QDoubleSpinBox*>()){
+        field->setFont(fieldFont);
+        field->setMinimumHeight(fieldHeight);
+    }
+    foreach(QComboBox *field, findChildren<QComboBox*>()){
+        field->setFont(fieldFont);
+        field->setMinimumHeight(fieldHeight);
+    }
     
     QObject::connect(copyF, SIGNAL(released()),
                       this, SLOT(copyFileNameEnabled()));
@@ -624,40 +721,23 @@ void PropertiesTrackObj::eTemplateEdited(QString val){
 }
 
 void PropertiesTrackObj::elevTypeEdited(QString val){
-    hideElevBoxes();
     showElevBox(val);
     ElevTypeName = val;
 }
 
 void PropertiesTrackObj::showElevBox(QString val){
-    if(val == "Permille ‰"){
-        elevProm.show();
-        elevPromLabel.show();
-    }
-    if(val == "Percent %"){
-        elevProp.show();
-        elevPropLabel.show();
-    }
-    if(val == "1 in 'X' m"){
-        elev1inXm.show();
-        elev1inXmLabel.show();
-    }
-    if(val == "Angle º"){
-        elevProg.show();
-        elevProgLabel.show();
-    }    
+    Q_UNUSED(val);
+    const int units = elevType.currentIndex();
+    elevValueStack.setCurrentIndex(units);
+    if(units == 0)
+        elevValueLabel.setText("‰");
+    else if(units == 1)
+        elevValueLabel.setText("%");
+    else if(units == 2)
+        elevValueLabel.setText("m");
+    else
+        elevValueLabel.setText("°");
     setStepValue(Game::DefaultMoveStep);
-}
-
-void PropertiesTrackObj::hideElevBoxes(){
-    elevProm.hide();
-    elevProg.hide();
-    elevProp.hide();
-    elev1inXm.hide();
-    elevPromLabel.hide();
-    elevProgLabel.hide();
-    elevPropLabel.hide();
-    elev1inXmLabel.hide();
 }
 
 PropertiesTrackObj::~PropertiesTrackObj() {
@@ -891,6 +971,10 @@ float PropertiesTrackObj::currentGradePercent() const{
     if(trackObj == NULL)
         return 0.0f;
     return qTan(trackObj->getElevation()) * 100.0f;
+}
+
+int PropertiesTrackObj::gradeUnitsIndex() const{
+    return elevType.currentIndex();
 }
 
 void PropertiesTrackObj::activateGradeAssistPlacement(){

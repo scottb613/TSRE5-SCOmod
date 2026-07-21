@@ -76,7 +76,7 @@ ObjTools::ObjTools(QString name)
     if(objectPanelFont.pointSizeF() > 0)
         objectPanelFont.setPointSizeF(objectPanelFont.pointSizeF() * 1.12);
     setFont(objectPanelFont);
-    setStyleSheet(GuiFunct::scoPanelStyle());
+    GuiFunct::applyEditorPanelStyle(this);
     buttonTools["selectTool"] = new QPushButton("Select", this);
     buttonTools["placeTool"] = new QPushButton("Place New", this);
     buttonTools["autoPlaceSimpleTool"] = new QPushButton("Auto Place", this);

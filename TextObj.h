@@ -45,7 +45,7 @@ private:
     float size = 4;
     float scale = 1;
     float rotOffset = 3.14;
-    float textHeight;
+    float textHeight = 0.0f;
     int resMult = 1;
 };
 

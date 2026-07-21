@@ -19,7 +19,7 @@
 QString PropertiesAbstract::ElevTypeName = "Percent %";
 
 PropertiesAbstract::PropertiesAbstract() : QWidget() {
-    setStyleSheet(GuiFunct::scoPanelStyle());
+    GuiFunct::applyEditorPanelStyle(this);
     foreach (QObject *child, children()) {
         if (child->isWidgetType()) {
             child->installEventFilter(this);

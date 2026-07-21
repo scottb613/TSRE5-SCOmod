@@ -16,8 +16,10 @@
 #include "ActLib.h"
 #include "Game.h"
 #include "EditFileNameDialog.h"
+#include "GuiFunct.h"
 
 ActivityTrafficWindow::ActivityTrafficWindow(QWidget* parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     setWindowFlags(Qt::WindowType::Tool);
     setWindowTitle(tr("Traffic"));
     

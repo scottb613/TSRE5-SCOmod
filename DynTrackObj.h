@@ -53,8 +53,14 @@ private:
     float elevation;
     float* jNodePosn = NULL;
     int sidxSelected = 0;
+    OglObj *gradeMarker = NULL;
+    OglObj *gradeMarkerMirror = NULL;
+    int gradeMarkerDirection = 99;
+    int gradeMarkerTransition = -1;
     bool getSimpleBorder(float* border);
     bool getBoxPoints(QVector<float> &points);
+    void renderGradeMarker(float lod, int renderMode, int selectionColor);
+    void rebuildGradeMarker(int direction, int transition);
 };
 
 #endif	/* DYNTRACKOBJ_H */

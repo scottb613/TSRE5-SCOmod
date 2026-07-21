@@ -38,7 +38,7 @@ ActivityTools::ActivityTools(QString name)
     if(panelFont.pointSizeF() > 0)
         panelFont.setPointSizeF(panelFont.pointSizeF() * 1.12);
     setFont(panelFont);
-    setStyleSheet(GuiFunct::scoPanelStyle());
+    GuiFunct::applyEditorPanelStyle(this);
     cSeason.setStyleSheet("combobox-popup: 0;");
     cSeason.addItem("Spring",0);
     cSeason.addItem("Summer",1);

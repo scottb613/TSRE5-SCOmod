@@ -17,8 +17,10 @@
 #include "SignalShape.h"
 #include "SignalWindowLink.h"
 #include "Undo.h"
+#include "GuiFunct.h"
 
 SignalWindow::SignalWindow(QWidget *parent) : QWidget(parent) {
+    GuiFunct::applyEditorPanelStyle(this);
     this->setWindowFlags(Qt::WindowType::Tool);
     //this->setWindowFlags(Qt::WindowStaysOnTopHint);
     this->setFixedWidth(400);
