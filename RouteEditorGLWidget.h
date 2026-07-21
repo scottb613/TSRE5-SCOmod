@@ -80,6 +80,7 @@ public slots:
     void msg(QString name, QString val);
     
     void editCopy();
+    void copySelectionInfo();
     void editPaste();
     void editSelect();
     void editFind1x1();

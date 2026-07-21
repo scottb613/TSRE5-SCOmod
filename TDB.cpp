@@ -2045,24 +2045,74 @@ void TDB::rebuildGradeMarkerCache(){
             int transition = GradeMarkerStable;
             if(current.magnitude > flatTolerance){
                 QVector<QString> neighborKeys;
+                auto appendNeighborKey = [&neighborKeys, &key](const QString &neighborKey){
+                    if(neighborKey != key && !neighborKeys.contains(neighborKey))
+                        neighborKeys.push_back(neighborKey);
+                };
+                auto appendVectorEndpointNeighbor = [this, &appendNeighborKey, &key](TRnode *neighborNode, int anchorNodeId){
+                    if(neighborNode == NULL || neighborNode->typ != 1 || neighborNode->iTrv < 1)
+                        return;
+                    int neighborId = -1;
+                    int step = 0;
+                    if(neighborNode->TrPinS[0] == anchorNodeId){
+                        neighborId = 0;
+                        step = 1;
+                    } else if(neighborNode->TrPinS[1] == anchorNodeId){
+                        neighborId = neighborNode->iTrv - 1;
+                        step = -1;
+                    }
+                    while(neighborId >= 0 && neighborId < neighborNode->iTrv){
+                        TRnode::TRSect &neighborSection = neighborNode->trVectorSection[neighborId];
+                        const QString neighborKey = gradeMarkerKey((int)neighborSection.param[2], -(int)neighborSection.param[3], (int)neighborSection.param[4]);
+                        if(neighborKey != key){
+                            appendNeighborKey(neighborKey);
+                            break;
+                        }
+                        neighborId += step;
+                    }
+                };
+                auto appendAcrossPin = [this, nodeId, node, &appendVectorEndpointNeighbor](int pinIndex){
+                    if(pinIndex < 0 || pinIndex >= node->TrP1 + node->TrP2)
+                        return;
+                    const int anchorNodeId = node->TrPinS[pinIndex];
+                    TRnode *anchor = trackNodes[anchorNodeId];
+                    if(anchor == NULL)
+                        return;
+                    if(anchor->typ == 1){
+                        appendVectorEndpointNeighbor(anchor, nodeId);
+                        return;
+                    }
+                    const int anchorPinCount = anchor->TrP1 + anchor->TrP2;
+                    for(int anchorPin = 0; anchorPin < anchorPinCount; ++anchorPin){
+                        const int connectedNodeId = anchor->TrPinS[anchorPin];
+                        if(connectedNodeId == nodeId)
+                            continue;
+                        appendVectorEndpointNeighbor(trackNodes[connectedNodeId], anchorNodeId);
+                    }
+                };
                 const int offsets[2] = { -1, 1 };
                 for(int offset : offsets){
                     int neighborId = sectionId + offset;
+                    bool foundInsideNode = false;
                     while(neighborId >= 0 && neighborId < node->iTrv){
                         TRnode::TRSect &neighborSection = node->trVectorSection[neighborId];
                         const QString neighborKey = gradeMarkerKey((int)neighborSection.param[2], -(int)neighborSection.param[3], (int)neighborSection.param[4]);
                         if(neighborKey != key){
-                            if(grades.contains(neighborKey))
-                                neighborKeys.push_back(neighborKey);
+                            appendNeighborKey(neighborKey);
+                            foundInsideNode = true;
                             break;
                         }
                         neighborId += offset;
                     }
+                    if(!foundInsideNode)
+                        appendAcrossPin(offset < 0 ? 0 : 1);
                 }
 
-                // Red is reserved for a real, connected crest: both visible
-                // uphill arrows point toward their shared joint.  Database
-                // traversal signs and nearby parallel tracks do not count.
+                // Red is reserved for a real, connected vertical-direction
+                // conflict at a shared joint.  Uphill arrows pointing toward
+                // one another form a crest; arrows pointing away from one
+                // another form a gully.  Database traversal signs and nearby
+                // parallel tracks do not count.
                 for(const QString &neighborKey : neighborKeys){
                     const GradeMarkerSample neighbor = grades.value(neighborKey);
                     if(current.magnitude <= transitionTolerance || neighbor.magnitude <= transitionTolerance)
@@ -2074,41 +2124,24 @@ void TDB::rebuildGradeMarkerCache(){
                         continue;
                     const float towardNeighbor = (current.arrowX * dx + current.arrowZ * dz) / distance;
                     const float neighborTowardCurrent = -(neighbor.arrowX * dx + neighbor.arrowZ * dz) / distance;
-                    if(towardNeighbor > 0.25f && neighborTowardCurrent > 0.25f){
+                    const bool crest = towardNeighbor > 0.25f && neighborTowardCurrent > 0.25f;
+                    const bool gully = towardNeighbor < -0.25f && neighborTowardCurrent < -0.25f;
+                    if(crest || gully){
                         transition = GradeMarkerWarning;
                         break;
                     }
                 }
 
-                // Otherwise compare the current magnitude with the connected
-                // section physically behind it in the visible uphill direction.
+                // Otherwise compare both connected ends.  Any grade-magnitude
+                // mismatch makes the piece transitory.  There is deliberately
+                // no increasing/decreasing classification: endpoint direction,
+                // object origin, and database traversal cannot change the color.
                 if(transition != GradeMarkerWarning){
-                    bool foundBehind = false;
-                    float bestBehindDot = 0.0f;
-                    GradeMarkerSample behind;
                     for(const QString &neighborKey : neighborKeys){
                         const GradeMarkerSample neighbor = grades.value(neighborKey);
-                        const float dx = neighbor.worldX - current.worldX;
-                        const float dz = neighbor.worldZ - current.worldZ;
-                        const float distance = std::sqrt(dx * dx + dz * dz);
-                        if(distance <= 0.001f)
-                            continue;
-                        const float arrowDot = (current.arrowX * dx + current.arrowZ * dz) / distance;
-                        if(arrowDot < bestBehindDot){
-                            bestBehindDot = arrowDot;
-                            behind = neighbor;
-                            foundBehind = true;
-                        }
-                    }
-                    if(foundBehind){
-                        if(behind.magnitude <= flatTolerance){
-                            transition = GradeMarkerIncreasing;
-                        } else {
-                            const float delta = current.magnitude - behind.magnitude;
-                            if(delta > transitionTolerance)
-                                transition = GradeMarkerIncreasing;
-                            else if(delta < -transitionTolerance)
-                                transition = GradeMarkerDecreasing;
+                        if(qAbs(neighbor.magnitude - current.magnitude) > transitionTolerance){
+                            transition = GradeMarkerTransitory;
+                            break;
                         }
                     }
                 }

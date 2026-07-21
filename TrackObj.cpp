@@ -23,6 +23,7 @@
 #include "TrackItemObj.h"
 #include "TSectionDAT.h"
 #include "ProceduralShape.h"
+#include "ComplexLine.h"
 #include "ErrorMessagesLib.h"
 #include "ErrorMessage.h"
 #include "Renderer.h"
@@ -552,19 +553,102 @@ void TrackObj::rebuildGradeMarker(int direction, int transition){
         gradeMarkerMirror->deleteVBO();
 
     float border[6];
+    float centerX = 0.0f;
+    float centerY = 0.0f;
     float centerZ = 0.0f;
     if(getSimpleBorder(border))
         centerZ = (border[4] + border[5]) * 0.5f;
 
-    const float y = 0.58f;
+    float forwardX = 0.0f;
+    float forwardZ = (float)direction;
+    TDB *tdb = roadShape ? Game::roadDB : Game::trackDB;
+    TrackShape *trackShape = NULL;
+    if(tdb != NULL && tdb->tsection != NULL)
+        trackShape = tdb->tsection->shape[sectionIdx];
+    if(trackShape != NULL && trackShape->numpaths > 0){
+        int firstPath = 0;
+        int pathCount = trackShape->numpaths;
+        if(trackShape->mainroute >= 0 && trackShape->mainroute < trackShape->numpaths){
+            firstPath = trackShape->mainroute;
+            pathCount = firstPath + 1;
+        }
+
+        float centerSum[3] = { 0.0f, 0.0f, 0.0f };
+        float tangentSum[3] = { 0.0f, 0.0f, 0.0f };
+        int sampledPaths = 0;
+        for(int pathId = firstPath; pathId < pathCount; ++pathId){
+            TrackShape::SectionIdx &path = trackShape->path[pathId];
+            QVector<TSection> sections;
+            for(int sectionId = 0; sectionId < path.n; ++sectionId){
+                TSection *section = tdb->tsection->sekcja[path.sect[sectionId]];
+                if(section != NULL)
+                    sections.push_back(*section);
+            }
+            if(sections.isEmpty())
+                continue;
+
+            ComplexLine line;
+            line.init(sections);
+            if(line.length <= 0.001f)
+                continue;
+
+            const float sampleStep = qMin(0.5f, line.length * 0.1f);
+            float center[6];
+            float before[6];
+            float after[6];
+            line.getDrawPosition(center, line.length * 0.5f);
+            line.getDrawPosition(before, qMax(0.0f, line.length * 0.5f - sampleStep));
+            line.getDrawPosition(after, qMin(line.length, line.length * 0.5f + sampleStep));
+
+            float pathRotation[4];
+            float pathMatrix[16];
+            float pathPosition[3] = { -path.pos[0], path.pos[1], path.pos[2] };
+            Quat::fill(pathRotation);
+            Quat::rotateY(pathRotation, pathRotation, -path.rotDeg * M_PI / 180.0f);
+            Mat4::fromRotationTranslation(pathMatrix, pathRotation, pathPosition);
+            Vec3::transformMat4(center, center, pathMatrix);
+            Vec3::transformMat4(before, before, pathMatrix);
+            Vec3::transformMat4(after, after, pathMatrix);
+
+            centerSum[0] += center[0];
+            centerSum[1] += center[1];
+            centerSum[2] += center[2];
+            tangentSum[0] += after[0] - before[0];
+            tangentSum[1] += after[1] - before[1];
+            tangentSum[2] += after[2] - before[2];
+            sampledPaths++;
+        }
+
+        if(sampledPaths > 0){
+            centerX = centerSum[0] / sampledPaths;
+            centerY = centerSum[1] / sampledPaths;
+            centerZ = centerSum[2] / sampledPaths;
+            const float tangentLength = std::sqrt(tangentSum[0] * tangentSum[0]
+                                                 + tangentSum[2] * tangentSum[2]);
+            if(tangentLength > 0.0001f){
+                forwardX = tangentSum[0] / tangentLength * direction;
+                forwardZ = tangentSum[2] / tangentLength * direction;
+            }
+        }
+    }
+
+    const float markerY = centerY + 0.58f;
     QVector<float> points;
     QVector<float> mirrorPoints;
     // The grade artwork is square.  Keep a fixed square footprint so track
     // section length cannot stretch or squash the symbol.
     const float halfSize = 2.3f;
     const float halfWidth = halfSize;
-    const float tailZ = centerZ - direction * halfSize;
-    const float headZ = centerZ + direction * halfSize;
+    const float rightX = forwardZ;
+    const float rightZ = -forwardX;
+    const float headLeftX = centerX - rightX * halfWidth + forwardX * halfSize;
+    const float headLeftZ = centerZ - rightZ * halfWidth + forwardZ * halfSize;
+    const float tailLeftX = centerX - rightX * halfWidth - forwardX * halfSize;
+    const float tailLeftZ = centerZ - rightZ * halfWidth - forwardZ * halfSize;
+    const float tailRightX = centerX + rightX * halfWidth - forwardX * halfSize;
+    const float tailRightZ = centerZ + rightZ * halfWidth - forwardZ * halfSize;
+    const float headRightX = centerX + rightX * halfWidth + forwardX * halfSize;
+    const float headRightZ = centerZ + rightZ * halfWidth + forwardZ * halfSize;
     const float alpha = -GLUU::get()->alphaTest;
     auto addVertex = [&points, alpha](float px, float py, float pz, float u, float v){
         points << px << py << pz << u << v << alpha;
@@ -573,39 +657,34 @@ void TrackObj::rebuildGradeMarker(int direction, int transition){
         mirrorPoints << px << py << pz << u << v << alpha;
     };
 
-    addVertex(-halfWidth, y, headZ, 0.0f, 0.0f);
-    addVertex(-halfWidth, y, tailZ, 0.0f, 1.0f);
-    addVertex( halfWidth, y, tailZ, 1.0f, 1.0f);
-    addVertex(-halfWidth, y, headZ, 0.0f, 0.0f);
-    addVertex( halfWidth, y, tailZ, 1.0f, 1.0f);
-    addVertex( halfWidth, y, headZ, 1.0f, 0.0f);
+    addVertex(headLeftX, markerY, headLeftZ, 0.0f, 0.0f);
+    addVertex(tailLeftX, markerY, tailLeftZ, 0.0f, 1.0f);
+    addVertex(tailRightX, markerY, tailRightZ, 1.0f, 1.0f);
+    addVertex(headLeftX, markerY, headLeftZ, 0.0f, 0.0f);
+    addVertex(tailRightX, markerY, tailRightZ, 1.0f, 1.0f);
+    addVertex(headRightX, markerY, headRightZ, 1.0f, 0.0f);
 
     // The opposite face uses the user-supplied horizontal mirror artwork.
     // Reversing only the winding guarantees coverage; the matched mirror
     // texture keeps the G readable on POS/NEG-swapped track pieces.
-    addMirrorVertex( halfWidth, y, tailZ, 1.0f, 1.0f);
-    addMirrorVertex(-halfWidth, y, tailZ, 0.0f, 1.0f);
-    addMirrorVertex(-halfWidth, y, headZ, 0.0f, 0.0f);
-    addMirrorVertex( halfWidth, y, headZ, 1.0f, 0.0f);
-    addMirrorVertex( halfWidth, y, tailZ, 1.0f, 1.0f);
-    addMirrorVertex(-halfWidth, y, headZ, 0.0f, 0.0f);
+    addMirrorVertex(tailRightX, markerY, tailRightZ, 1.0f, 1.0f);
+    addMirrorVertex(tailLeftX, markerY, tailLeftZ, 0.0f, 1.0f);
+    addMirrorVertex(headLeftX, markerY, headLeftZ, 0.0f, 0.0f);
+    addMirrorVertex(headRightX, markerY, headRightZ, 1.0f, 0.0f);
+    addMirrorVertex(tailRightX, markerY, tailRightZ, 1.0f, 1.0f);
+    addMirrorVertex(headLeftX, markerY, headLeftZ, 0.0f, 0.0f);
 
     static QString stableTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-stable.png";
-    static QString increaseTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-increase.png";
-    static QString decreaseTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-decrease.png";
+    static QString transitionTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-increase.png";
     static QString warningTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-warning.png";
     static QString stableMirrorTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-stable-mirror.png";
-    static QString increaseMirrorTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-increase-mirror.png";
-    static QString decreaseMirrorTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-decrease-mirror.png";
+    static QString transitionMirrorTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-increase-mirror.png";
     static QString warningMirrorTexture = QCoreApplication::applicationDirPath() + "/tsre_appdata/" + Game::AppDataVersion + "/grade-warning-mirror.png";
     QString *texture = &stableTexture;
     QString *mirrorTexture = &stableMirrorTexture;
-    if(transition == TDB::GradeMarkerIncreasing){
-        texture = &increaseTexture;
-        mirrorTexture = &increaseMirrorTexture;
-    } else if(transition == TDB::GradeMarkerDecreasing){
-        texture = &decreaseTexture;
-        mirrorTexture = &decreaseMirrorTexture;
+    if(transition == TDB::GradeMarkerTransitory){
+        texture = &transitionTexture;
+        mirrorTexture = &transitionMirrorTexture;
     } else if(transition == TDB::GradeMarkerWarning){
         texture = &warningTexture;
         mirrorTexture = &warningMirrorTexture;

@@ -38,9 +38,8 @@ class TDB {
 public:
     enum GradeMarkerTransition {
         GradeMarkerStable = 0,
-        GradeMarkerIncreasing = 1,
-        GradeMarkerDecreasing = 2,
-        GradeMarkerWarning = 3
+        GradeMarkerTransitory = 1,
+        GradeMarkerWarning = 2
     };
     struct IntersectionPoint{
         float distance;

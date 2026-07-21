@@ -61,8 +61,10 @@ HIGHLIGHTS
 - Changed [track properties] grade editing to open in Percent by default with clearer unit labeling.
 - Added [track properties] [Lock Grade] so newly placed track and road pieces can inherit the selected piece's physical grade.
 - Added [track properties] a dock-friendly [Grade Helper] for controlled per-piece transitions toward a target grade, with connected-piece validation and automatic rejection of invalid transition placements.
-- Added [view] toggleable Grade Symbols with an on-screen legend for steady, increasing, decreasing, and crest-warning grade states.
-- Hardened [view] Grade Symbols cache invalidation so track-database edits refresh the overlay without repeated full-database scans for non-database pieces.
+- Added [view] toggleable Grade Symbols with an on-screen legend for orange steady grades, cyan transitions, and red crest/gully warnings.
+- Hardened [view] Grade Symbols connectivity and cache handling so both ends of every piece are evaluated across vector-node boundaries without repeated full-database scans.
+- Centered [view] Grade Symbols on the actual TSECTION path midpoint and tangent so markers follow long curves instead of the shape bounding box.
+- Added [right-click > Edit > Copy Info] to copy route, selection, tile, position, UID, object, grade, and other diagnostic details to the clipboard.
 - Refined [Control Panel] button states and added `SCOchirp.wav` feedback for successful navigation jumps and completed grade transitions.
 - Added [global] orange hover highlighting to the Route Editor's top menu dropdown rows.
 
@@ -427,16 +429,24 @@ The placement endpoint information used by this check is transient editor state 
 
    --- Grade Symbols Overlay ---
 
-The View menu and Track properties panel now expose the same global `Grade Symbols` toggle. When enabled, graded static track and road pieces receive square, direction-aware symbols above the track, and a viewport legend explains the four states:
+The View menu and Track properties panel now expose the same global `Grade Symbols` toggle. When enabled, graded static track and road pieces receive square, direction-aware symbols above the track, and a viewport legend explains the three states:
 
   - orange: steady grade
-  - cyan: grade increasing in the visible uphill direction
-  - magenta: grade decreasing in the visible uphill direction
-  - red: connected crest warning where uphill arrows converge
+  - cyan: a transition because the piece differs in grade magnitude from a connected neighbor at either end
+  - red: a direct crest or gully warning where two graded pieces meet without an intervening level section
 
-The overlay reads live TrackObj grades while using TrackDB/RoadDB connectivity to compare only genuinely connected neighboring pieces, avoiding false transitions from nearby parallel tracks. Mirrored symbol artwork keeps the marking readable from either face of reversed/POS-NEG-swapped track pieces.
+The transition rule deliberately does not classify grades as increasing or decreasing. Each non-level piece checks both connected ends, including connections that cross vector-node and junction boundaries. Any grade-magnitude mismatch is cyan regardless of database traversal, object origin, or the visible uphill direction. A direct meeting where both uphill arrows face toward the joint (crest) or away from it (gully) is red because proper construction needs a level separator. Nearby parallel track does not count as connected.
+
+Each symbol is placed at the exact distance midpoint of the ordered TSECTION path and aligned to the local path tangent. This keeps the marker centered lengthwise and on the same centerline used to draw long curves. Multi-path shapes use their declared main route when available and otherwise average valid paths. Mirrored artwork keeps the marking readable from either face of reversed/POS-NEG-swapped pieces.
 
 The overlay cache is invalidated by grade rotation and track-database refresh operations. Missing or temporarily non-database pieces safely use the steady fallback without forcing a full database rescan every rendered frame; this keeps the optional overlay practical on populated routes.
+
+
+   --- Selection Diagnostic Clipboard ---
+
+The right-click menu now includes `Edit > Copy Info` whenever an object or other editor item is selected. It creates a plain-text diagnostic block suitable for a forum post, bug report, or AI troubleshooting conversation. The common header includes the TSRE version and active route, followed by the most useful fields available for the selected type.
+
+For world objects this includes the object class and filename, UID, tile and terrain-tile name, local position, quaternion, flags, detail level, and load/modified/flipped state. Track pieces also include section index, percent grade, and elevation radians. Terrain patches, track items, activity objects, consists, paths, and groups add their own relevant identifiers, positions, names, and member details where available.
 
 
    --- Interface Feedback Refinements ---

@@ -380,6 +380,24 @@ Created source/test/reference code files
 
 Project files edited
 
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
+  - Added right-click Edit > Copy Info clipboard diagnostics for all supported selection classes.
+  - Simplified the Grade Symbols legend to steady, transition, and crest/gully warning states.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
+  - Added the Copy Info selection-diagnostics slot.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.cpp
+  - Changed grade-transition detection to evaluate both connected ends without increasing/decreasing direction classification.
+  - Traversed vector-node and junction pins so endpoint transitions are not missed.
+  - Flagged direct connected crests and gullies as warnings when no level section separates them.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.h
+  - Reduced grade-marker state to stable, transitory, and warning.
+
+- TSRE5-Trainsim.Com-Fork-master/TrackObj.cpp
+  - Positioned Grade Symbols at the exact TSECTION path midpoint and aligned them to the local path tangent on curves.
+
 - TSRE5-Trainsim.Com-Fork-master/nbproject/Makefile-Release_x64.mk
   - Updated by project/build configuration work as needed for the current MinGW/Qt build.
 

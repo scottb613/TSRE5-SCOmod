@@ -60,8 +60,10 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Changed `track properties` grade editing to open in Percent by default with clearer unit labeling.
 - Added `track properties` `Lock Grade` so newly placed track and road pieces can inherit the selected piece's physical grade.
 - Added `track properties` a dock-friendly `Grade Helper` for controlled per-piece transitions toward a target grade, with connected-piece validation and automatic rejection of invalid transition placements.
-- Added `view` toggleable Grade Symbols with an on-screen legend for steady, increasing, decreasing, and crest-warning grade states.
-- Hardened `view` Grade Symbols cache invalidation so track-database edits refresh the overlay without repeated full-database scans for non-database pieces.
+- Added `view` toggleable Grade Symbols for orange steady grades, cyan transitions at either connected end, and red direct crest/gully warnings.
+- Hardened `view` Grade Symbols connectivity and cache handling across vector-node and junction boundaries.
+- Centered `view` Grade Symbols on the actual TSECTION path midpoint and tangent so markers follow long curves.
+- Added `right-click > Edit > Copy Info` selection diagnostics for clipboard-ready route, object, tile, position, UID, grade, and related details.
 - Refined `Control Panel` button states and added `SCOchirp.wav` feedback for successful navigation jumps and completed grade transitions.
 - Added `global` orange hover highlighting to the Route Editor's top menu dropdown rows.
 

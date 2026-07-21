@@ -19,6 +19,8 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QApplication>
+#include <QClipboard>
 #include <math.h>
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
@@ -50,6 +52,8 @@
 #include "Environment.h"
 #include "Terrain.h"
 #include "ActivityObject.h"
+#include "Consist.h"
+#include "Path.h"
 #include "GuiFunct.h"
 #include "GuiGlCompass.h"
 #include "ActLib.h"
@@ -111,9 +115,8 @@ m_zRot(0) {
         legendLayout->addLayout(row);
     };
     addLegendRow("#f28c18", "Steady Grade");
-    addLegendRow("#24c7e8", "Grade Increasing");
-    addLegendRow("#d85ad8", "Grade Decreasing");
-    addLegendRow("#f04444", "Crest Warning");
+    addLegendRow("#24c7e8", "Grade Transition");
+    addLegendRow("#f04444", "Crest/Gully Warning");
     gradeLegend->adjustSize();
     gradeLegend->setVisible(Game::gradeOverlayEnabled);
     updateGradeLegendPosition();
@@ -2266,6 +2269,187 @@ void RouteEditorGLWidget::editCopy() {
     }
 }
 
+void RouteEditorGLWidget::copySelectionInfo() {
+    if (selectedObj == NULL)
+        return;
+
+    const auto number = [](double value) {
+        return QString::number(value, 'f', 6);
+    };
+    const auto yesNo = [](bool value) {
+        return value ? QString("Yes") : QString("No");
+    };
+    const auto worldTypeName = [](WorldObj::TypeID typeId) {
+        switch (typeId) {
+        case WorldObj::sstatic:       return QString("Static Object");
+        case WorldObj::signal:        return QString("Signal");
+        case WorldObj::speedpost:     return QString("Speedpost");
+        case WorldObj::trackobj:      return QString("Track Object");
+        case WorldObj::gantry:        return QString("Gantry");
+        case WorldObj::collideobject: return QString("Collision Object");
+        case WorldObj::dyntrack:      return QString("Dynamic Track");
+        case WorldObj::forest:        return QString("Forest");
+        case WorldObj::transfer:      return QString("Transfer");
+        case WorldObj::platform:      return QString("Platform");
+        case WorldObj::siding:        return QString("Siding");
+        case WorldObj::carspawner:    return QString("Car Spawner");
+        case WorldObj::levelcr:       return QString("Level Crossing");
+        case WorldObj::pickup:        return QString("Pickup");
+        case WorldObj::hazard:        return QString("Hazard");
+        case WorldObj::soundsource:   return QString("Sound Source");
+        case WorldObj::soundregion:   return QString("Sound Region");
+        case WorldObj::groupobject:   return QString("Object Group");
+        case WorldObj::ruler:         return QString("Ruler");
+        case WorldObj::polyforest:    return QString("Polygon Forest");
+        default:                      return QString("World Object");
+        }
+    };
+
+    QStringList info;
+    info << "TSRE Selection Info";
+    info << "App Version: " + Game::AppVersion;
+    info << "Route: " + (Game::route.isEmpty() ? QString("(unknown)") : Game::route);
+    if (!Game::routeName.isEmpty() && Game::routeName != Game::route)
+        info << "Route Name: " + Game::routeName;
+
+    if (selectedObj->typeObj == GameObj::worldobj) {
+        WorldObj *obj = static_cast<WorldObj*>(selectedObj);
+        float *position = obj->getPosition();
+        float *quaternion = obj->getQuatRotation();
+        if (position == NULL)
+            position = obj->position;
+        if (quaternion == NULL)
+            quaternion = obj->qDirection;
+
+        info << "Selection Type: " + worldTypeName(obj->typeID);
+        info << "Object Type: " + (obj->type.isEmpty() ? QString("(unknown)") : obj->type);
+        if (!obj->fileName.isEmpty())
+            info << "Object Name: " + obj->fileName;
+        info << "UID: " + QString::number(obj->UiD);
+        info << QString("Tile X/Y: %1, %2").arg(obj->x).arg(-obj->y);
+        info << "Terrain Tile: " + Terrain::getTileName(obj->x, -obj->y);
+        info << QString("Position X/Y/Z: %1, %2, %3")
+                    .arg(number(position[0]), number(position[1]), number(-position[2]));
+        info << QString("Quaternion X/Y/Z/W: %1, %2, %3, %4")
+                    .arg(number(quaternion[0]), number(quaternion[1]),
+                         number(-quaternion[2]), number(quaternion[3]));
+
+        if (obj->typeID == WorldObj::trackobj || obj->typeID == WorldObj::dyntrack) {
+            info << "Track Section Index: " + QString::number(obj->sectionIdx);
+            info << "Grade: " + number(tan(obj->getElevation()) * 100.0) + "%";
+            info << "Elevation Radians: " + number(obj->getElevation());
+        }
+
+        info << "Static Flags: 0x" + QString::number(obj->staticFlags, 16).toUpper();
+        info << "Detail Level: " + QString::number(obj->getCurrentDetailLevel());
+        info << "Loaded: " + yesNo(obj->loaded);
+        info << "Modified: " + yesNo(obj->modified);
+        info << "Flipped: " + yesNo(obj->flipped);
+
+        if (obj->typeID == WorldObj::groupobject) {
+            GroupObj *group = static_cast<GroupObj*>(obj);
+            info << "Group Object Count: " + QString::number(group->objects.size());
+            for (int i = 0; i < group->objects.size(); ++i) {
+                WorldObj *member = group->objects[i];
+                if (member == NULL)
+                    continue;
+                info << QString("Group Item %1: UID %2 | %3 | %4 | Tile %5,%6 | Pos %7,%8,%9")
+                            .arg(i + 1).arg(member->UiD).arg(worldTypeName(member->typeID))
+                            .arg(member->fileName.isEmpty() ? member->type : member->fileName)
+                            .arg(member->x).arg(-member->y)
+                            .arg(number(member->position[0]), number(member->position[1]),
+                                 number(-member->position[2]));
+            }
+        }
+    } else if (selectedObj->typeObj == GameObj::terrainobj) {
+        Terrain *terrain = static_cast<Terrain*>(selectedObj);
+        info << "Selection Type: Terrain";
+        info << QString("Tile X/Y: %1, %2").arg(terrain->mojex).arg(-terrain->mojez);
+        info << "Terrain Tile: " + terrain->getTileName();
+        info << QString("Pointer Position X/Y/Z: %1, %2, %3")
+                    .arg(number(aktPointerPos[0]), number(aktPointerPos[1]), number(-aktPointerPos[2]));
+        QString texture = terrain->getPatchMainTextureName();
+        if (!texture.isEmpty())
+            info << "Selected Patch Texture: " + texture;
+        info << "Selected Texture Path ID: " + QString::number(terrain->getSelectedPathId());
+        info << "Selected Shader ID: " + QString::number(terrain->getSelectedShaderId());
+        info << "Modified: " + yesNo(terrain->isModified());
+    } else if (selectedObj->typeObj == GameObj::tritemobj) {
+        TRitem *item = static_cast<TRitem*>(selectedObj);
+        info << "Selection Type: Track Item";
+        info << "Item Type: " + item->type;
+        info << "Item Name: " + item->getTrackItemName();
+        info << "Track Item ID: " + QString::number(item->trItemId);
+        info << "Database: " + (item->tdbId == 0 ? QString("Track (TDB)")
+                                                   : item->tdbId == 1 ? QString("Road (RDB)")
+                                                                      : QString::number(item->tdbId));
+        info << "Track Position: " + number(item->getTrackPosition());
+        if (item->trItemRData != NULL) {
+            info << QString("Tile X/Y: %1, %2")
+                        .arg(number(item->trItemRData[3]), number(item->trItemRData[4]));
+            info << "Terrain Tile: " + Terrain::getTileName((int)item->trItemRData[3],
+                                                             (int)item->trItemRData[4]);
+            info << QString("Position X/Y/Z: %1, %2, %3")
+                        .arg(number(item->trItemRData[0]), number(item->trItemRData[1]),
+                             number(item->trItemRData[2]));
+        } else if (item->trItemPData != NULL) {
+            info << QString("Tile X/Y: %1, %2")
+                        .arg(number(item->trItemPData[2]), number(item->trItemPData[3]));
+            info << QString("Position X/Z: %1, %2")
+                        .arg(number(item->trItemPData[0]), number(item->trItemPData[1]));
+        }
+    } else if (selectedObj->typeObj == GameObj::activityobj) {
+        ActivityObject *activity = static_cast<ActivityObject*>(selectedObj);
+        info << "Selection Type: Activity Object";
+        info << "Activity Object Type: " + activity->objectType;
+        info << "Activity Object ID: " + QString::number(activity->id);
+        QString parent = activity->getParentName();
+        if (!parent.isEmpty())
+            info << "Activity: " + parent;
+        info << "Selected Element ID: " + QString::number(activity->getSelectedElementId());
+        info << "Direction: " + number(activity->direction);
+        float pos[5];
+        if (activity->getElementPosition(activity->getSelectedElementId(), pos)) {
+            info << QString("Tile X/Y: %1, %2").arg(number(pos[0]), number(pos[1]));
+            info << QString("Position X/Y/Z: %1, %2, %3")
+                        .arg(number(pos[2]), number(pos[3]), number(-pos[4]));
+        }
+    } else if (selectedObj->typeObj == GameObj::consistobj) {
+        Consist *consist = static_cast<Consist*>(selectedObj);
+        info << "Selection Type: Consist";
+        info << "Consist Name: " + consist->name;
+        if (!consist->displayName.isEmpty())
+            info << "Display Name: " + consist->displayName;
+        info << "Serial: " + QString::number(consist->serial);
+        info << "Selected Vehicle Index: " + QString::number(consist->selectedIdx);
+        info << "Vehicle Count: " + QString::number(consist->engItems.size());
+        info << "Length: " + number(consist->conLength);
+        info << "Mass: " + number(consist->mass);
+        info << "On Track: " + yesNo(consist->isOnTrack);
+        float pos[5];
+        if (consist->selectedIdx >= 0 && consist->getWagonWorldPosition(consist->selectedIdx, pos)) {
+            info << QString("Tile X/Y: %1, %2").arg(number(pos[0]), number(pos[1]));
+            info << QString("Position X/Y/Z: %1, %2, %3")
+                        .arg(number(pos[2]), number(pos[3]), number(-pos[4]));
+        }
+    } else if (selectedObj->typeObj == GameObj::activitypath) {
+        Path *path = static_cast<Path*>(selectedObj);
+        info << "Selection Type: Activity Path";
+        info << "Path Name: " + path->displayName;
+        info << "Path File: " + path->trPathName;
+        info << "Path Start: " + path->trPathStart;
+        info << "Path End: " + path->trPathEnd;
+        info << "Path ID: " + path->pathId;
+    } else {
+        info << "Selection Type: " + selectedObj->getName();
+        info << "Selection Class ID: " + QString::number((int)selectedObj->typeObj);
+    }
+
+    QApplication::clipboard()->setText(info.join('\n'));
+    if (Game::debugOutput)
+        qDebug().noquote() << info.join('\n');
+}
+
 void RouteEditorGLWidget::editPaste() {
     if(Game::debugOutput) qDebug() << "EditPaste Start";
     Undo::StateBeginIfNotExist();
@@ -2921,6 +3105,10 @@ void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
         defaultMenuActions["copy"] = new QAction(tr("&Copy"), this);
         QObject::connect(defaultMenuActions["copy"], SIGNAL(triggered()), this, SLOT(editCopy()));
     }
+    if(defaultMenuActions["copyInfo"] == NULL){
+        defaultMenuActions["copyInfo"] = new QAction(tr("Copy &Info"), this);
+        QObject::connect(defaultMenuActions["copyInfo"], SIGNAL(triggered()), this, SLOT(copySelectionInfo()));
+    }
     if(defaultMenuActions["paste"] == NULL){
         defaultMenuActions["paste"] = new QAction(tr("&Paste"), this);
         QObject::connect(defaultMenuActions["paste"], SIGNAL(triggered()), this, SLOT(editPaste()));
@@ -3266,6 +3454,8 @@ void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
     menu.addSection("Edit");
     menu.addAction(defaultMenuActions["undo"]);
     menu.addAction(defaultMenuActions["copy"]);
+    defaultMenuActions["copyInfo"]->setEnabled(selectedObj != NULL);
+    menu.addAction(defaultMenuActions["copyInfo"]);
     menu.addAction(defaultMenuActions["paste"]);
     menu.addSeparator();
     menu.addAction(defaultMenuActions["select"]);
