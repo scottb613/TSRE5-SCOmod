@@ -1971,8 +1971,8 @@ bool TDB::ifTrackExist(int x, int y, int UiD){
 }
 
 namespace {
-QString gradeMarkerKey(int x, int y, int uid){
-    return QString::number(x) + ':' + QString::number(y) + ':' + QString::number(uid);
+GradeMarkerKey gradeMarkerKey(int x, int y, int uid){
+    return GradeMarkerKey{x, y, uid};
 }
 
 struct GradeMarkerSample {
@@ -1992,7 +1992,7 @@ void TDB::rebuildGradeMarkerCache(){
 
     // TrackDB/RoadDB supplies connectivity.  Live TrackObj data supplies the
     // magnitude and the same physical uphill direction shown by the marker.
-    QHash<QString, GradeMarkerSample> grades;
+    QHash<GradeMarkerKey, GradeMarkerSample> grades;
     for(int nodeId = 1; nodeId <= iTRnodes; ++nodeId){
         TRnode *node = trackNodes[nodeId];
         if(node == NULL || node->typ != 1)
@@ -2040,15 +2040,15 @@ void TDB::rebuildGradeMarkerCache(){
             continue;
         for(int sectionId = 0; sectionId < node->iTrv; ++sectionId){
             TRnode::TRSect &section = node->trVectorSection[sectionId];
-            const QString key = gradeMarkerKey((int)section.param[2], -(int)section.param[3], (int)section.param[4]);
+            const GradeMarkerKey key = gradeMarkerKey((int)section.param[2], -(int)section.param[3], (int)section.param[4]);
             if(!grades.contains(key))
                 continue;
 
             const GradeMarkerSample current = grades.value(key);
             int transition = GradeMarkerStable;
             if(current.magnitude > flatTolerance){
-                QVector<QString> neighborKeys;
-                auto appendNeighborKey = [&neighborKeys, &key](const QString &neighborKey){
+                QVector<GradeMarkerKey> neighborKeys;
+                auto appendNeighborKey = [&neighborKeys, &key](const GradeMarkerKey &neighborKey){
                     if(neighborKey != key && !neighborKeys.contains(neighborKey))
                         neighborKeys.push_back(neighborKey);
                 };
@@ -2066,7 +2066,7 @@ void TDB::rebuildGradeMarkerCache(){
                     }
                     while(neighborId >= 0 && neighborId < neighborNode->iTrv){
                         TRnode::TRSect &neighborSection = neighborNode->trVectorSection[neighborId];
-                        const QString neighborKey = gradeMarkerKey((int)neighborSection.param[2], -(int)neighborSection.param[3], (int)neighborSection.param[4]);
+                        const GradeMarkerKey neighborKey = gradeMarkerKey((int)neighborSection.param[2], -(int)neighborSection.param[3], (int)neighborSection.param[4]);
                         if(neighborKey != key){
                             appendNeighborKey(neighborKey);
                             break;
@@ -2099,7 +2099,7 @@ void TDB::rebuildGradeMarkerCache(){
                     bool foundInsideNode = false;
                     while(neighborId >= 0 && neighborId < node->iTrv){
                         TRnode::TRSect &neighborSection = node->trVectorSection[neighborId];
-                        const QString neighborKey = gradeMarkerKey((int)neighborSection.param[2], -(int)neighborSection.param[3], (int)neighborSection.param[4]);
+                        const GradeMarkerKey neighborKey = gradeMarkerKey((int)neighborSection.param[2], -(int)neighborSection.param[3], (int)neighborSection.param[4]);
                         if(neighborKey != key){
                             appendNeighborKey(neighborKey);
                             foundInsideNode = true;
@@ -2116,7 +2116,7 @@ void TDB::rebuildGradeMarkerCache(){
                 // one another form a crest; arrows pointing away from one
                 // another form a gully.  Database traversal signs and nearby
                 // parallel tracks do not count.
-                for(const QString &neighborKey : neighborKeys){
+                for(const GradeMarkerKey &neighborKey : neighborKeys){
                     const GradeMarkerSample neighbor = grades.value(neighborKey);
                     if(current.magnitude <= transitionTolerance || neighbor.magnitude <= transitionTolerance)
                         continue;
@@ -2140,7 +2140,7 @@ void TDB::rebuildGradeMarkerCache(){
                 // no increasing/decreasing classification: endpoint direction,
                 // object origin, and database traversal cannot change the color.
                 if(transition != GradeMarkerWarning){
-                    for(const QString &neighborKey : neighborKeys){
+                    for(const GradeMarkerKey &neighborKey : neighborKeys){
                         const GradeMarkerSample neighbor = grades.value(neighborKey);
                         if(qAbs(neighbor.magnitude - current.magnitude) > transitionTolerance){
                             transition = GradeMarkerTransitory;
@@ -2158,15 +2158,14 @@ void TDB::rebuildGradeMarkerCache(){
 }
 
 int TDB::getGradeMarkerTransition(int x, int y, int UiD){
-    const QString key = gradeMarkerKey(x, y, UiD);
-    // World tiles are loaded incrementally.  With Grade Symbols enabled by
-    // default, the first cache can be built before every visible TrackObj is
-    // available.  Rebuild when a newly loaded piece is missing so it and its
-    // already-cached neighbors receive their cyan/red transition state rather
-    // than permanently falling back to orange.
-    if(gradeMarkerCacheRevision != Game::gradeOverlayRevision
-            || !gradeMarkerTransitionCache.contains(key))
+    const GradeMarkerKey key = gradeMarkerKey(x, y, UiD);
+    // Cache rebuilds are driven by TDB edits and completed world-tile loads.
+    // Never launch a complete database traversal just because one object is
+    // absent while a frame is being rendered.
+    if(gradeMarkerCacheRevision != Game::gradeOverlayRevision)
         rebuildGradeMarkerCache();
+    if(!gradeMarkerTransitionCache.contains(key))
+        gradeMarkerTransitionCache.insert(key, GradeMarkerStable);
     return gradeMarkerTransitionCache.value(key, GradeMarkerStable);
 }
 

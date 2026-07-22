@@ -724,7 +724,8 @@ void RouteEditorGLWidget::paintGL2() {
     handleSelection();
 
     // Set Info
-    if (this->isActiveWindow()) {
+    if (this->isActiveWindow() && timeNow - lastDisplayInfoUpdate >= 100) {
+        lastDisplayInfoUpdate = timeNow;
         emit this->naviInfo(route->getTileObjCount((int) camera->pozT[0], (int) camera->pozT[1]), route->getTileHiddenObjCount((int) camera->pozT[0], (int) camera->pozT[1]));
         emit this->posInfo(camera->getCurrentPos());
         emit this->pointerInfo(aktPointerPos);
@@ -1001,21 +1002,42 @@ void RouteEditorGLWidget::drawPointer() {
     int x = mousex;
     int y = mousey;
 
-    static unsigned long long int oldTime = 0;
-    unsigned long long int newTime = QDateTime::currentMSecsSinceEpoch();
     static float winZ[4];
-    int viewport[4];
+    int viewport[4] = {0, 0,
+        (int)(this->width() * Game::PixelRatio),
+        (int)(this->height() * Game::PixelRatio)};
     //float wcoord[4];
 
 
 
-    glGetIntegerv(GL_VIEWPORT, viewport);
-    //glGetFloatv(GL_MODELVIEW_MATRIX, mvmatrix);
-    //glGetFloatv(GL_PROJECTION_MATRIX, projmatrix);
     int realy = viewport[3] - (int) y - 1;
-    if(newTime - oldTime > 50){
+    float *cameraPos = camera->getPos();
+    float *cameraTarget = camera->getTarget();
+    const bool pointerInputChanged = !pointerDepthValid
+            || pointerDepthMouseX != x || pointerDepthMouseY != y
+            || pointerDepthTileX != (int)camera->pozT[0]
+            || pointerDepthTileZ != (int)camera->pozT[1]
+            || pointerDepthCameraPos[0] != cameraPos[0]
+            || pointerDepthCameraPos[1] != cameraPos[1]
+            || pointerDepthCameraPos[2] != cameraPos[2]
+            || pointerDepthCameraTarget[0] != cameraTarget[0]
+            || pointerDepthCameraTarget[1] != cameraTarget[1]
+            || pointerDepthCameraTarget[2] != cameraTarget[2];
+    const unsigned long long int newTime = QDateTime::currentMSecsSinceEpoch();
+    if(pointerInputChanged && newTime - lastPointerDepthRead >= 50){
         glReadPixels(x, realy, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winZ);
-        oldTime = newTime;
+        lastPointerDepthRead = newTime;
+        pointerDepthMouseX = x;
+        pointerDepthMouseY = y;
+        pointerDepthTileX = (int)camera->pozT[0];
+        pointerDepthTileZ = (int)camera->pozT[1];
+        pointerDepthCameraPos[0] = cameraPos[0];
+        pointerDepthCameraPos[1] = cameraPos[1];
+        pointerDepthCameraPos[2] = cameraPos[2];
+        pointerDepthCameraTarget[0] = cameraTarget[0];
+        pointerDepthCameraTarget[1] = cameraTarget[1];
+        pointerDepthCameraTarget[2] = cameraTarget[2];
+        pointerDepthValid = true;
     }
     GLH::glhUnProjectf((float) x, (float) realy, winZ[0], //
             gluu->mvMatrix,

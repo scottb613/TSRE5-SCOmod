@@ -13,66 +13,30 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 
 ## Highlights
 
-- Added `code` build fixes for current MSYS2/MinGW tooling.
-- Improved `F` terrain conforming for track cuts and embankments.
-- Adjusted `F` track-width behavior so the 1/2/3 settings are more practical.
-- Added `Shift+F` terrain smoothing pass for selected track/ruler objects.
-- Added `Ctrl+F` selected-object tile-level terrain conforming for track/road objects.
-- Added `Alt+A` selected terrain tile patch selection for selecting all 256 terrain patches on the current tile.
-- Added `F2` `Conform DB` height brush mode for grade-following spot terrain cleanup along track and road databases.
-- Added `autopaint` tile-level tools for track, roads, and water.
-- Added `autopaint` water shoreline/water-edge terrain painting based on terrain/water contour detection.
-- Added `F2` TERRTEX route and tile reset tools for returning painted terrain tiles to `terrain.ace`.
-- Added `F2` route-local terrain paint presets for texture, brush size, intensity, brush shape, and rotation.
-- Added `F2` 0-360 degree terrain texture rotation control for seamless directional textures.
-- Added `F2` seasonal selector for Summer, Spring, Autumn, Winter, and Night.
-- Added `global` seasonal fallback refresh for terrain, route objects, transfers, dynamic track, and forest/polyforest geometry.
-- Fixed `global` transfer object reload behavior when switching from Winter back to Summer.
-- Added `F2` `Mirror Season` button for paired default/snow TERRTEX painting with matching paired textures required.
-- Disabled `global` the old settings-file `season` / `seasonalEditing` controls so the `F2` selector is the active seasonal control.
-- Protected editable TERRTEX 1024x1024 files from accidental downsampling while painting.
-- Added `view` `Forest Regions Toggle` stutter mitigation and a View menu toggle for Forest Regions.
-- Fixed `global` texture cache invalidation bug that caused severe lag and wrong texture reuse on large populated routes.
-- Added `load` single-instance protection.
-- Fixed `load` route-selection table refresh when switching MSTS root folders.
-- Added `windows` executable icon and `AddShortcutDesktop.cmd` helper.
-- Added `restore last session` on the `load` screen to reopen the last route, camera view, and editor window layout.
-- Added `load` high-resolution branded splash artwork, scaled loader/about display, and a persistent shuffled image cycle synchronized across all splash-bearing windows in each application session.
-- Refined `load` Route Loader action buttons with consistent green, orange, and red hover/pressed feedback.
-- Added `Route > Open Route Folder` to open the active route directly in Windows Explorer.
-- Consolidated the former Status and Navi windows into one styled `Control Panel`, toggled with `F7`, with delayed edge snapping.
-- Added toggleable `Move: Fast` and `Move: Slow` Control Panel locks with sound, yellow active state, and automatic viewport focus return.
-- Improved `object Panel` searching with `ALL` category defaults, enforced mutually exclusive Tracks/Roads/Other category filters for searches, and a `Reset` search button.
-- Improved `object Panel` Scale Rail grouping so family/type categories contain the individual lengths, radii, and variants.
-- Refined `F1-F4 object/property/tool panels` with consistent dark controls, bold orange Title Case headings, inset category separators, orange checked states, clearer object names, standardized button feedback, and a cleaner terrain-texture preview/thumbnail bank.
-- Added `global` `uiScale` support for larger editor fonts and proportionally wider panels.
-- Added `global` sound feedback with standardized `SCOclick.wav`, `SCObuzz.wav`, and `SCOpress.wav` files.
-- Added `Control Panel` `Place Guard` validation to prevent spammed objects with automatic undo, and respective feedback.
-- Updated `global` title bar to identify the build as `TSRE GenX`.
-- Reworked `F12` Settings Editor to save the active settings.txt with timestamp backups, organized tabs, dark striped rows, key assignments, and full-sentence tooltips.
-- Fixed `F3` OSM Vector Map HTTPS loading by packaging the current OpenSSL 3 runtime DLLs.
-- Hardened `F3` OSM Vector Map loading so failed network replies do not crash the editor.
-- Set `F3` downloaded map imagery resolution to 4096 for clearer per-tile map output.
-- Added `dynamic track` GokuMK's Classic Flex foundation for the familiar Straight-Curve-Straight connection workflow.
-- Added `dynamic track` NextGen Flex as a separate Straight-Curve-Straight-Curve-Straight mode for compound and full S-curve connections, with Classic/NextGen selection in the Dynamic Track panel.
-- Improved `dynamic track` editing reliability with rebuilt track-database geometry after Flex, synchronized elevation data, length/curve readouts, clearer section names, consistent Dynamic Track naming, and refined success/error feedback.
-- Improved `load` MSTS/ORTS root selection with an editable recent-root field, Browse button, path validation, inline error guidance, and duplicate-safe recent-root ordering.
-- Expanded `object Panel` Recent Items to 30 entries in a scrollable 15-row view and added `Clear Recent`.
-- Changed `track properties` grade editing to open in Percent by default with clearer unit labeling.
-- Added `track properties` `Lock Grade` so newly placed track and road pieces can inherit the selected piece's physical grade.
-- Added `track properties` a dock-friendly `Grade Helper` for controlled per-piece transitions toward a target grade, with connected-piece validation and automatic rejection of invalid transition placements.
-- Added `view` Grade Symbols, enabled by default from the View menu, for orange steady grades, cyan transitions at either connected end, and red direct crest/gully warnings.
-- Hardened `view` Grade Symbols connectivity and incremental world-tile cache handling across vector-node and junction boundaries.
-- Centered `view` Grade Symbols on the actual TSECTION path midpoint and tangent so markers follow long curves.
-- Extended `view` Grade Symbols to Dynamic Track using the same direction, transition, and warning classifications.
-- Replaced View > Unselect All with `Toggle All`, which temporarily hides View overlays and restores the user's prior selections while leaving Compass unchanged.
-- Refined `track properties` and Grade Helper with unit-aware values and symbols, consistent required-input borders, visible spin controls, and removal of redundant overlay controls and the introductory legend.
-- Standardized editable-field colors, fonts, borders, spin controls, and vertical spacing across editor side panels and popups while preserving the Control Panel's established appearance.
-- Changed Control Panel `Jump` feedback to play the normal press immediately followed by the success chirp after one second.
-- Repaired `marker flags` label height initialization and replaced fragile single poles with tall, color-coded four-line marker clusters keyed to the three MKR marker types.
-- Added `right-click > Edit > Copy Info` selection diagnostics for clipboard-ready route, object, tile, position, UID, grade, and related details.
-- Refined `Control Panel` button states and added `SCOchirp.wav` feedback for successful navigation jumps and completed grade transitions.
-- Added `global` orange hover highlighting to the Route Editor's top menu dropdown rows.
+- Updated the codebase to build with current MSYS2/MinGW tooling.
+- Expanded terrain conforming with improved cuts and embankments, selected-object tile conforming, grade-following brush cleanup, and non-destructive smoothing.
+- Added complete-tile terrain selection plus track, road, and shoreline-aware water autopaint tools.
+- Added route and tile TERRTEX reset tools, route-local paint presets, and full directional texture rotation.
+- Added an editor-controlled seasonal texture workflow with default/snow mirror painting, per-file seasonal fallback, and protection against accidental texture downsampling.
+- Reduced populated-route stutter through forest-generation controls, a Forest Regions view toggle, and safer texture-cache invalidation.
+- Reduced route-view overhead through event-driven Grade Symbol cache rebuilds, conditional pointer depth sampling, and bounded Control Panel updates.
+- Refined route-preview lighting with warmer sunlight and cooler ambient shading while preserving MSTS textures and editor-overlay colors.
+- Improved startup reliability with single-instance protection, validated recent route roots, cleaner route selection, and full last-session restoration.
+- Added runtime-discovered splash artwork with a persistent shuffled cycle shared by all splash-bearing windows during each application session.
+- Added Windows and editor workflow conveniences, including the GenX executable icon, desktop-shortcut helper, and direct Route Folder access.
+- Consolidated Status and navigation functions into a styled, scalable Control Panel with movement locks, state controls, navigation tools, and delayed edge snapping.
+- Added Place Guard validation with automatic undo for dangerous or invalid object placements.
+- Improved the Object Panel with category-aware search, cleaner Scale Rail grouping, a larger bounded Recent Items history, and reset controls.
+- Reworked the editor GUI into a consistent scalable visual system across tool, property, object, settings, and startup panels.
+- Reorganized the F12 Settings Editor with direct saves, timestamped backups, practical categories, tooltips, and an integrated key-assignment reference.
+- Added a guarded Save, Restart and Restore workflow and optional UI sound feedback across editor controls and menu selections.
+- Repaired and hardened F3 OSM Vector Map loading while increasing generated map-image resolution.
+- Preserved the existing Classic Dynamic Track Flex workflow, added a Classic/NextGen mode choice, and adapted GokuMK's code as the foundation for NextGen compound and full S-curve connections.
+- Improved Dynamic Track editing reliability with database rebuilding, synchronized elevation data, clearer section information, and consistent naming.
+- Added grade-unit improvements, Lock Grade, and a dock-friendly Grade Helper for validated per-piece vertical transitions.
+- Added connectivity-aware Grade Symbols for static and Dynamic Track, including transition and direct crest/gully warnings.
+- Added reversible View overlay toggling and improved marker visibility for route-editing reference layers.
+- Added Edit > Copy Info selection diagnostics for clipboard-ready troubleshooting and reporting.
 
 ## Downloads
 

@@ -113,6 +113,8 @@ RouteEditorWindow::RouteEditorWindow() {
     aboutWindow = new AboutWindow(this);
     statusWindow = new StatusWindow(this);
     settingsDialog = new SettingsDialog(this);
+    QObject::connect(settingsDialog, SIGNAL(restartAndRestoreRequested()),
+                     this, SLOT(restartAndRestore()));
     
     
     errorMessagesWindow = ErrorMessagesLib::GetWindow(this);
@@ -865,8 +867,30 @@ void RouteEditorWindow::reloadMkr(){
 void RouteEditorWindow::reloadSettings(){
     /// emit signal to GLW which fires off Route->something
     Game::reload = true;
-    Game::load();    
+    Game::load();
+    settingsDialog->loadSettings();
     
+}
+
+void RouteEditorWindow::restartAndRestore(){
+    QVector<QString> unsavedItems;
+    glWidget->getUnsavedInfo(unsavedItems);
+    if(!unsavedItems.isEmpty()){
+        QStringList pendingItems;
+        for(const QString &item : unsavedItems)
+            pendingItems.append(item);
+        QMessageBox::warning(this, tr("Restart and Restore"),
+                             tr("TSRE was not restarted because route changes are still pending.\n\n"
+                                "Save the route changes first, then try Restart and Restore again.\n\n%1")
+                             .arg(pendingItems.join("\n")));
+        return;
+    }
+
+    if(!settingsDialog->save("settings.txt"))
+        return;
+
+    saveLastSession();
+    qApp->exit(Game::RestartAndRestoreExitCode);
 }
 
 

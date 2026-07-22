@@ -123,10 +123,16 @@ void main() {
             visibility -= shadowsEnabled2*t*shadowIntensity*(1.0-texture( shadow1, vec3(shadowPos2.xy + poissonDisk[14]/shadow1Res, (shadowPos2.z-bias)) ));
             visibility -= shadowsEnabled2*t*shadowIntensity*(1.0-texture( shadow1, vec3(shadowPos2.xy + poissonDisk[15]/shadow1Res, (shadowPos2.z-bias)) ));
             
-            // calculate light color
-            vec3 color = diffuseColor.xyz;
-            color *= clamp(visibility, 0.0, 1.0);
-            color += ambientColor.xyz;
+            // Warm directional sunlight and cool sky / warm ground ambient
+            // give route geometry more depth than the former flat grey light.
+            // Objects that explicitly disable normals remain color-neutral.
+            float skyAmount = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
+            vec3 ambientTint = mix(vec3(0.86, 0.78, 0.68),
+                                   vec3(0.75, 0.84, 1.00), skyAmount);
+            vec3 sunlightTint = vec3(1.00, 0.94, 0.84);
+            vec3 litColor = ambientColor.xyz * ambientTint
+                          + diffuseColor.xyz * sunlightTint * clamp(visibility, 0.0, 1.0);
+            vec3 color = mix(vec3(1.0), litColor, enableNormals);
             gl_FragColor.xyz *= color*colorBrightness;
 
             gl_FragColor = mix(gl_FragColor, skyColor, fogFactor);

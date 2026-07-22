@@ -93,6 +93,8 @@ private:
     QString statG;
     QString statY;
     QString statS;
+    QString statReadout;
+    QString statReadoutY;
     QString statR;
     QString lastGuardStatus = "Place Guard: ON";
     bool snapping = false;
@@ -115,9 +117,14 @@ private:
     QLabel tileInfo;
     int lastTX = 0;
     int lastTZ = 0;
-    int lastX = 0;
-    int lastY = 0;
-    int lastZ = 0;
+    float lastX = 0;
+    float lastY = 0;
+    float lastZ = 0;
+    float lastPX = 0;
+    float lastPY = 0;
+    float lastPZ = 0;
+    bool pointerInfoValid = false;
+    bool posInfoValid = false;
     int objCount = 0;
     int objHidden = 0;
     IghCoordinate* igh = NULL;

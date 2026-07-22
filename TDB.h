@@ -34,6 +34,26 @@ class GLUU;
 class FileBuffer;
 class SpeedPostDAT;
 
+struct GradeMarkerKey {
+    int x;
+    int y;
+    int uid;
+
+    bool operator==(const GradeMarkerKey &other) const {
+        return x == other.x && y == other.y && uid == other.uid;
+    }
+
+    bool operator!=(const GradeMarkerKey &other) const {
+        return !(*this == other);
+    }
+};
+
+inline uint qHash(const GradeMarkerKey &key, uint seed = 0) {
+    seed = qHash(key.x, seed);
+    seed = qHash(key.y, seed);
+    return qHash(key.uid, seed);
+}
+
 class TDB {
 public:
     enum GradeMarkerTransition {
@@ -186,7 +206,7 @@ protected:
     bool isInitTrItemsDraw = false;
     bool road = false;
     int tdbId = 0;
-    QHash<QString, int> gradeMarkerTransitionCache;
+    QHash<GradeMarkerKey, int> gradeMarkerTransitionCache;
     unsigned int gradeMarkerCacheRevision = 0;
     void rebuildGradeMarkerCache();
     ErrorMessage::SourceType tdbName = ErrorMessage::Source_TDB;

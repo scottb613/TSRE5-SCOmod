@@ -79,6 +79,7 @@ Tile::Tile(int xx, int zz, FileBuffer *data) {
 
 void Tile::initNew(){
     loaded = 1;
+    ++Game::gradeOverlayRevision;
     jestObiektow = 0;
     vDbIdCount = 0;
     inUse = false;
@@ -122,6 +123,10 @@ void Tile::wczytajObiekty() {
     }
     //qDebug() << "ok";
     loaded = 1;
+    // Newly available TrackObj/DynTrackObj instances can change the grade
+    // connectivity cache.  Invalidate once per completed tile load rather
+    // than rebuilding repeatedly from individual render calls.
+    ++Game::gradeOverlayRevision;
     //save();
 }
 

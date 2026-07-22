@@ -52,6 +52,7 @@ public slots:
     void reloadRef();
     void reloadMkr();
     void reloadSettings();
+    void restartAndRestore();
     void refreshErrors();
     void about();
     void terrainCamera(bool val);

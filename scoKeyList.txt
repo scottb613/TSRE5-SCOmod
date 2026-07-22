@@ -31,7 +31,7 @@ Home          Jump camera/pointer upward by 40m
 
 TERRAIN / HEIGHT TOOL CONTEXT
 Z             Toggle terrain brush direction +/- when not Ctrl
-Alt+A         Select all terrain patches on the currently selected tile
+Alt+A         Select all terrain texture patches on the currently selected tile
 
 SELECT / PLACE TOOL CONTEXT
 Up / 8        Move selected object forward; or resize/rotate X+

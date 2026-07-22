@@ -376,6 +376,9 @@ private:
 };
 
 PropertiesTrackObj::PropertiesTrackObj(){
+    const QString detailLevelHelp = "Controls this placed track object's StaticDetailLevel. Default uses the ESD_Detail_Level from the shape's .sd file; enable Custom to write an override into the world file. The value is limited by the route's TsreMaxStaticDetailLevel.";
+    const QString flagsHelp = "Read-only MSTS StaticFlags from the world file. These hexadecimal bit flags control object rendering properties. Use Copy/Paste Flags instead of editing the value directly.";
+    const QString collisionHelp = "MSTS CollideFlags and collision function for this track object. Disabled turns collision off; Immovable uses the normal solid collision function; Buffer uses the buffer collision function.";
     setStyleSheet(GuiFunct::scoEditorPanelStyle());
 
     QLabel *label;
@@ -511,18 +514,23 @@ PropertiesTrackObj::PropertiesTrackObj(){
     addRule();
     
     label = new QLabel("Detail Level:");
+    label->setToolTip(detailLevelHelp);
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->defaultDetailLevel.setDisabled(true);
+    this->defaultDetailLevel.setToolTip(detailLevelHelp);
     this->defaultDetailLevel.setAlignment(Qt::AlignCenter);
     this->enableCustomDetailLevel.setText("Custom");
+    this->enableCustomDetailLevel.setToolTip(detailLevelHelp);
     QCheckBox* defaultDetailLevelLabel = new QCheckBox("Default", this);
+    defaultDetailLevelLabel->setToolTip(detailLevelHelp);
     defaultDetailLevelLabel->setDisabled(true);
     defaultDetailLevelLabel->setChecked(true);
     QObject::connect(&enableCustomDetailLevel, SIGNAL(stateChanged(int)),
                       this, SLOT(enableCustomDetailLevelEnabled(int)));
     this->customDetailLevel.setDisabled(true);
+    this->customDetailLevel.setToolTip(detailLevelHelp);
     this->customDetailLevel.setAlignment(Qt::AlignCenter);
     QObject::connect(&customDetailLevel, SIGNAL(textEdited(QString)),
                       this, SLOT(customDetailLevelEdited(QString)));
@@ -537,19 +545,23 @@ PropertiesTrackObj::PropertiesTrackObj(){
     addRule();
     
     label = new QLabel("Flags:");
+    label->setToolTip(flagsHelp);
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->flags.setDisabled(true);
+    this->flags.setToolTip(flagsHelp);
     this->flags.setAlignment(Qt::AlignCenter);
     vbox->addWidget(&this->flags);
     QGridLayout *flagslView = new QGridLayout;
     flagslView->setSpacing(2);
     flagslView->setContentsMargins(0,0,0,0);    
     QPushButton *copyFlags = new QPushButton("Copy Flags", this);
+    copyFlags->setToolTip(flagsHelp);
     QObject::connect(copyFlags, SIGNAL(released()),
                       this, SLOT(copyFEnabled()));
     QPushButton *pasteFlags = new QPushButton("Paste", this);
+    pasteFlags->setToolTip(flagsHelp);
     QObject::connect(pasteFlags, SIGNAL(released()),
                       this, SLOT(pasteFEnabled()));
     flagslView->addWidget(copyFlags,0,0);
@@ -656,16 +668,19 @@ PropertiesTrackObj::PropertiesTrackObj(){
     
     
     label = new QLabel("MSTS Collision:");
+    label->setToolTip(collisionHelp);
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&eCollisionFlags);
+    eCollisionFlags.setToolTip(collisionHelp);
     eCollisionFlags.setDisabled(true);
     eCollisionFlags.setAlignment(Qt::AlignCenter);
     cCollisionType.addItem("Disabled");
     cCollisionType.addItem("Immovable");
     cCollisionType.addItem("Buffer");
     cCollisionType.setStyleSheet("combobox-popup: 0;");
+    cCollisionType.setToolTip(collisionHelp);
     vbox->addWidget(&cCollisionType);
     QObject::connect(&cCollisionType, SIGNAL(currentIndexChanged(int)),
                       this, SLOT(cCollisionTypeEdited(int)));
@@ -986,7 +1001,7 @@ void PropertiesTrackObj::refreshGradeLockUi(){
     gradeLock.setChecked(Game::gradeLockEnabled);
     gradeLock.blockSignals(false);
     if(Game::gradeLockEnabled){
-        gradeLock.setText(QString("Locked Grade: %1%").arg(Game::gradeLockedPercent, 0, 'f', 5));
+        gradeLock.setText(QString("Lock Grade: %1%").arg(Game::gradeLockedPercent, 0, 'f', 5));
         gradeLock.setToolTip(QString("New track and road pieces will use a physical grade of %1%.").arg(Game::gradeLockedPercent, 0, 'f', 5));
     } else {
         gradeLock.setText("Lock Grade");

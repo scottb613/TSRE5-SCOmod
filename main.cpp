@@ -18,8 +18,14 @@
 #include <QColor>
 #include <QStringList>
 #include <QSharedMemory>
+#include <QProcess>
 #include <QMessageBox>
 #include <QFontInfo>
+#include <QAbstractButton>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QMenu>
+#include <QRadioButton>
 #include <iostream>
 #include "Game.h"
 #include "RouteEditorWindow.h"
@@ -31,8 +37,65 @@
 #include "RouteEditorClient.h"
 #include "Undo.h"
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <mmsystem.h>
+#endif
+
+class UiInteractionSoundFilter : public QObject {
+public:
+    explicit UiInteractionSoundFilter(QObject *parent = nullptr) : QObject(parent) {}
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override {
+        Q_UNUSED(event);
+        if(QAbstractButton *button = qobject_cast<QAbstractButton*>(watched)){
+            if((qobject_cast<QCheckBox*>(button) || qobject_cast<QRadioButton*>(button))
+                    && !button->property("scoUiSoundConnected").toBool()){
+                button->setProperty("scoUiSoundConnected", true);
+                QObject::connect(button, &QAbstractButton::clicked, this, [](){
+                    play("SCOtic.wav");
+                });
+            }
+        } else if(QComboBox *combo = qobject_cast<QComboBox*>(watched)){
+            if(!combo->property("scoUiSoundConnected").toBool()){
+                combo->setProperty("scoUiSoundConnected", true);
+                QObject::connect(combo,
+                                 static_cast<void (QComboBox::*)(int)>(&QComboBox::activated),
+                                 this, [](int){ play("SCOtic.wav"); });
+            }
+        } else if(QMenu *menu = qobject_cast<QMenu*>(watched)){
+            if(!menu->property("scoUiSoundConnected").toBool()){
+                menu->setProperty("scoUiSoundConnected", true);
+                QObject::connect(menu, &QMenu::triggered, this, [](QAction *action){
+                    if(action && action->isEnabled() && !action->isSeparator())
+                        play("SCOtic.wav");
+                });
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    static void play(const QString &fileName) {
+        if(!Game::scoSoundEnabled)
+            return;
+#ifdef Q_OS_WIN
+        const QString soundPath = QCoreApplication::applicationDirPath() + "/content/" + fileName;
+        if(QFile::exists(soundPath)){
+            ::PlaySoundW(NULL, NULL, 0);
+            ::PlaySoundW(reinterpret_cast<const wchar_t*>(soundPath.utf16()), NULL,
+                         SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+        }
+#else
+        Q_UNUSED(fileName);
+#endif
+    }
+};
+
 QFile logFile;
 QTextStream logFileOut;
+QHash<QString, QString> consoleArgs;
 
     
 void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg){
@@ -165,7 +228,9 @@ void LoadRouteEditor(){
         QObject::connect(window, SIGNAL(exitNow()), loadWindow, SLOT(exitNow()));
         QObject::connect(loadWindow, SIGNAL(showMainWindow()), window, SLOT(showRoute()));
 
-        if(Game::checkRoot(Game::root) && (Game::checkRoute(Game::route) || Game::createNewRoutes)){
+        if(consoleArgs["RESTORE"] == "TRUE"){
+            loadWindow->restoreLastSession();
+        } else if(Game::checkRoot(Game::root) && (Game::checkRoute(Game::route) || Game::createNewRoutes)){
             window->showRoute();
         } else {
             // EFO moving to the primary screen to match the main window
@@ -198,8 +263,6 @@ enum CommandLineParseResult {
     CommandLineHelpRequested
 };
 
-QHash<QString, QString> consoleArgs;
-
 CommandLineParseResult parseCommandLineArgs(QCommandLineParser &parser){
     parser.setSingleDashWordOptionMode(QCommandLineParser::ParseAsLongOptions);
     const QCommandLineOption helpOption = parser.addHelpOption();
@@ -219,6 +282,8 @@ CommandLineParseResult parseCommandLineArgs(QCommandLineParser &parser){
     /// EFO New Option
     const QCommandLineOption RouteEditOption("routeedit", "Run Route Editor.");
     parser.addOption(RouteEditOption);
+    const QCommandLineOption RestoreLastSessionOption("restore-last-session", "Restore the saved route editor session after startup.");
+    parser.addOption(RestoreLastSessionOption);
     const QCommandLineOption ConEditOption("conedit", "Run Consist Editor.");
     parser.addOption(ConEditOption);
     const QCommandLineOption PlayOption("play", "Play Activity.");
@@ -268,6 +333,10 @@ CommandLineParseResult parseCommandLineArgs(QCommandLineParser &parser){
     if (parser.isSet(RouteEditOption)) {
         consoleArgs["RE"] = "TRUE";
     }
+    if (parser.isSet(RestoreLastSessionOption)) {
+        consoleArgs["RESTORE"] = "TRUE";
+        consoleArgs["RE"] = "TRUE";
+    }
     if (parser.isSet(PlayOption)) {
         consoleArgs["PLAY"] = "TRUE";
     }
@@ -276,6 +345,21 @@ CommandLineParseResult parseCommandLineArgs(QCommandLineParser &parser){
     }
     
     return CommandLineOk;
+}
+
+static int finishApplication(QApplication &app, QSharedMemory &singleInstance){
+    const int result = app.exec();
+    if(result == Game::RestartAndRestoreExitCode){
+        singleInstance.detach();
+        if(!QProcess::startDetached(QCoreApplication::applicationFilePath(),
+                                    QStringList() << "--restore-last-session")){
+            QMessageBox::critical(NULL, "Restart and Restore",
+                                  "TSRE could not start the replacement process. Please start TSRE manually and choose Restore Last Session.");
+            return 1;
+        }
+        return 0;
+    }
+    return result;
 }
 
 int main(int argc, char *argv[]){
@@ -334,7 +418,9 @@ int main(int argc, char *argv[]){
         QDir::setCurrent(QCoreApplication::applicationDirPath());
     }
     
-    Game::load();    
+    Game::load();
+    UiInteractionSoundFilter uiInteractionSounds(&app);
+    app.installEventFilter(&uiInteractionSounds);
     if(Game::debugOutput) qDebug() << "workingDir" << workingDir;
     
     QCommandLineParser parser;
@@ -447,28 +533,28 @@ int main(int argc, char *argv[]){
     if(consoleArgs["ACE"] == "TRUE"){
         // Run ace converter
         qDebug() << "Run ace converter";
-        return app.exec();
+        return finishApplication(app, singleInstance);
     }
     
     /// EFO New Option
     if(consoleArgs["RE"] == "TRUE"){
         qDebug() << "Run route editor";
         LoadRouteEditor();
-        return app.exec();
+        return finishApplication(app, singleInstance);
     }
     
     if(consoleArgs["CON"] == "TRUE"){
         // Run ace converter
         qDebug() << "Run con editor";
         LoadConEditor();
-        return app.exec();
+        return finishApplication(app, singleInstance);
     }
 
     if(consoleArgs["SV"] == "TRUE"){
         // Run ace converter
         qDebug() << "Run shape viewer";
         LoadShapeViewer(consoleArgs["FILENAME"]);
-        return app.exec();
+        return finishApplication(app, singleInstance);
     }
     if(consoleArgs["PLAY"] == "TRUE"){
         // Play
@@ -482,7 +568,7 @@ int main(int argc, char *argv[]){
         Game::checkRoute(Game::route);
         qDebug() << "Run server";
         RunRouteEditorServer();
-        return app.exec();
+        return finishApplication(app, singleInstance);
     }
         
     /// EFO New Setting 
@@ -498,5 +584,5 @@ int main(int argc, char *argv[]){
 
     //MapWindow aaa;
     //aaa.show();
-    return app.exec();
+    return finishApplication(app, singleInstance);
  }

@@ -431,7 +431,7 @@ QString SettingsDialog::keyAssignmentsText() const {
         "\n"
         "TERRAIN / HEIGHT TOOL CONTEXT\n"
         "Z             Toggle terrain brush direction +/- when not Ctrl\n"
-        "Alt+A         Select all terrain patches on the currently selected tile\n"
+        "Alt+A         Select all terrain texture patches on the currently selected tile\n"
         "\n"
         "SELECT / PLACE TOOL CONTEXT\n"
         "Up / 8        Move selected object forward; or resize/rotate X+\n"
@@ -506,7 +506,6 @@ void SettingsDialog::setupUi() {
     addRow(l, "debugOutput", "bool", "Debug Output", "enables extended logging detail");
     addRow(l, "fullscreen", "bool", "Fullscreen", "Prevents screen from being maximized");
     addRow(l, "soundEnabled", "bool", "Sound Enabled", "");
-    addRow(l, "scoSoundEnabled", "bool", "GenX Sounds", "click, buzz, chirp editor feedback");
     addRow(l, "startapp", "string", "Start App", "r=Route Edit, c=Consist Edit, s=Shapeviewer");
     addRow(l, "systemTheme", "bool", "System Theme", "true uses Windows palette");
     addRow(l, "unsafemode", "bool", "Unsafe Mode", "Only for risky features");
@@ -539,6 +538,7 @@ void SettingsDialog::setupUi() {
     addRow(l, "controlPanel", "twonumber", "Control Panel", "X, Y position");
     addRow(l, "toolsHidden", "bool", "Tools Hidden", "");
     addRow(l, "uiScale", "number", "UI Scale", "1.00 to 1.25 recommended");
+    addRow(l, "scoSoundEnabled", "bool", "UI Sounds", "Enables interface clicks, error buzzes, and success chirps");
 
     createScrollTab(l, tabs, "Camera");
     addRow(l, "cameraFov", "number", "Camera FOV", "");
@@ -652,22 +652,30 @@ void SettingsDialog::setupUi() {
 
     QString setFile = "settings.txt";
     QPushButton* saveBtn = new QPushButton(QString("Save %1").arg(setFile));
-    main->addWidget(saveBtn);
+    QPushButton* reloadBtn = new QPushButton("Save, Restart and Restore");
+    reloadBtn->setToolTip("Saves these settings, restarts TSRE, and restores the current route, camera, and window layout. The restart is blocked while route changes are pending.");
+    QHBoxLayout* settingsButtons = new QHBoxLayout();
+    settingsButtons->addWidget(saveBtn);
+    settingsButtons->addWidget(reloadBtn);
+    main->addLayout(settingsButtons);
 
     connect(saveBtn, &QPushButton::clicked, this, [this, setFile]() {
         save(setFile);
+    });
+    connect(reloadBtn, &QPushButton::clicked, this, [this]() {
+        emit restartAndRestoreRequested();
     });
     
     loadSettings();
 }
 
-void SettingsDialog::save(const QString& filename) {
+bool SettingsDialog::save(const QString& filename) {
     if (!backupSettingsFile(filename))
-        return;
+        return false;
 
     QFile file(filename);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-        return;
+        return false;
 
     QTextStream out(&file);
 
@@ -680,7 +688,6 @@ void SettingsDialog::save(const QString& filename) {
     writeSetting(out, "debugOutput", "false", "enable extended logging detail");
     writeSetting(out, "fullscreen", "false", "start maximized/fullscreen");
     writeSetting(out, "soundEnabled", "false", "legacy TSRE sound support");
-    writeSetting(out, "scoSoundEnabled", "true", "GenX editor UI sounds: click, buzz, chirp");
     writeSetting(out, "startapp", "r", "r = Route Editor, c = Consist Editor, s = Shape Viewer");
     writeSetting(out, "systemTheme", "false", "true uses your Windows palette");
     writeSetting(out, "unsafemode", "false", "only enable for risky/advanced features");
@@ -715,6 +722,7 @@ void SettingsDialog::save(const QString& filename) {
     writeSetting(out, "controlPanel", "0, 100", "X, Y of Control Panel");
     writeSetting(out, "toolsHidden", "false", "only show the viewport");
     writeSetting(out, "uiScale", "1.15", "global editor UI font/panel scale; 1.00 to 1.25 recommended");
+    writeSetting(out, "scoSoundEnabled", "true", "interface clicks, error buzzes, and success chirps");
 
     out << "\n\n//// Camera / Viewport\n\n";
     writeSetting(out, "cameraFov", "35");
@@ -842,6 +850,7 @@ void SettingsDialog::save(const QString& filename) {
 
     file.close();
     accept();
+    return true;
 }
 
 QString SettingsDialog::currentValue(const QString& key, const QString& fallback) const {

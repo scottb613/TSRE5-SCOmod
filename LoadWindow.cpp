@@ -27,8 +27,8 @@
 #include <mmsystem.h>
 #endif
 
-static void playLoadWindowSound(const QString &fileName){
-    if(!Game::scoSoundEnabled)
+static void playLoadWindowSound(const QString &fileName, bool alwaysPlay = false){
+    if(!alwaysPlay && !Game::scoSoundEnabled)
         return;
 #ifdef Q_OS_WIN
     QString soundPath = QCoreApplication::applicationDirPath() + "/content/" + fileName;
@@ -97,6 +97,13 @@ LoadWindow::LoadWindow() {
     exit = new QPushButton("Exit");
     exit->setMinimumHeight(24);
     exit->setStyleSheet(redButton);
+
+    const QList<QPushButton*> startupButtons = { browse, load, neww, restoreLast, exit };
+    for(QPushButton *button : startupButtons){
+        connect(button, &QPushButton::pressed, this, [](){
+            playLoadWindowSound("SCOpress.wav", true);
+        });
+    }
 
     
 

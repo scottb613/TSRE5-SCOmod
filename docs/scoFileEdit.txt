@@ -92,6 +92,7 @@ Primary source files edited
   - Replaced overlapping one-shot Place Guard callbacks with an owned restartable guard-error timer.
   - Integrated marker selectors, pointer/camera coordinates, latitude/longitude entry, object count, and Jump from the former Navi window.
   - Added fast/slow toggle buttons with yellow active state, sound-command routing, and focus return.
+  - Moved the fast/slow movement-lock row directly below the Camera row and replaced the brown-mustard active state with a coordinated traditional yellow palette using charcoal `#232323` text for contrast.
 
 - TSRE5-Trainsim.Com-Fork-master/StatusWindow.h
   - Added Control Panel command signal and button action slots.
@@ -551,8 +552,57 @@ v0.6 grade, visibility, and interface follow-up
   - Switched the Consist Loader and About window to the shared session splash image.
 
 - TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Arizona_Desert.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Australia_Blue_Mountains.png
 - TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Canadian_Rockies.png
 - TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Iowa_Farmland.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Italy_Cinque_Terre.png
 - TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Poland_Overcast.png
-  - Added the four runtime-discovered v0.6 splash images and removed the obsolete fixed `load.png` asset.
+  - Added the six runtime-discovered v0.6 splash images and removed the obsolete fixed `load.png` asset.
+
+
+v0.6 route-display, settings-restart, and UI-feedback follow-up
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.cpp
+- TSRE5-Trainsim.Com-Fork-master/TDB.h
+- TSRE5-Trainsim.Com-Fork-master/Tile.cpp
+  - Replaced string-built Grade Symbol cache keys with compact typed keys.
+  - Moved cache invalidation to completed tile loads and database changes so rendering cannot trigger repeated full connectivity rebuilds.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
+  - Reused pointer depth results until mouse/camera input changes and removed the per-frame OpenGL viewport query.
+  - Bounded navigation, pointer, and Control Panel status emission frequency.
+
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.h
+  - Skipped unchanged camera/pointer coordinate rewrites.
+  - Kept the time-since-save warning as a read-only display without hover or pressed feedback.
+
+- TSRE5-Trainsim.Com-Fork-master/StandardFog.fs
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/shaders/StandardFog.fs
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/shaders330/StandardFog.fs
+  - Added warmer directional sunlight and cooler sky-facing ambient light while preserving neutral unlit editor overlays.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.cpp
+  - Added texture-filename tooltips to the F2 main preview and Recent Texture thumbnails.
+
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.h
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
+- TSRE5-Trainsim.Com-Fork-master/Game.h
+- TSRE5-Trainsim.Com-Fork-master/main.cpp
+  - Moved UI Sounds below UI Scale and added the guarded Save, Restart and Restore workflow.
+  - Added automatic relaunch into the existing last-session restoration path after confirming that no route edits are pending.
+  - Added UI-sound feedback for radio buttons, checkboxes, combo-box selections, and selected menu actions.
+
+- TSRE5-Trainsim.Com-Fork-master/LoadWindow.cpp
+  - Played startup pushbutton feedback immediately and independently of the saved UI Sounds state.
+
+- TSRE5-Trainsim.Com-Fork-master/content/SCOtic.wav
+  - Added the compact toggle, checkbox, combo-selection, and menu-selection feedback sound.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesStatic.cpp
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp
+  - Added source-derived guidance for Detail Level, StaticFlags, and MSTS Collision controls.
 

@@ -22,7 +22,10 @@ public:
     explicit SettingsDialog(QWidget *parent = nullptr);
     virtual ~SettingsDialog() = default;
     void loadSettings();
-    void save(const QString& filename = "settings.txt");
+    bool save(const QString& filename = "settings.txt");
+
+signals:
+    void restartAndRestoreRequested();
     
 private:
     // --- UI Setup ---

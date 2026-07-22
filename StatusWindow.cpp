@@ -37,6 +37,15 @@ static QString statusButtonStyle(const QString& background, const QString& hover
     ).arg(textColor, background, hoverBackground, border, pressedBackground);
 }
 
+static QString statusReadoutStyle(const QString& background, const QString& textColor,
+                                  const QString& border){
+    return QString(
+        "QPushButton, QPushButton:hover, QPushButton:pressed { color: %1;"
+        " background-color: %2; border: 1px solid %3; border-radius: 1px;"
+        " padding: 1px 4px; }"
+    ).arg(textColor, background, border);
+}
+
 static QPoint snapWindowPosition(QWidget *window){
     const int snapDistance = 10;
     QRect moving = window->frameGeometry();
@@ -133,13 +142,8 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     }
     status10.setFlat(true);
 
-    QHBoxLayout *moveSpeedRow = new QHBoxLayout;
-    moveSpeedRow->setSpacing(2);
-    moveSpeedRow->setContentsMargins(3,0,1,0);
     moveFast.setText("Move: Fast");
     moveSlow.setText("Move: Slow");
-    moveSpeedRow->addWidget(&moveFast);
-    moveSpeedRow->addWidget(&moveSlow);
 
     vbox->addWidget(&status4,0,0);
     vbox->addWidget(&status9,0,1);
@@ -151,11 +155,12 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     vbox->addWidget(&status2,3,1);
     vbox->addWidget(&status0,4,0);
     vbox->addWidget(&status5,4,1);
-    vbox->addWidget(&status10,5,0);
-    vbox->addWidget(&status11,5,1);
-    vbox->addWidget(&status12,6,0,1,2);
+    vbox->addWidget(&moveFast,5,0);
+    vbox->addWidget(&moveSlow,5,1);
+    vbox->addWidget(&status10,6,0);
+    vbox->addWidget(&status11,6,1);
+    vbox->addWidget(&status12,7,0,1,2);
 
-    v->addItem(moveSpeedRow);
     v->addItem(vbox);
 
     QWidget *ruleRow = new QWidget;
@@ -244,11 +249,15 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
 
     statS = statusButtonStyle("#26292c", "#303438", "#e7eaec", "#383d41", "#191b1d");
     statG = statusButtonStyle("#176c25", "#1e8430", "#f2fff4", "#319344", "#104b1a");
-    statY = statusButtonStyle("#a88718", "#c19d1f", "#fff9d8", "#d0ad32", "#70590e");
+    statY = statusButtonStyle("#b3b300", "#d0d020", "#232323", "#e0e03a", "#707000");
+    statReadout = statusReadoutStyle("#26292c", "#e7eaec", "#383d41");
+    statReadoutY = statusReadoutStyle("#b3b300", "#232323", "#e0e03a");
     statR = statusButtonStyle("#8d3030", "#a63b3b", "#fff0f0", "#bd5151", "#602020");
 
     for(int i = 0; i < buttons.size(); i++)
         buttons[i]->setStyleSheet(statS);
+    status10.setStyleSheet(statReadout);
+    status10.setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
     QObject::connect(&status4, SIGNAL(released()), this, SLOT(selectButtonAction()));
     QObject::connect(&status9, SIGNAL(released()), this, SLOT(placeButtonAction()));
@@ -396,7 +405,7 @@ void StatusWindow::recStatus(QString statName, QString statVal ){
     if(statName.contains("rotate"))    { status7.setText(statVal); if(statVal.endsWith("ON")) status7.setStyleSheet(statY); else status7.setStyleSheet(statS);  }
     if(statName.contains("translate")) { status8.setText(statVal); if(statVal.endsWith("ON")) status8.setStyleSheet(statY); else status8.setStyleSheet(statS);  }
     if(statName.contains("place"))     { statVal.replace("Place:", "Place New:"); status9.setText(statVal); if(statVal.endsWith("ON")) status9.setStyleSheet(statG); else status9.setStyleSheet(statS);  }
-    if(statName.contains("timer"))     { status10.setText(statVal + "m Since Save"); if(statVal.toInt() > 10) status10.setStyleSheet(statY); else status10.setStyleSheet(statS);  }
+    if(statName.contains("timer"))     { status10.setText(statVal + "m Since Save"); if(statVal.toInt() > 10) status10.setStyleSheet(statReadoutY); else status10.setStyleSheet(statReadout);  }
     if(statName.contains("object"))    { if(statVal.size() > 0) {status11.setText(statVal + " Selected"); status11.setStyleSheet(statY); } else {status11.setText(""); status11.setStyleSheet(statS);}  }
     if(statName.contains("guard"))     { lastGuardStatus = statVal; if(guardErrorActive) return; status12.setText(statVal); if(statVal.endsWith("ON")) status12.setStyleSheet(statS); else status12.setStyleSheet(statY);  }
     if(statName.contains("movefast"))  { moveFast.setStyleSheet(statVal.endsWith("ON") ? statY : statS); }
@@ -456,6 +465,12 @@ void StatusWindow::naviInfo(int all, int hidden){
 }
 
 void StatusWindow::pointerInfo(float* coords){
+    if(pointerInfoValid && lastPX == coords[0] && lastPY == coords[1] && lastPZ == coords[2])
+        return;
+    lastPX = coords[0];
+    lastPY = coords[1];
+    lastPZ = coords[2];
+    pointerInfoValid = true;
     pxBox.setText(QString::number(coords[0]));
     pyBox.setText(QString::number(coords[1]));
     pyBoxx.setText(QString::number(coords[1] * Game::convertDistance, 'f', 0) + " " + Game::convertUnitD);
@@ -463,7 +478,7 @@ void StatusWindow::pointerInfo(float* coords){
 }
 
 void StatusWindow::posInfo(PreciseTileCoordinate* coords){
-    if(lastX == coords->X && lastY == coords->Y && lastZ == coords->Z &&
+    if(posInfoValid && lastX == coords->wX && lastY == coords->wY && lastZ == coords->wZ &&
        lastTX == coords->TileX && lastTZ == coords->TileZ)
         return;
 
@@ -472,6 +487,7 @@ void StatusWindow::posInfo(PreciseTileCoordinate* coords){
     lastZ = coords->wZ;
     lastTX = coords->TileX;
     lastTZ = coords->TileZ;
+    posInfoValid = true;
     txBox.setText(QString::number(lastTX));
     tyBox.setText(QString::number(lastTZ));
     xBox.setText(QString::number(lastX));

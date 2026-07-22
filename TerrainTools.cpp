@@ -24,6 +24,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QFileInfo>
 
 static int scaledUiSize(int base){
     return qRound(base * qMax(1.0f, Game::uiScale));
@@ -1204,6 +1205,10 @@ void TerrainTools::updateTexPrev(){
         idx = texLastItems.size() - i;
         if(idx < 0)
             continue;
+        Texture *previewTexture = texLastItems[idx].second;
+        QString textureName = QFileInfo(previewTexture->pathid).fileName();
+        if(textureName.isEmpty())
+            textureName = previewTexture->pathid;
         if(i == 1){
             tlabel = texPreviewLabel;
             res = 160;
@@ -1211,16 +1216,18 @@ void TerrainTools::updateTexPrev(){
             if(this->paintBrush->tex->bytesPerPixel == 3)
                 tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGB888)));
             if(this->paintBrush->tex->bytesPerPixel == 4)
-                tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGBA8888)));   
+                tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGBA8888)));
+            tlabel->setToolTip(textureName);
         }// else {
         tlabel = texPreviewLabels[i-1];
         res = 36;
-        out = texLastItems[idx].second->getImageData(res,res);
+        out = previewTexture->getImageData(res,res);
         //}
-        if(texLastItems[idx].second->bytesPerPixel == 3)
+        if(previewTexture->bytesPerPixel == 3)
             tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGB888)));
-        if(texLastItems[idx].second->bytesPerPixel == 4)
-            tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGBA8888)));   
+        if(previewTexture->bytesPerPixel == 4)
+            tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGBA8888)));
+        tlabel->setToolTip(textureName);
     }
 }
 

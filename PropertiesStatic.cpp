@@ -16,6 +16,9 @@
 #include "Game.h"
 
 PropertiesStatic::PropertiesStatic(){
+    const QString detailLevelHelp = "Controls this placed object's StaticDetailLevel. Default uses the ESD_Detail_Level from the shape's .sd file; enable Custom to write an override into the world file. The value is limited by the route's TsreMaxStaticDetailLevel.";
+    const QString flagsHelp = "Read-only MSTS StaticFlags from the world file. These hexadecimal bit flags control properties including animation, terrain-object behavior, and shadow type. Use the controls below or Copy/Paste Flags instead of editing the value directly.";
+    const QString collisionHelp = "MSTS CollideFlags and collision function for this object. Disabled turns collision off; Immovable creates a solid collision object; Buffer uses the buffer collision function. Remove Collisions converts a collision object back to a normal static object.";
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
@@ -128,18 +131,23 @@ PropertiesStatic::PropertiesStatic(){
     addRule();
     
     label = new QLabel("Detail Level:");
+    label->setToolTip(detailLevelHelp);
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->defaultDetailLevel.setDisabled(true);
+    this->defaultDetailLevel.setToolTip(detailLevelHelp);
     this->defaultDetailLevel.setAlignment(Qt::AlignCenter);
     this->enableCustomDetailLevel.setText("Custom");
+    this->enableCustomDetailLevel.setToolTip(detailLevelHelp);
     QCheckBox* defaultDetailLevelLabel = new QCheckBox("Default", this);
+    defaultDetailLevelLabel->setToolTip(detailLevelHelp);
     defaultDetailLevelLabel->setDisabled(true);
     defaultDetailLevelLabel->setChecked(true);
     QObject::connect(&enableCustomDetailLevel, SIGNAL(stateChanged(int)),
                       this, SLOT(enableCustomDetailLevelEnabled(int)));
     this->customDetailLevel.setDisabled(true);
+    this->customDetailLevel.setToolTip(detailLevelHelp);
     this->customDetailLevel.setAlignment(Qt::AlignCenter);
     QObject::connect(&customDetailLevel, SIGNAL(textEdited(QString)),
                       this, SLOT(customDetailLevelEdited(QString)));
@@ -154,19 +162,23 @@ PropertiesStatic::PropertiesStatic(){
     addRule();
     
     label = new QLabel("Flags:");
+    label->setToolTip(flagsHelp);
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->flags.setDisabled(true);
+    this->flags.setToolTip(flagsHelp);
     this->flags.setAlignment(Qt::AlignCenter);
     vbox->addWidget(&this->flags);
     QGridLayout *flagslView = new QGridLayout;
     flagslView->setSpacing(2);
     flagslView->setContentsMargins(0,0,0,0);    
     QPushButton *copyFlags = new QPushButton("Copy Flags", this);
+    copyFlags->setToolTip(flagsHelp);
     QObject::connect(copyFlags, SIGNAL(released()),
                       this, SLOT(copyFEnabled()));
     QPushButton *pasteFlags = new QPushButton("Paste", this);
+    pasteFlags->setToolTip(flagsHelp);
     QObject::connect(pasteFlags, SIGNAL(released()),
                       this, SLOT(pasteFEnabled()));
     flagslView->addWidget(copyFlags,0,0);
@@ -193,20 +205,24 @@ PropertiesStatic::PropertiesStatic(){
 
     addRule();
     label = new QLabel("MSTS Collision:");
+    label->setToolTip(collisionHelp);
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&eCollisionFlags);
+    eCollisionFlags.setToolTip(collisionHelp);
     eCollisionFlags.setDisabled(true);
     eCollisionFlags.setAlignment(Qt::AlignCenter);
     cCollisionType.addItem("Disabled");
     cCollisionType.addItem("Immovable");
     cCollisionType.addItem("Buffer");
     cCollisionType.setStyleSheet("combobox-popup: 0;");
+    cCollisionType.setToolTip(collisionHelp);
     vbox->addWidget(&cCollisionType);
     QObject::connect(&cCollisionType, SIGNAL(currentIndexChanged(int)),
                       this, SLOT(cCollisionTypeEdited(int)));
     QPushButton *resetFlags = new QPushButton("Remove Collisions", this);
+    resetFlags->setToolTip(collisionHelp);
     QObject::connect(resetFlags, SIGNAL(released()),
                       this, SLOT(removeCollisionsEnabled()));
     vbox->addWidget(resetFlags);

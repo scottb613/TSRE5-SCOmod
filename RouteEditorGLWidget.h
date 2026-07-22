@@ -203,9 +203,11 @@ private:
     void showPlacementGuardError();
     void rejectPlacement();
     QBasicTimer timer;
-    unsigned long long int lastTime;
-    unsigned long long int timeNow;
-    unsigned long long int timeSaved;
+    unsigned long long int lastTime = 0;
+    unsigned long long int timeNow = 0;
+    unsigned long long int timeSaved = 0;
+    unsigned long long int lastDisplayInfoUpdate = 0;
+    unsigned long long int lastPointerDepthRead = 0;
     bool m_core;
     int m_xRot;
     int m_yRot;
@@ -225,6 +227,13 @@ private:
     CameraConsist* cameraObj = NULL;
     bool selection = false;
     int mousex, mousey;
+    int pointerDepthMouseX = -1;
+    int pointerDepthMouseY = -1;
+    int pointerDepthTileX = 0;
+    int pointerDepthTileZ = 0;
+    float pointerDepthCameraPos[3] = {0.0f, 0.0f, 0.0f};
+    float pointerDepthCameraTarget[3] = {0.0f, 0.0f, 0.0f};
+    bool pointerDepthValid = false;
     GameObj* selectedObj = NULL;
     bool placeGuardEnabled = true;
     GameObj* StartObject = NULL;

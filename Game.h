@@ -34,6 +34,7 @@ class RouteEditorClient;
 
 class Game {
 public:
+    static const int RestartAndRestoreExitCode = 773;
     static bool ServerMode;
     static QString serverLogin;
     static QString serverAuth;
