@@ -28,13 +28,13 @@ HIGHLIGHTS
 - Protected [seasonal TERRTEX] 1024x1024 files from accidental downsampling during painting and corrected transfer/material cache refresh behavior.
 - Reduced [route performance] stutter with forest-generation controls, a Forest Regions view toggle, and texture-cache invalidation only when material paths change.
 - Improved [load] reliability with single-instance protection, corrected route-table refresh, and validated editable recent MSTS/ORTS root selection.
-- Added [Restore Last Session] for reopening the last route, camera location, main window, and Control Panel layout.
+- Added [Restore Last Session] for reopening the last route and camera context, plus compact [Pin] controls that remember the main window, Control Panel, and Grade Helper placement between sessions.
 - Added [Windows] the GenX executable icon, desktop-shortcut helper, and Route > Open Route Folder command.
 - Consolidated [Control Panel] Status and Navi functions into a scalable F7 panel with editing-state controls, navigation, movement locks, and delayed edge snapping.
 - Improved [Object Panel] with category-aware search and reset, cleaner Scale Rail grouping, and 30 Recent Items in a bounded scrollable history with Clear Recent.
 - Reworked [F1-F4 panels] property panels, Object Panel, Control Panel, Settings Editor, and startup screens into a consistent scalable interface.
 - Substantially reorganized [F2 textures] around a larger selected-texture preview, a compact two-column Recent Texture bank, clearer paint/preset/brush groups, and texture-name tooltips.
-- Added [global UI] scaling and consistent user-action sound feedback without playing sounds during passive panel refreshes.
+- Added [global UI] scaling, consistent manual-action sound feedback, cleaner square F12 boolean selectors, and coordinated state colors without false responses during passive refreshes.
 - Added [Place Guard] validation with automatic undo and distinct feedback for dangerous or invalid scenery, track, and interactive-object placements.
 - Reorganized [F12 Settings] into practical categories with direct settings saves, timestamped backups, full-sentence tooltips, and an integrated key-assignment reference.
 - Repaired [F3 maps] OSM Vector Map HTTPS support, hardened failed-response handling, and increased generated map imagery to 4096 resolution.
@@ -42,7 +42,7 @@ HIGHLIGHTS
 - Improved [Dynamic Track] editing with database rebuilding after Flex, synchronized elevation data, clearer section/length information, fallback textures, and consistent naming.
 - Added [splash screens] runtime-discovered artwork with a persistent shuffled cycle shared by the Route Loader, Consist Loader, and About window during each session.
 - Improved [track properties] grade-unit presentation and added Lock Grade so newly placed track or road pieces can inherit the selected piece's physical grade.
-- Added [Grade Helper] for dock-friendly, validated, connected, per-piece vertical transitions to an exact target grade.
+- Added [Grade Helper] for dock-friendly, validated, connected, per-piece vertical transitions to an exact target grade, with remembered placement and automatic Lock Grade handoff.
 - Added [Grade Symbols] connectivity-aware markers for static and Dynamic Track, including steady-grade, transition, and direct crest/gully classifications.
 - Added [View and Markers] reversible overlay toggling and improved marker placement, color, height, and label reliability.
 - Added [Edit > Copy Info] selection diagnostics for clipboard-ready troubleshooting and reporting.
@@ -240,6 +240,8 @@ I added a Restore Last Session button to the first startup screen. Before a rout
 
 The intent is simple: if you were deep in a route, looking at a specific trouble spot, you can restart TSRE and return to that same working context without reselecting the MSTS folder, reselecting the route, and manually flying back to the same location.
 
+The startup loader itself now opens centered on the primary screen. Independent compact `Pin` controls remember normal working geometry between sessions: the main window stores position, size, and maximized state, while the Control Panel stores its position. Unpinning returns a window to its normal default placement instead of leaving another group of manual position settings in F12.
+
 
 I added `Open Route Folder` under the Route menu, placed with the other route-level commands. It opens the active route directory directly in Windows Explorer and reports a clear warning if the route folder cannot be found.
 
@@ -260,7 +262,7 @@ I also added gentle delayed snapping for the Control Panel. The snap only trigge
 
 The former Navi controls now live inside the Control Panel and use its darker visual treatment. The pointer readout fields are protected from editing without using dimmed disabled text. The separate Navi window, F6 action, duplicate geometry settings, and duplicate session state were removed; F7 now toggles the single Control Panel.
 
-The Control Panel uses one position setting and one saved-session geometry record, while legacy Status Window session data remains readable during migration.
+The Control Panel `Pin` is intentionally small and unobtrusive. Its title treatment indicates the pinned state, and normal unpinned placement remains independent of Restore Last Session. Legacy Status Window session data remains readable during migration.
 
 I also updated the visible program titlebars so the startup screen and main editor window identify the build as TSRE GenX instead of the older Trainsim.Com Fork title.
 
@@ -304,6 +306,8 @@ I added light sound feedback for editor actions while keeping the sounds separat
 Passive status refreshes do not play sounds. This avoids double audio when the editor merely updates button states after a placement or automatic mode change.
 
 The same GUI pass standardized active, neutral, success, warning, and failure states across the startup screen, Control Panel, editor menus, and supporting panels. Deliberate commands and completed actions provide consistent visual and sound feedback without allowing programmatic refreshes to create false responses.
+
+Yellow button and indicator states now use the same clear Control Panel palette instead of the older mustard shades. F12 True/False choices retain mutually exclusive radio-button behavior but use the cleaner square checkbox-style indicator artwork.
 
 
    --- Place Guard ---
@@ -382,6 +386,10 @@ When Grade Assist is active, TSRE verifies that the next placement is physically
 
 The placement endpoint information used by this check is transient editor state only and is never written into route world files.
 
+Opening Grade Helper clears an existing manual Lock Grade so the two placement workflows cannot compete. Reaching the requested target silently hands the achieved value back to Lock Grade. Automatic state changes remain silent; accepted placement uses the normal track-placement click, followed by the existing delayed completion chirp when the target is reached.
+
+Grade Helper has its own `Pin`, which remembers only the helper's position. It never causes the helper to open automatically on the next session; the operator must still click `Grade Helper...` when it is needed.
+
 
    --- Grade Symbols Overlay ---
 
@@ -431,6 +439,8 @@ F2 terrain texture previews now expose the source texture filename as a tooltip 
    --- Settings Restart and Interface Sounds ---
 
 The F12 editor now places `UI Sounds` directly below `UI Scale`. The setting controls editor interaction feedback including placement/error/success sounds plus `SCOtic.wav` for radio buttons, checkboxes, combo-box selections, and chosen menu actions. Route Loader pushbuttons always play the normal press sound immediately, before route loading begins, so startup feedback does not depend on the saved UI Sounds state.
+
+Menu-command feedback covers selections from the Route, Edit, View, Tools, Settings, and Help menus. Sounds are tied to deliberate operator input; programmatic toggles and status synchronization remain silent.
 
 F12 now provides `Save, Restart and Restore`. It saves the displayed settings, checks the route's existing unsaved-item list, and refuses to restart while route, terrain, database, or activity changes are pending. With a clean route it records the existing last-session route, camera, and window state; relaunches TSRE; and restores that session through the same startup restoration path used by the Route Loader. The existing Route menu reload command remains available for settings that can safely change in a running process.
 

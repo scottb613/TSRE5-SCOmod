@@ -100,7 +100,24 @@ public:
         layout->setContentsMargins(4,4,4,4);
         QLabel *heading = new QLabel("Grade Transition:");
         heading->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
-        layout->addWidget(heading);
+        QHBoxLayout *headingRow = new QHBoxLayout;
+        headingRow->setContentsMargins(0,0,0,0);
+        headingRow->addWidget(heading);
+        headingRow->addStretch();
+        pinButton.setText("Pin");
+        pinButton.setCheckable(true);
+        pinButton.setFocusPolicy(Qt::NoFocus);
+        QFont pinFont = pinButton.font();
+        pinFont.setBold(false);
+        if(pinFont.pointSizeF() > 0)
+            pinFont.setPointSizeF(qMax(7.0, pinFont.pointSizeF() * 0.85));
+        pinButton.setFont(pinFont);
+        pinButton.setFixedSize(gradeHelperScaledSize(30), gradeHelperScaledSize(17));
+        positionPinned = Game::pinnedWindowPosition("gradeHelper", NULL);
+        pinButton.setChecked(positionPinned);
+        updatePinAppearance();
+        headingRow->addWidget(&pinButton);
+        layout->addLayout(headingRow);
 
         QFormLayout *form = new QFormLayout;
         form->setSpacing(3);
@@ -162,6 +179,24 @@ public:
                 snapping = false;
             }
         });
+        pinSaveTimer.setSingleShot(true);
+        QObject::connect(&pinSaveTimer, &QTimer::timeout, this, [this](){
+            if(positionPinned)
+                Game::savePinnedWindowPosition("gradeHelper", pos());
+        });
+        QObject::connect(&pinButton, &QToolButton::toggled, this, [this](bool pinned){
+            positionPinned = pinned;
+            updatePinAppearance();
+            if(pinned){
+                Game::clearPinnedWindowPosition("gradeHelperUseDefault");
+                Game::savePinnedWindowPosition("gradeHelper", pos());
+            } else {
+                pinSaveTimer.stop();
+                Game::clearPinnedWindowPosition("gradeHelper");
+                Game::savePinnedWindowPosition("gradeHelperUseDefault", QPoint(0, 0));
+                moveToDefaultPosition();
+            }
+        });
         QObject::connect(&refreshTimer, &QTimer::timeout, this, [this](){ syncUi(); });
         refreshTimer.start(120);
 
@@ -208,6 +243,9 @@ public:
         syncUi();
         layout->activate();
         setFixedHeight(layout->sizeHint().height());
+        QPoint pinnedPosition;
+        if(Game::pinnedWindowPosition("gradeHelper", &pinnedPosition))
+            move(Game::visibleWindowPosition(pinnedPosition, size()));
     }
 
     void showForGrade(float grade){
@@ -221,15 +259,8 @@ public:
             }
         }
         syncUi();
-        if(!everShown){
-            for(QWidget *candidate : QApplication::topLevelWidgets()){
-                if(candidate != this && candidate->isVisible() && candidate->windowTitle() == "Control Panel"){
-                    QRect control = candidate->frameGeometry();
-                    setFixedWidth(candidate->width());
-                    move(control.right() + 1, control.top());
-                    break;
-                }
-            }
+        if(!everShown && !positionPinned){
+            moveToDefaultPosition();
             everShown = true;
         }
         show();
@@ -242,8 +273,11 @@ public:
 protected:
     void moveEvent(QMoveEvent *event) override {
         QWidget::moveEvent(event);
-        if(!snapping)
+        if(!snapping){
             snapTimer.start(120);
+            if(positionPinned)
+                pinSaveTimer.start(240);
+        }
     }
 
     void closeEvent(QCloseEvent *event) override {
@@ -253,6 +287,43 @@ protected:
     }
 
 private:
+    void moveToDefaultPosition(){
+        for(QWidget *candidate : QApplication::topLevelWidgets()){
+            if(candidate != this && candidate->isVisible() && candidate->windowTitle() == "Control Panel"){
+                QRect control = candidate->frameGeometry();
+                setFixedWidth(candidate->width());
+                move(Game::visibleWindowPosition(QPoint(control.right() + 1, control.top()), size()));
+                return;
+            }
+        }
+        QWidget *mainWindow = owner->window();
+        if(mainWindow != NULL){
+            const QPoint fallback(mainWindow->x() + mainWindow->width() - width(),
+                                  mainWindow->y() + 80);
+            move(Game::visibleWindowPosition(fallback, size()));
+        }
+    }
+
+    void updatePinAppearance(){
+        pinButton.setText("Pin");
+        pinButton.setToolTip(positionPinned
+            ? "The Grade Helper position is saved between sessions. Click to return to default placement."
+            : "Save the current Grade Helper position between sessions.");
+        if(positionPinned){
+            pinButton.setStyleSheet(QString(
+                "QToolButton { color: #232323; background-color: %1;"
+                " border: 1px solid %1; padding: 0px 3px; font-weight: normal; }"
+                "QToolButton:hover { border-color: #e4c5a3; }"
+                "QToolButton:pressed { background-color: #a98a69; }").arg(Game::StyleMainLabel));
+        } else {
+            pinButton.setStyleSheet(
+                "QToolButton { color: #e7eaec; background-color: #26292c;"
+                " border: 1px solid #383d41; padding: 0px 3px; font-weight: normal; }"
+                "QToolButton:hover { background-color: #303438; border-color: #f08200; }"
+                "QToolButton:pressed { background-color: #191b1d; }");
+        }
+    }
+
     float percentToDisplayGrade(float percent) const{
         switch(owner->gradeUnitsIndex()){
         case 0: return percent * 10.0f;
@@ -350,7 +421,7 @@ private:
         stepGrade.setEnabled(editingEnabled);
         if(Game::gradeAssistEnabled){
             stateButton.setText("Grade Assist Active - Click to Stop");
-            stateButton.setStyleSheet(gradeHelperStateStyle("#a88718", "#d0ad32", "#fff9d8"));
+            stateButton.setStyleSheet(gradeHelperStateStyle("#b3b300", "#e0e03a", "#232323"));
         } else if(Game::gradeAssistTargetReached){
             stateButton.setText("Grade Achieved - Holding Target");
             stateButton.setStyleSheet(gradeHelperStateStyle("#176c25", "#319344", "#f2fff4"));
@@ -368,9 +439,12 @@ private:
     QDoubleSpinBox stepGrade;
     QLineEdit nextGrade;
     QPushButton stateButton;
+    QToolButton pinButton;
     QTimer refreshTimer;
     QTimer snapTimer;
+    QTimer pinSaveTimer;
     bool snapping = false;
+    bool positionPinned = false;
     bool everShown = false;
     int displayedUnits = -1;
 };
@@ -1012,6 +1086,8 @@ void PropertiesTrackObj::refreshGradeLockUi(){
 void PropertiesTrackObj::openGradeHelper(){
     if(trackObj == NULL)
         return;
+    Game::gradeLockEnabled = false;
+    refreshGradeLockUi();
     if(gradeHelperWindow == NULL){
         gradeHelperWindow = new GradeHelperWindow(this);
         QObject::connect(gradeHelperWindow, &QObject::destroyed, this, [this](){

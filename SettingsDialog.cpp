@@ -96,7 +96,22 @@ void SettingsDialog::addRow(QFormLayout* l, const QString& key, const QString& t
 
         QRadioButton* rbTrue = new QRadioButton("True");
         QRadioButton* rbFalse = new QRadioButton("False");
-        
+
+        // Keep radio-button exclusivity, but paint the F12 boolean controls with
+        // the same clean square indicator used by checkboxes.
+        const QString squareRadioStyle =
+            "QRadioButton { color: white; spacing: 5px; }"
+            "QRadioButton::indicator {"
+            " width: 13px; height: 13px; background-color: #202020;"
+            " border: 1px solid #9a9a9a; border-radius: 0px;"
+            "}"
+            "QRadioButton::indicator:hover { border-color: #f08200; }"
+            "QRadioButton::indicator:checked {"
+            " background-color: #f08200; border-color: #ffad3b; border-radius: 0px;"
+            "}";
+        rbTrue->setStyleSheet(squareRadioStyle);
+        rbFalse->setStyleSheet(squareRadioStyle);
+
         rbTrue->setProperty("buddy", QVariant::fromValue(rbFalse));
         rbFalse->setProperty("buddy", QVariant::fromValue(rbTrue));
 
@@ -213,9 +228,7 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "routemergetdb") return "Allows route merge operations to merge track database data. Use only with a planned merge workflow.";
     if (k == "routemergeterrain") return "Allows route merge operations to overwrite overlapping terrain heights.";
     if (k == "routemergeterrtex") return "Allows route merge operations to overwrite overlapping terrain texture assignments.";
-    if (k == "mainwindow") return "Initial X and Y screen position for the main editor and startup window.";
     if (k == "mainwindowlayout") return "Controls the main editor panel order. P is Properties, T is Tools, W is World, and C is Control Panel.";
-    if (k == "controlpanel") return "Initial X and Y screen position for the Control Panel.";
     if (k == "toolshidden") return "Starts with tool panels hidden so the viewport gets more room.";
     if (k == "uiscale") return "Scales editor fonts and panel widths. Recommended public range is 1.00 to 1.25; 1.15 works well on Scott's 32-inch 2K display.";
     if (k == "camerafov") return "Sets the camera field of view in degrees. Lower values feel more zoomed in; higher values show more peripheral view.";
@@ -498,7 +511,15 @@ void SettingsDialog::setupUi() {
         "QPushButton:pressed { background-color: #3a3a3a; }"
         "QTabBar::tab { background-color: #202020; color: white; border: 1px solid #555; padding: 4px 10px; }"
         "QTabBar::tab:selected { background-color: #404040; }"
-    ) + GuiFunct::scoEditorPanelStyle());
+    ) + GuiFunct::scoEditorPanelStyle() + QString(
+        "QRadioButton::indicator {"
+        " width: 13px; height: 13px; background-color: #202020; border: 1px solid #9a9a9a; border-radius: 0px;"
+        "}"
+        "QRadioButton::indicator:hover { border-color: #f08200; }"
+        "QRadioButton::indicator:checked {"
+        " background-color: #f08200; border-color: #ffad3b; border-radius: 0px;"
+        "}"
+    ));
     QFormLayout* l = nullptr;
 
     createScrollTab(l, tabs, "General");
@@ -533,9 +554,7 @@ void SettingsDialog::setupUi() {
     addRow(l, "routeMergeTerrtex", "bool", "Route Merge Terrtex", "");
 
     createScrollTab(l, tabs, "UI");
-    addRow(l, "mainWindow", "twonumber", "Main Window", "X, Y position");
     addRow(l, "mainWindowLayout", "string", "Window Layout", "P = Properties, T = Tools, W = World, C = Control Panel");
-    addRow(l, "controlPanel", "twonumber", "Control Panel", "X, Y position");
     addRow(l, "toolsHidden", "bool", "Tools Hidden", "");
     addRow(l, "uiScale", "number", "UI Scale", "1.00 to 1.25 recommended");
     addRow(l, "scoSoundEnabled", "bool", "UI Sounds", "Enables interface clicks, error buzzes, and success chirps");
@@ -717,9 +736,7 @@ bool SettingsDialog::save(const QString& filename) {
     writeOptionalSetting(out, "routeMergeTerrtex", "false", "set true to overwrite overlapping terrain textures");
 
     out << "\n\n//// UI / Windows / Scaling\n\n";
-    writeSetting(out, "mainWindow", "100, 100", "X, Y of main window and load window");
     writeSetting(out, "mainWindowLayout", "PWTC", "window order: P = Properties, T = Tools, W = World, C = Control Panel", true);
-    writeSetting(out, "controlPanel", "0, 100", "X, Y of Control Panel");
     writeSetting(out, "toolsHidden", "false", "only show the viewport");
     writeSetting(out, "uiScale", "1.15", "global editor UI font/panel scale; 1.00 to 1.25 recommended");
     writeSetting(out, "scoSoundEnabled", "true", "interface clicks, error buzzes, and success chirps");
@@ -1011,8 +1028,6 @@ QString SettingsDialog::getGameValue(const QString& key) {
     if (key == "loadactivities") return Game::loadActivities ? "true" : "false";
     if (key == "loadconsists") return Game::loadConsists ? "true" : "false";
     if (key == "mainwindowlayout") return Game::mainWindowLayout;
-    if (key == "mainwindow") return Game::mainPos;
-    if (key == "controlpanel") return Game::statusPos;
     if (key == "cewindowlayout") return Game::ceWindowLayout;
     if (key == "playermode") return Game::playerMode ? "true" : "false";
     if (key == "usenetworkeng") return Game::useNetworkEng ? "true" : "false";

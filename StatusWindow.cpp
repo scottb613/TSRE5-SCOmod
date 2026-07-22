@@ -105,12 +105,20 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     this->setWindowFlags(Qt::WindowType::Tool);
     //this->setWindowFlags(Qt::WindowStaysOnTopHint);
     this->setFixedWidth(scaledUiSize(300));
-    this->setFixedHeight(scaledUiSize(440));
+    this->setFixedHeight(scaledUiSize(463));
     this->setWindowTitle(tr("Control Panel"));
+    const bool defaultPositionRequested = Game::pinnedWindowPosition("controlPanelUseDefault", NULL);
     QStringList winPos = Game::statusPos.split(",");
-    if(winPos.count() > 1) this->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
+    if(!defaultPositionRequested && winPos.count() > 1)
+        this->move(winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
+    QPoint pinnedPosition;
+    positionPinned = Game::pinnedWindowPosition("controlPanel", &pinnedPosition);
+    if(positionPinned)
+        this->move(Game::visibleWindowPosition(pinnedPosition, size()));
     snapTimer.setSingleShot(true);
     QObject::connect(&snapTimer, SIGNAL(timeout()), this, SLOT(applyWindowSnap()));
+    pinSaveTimer.setSingleShot(true);
+    QObject::connect(&pinSaveTimer, SIGNAL(timeout()), this, SLOT(savePinnedPosition()));
     guardErrorTimer.setSingleShot(true);
     QObject::connect(&guardErrorTimer, SIGNAL(timeout()), this, SLOT(clearGuardError()));
 
@@ -123,6 +131,22 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     QVBoxLayout *v = new QVBoxLayout;
     v->setSpacing(2);
     v->setContentsMargins(0,1,1,1);
+
+    QHBoxLayout *pinRow = new QHBoxLayout;
+    pinRow->setContentsMargins(3,0,1,0);
+    pinRow->addStretch();
+    pinPositionButton.setCheckable(true);
+    pinPositionButton.setChecked(positionPinned);
+    pinPositionButton.setFocusPolicy(Qt::NoFocus);
+    pinPositionButton.setText(tr("Pin"));
+    QFont pinFont = pinPositionButton.font();
+    pinFont.setBold(false);
+    if(pinFont.pointSizeF() > 0)
+        pinFont.setPointSizeF(qMax(7.0, pinFont.pointSizeF() * 0.85));
+    pinPositionButton.setFont(pinFont);
+    pinPositionButton.setFixedSize(scaledUiSize(30), scaledUiSize(17));
+    pinRow->addWidget(&pinPositionButton);
+    v->addLayout(pinRow);
 
     QGridLayout *vbox = new QGridLayout;
 
@@ -243,6 +267,7 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
 
     this->setLayout(v);
     this->setStyleSheet(GuiFunct::scoPanelStyle());
+    updatePositionPinAppearance();
     markerFileLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     markerLocationLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     positionLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
@@ -273,6 +298,7 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     QObject::connect(&status12, SIGNAL(released()), this, SLOT(placeGuardButtonAction()));
     QObject::connect(&moveFast, SIGNAL(released()), this, SLOT(moveFastButtonAction()));
     QObject::connect(&moveSlow, SIGNAL(released()), this, SLOT(moveSlowButtonAction()));
+    QObject::connect(&pinPositionButton, SIGNAL(toggled(bool)), this, SLOT(togglePositionPin(bool)));
     QObject::connect(jumpButton, SIGNAL(released()), this, SLOT(jumpTileSelected()));
     QObject::connect(&markerFiles, SIGNAL(activated(QString)), this, SLOT(mkrFilesSelected(QString)));
     QObject::connect(&markerList, SIGNAL(activated(QString)), this, SLOT(mkrListSelected(QString)));
@@ -302,6 +328,8 @@ void StatusWindow::moveEvent(QMoveEvent *e){
         return;
 
     snapTimer.start(120);
+    if(positionPinned && !positionPersistenceSuspended)
+        pinSaveTimer.start(240);
 }
 
 void StatusWindow::applyWindowSnap(){
@@ -315,6 +343,59 @@ void StatusWindow::applyWindowSnap(){
     snapping = true;
     move(snapped);
     snapping = false;
+}
+
+void StatusWindow::togglePositionPin(bool pinned){
+    positionPinned = pinned;
+    updatePositionPinAppearance();
+
+    if(pinned){
+        Game::clearPinnedWindowPosition("controlPanelUseDefault");
+        Game::savePinnedWindowPosition("controlPanel", pos());
+        return;
+    }
+
+    pinSaveTimer.stop();
+    Game::clearPinnedWindowPosition("controlPanel");
+    Game::savePinnedWindowPosition("controlPanelUseDefault", QPoint(0, 0));
+    QWidget *mainWindow = parentWidget();
+    if(mainWindow != NULL){
+        const QPoint defaultPosition(mainWindow->x() - width(), mainWindow->y() + 200);
+        positionPersistenceSuspended = true;
+        move(Game::visibleWindowPosition(defaultPosition, size()));
+        positionPersistenceSuspended = false;
+    }
+}
+
+void StatusWindow::savePinnedPosition(){
+    if(positionPinned && !positionPersistenceSuspended)
+        Game::savePinnedWindowPosition("controlPanel", pos());
+}
+
+void StatusWindow::setPositionPersistenceSuspended(bool suspended){
+    positionPersistenceSuspended = suspended;
+    if(suspended)
+        pinSaveTimer.stop();
+}
+
+void StatusWindow::updatePositionPinAppearance(){
+    pinPositionButton.setText(tr("Pin"));
+    pinPositionButton.setToolTip(positionPinned
+        ? tr("The Control Panel position is saved between sessions. Click to unpin and return to default placement.")
+        : tr("Save the current Control Panel position between sessions."));
+    if(positionPinned){
+        pinPositionButton.setStyleSheet(QString(
+            "QToolButton { color: #232323; background-color: %1;"
+            " border: 1px solid %1; padding: 0px 3px; font-weight: normal; }"
+            "QToolButton:hover { border-color: #e4c5a3; }"
+            "QToolButton:pressed { background-color: #a98a69; }").arg(Game::StyleMainLabel));
+    } else {
+        pinPositionButton.setStyleSheet(
+            "QToolButton { color: #e7eaec; background-color: #26292c;"
+            " border: 1px solid #383d41; padding: 0px 3px; font-weight: normal; }"
+            "QToolButton:hover { background-color: #303438; border-color: #f08200; }"
+            "QToolButton:pressed { background-color: #191b1d; }");
+    }
 }
 
 

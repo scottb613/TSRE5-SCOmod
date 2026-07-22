@@ -207,6 +207,16 @@ LoadWindow::LoadWindow() {
     }
 }
 
+void LoadWindow::showEvent(QShowEvent *event){
+    QWidget::showEvent(event);
+    QScreen *screen = QApplication::primaryScreen();
+    if(screen == NULL)
+        return;
+    const QRect available = screen->availableGeometry();
+    move(available.left() + (available.width() - width()) / 2,
+         available.top() + (available.height() - height()) / 2);
+}
+
 
 
 

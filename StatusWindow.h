@@ -24,6 +24,7 @@ class StatusWindow : public QWidget {
 public:
     StatusWindow(QWidget* parent);
     virtual ~StatusWindow();
+    void setPositionPersistenceSuspended(bool suspended);
 
 public slots:
 
@@ -44,6 +45,8 @@ public slots:
     void moveFastButtonAction();
     void moveSlowButtonAction();
     void applyWindowSnap();
+    void togglePositionPin(bool pinned);
+    void savePinnedPosition();
     void clearGuardError();
     void jumpTileSelected();
     void naviInfo(int all, int hidden);
@@ -73,6 +76,7 @@ protected:
 
 
 private:
+    void updatePositionPinAppearance();
     /// EFO New
     QPushButton status0;
     QPushButton status1;
@@ -100,7 +104,11 @@ private:
     bool snapping = false;
     bool guardErrorActive = false;
     QTimer snapTimer;
+    QTimer pinSaveTimer;
     QTimer guardErrorTimer;
+    QToolButton pinPositionButton;
+    bool positionPinned = false;
+    bool positionPersistenceSuspended = false;
     QComboBox markerFiles;
     QComboBox markerList;
     QLineEdit txBox;

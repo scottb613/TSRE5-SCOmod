@@ -21,6 +21,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QGuiApplication>
+#include <QScreen>
 //#include <QCoreApplication>
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
@@ -173,7 +175,7 @@ QColor *Game::colorShapeView = NULL;
 QString Game::StyleMainLabel = "#770000";
 QString Game::StyleGreenButton = "#55FF55";
 QString Game::StyleRedButton = "#FF5555";
-QString Game::StyleYellowButton = "#FFFF55";
+QString Game::StyleYellowButton = "#b3b300";
 QString Game::StyleGreenText = "#009900";
 QString Game::StyleRedText = "#990000";
 
@@ -419,6 +421,107 @@ QString Game::routeAppDataDir(){
 
 QString Game::lastSessionFilePath(){
     return appDataDir()+"/lastSession.json";
+}
+
+QString Game::windowPinsFilePath(){
+    return appDataDir()+"/windowPins.json";
+}
+
+static QJsonObject readWindowPins(){
+    QFile file(Game::windowPinsFilePath());
+    if(!file.open(QIODevice::ReadOnly))
+        return QJsonObject();
+
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    return document.isObject() ? document.object() : QJsonObject();
+}
+
+static void writeWindowPins(const QJsonObject &pins){
+    QSaveFile file(Game::windowPinsFilePath());
+    if(!file.open(QIODevice::WriteOnly)){
+        qWarning() << "Unable to open window pin state" << file.fileName()
+                   << file.errorString();
+        return;
+    }
+    file.write(QJsonDocument(pins).toJson(QJsonDocument::Indented));
+    if(!file.commit())
+        qWarning() << "Unable to save window pin state" << file.fileName()
+                   << file.errorString();
+}
+
+bool Game::pinnedWindowPosition(const QString &windowName, QPoint *position){
+    QRect geometry;
+    if(!pinnedWindowGeometry(windowName, &geometry))
+        return false;
+    if(position != NULL)
+        *position = geometry.topLeft();
+    return true;
+}
+
+bool Game::pinnedWindowGeometry(const QString &windowName, QRect *geometry, bool *maximized){
+    const QJsonObject entry = readWindowPins().value(windowName).toObject();
+    if(!entry.value("pinned").toBool(false))
+        return false;
+    if(geometry != NULL){
+        const int width = entry.value("w").toInt();
+        const int height = entry.value("h").toInt();
+        *geometry = QRect(entry.value("x").toInt(), entry.value("y").toInt(), width, height);
+    }
+    if(maximized != NULL)
+        *maximized = entry.value("maximized").toBool(false);
+    return true;
+}
+
+void Game::savePinnedWindowPosition(const QString &windowName, const QPoint &position){
+    QJsonObject pins = readWindowPins();
+    QJsonObject entry;
+    entry["pinned"] = true;
+    entry["x"] = position.x();
+    entry["y"] = position.y();
+    pins[windowName] = entry;
+    writeWindowPins(pins);
+}
+
+void Game::savePinnedWindowGeometry(const QString &windowName, const QRect &geometry, bool maximized){
+    QJsonObject pins = readWindowPins();
+    QJsonObject entry;
+    entry["pinned"] = true;
+    entry["x"] = geometry.x();
+    entry["y"] = geometry.y();
+    entry["w"] = geometry.width();
+    entry["h"] = geometry.height();
+    entry["maximized"] = maximized;
+    pins[windowName] = entry;
+    writeWindowPins(pins);
+}
+
+void Game::clearPinnedWindowPosition(const QString &windowName){
+    QJsonObject pins = readWindowPins();
+    pins.remove(windowName);
+    writeWindowPins(pins);
+}
+
+QPoint Game::visibleWindowPosition(const QPoint &position, const QSize &windowSize){
+    QScreen *targetScreen = NULL;
+    const QRect requested(position, windowSize);
+    const QList<QScreen*> screens = QGuiApplication::screens();
+    for(QScreen *screen : screens){
+        if(screen->availableGeometry().intersects(requested)){
+            targetScreen = screen;
+            break;
+        }
+    }
+    if(targetScreen == NULL)
+        targetScreen = QGuiApplication::primaryScreen();
+    if(targetScreen == NULL)
+        return position;
+
+    const QRect available = targetScreen->availableGeometry();
+    const int maxX = qMax(available.left(), available.right() - qMin(windowSize.width(), available.width()) + 1);
+    const int maxY = qMax(available.top(), available.bottom() - qMin(windowSize.height(), available.height()) + 1);
+    return QPoint(qBound(available.left(), position.x(), maxX),
+                  qBound(available.top(), position.y(), maxY));
 }
 
 QString Game::terrainPaintPresetFilePath(){
@@ -1525,7 +1628,6 @@ void Game::CreateNewSettingsFile(){
     out << "imageUpgrade = true            // show DDS if available, false uses shapefile defined texture only \n " ; 
     out << "logfiledays = 20               // delete files older than X days \n " ; 
     out << "logfilemax = 50000             // keep only X logs \n " ; 
-    out << "//mainWindow = 100, 100          // X, Y of main windows and load window \n " ; 
     out << "mainWindowLayout = \"PWTC\"      // Order of windows: P = Properties, T = Tools, W = World, C = Control Panel \n " ; 
     out << "maxObjLag = 10  \n " ; 
     out << "mouseSpeed = 0.1  \n " ; 
@@ -1640,7 +1742,6 @@ void Game::CreateNewSettingsFile(){
     out << "selectedTerrColor = #FFB612       // terrain selection line color  \n " ; 
     out << "selectedTerrWidth = 4             // terrain selection line width  \n " ; 
     out << "skyColor =  #E0FFFF  \n " ; 
-    out << "controlPanel=10,400                // X, Y of Control Panel  \n " ; 
     out << "tileLod = 1                       // tiles in each direction to load  \n " ; 
     out << "toolsHidden = false               // only show the viewport  \n " ; 
     out << "useSuperelevation = false         // apply superelevation when rendering curves  \n " ; 

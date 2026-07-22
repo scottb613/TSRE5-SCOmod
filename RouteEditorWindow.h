@@ -14,6 +14,7 @@
 #include <QWidget>
 #include <QMainWindow>
 #include <QMap>
+#include <QTimer>
 
 class QSlider;
 class RouteEditorGLWidget;
@@ -42,6 +43,7 @@ class RouteEditorWindow : public QMainWindow
 
 public:
     RouteEditorWindow();
+    void applyPinnedMainWindowPosition();
     
 public slots:
     void save();
@@ -53,6 +55,8 @@ public slots:
     void reloadMkr();
     void reloadSettings();
     void restartAndRestore();
+    void toggleMainWindowPositionPin(bool pinned);
+    void savePinnedMainWindowPosition();
     void refreshErrors();
     void about();
     void terrainCamera(bool val);
@@ -114,6 +118,9 @@ signals:
 protected:
     void keyPressEvent(QKeyEvent *event);
     virtual void closeEvent(QCloseEvent * event );
+    void moveEvent(QMoveEvent *event);
+    void resizeEvent(QResizeEvent *event);
+    void changeEvent(QEvent *event);
     void hideAllTools();
 
 private:
@@ -155,6 +162,7 @@ private:
     QAction *aboutAction;
     QAction *terrainCameraAction;
     QAction *mstsShadowsAction;
+    QAction *pinMainWindowAction = NULL;
     QAction *propertiesAction;
     QAction *statAction;
     QAction *settingsAction;    
@@ -197,6 +205,8 @@ private:
     ActivityTrafficWindow* activityTrafficWindow;
     ActivityTimetableWindow* activityTimetableWindow;
     ShapeViewWindow* shapeViewWindow;
+    QTimer pinPositionTimer;
+    bool applyingWindowPosition = false;
 };
 //! [0]
 

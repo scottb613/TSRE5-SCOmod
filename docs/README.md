@@ -8,8 +8,8 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 
 ## Branches
 
-- `tsre-scomod-stable` is the stable/rescue branch, capped and tagged at `v0.5`.
-- `tsre-scomod-wip` is the continuing work-in-progress branch, beginning its next cycle at the `v0.6-wip` marker.
+- `tsre-scomod-stable` is the stable/rescue branch, capped and tagged at `v0.6`.
+- `tsre-scomod-wip` is the development branch; its current completed release cap is `v0.6`.
 
 ## Highlights
 
@@ -27,13 +27,13 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Protected `seasonal TERRTEX` 1024x1024 files from accidental downsampling during painting and corrected transfer/material cache refresh behavior.
 - Reduced `route performance` stutter with forest-generation controls, a Forest Regions view toggle, and texture-cache invalidation only when material paths change.
 - Improved `load` reliability with single-instance protection, corrected route-table refresh, and validated editable recent MSTS/ORTS root selection.
-- Added `Restore Last Session` for reopening the last route, camera location, main window, and Control Panel layout.
+- Added `Restore Last Session` for reopening the last route and camera context, plus compact `Pin` controls that remember the main window, Control Panel, and Grade Helper placement between sessions.
 - Added `Windows` the GenX executable icon, desktop-shortcut helper, and Route > Open Route Folder command.
 - Consolidated `Control Panel` Status and Navi functions into a scalable F7 panel with editing-state controls, navigation, movement locks, and delayed edge snapping.
 - Improved `Object Panel` with category-aware search and reset, cleaner Scale Rail grouping, and 30 Recent Items in a bounded scrollable history with Clear Recent.
 - Reworked `F1-F4 panels` property panels, Object Panel, Control Panel, Settings Editor, and startup screens into a consistent scalable interface.
 - Substantially reorganized `F2 textures` around a larger selected-texture preview, a compact two-column Recent Texture bank, clearer paint/preset/brush groups, and texture-name tooltips.
-- Added `global UI` scaling and consistent user-action sound feedback without playing sounds during passive panel refreshes.
+- Added `global UI` scaling, consistent manual-action sound feedback, cleaner square F12 boolean selectors, and coordinated state colors without false responses during passive refreshes.
 - Added `Place Guard` validation with automatic undo and distinct feedback for dangerous or invalid scenery, track, and interactive-object placements.
 - Reorganized `F12 Settings` into practical categories with direct settings saves, timestamped backups, full-sentence tooltips, and an integrated key-assignment reference.
 - Repaired `F3 maps` OSM Vector Map HTTPS support, hardened failed-response handling, and increased generated map imagery to 4096 resolution.
@@ -41,7 +41,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Improved `Dynamic Track` editing with database rebuilding after Flex, synchronized elevation data, clearer section/length information, fallback textures, and consistent naming.
 - Added `splash screens` runtime-discovered artwork with a persistent shuffled cycle shared by the Route Loader, Consist Loader, and About window during each session.
 - Improved `track properties` grade-unit presentation and added Lock Grade so newly placed track or road pieces can inherit the selected piece's physical grade.
-- Added `Grade Helper` for dock-friendly, validated, connected, per-piece vertical transitions to an exact target grade.
+- Added `Grade Helper` for dock-friendly, validated, connected, per-piece vertical transitions to an exact target grade, with remembered placement and automatic Lock Grade handoff.
 - Added `Grade Symbols` connectivity-aware markers for static and Dynamic Track, including steady-grade, transition, and direct crest/gully classifications.
 - Added `View and Markers` reversible overlay toggling and improved marker placement, color, height, and label reliability.
 - Added `Edit > Copy Info` selection diagnostics for clipboard-ready troubleshooting and reporting.

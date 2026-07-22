@@ -35,6 +35,8 @@ public slots:
     void rootPathEntered();
 signals:
     void showMainWindow();
+protected:
+    void showEvent(QShowEvent *event);
 private:
     void listRoutes();
     void updateStartupButtons(bool validRoot);

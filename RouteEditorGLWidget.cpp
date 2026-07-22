@@ -1713,10 +1713,12 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                     }
                     return;
                 }
-                if(gradeAchieved)
-                    userJumpSound();
-                else
-                    showPlacementSuccess();
+                showPlacementSuccess();
+                if(gradeAchieved){
+                    QTimer::singleShot(1000, this, [this](){
+                        playPlacementSound("SCOchirp.wav");
+                    });
+                }
                 selectedObj->select();
             }
         }

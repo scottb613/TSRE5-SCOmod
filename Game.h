@@ -14,6 +14,10 @@
 #include <QString>
 #include <QHash>
 
+class QPoint;
+class QRect;
+class QSize;
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -76,6 +80,13 @@ public:
     static QString sessionSplashImagePath();
     static QString routeAppDataDir();
     static QString lastSessionFilePath();
+    static QString windowPinsFilePath();
+    static bool pinnedWindowPosition(const QString &windowName, QPoint *position);
+    static bool pinnedWindowGeometry(const QString &windowName, QRect *geometry, bool *maximized = NULL);
+    static void savePinnedWindowPosition(const QString &windowName, const QPoint &position);
+    static void savePinnedWindowGeometry(const QString &windowName, const QRect &geometry, bool maximized = false);
+    static void clearPinnedWindowPosition(const QString &windowName);
+    static QPoint visibleWindowPosition(const QPoint &position, const QSize &windowSize);
     static QString terrainPaintPresetFilePath();
     //static bool loadRouteEditor();
     //static bool loadConEditor();

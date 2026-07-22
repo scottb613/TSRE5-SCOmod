@@ -45,9 +45,7 @@ loadAllWFiles = false             // true loads the entire route for error check
 
 //// UI / Windows / Scaling
 
-mainWindow = 100, 100             // X, Y of main window and load window
 mainWindowLayout = "PWTC"         // window order: P = Properties, T = Tools, W = World, C = Control Panel
-controlPanel = 0, 100             // X, Y of Control Panel
 toolsHidden = false               // only show the viewport
 uiScale = 1.15                    // global editor UI font/panel scale; 1.00 to 1.25 recommended
 

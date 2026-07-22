@@ -606,3 +606,32 @@ v0.6 route-display, settings-restart, and UI-feedback follow-up
 - TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp
   - Added source-derived guidance for Detail Level, StaticFlags, and MSTS Collision controls.
 
+
+v0.6 final window, grade, sound, and interface polish
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp and Game.h
+- TSRE5-Trainsim.Com-Fork-master/main.cpp
+- TSRE5-Trainsim.Com-Fork-master/LoadWindow.cpp and LoadWindow.h
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp and RouteEditorWindow.h
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.cpp and StatusWindow.h
+  - Added compact persistent Pin controls for the main window and Control Panel, including main-window size and maximized-state restoration.
+  - Centered the startup loader and removed the superseded manual window-position settings from generated settings and F12.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp and PropertiesTrackObj.h
+  - Added the Grade Helper position-only Pin without making the helper auto-open.
+  - Cleared manual Lock Grade when Grade Helper opens and silently restored Lock Grade when the target is achieved.
+  - Kept automatic state changes silent while using the normal placement click and delayed completion chirp.
+
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+  - Replaced the rough circular F12 True/False indicators with square checkbox-style indicators while preserving exclusive selection.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+- TSRE5-Trainsim.Com-Fork-master/main.cpp
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp
+- TSRE5-Trainsim.Com-Fork-master/SignalWindow.cpp
+  - Standardized yellow button and indicator states on the Control Panel palette.
+
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/grade-decrease.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/grade-decrease-mirror.png
+  - Removed obsolete Grade Symbol artwork no longer referenced by the renderer.
+

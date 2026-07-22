@@ -214,8 +214,11 @@ void LoadRouteEditor(){
         
     
                 
-        QStringList winPos = Game::mainPos.split(","); 
-        if(winPos.count() > 1) window->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
+        QStringList winPos = Game::mainPos.split(",");
+        const bool mainDefaultRequested = Game::pinnedWindowPosition("mainWindowUseDefault", NULL);
+        if(!mainDefaultRequested && winPos.count() > 1)
+            window->move(winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
+        window->applyPinnedMainWindowPosition();
         
         if(Game::debugOutput) qDebug() << "Window  Final: " << window->pos() ;        
         
@@ -233,10 +236,6 @@ void LoadRouteEditor(){
         } else if(Game::checkRoot(Game::root) && (Game::checkRoute(Game::route) || Game::createNewRoutes)){
             window->showRoute();
         } else {
-            // EFO moving to the primary screen to match the main window
-            QStringList winPos = Game::mainPos.split(","); 
-            if(winPos.count() > 1) loadWindow->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
-    
             loadWindow->show(); /// EFO moved inside bracket to fix double-window-load 8.002
         }
             
@@ -468,7 +467,7 @@ int main(int argc, char *argv[]){
         Game::StyleMainLabel = "#c4a480";
         Game::StyleGreenButton = "#008800";
         Game::StyleRedButton = "#880000";
-        Game::StyleYellowButton = "#888800";
+        Game::StyleYellowButton = "#b3b300";
         Game::StyleGreenText = "#55FF55";
         Game::StyleRedText = "#FF5555";
     } else {

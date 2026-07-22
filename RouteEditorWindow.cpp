@@ -428,6 +428,15 @@ RouteEditorWindow::RouteEditorWindow() {
     mstsShadowsAction = GuiFunct::newMenuCheckAction(tr("&MSTS Shadows"), this); 
     mstsShadowsAction->setChecked(Game::mstsShadows);
     QObject::connect(mstsShadowsAction, SIGNAL(triggered(bool)), this, SLOT(mstsShadows(bool)));
+    QPoint pinnedMainPosition;
+    const bool mainPositionPinned = Game::pinnedWindowPosition("mainWindow", &pinnedMainPosition);
+    pinMainWindowAction = GuiFunct::newMenuCheckAction(tr("Pin Main"), this, mainPositionPinned);
+    pinMainWindowAction->setToolTip(mainPositionPinned
+        ? tr("The Main Window position is saved between sessions. Unpin to return to centered placement.")
+        : tr("Pin the current Main Window position between sessions."));
+    QObject::connect(pinMainWindowAction, SIGNAL(triggered(bool)), this, SLOT(toggleMainWindowPositionPin(bool)));
+    pinPositionTimer.setSingleShot(true);
+    QObject::connect(&pinPositionTimer, SIGNAL(timeout()), this, SLOT(savePinnedMainWindowPosition()));
     QMenu *terrainMenu = new QMenu("&Terrain Editing:");
     QAction *detailTerrainAction = new QAction(tr("&Detailed Terrain"), this);
     QObject::connect(detailTerrainAction, SIGNAL(triggered()), this, SLOT(detailedTerrainEnabled()));
@@ -438,6 +447,7 @@ RouteEditorWindow::RouteEditorWindow() {
     settingsMenu = menuBar()->addMenu(tr("&Settings"));
     settingsMenu->addAction(terrainCameraAction);
     settingsMenu->addAction(mstsShadowsAction);
+    settingsMenu->addAction(pinMainWindowAction);
     settingsMenu->addMenu(terrainMenu);
     // Help
     aboutAction = new QAction(tr("&About"), this);
@@ -787,6 +797,71 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
     
 }
 
+void RouteEditorWindow::moveEvent(QMoveEvent *event){
+    QMainWindow::moveEvent(event);
+    if(pinMainWindowAction != NULL && pinMainWindowAction->isChecked() && !applyingWindowPosition)
+        pinPositionTimer.start(240);
+}
+
+void RouteEditorWindow::resizeEvent(QResizeEvent *event){
+    QMainWindow::resizeEvent(event);
+    if(pinMainWindowAction != NULL && pinMainWindowAction->isChecked() && !applyingWindowPosition)
+        pinPositionTimer.start(240);
+}
+
+void RouteEditorWindow::changeEvent(QEvent *event){
+    QMainWindow::changeEvent(event);
+    if(event->type() == QEvent::WindowStateChange && pinMainWindowAction != NULL
+            && pinMainWindowAction->isChecked() && !applyingWindowPosition)
+        pinPositionTimer.start(240);
+}
+
+void RouteEditorWindow::applyPinnedMainWindowPosition(){
+    QRect pinnedGeometry;
+    bool pinnedMaximized = false;
+    if(!Game::pinnedWindowGeometry("mainWindow", &pinnedGeometry, &pinnedMaximized))
+        return;
+    applyingWindowPosition = true;
+    setWindowState(windowState() & ~Qt::WindowMaximized);
+    if(pinnedGeometry.width() > 0 && pinnedGeometry.height() > 0)
+        resize(pinnedGeometry.size());
+    move(Game::visibleWindowPosition(pinnedGeometry.topLeft(), size()));
+    if(pinnedMaximized)
+        setWindowState(windowState() | Qt::WindowMaximized);
+    applyingWindowPosition = false;
+}
+
+void RouteEditorWindow::toggleMainWindowPositionPin(bool pinned){
+    pinMainWindowAction->setToolTip(pinned
+        ? tr("The Main Window position is saved between sessions. Unpin to return to centered placement.")
+        : tr("Pin the current Main Window position between sessions."));
+    if(pinned){
+        Game::clearPinnedWindowPosition("mainWindowUseDefault");
+        Game::savePinnedWindowGeometry("mainWindow", isMaximized() ? normalGeometry() : geometry(), isMaximized());
+        return;
+    }
+
+    pinPositionTimer.stop();
+    Game::clearPinnedWindowPosition("mainWindow");
+    Game::savePinnedWindowPosition("mainWindowUseDefault", QPoint(0, 0));
+    QScreen *screen = QApplication::primaryScreen();
+    if(screen != NULL){
+        applyingWindowPosition = true;
+        setWindowState(windowState() & ~Qt::WindowMaximized);
+        resize(1280, 800);
+        const QRect available = screen->availableGeometry();
+        const QPoint centered(available.left() + (available.width() - width()) / 2,
+                              available.top() + (available.height() - height()) / 2);
+        move(Game::visibleWindowPosition(centered, size()));
+        applyingWindowPosition = false;
+    }
+}
+
+void RouteEditorWindow::savePinnedMainWindowPosition(){
+    if(pinMainWindowAction != NULL && pinMainWindowAction->isChecked() && !applyingWindowPosition)
+        Game::savePinnedWindowGeometry("mainWindow", isMaximized() ? normalGeometry() : geometry(), isMaximized());
+}
+
 void RouteEditorWindow::saveLastSession(){
     QJsonObject root;
     root["savedAt"] = QDateTime::currentDateTime().toString(Qt::ISODate);
@@ -821,6 +896,9 @@ void RouteEditorWindow::saveLastSession(){
 }
 
 void RouteEditorWindow::applyRestoredSessionGeometry(){
+    pinPositionTimer.stop();
+    applyingWindowPosition = true;
+    statusWindow->setPositionPersistenceSuspended(true);
     if(Game::restoreLastSessionWindowGeometry){
         if(Game::restoreMainW > 0 && Game::restoreMainH > 0)
             setGeometry(Game::restoreMainX, Game::restoreMainY, Game::restoreMainW, Game::restoreMainH);
@@ -833,6 +911,8 @@ void RouteEditorWindow::applyRestoredSessionGeometry(){
         statusWindow->setGeometry(Game::restoreStatusX, Game::restoreStatusY, Game::restoreStatusW, Game::restoreStatusH);
         Game::restoreStatusGeometry = false;
     }
+    statusWindow->setPositionPersistenceSuspended(false);
+    applyingWindowPosition = false;
 }
 
 void RouteEditorWindow::save(){
@@ -1192,9 +1272,12 @@ void RouteEditorWindow::show(){
              statusWindow->show();
              statAction->setChecked(true);
          }
-         QStringList winPos = Game::statusPos.split(","); 
+         QStringList winPos = Game::statusPos.split(",");
+         QPoint pinnedControlPosition;
+         const bool controlPositionPinned = Game::pinnedWindowPosition("controlPanel", &pinnedControlPosition);
+         const bool controlDefaultRequested = Game::pinnedWindowPosition("controlPanelUseDefault", NULL);
         
-          if(winPos.count() < 2)                
+          if(!controlPositionPinned && (controlDefaultRequested || winPos.count() < 2))
           {            
             const int naviTemp1 = this->x() - 300;  // left of window 
             const int naviTemp2 = this->y() + 200;  // 200 from the top corner
