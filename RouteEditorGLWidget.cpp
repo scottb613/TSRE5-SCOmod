@@ -1590,10 +1590,29 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
                     return;
                 if (selectedObj->typeObj != WorldObj::worldobj)
                     return;
-                //route->refreshObj(selectedWorldObj);
-                route->flipObject((WorldObj*)selectedObj);
-                if(placeElev != 0)
-                    selectedObj->rotate(placeElev, 0, 0);
+                {
+                    WorldObj *worldObj = (WorldObj*)selectedObj;
+                    const bool preserveTrackGrade = worldObj->typeID == WorldObj::trackobj;
+                    float trackGradeBeforeFlip = preserveTrackGrade
+                            ? trackGradePercent(selectedObj) : 0.0f;
+                    if(preserveTrackGrade){
+                        if(Game::gradeAssistEnabled || Game::gradeAssistTargetReached)
+                            trackGradeBeforeFlip = Game::gradeAssistCurrentPercent;
+                        else if(Game::gradeLockEnabled)
+                            trackGradeBeforeFlip = Game::gradeLockedPercent;
+                    }
+                    //route->refreshObj(selectedWorldObj);
+                    route->flipObject(worldObj);
+                    if(preserveTrackGrade){
+                        // Swapping the placement end rebuilds the track quaternion
+                        // from the database and would otherwise flatten the piece.
+                        // Restore the same physical grade; TrackObj accounts for
+                        // the reversed endpoint sign internally.
+                        ((TrackObj*)worldObj)->setElevation(trackGradeBeforeFlip * 10.0f);
+                    } else if(placeElev != 0) {
+                        selectedObj->rotate(placeElev, 0, 0);
+                    }
+                }
                 //selectToolresetRot();
                 break;
             default:
