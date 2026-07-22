@@ -281,7 +281,7 @@ function Write-WorkListRtf {
 
 function Assert-NoGarbage {
     param(
-        [Parameter(Mandatory)][string[]]$RelativePaths,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$RelativePaths,
         [Parameter(Mandatory)][string]$Scope
     )
 
