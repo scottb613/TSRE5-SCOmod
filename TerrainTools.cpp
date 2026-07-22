@@ -43,13 +43,14 @@ TerrainTools::TerrainTools(QString name)
     texPreview = new QPixmap(160,160);
     defaultTexPreview = new QPixmap(36,36);
     defaultTexPreview->fill(Qt::transparent);
-    texPreview->fill(Qt::gray);
+    texPreview->fill(Qt::black);
     texPreviewLabel = new ClickableLabel("");
     texPreviewLabel->setContentsMargins(0,0,0,0);
     texPreviewLabel->setFixedSize(162,162);
     texPreviewLabel->setAlignment(Qt::AlignCenter);
     texPreviewLabel->setStyleSheet("background-color: #171717; border: 1px solid #555555;");
     texPreviewLabel->setPixmap(*texPreview);
+    texPreviewLabel->setToolTip("#000000");
     for(int i = 0; i < 7; i++){
         texPreviewLabels.push_back(new ClickableLabel(""));
         texPreviewLabels.back()->setContentsMargins(0,0,0,0);
@@ -584,9 +585,18 @@ void TerrainTools::heightToolEnabled(bool val){
     }
 }
 
+void TerrainTools::updateColorPreview(){
+    QColor color(paintBrush->color[0], paintBrush->color[1], paintBrush->color[2]);
+    QPixmap colorPreview(160, 160);
+    colorPreview.fill(color);
+    texPreviewLabel->setPixmap(colorPreview);
+    texPreviewLabel->setToolTip(color.name());
+}
+
 void TerrainTools::paintColorToolEnabled(bool val){
      if(val){
         this->paintBrush->useTexture = false;
+        updateColorPreview();
         emit setPaintBrush(this->paintBrush);
         emit enableTool("paintToolColor");
     } else {
@@ -605,6 +615,7 @@ void TerrainTools::gapsTerrToolEnabled(bool val){
 void TerrainTools::paintTexToolEnabled(bool val){
     if(val){
         this->paintBrush->useTexture = true;
+        updateTexPrev();
         emit setPaintBrush(this->paintBrush);
         emit enableTool("paintToolTexture");
     } else {
@@ -620,11 +631,15 @@ void TerrainTools::mirrorSeasonEnabled(bool val){
 void TerrainTools::chooseColorEnabled(){
     QColor aColor(paintBrush->color[0], paintBrush->color[1], paintBrush->color[2]);
     QColor color = QColorDialog::getColor(aColor, this, "Text Color",  QColorDialog::DontUseNativeDialog);
+    if(!color.isValid())
+        return;
     paintBrush->color[0] = color.red();
     paintBrush->color[1] = color.green();
     paintBrush->color[2] = color.blue();
     colorw->setStyleSheet("background-color:"+color.name()+";");
     colorw->setText(color.name());
+    if(!paintBrush->useTexture)
+        updateColorPreview();
 }
 
 void TerrainTools::pickTexToolEnabled(bool val){
@@ -705,6 +720,22 @@ void TerrainTools::preloadTexTool(QString filename)
 {
     filename = Terrain::resolveTexturePath(Terrain::routeTerrtexPath(),
             Terrain::textureSubdirCandidatesForFlags(Game::TextureFlags["snow"], Game::season), filename);
+    if(!QFile::exists(filename)){
+        QFileInfo requested(filename);
+        const QString baseName = requested.absolutePath() + "/" + requested.completeBaseName();
+        const QStringList alternatives = QStringList() << "ace" << "dds" << "bmp" << "png";
+        QString existingAlternative;
+        for(const QString &extension : alternatives){
+            const QString candidate = baseName + "." + extension;
+            if(QFile::exists(candidate)){
+                existingAlternative = candidate;
+                break;
+            }
+        }
+        if(existingAlternative.isEmpty())
+            return;
+        filename = existingAlternative;
+    }
     if(Game::debugOutput) qDebug() << "preloading " << filename;
     int result = TexLib::getTex(filename);     
     if(result == -1)
@@ -1212,12 +1243,16 @@ void TerrainTools::updateTexPrev(){
         if(i == 1){
             tlabel = texPreviewLabel;
             res = 160;
-            out = this->paintBrush->tex->getImageData(res,res);
-            if(this->paintBrush->tex->bytesPerPixel == 3)
-                tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGB888)));
-            if(this->paintBrush->tex->bytesPerPixel == 4)
-                tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGBA8888)));
-            tlabel->setToolTip(textureName);
+            if(paintBrush->useTexture){
+                out = this->paintBrush->tex->getImageData(res,res);
+                if(this->paintBrush->tex->bytesPerPixel == 3)
+                    tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGB888)));
+                if(this->paintBrush->tex->bytesPerPixel == 4)
+                    tlabel->setPixmap(QPixmap::fromImage(QImage(out,res,res,QImage::Format_RGBA8888)));
+                tlabel->setToolTip(textureName);
+            } else {
+                updateColorPreview();
+            }
         }// else {
         tlabel = texPreviewLabels[i-1];
         res = 36;

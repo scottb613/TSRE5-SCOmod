@@ -90,6 +90,7 @@ private:
     QVector<QImage> brushShapes;
     int currentBrushShape = -1;
     void nextBrushShape();
+    void updateColorPreview();
     QVector<QPair<int, Texture*>> texLastItems;
     QString paintPresetFilePath();
     void refreshPaintPresets();

@@ -335,10 +335,16 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
 
 void SettingsDialog::createKeyAssignmentsTab(QTabWidget* tabs) {
     QTableWidget* table = new QTableWidget(tabs);
+    const float scale = qMax(1.0f, Game::uiScale);
+    const int normalRowHeight = qRound(24.0f * scale);
+    const int sectionRowHeight = qRound(29.0f * scale);
+    const int spacerRowHeight = qRound(8.0f * scale);
+    table->setFont(font());
     table->setColumnCount(2);
     table->setHorizontalHeaderLabels(QStringList() << "Key" << "Action");
     table->verticalHeader()->hide();
     table->horizontalHeader()->setStretchLastSection(true);
+    table->horizontalHeader()->setMinimumHeight(qRound(24.0f * scale));
     table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -368,7 +374,7 @@ void SettingsDialog::createKeyAssignmentsTab(QTabWidget* tabs) {
                 spacer->setBackground(QColor("#202020"));
                 table->setItem(spacerRow, 0, spacer);
                 table->setSpan(spacerRow, 0, 1, 2);
-                table->setRowHeight(spacerRow, 8);
+                table->setRowHeight(spacerRow, spacerRowHeight);
             }
             int row = table->rowCount();
             table->insertRow(row);
@@ -382,7 +388,7 @@ void SettingsDialog::createKeyAssignmentsTab(QTabWidget* tabs) {
             section->setBackground(QColor("#303030"));
             table->setItem(row, 0, section);
             table->setSpan(row, 0, 1, 2);
-            table->setRowHeight(row, 26);
+            table->setRowHeight(row, sectionRowHeight);
             visualRow = 0;
             firstSection = false;
             continue;
@@ -402,7 +408,7 @@ void SettingsDialog::createKeyAssignmentsTab(QTabWidget* tabs) {
         actionItem->setBackground(bg);
         table->setItem(row, 0, keyItem);
         table->setItem(row, 1, actionItem);
-        table->setRowHeight(row, 22);
+        table->setRowHeight(row, normalRowHeight);
         visualRow++;
     }
 
