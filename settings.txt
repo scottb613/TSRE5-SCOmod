@@ -124,7 +124,7 @@ writeTDB = true                   // set false to manually add to TDB via Z key
 
 //// Terrain Editing / F2 Brush Defaults
 
-terrainBrushColor = "#1B2E29"
+terrainBrushColor = "#000000"
 terrainBrushIntensity = 70
 terrainBrushSize = 25
 terrainCut = 2
@@ -135,7 +135,7 @@ terrainSize = 1
 
 //// Terrain Texture / Seasonal Paint
 
-preloadTextures = "rock.ace"      // supports ace, bmp, dds, png files in TERRTEX folder
+preloadTextures = ""              // optional ace, bmp, dds, png files in TERRTEX folder
 
 
 //// Map / F3 Imagery
