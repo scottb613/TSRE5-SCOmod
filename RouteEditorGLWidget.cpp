@@ -1202,6 +1202,10 @@ void RouteEditorGLWidget::showModeChange() {
     playPlacementSound("SCOpress.wav");
 }
 
+void RouteEditorGLWidget::userPanelToggleSound() {
+    playPlacementSound("SCOtic.wav");
+}
+
 void RouteEditorGLWidget::userModeChangeSound() {
     showModeChange();
 }
@@ -1733,6 +1737,7 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                     return;
                 }
                 showPlacementSuccess();
+                emit itemSelected(route->ref->selected);
                 if(gradeAchieved){
                     QTimer::singleShot(1000, this, [this](){
                         playPlacementSound("SCOchirp.wav");
@@ -1772,6 +1777,7 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             }
             if (selectedObj != NULL) {
                 showPlacementSuccess();
+                emit itemSelected(route->ref->selected);
                 selectedObj->select();
             }
         }
@@ -2796,7 +2802,6 @@ void RouteEditorGLWidget::pickObjForPlacement(){
         if(selectedObj->typeObj == GameObj::worldobj){
             Quat::copy(this->placeRot, ((WorldObj*)selectedObj)->qDirection);
             route->ref->selected = ((WorldObj*)selectedObj)->getRefInfo();
-            emit itemSelected(route->ref->selected);
         }
     }
 }

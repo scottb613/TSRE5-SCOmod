@@ -66,6 +66,7 @@ public:
 public slots:
     void cleanup();
     void enableTool(QString name);
+    void userPanelToggleSound();
     void userModeChangeSound();
     void userJumpSound();
     void setPaintBrush(Brush* brush);

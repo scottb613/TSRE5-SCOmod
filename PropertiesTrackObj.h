@@ -15,6 +15,7 @@
 
 class TrackObj;
 class GradeHelperWindow;
+class HacksWindow;
 
 class PropertiesTrackObj : public PropertiesAbstract{
     Q_OBJECT
@@ -43,9 +44,11 @@ public slots:
     void haxRemoveTDBVectorEnabled();
     void haxElevTDBVectorEnabled();
     void haxRemoveTDBTreeEnabled();
+    void removeAllInteractivesEnabled();
     void eTemplateEdited(QString val);
     void openGradeHelper();
     void gradeHelperWindowClosed();
+    void hacksWindowClosed();
     void resetGradeHelper();
         
 signals:
@@ -65,10 +68,12 @@ private:
     QPushButton gradeLock;
     QPushButton gradeHelper;
     GradeHelperWindow *gradeHelperWindow = NULL;
+    HacksWindow *hacksWindow = NULL;
     QTimer gradeHelperUiTimer;
     QComboBox cCollisionType;
     QLineEdit eCollisionFlags;
     QLineEdit eSectionIdx;
+    QPushButton hacks;
     
     void showElevBox(QString val);
     void setStepValue(float step);

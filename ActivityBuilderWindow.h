@@ -30,6 +30,7 @@ public slots:
 
 signals:
     void visibilityChanged(bool visible);
+    void userToggleSoundRequested();
 
 protected:
     void closeEvent(QCloseEvent *event);

@@ -228,7 +228,7 @@ RouteEditorWindow::RouteEditorWindow() {
     mainLayout3->setSpacing(3);
     mainLayout2->setMargin(0);
     mainLayout2->setSpacing(0);
-    propertiesPanelTitle = new QLabel("OBJECT PLACEMENT", box2);
+    propertiesPanelTitle = new QLabel("OBJECT PROPERTIES", box2);
     GuiFunct::styleEditorTitle(propertiesPanelTitle);
     propertiesPanelTitle->hide();
     mainLayout3->addWidget(propertiesPanelTitle);
@@ -475,6 +475,8 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(activityAction, SIGNAL(triggered(bool)), this, SLOT(showToolsActivity(bool)));
     QObject::connect(activityBuilderWindow, SIGNAL(visibilityChanged(bool)),
                      activityAction, SLOT(setChecked(bool)));
+    QObject::connect(activityBuilderWindow, SIGNAL(userToggleSoundRequested()),
+                     glWidget, SLOT(userPanelToggleSound()));
     // Settings
     terrainCameraAction = GuiFunct::newMenuCheckAction(tr("&Stick Camera To Terrain"), this); 
     terrainCameraAction->setChecked(Game::cameraStickToTerrain);
@@ -1230,8 +1232,8 @@ void RouteEditorWindow::showProperties(GameObj* obj){
     foreach (PropertiesAbstract *it, objProperties){
         if(it == NULL) continue;
         if(!it->support(obj)) continue;
-        it->show();
         it->showObj(obj);
+        it->show();
         return;
     }
 }

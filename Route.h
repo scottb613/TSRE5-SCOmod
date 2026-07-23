@@ -100,6 +100,7 @@ public:
     void reloadTile(int x, int z);
     void reloadLoadedWorldObjects();
     void deleteObj(WorldObj* obj);
+    int removeAllInteractives(bool gui = true);
     void undoPlaceObj(int x, int y, int UiD);
     void removeTrackFromTDB(WorldObj* obj);
     void fillWorldObjectsByTrackItemId(QVector<WorldObj*> &objects, int tdbId, int id);

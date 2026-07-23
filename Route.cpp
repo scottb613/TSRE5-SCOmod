@@ -2615,6 +2615,62 @@ void Route::deleteObj(WorldObj* obj) {
         tTile->jestHiddenObj++;
 }
 
+int Route::removeAllInteractives(bool gui) {
+    // A route-wide cleanup must not depend on which tiles happen to be visible.
+    // preloadWFiles creates and loads every world tile that is not already in
+    // the route tile map.
+    preloadWFiles(gui);
+
+    QVector<WorldObj*> interactives;
+    foreach (Tile *tTile, tile) {
+        if (tTile == NULL || tTile->loaded != 1)
+            continue;
+        for (auto it = tTile->obiekty.begin(); it != tTile->obiekty.end(); ++it) {
+            WorldObj *obj = it->second;
+            if (obj != NULL && obj->loaded && obj->isTrackItem())
+                interactives.push_back(obj);
+        }
+    }
+
+    if (interactives.isEmpty())
+        return 0;
+
+    QProgressDialog *progress = NULL;
+    if (gui) {
+        progress = new QProgressDialog(
+            "Removing All Interactives ...", "", 0, interactives.size());
+        progress->setWindowModality(Qt::WindowModal);
+        progress->setCancelButton(NULL);
+        progress->setWindowFlags(Qt::CustomizeWindowHint);
+        progress->show();
+    }
+
+    Undo::StateBegin();
+    Undo::PushTrackDB(trackDB, false);
+    Undo::PushTrackDB(roadDB, true);
+    for (int i = 0; i < interactives.size(); ++i) {
+        WorldObj *obj = interactives[i];
+        Undo::PushWorldObjRemoved(obj);
+        obj->loaded = false;
+        obj->setModified();
+        obj->deleteTrItems();
+
+        Tile *tTile = tile.value(obj->x * 10000 + obj->y, NULL);
+        if (tTile != NULL)
+            ++tTile->jestHiddenObj;
+
+        if (progress != NULL) {
+            progress->setValue(i + 1);
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        }
+    }
+    Undo::StateEnd();
+
+    delete progress;
+    emit sendMsg("unselect");
+    return interactives.size();
+}
+
 void Route::removeTrackFromTDB(WorldObj* obj) {
     if(obj->typeObj != WorldObj::worldobj)
         return;

@@ -333,6 +333,9 @@ ObjTools::ObjTools(QString name)
     vbox->addItem(vlist);
     vbox->addWidget(&refList);
     addRule();
+    QLabel *placeTitle = new QLabel("OBJECT PLACE");
+    GuiFunct::styleEditorTitle(placeTitle);
+    vbox->addWidget(placeTitle);
     QGridLayout *vlist3 = new QGridLayout;
     vlist3->setSpacing(2);
     vlist3->setContentsMargins(3,0,1,0);    
@@ -448,17 +451,15 @@ ObjTools::ObjTools(QString name)
     autoPlaceLayout->addWidget(resetRotationButton);
     autoPlacementWindow->finishLayout();
 
-    addRule();
-    QLabel *label2 = new QLabel("• Recent Items");
-    label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label2->setContentsMargins(12,0,0,0);
+    QLabel *label2 = new QLabel("RECENT ITEMS");
+    GuiFunct::styleEditorTitle(label2);
+    label2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     clearRecentButton.setText("Clear Recent");
     clearRecentButton.setFocusPolicy(Qt::NoFocus);
     QHBoxLayout *recentHeader = new QHBoxLayout;
     recentHeader->setSpacing(2);
     recentHeader->setContentsMargins(0,0,1,0);
     recentHeader->addWidget(label2);
-    recentHeader->addStretch();
     recentHeader->addWidget(&clearRecentButton);
     //refClasssetMargin(0);
     //refTrack->sets >setMargin(0);
@@ -476,7 +477,9 @@ ObjTools::ObjTools(QString name)
     //astItems.setSizePolicy(*sizePolicy);
     //) QSizePolicy::MinimumExpanding);
     //lastItems.setMaximumHeight(999);
-    refList.setMinimumHeight(250);
+    // The OBJECT PLACE and RECENT ITEMS title strips take their space from
+    // the main object list, never from the fixed-height recent-items list.
+    refList.setMinimumHeight(scaledUiSize(220));
     refList.setFont(objectPanelFont);
     refList.setUniformItemSizes(true);
     refList.setSpacing(1);
@@ -937,7 +940,6 @@ void ObjTools::refListSelected(QListWidgetItem * item){
     try {
         route->ref->selected = currentItemList[item->type()];//&route->ref->refItems[refClass.currentText().toStdString()][refList.currentRow()];
         emit sendMsg("engItemSelected");
-        itemSelected((Ref::RefItem*)route->ref->selected);
     } catch(const std::out_of_range& oor){
         route->ref->selected = NULL;
     }

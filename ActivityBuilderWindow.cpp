@@ -116,7 +116,7 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     pathDockTitle->setFixedHeight(0);
     pathDock->setTitleBarWidget(pathDockTitle);
     QWidget *pathControls = new QWidget(pathDock);
-    pathControls->setStyleSheet(GuiFunct::scoPanelStyle());
+    GuiFunct::applyEditorPanelStyle(pathControls);
     QVBoxLayout *pathLayout = new QVBoxLayout(pathControls);
     QLabel *pathHeading = new QLabel(tr("PATH CONTROLS"), pathControls);
     GuiFunct::styleEditorTitle(pathHeading);
@@ -253,6 +253,7 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     toggleActivityBuilder->setShortcutContext(Qt::WindowShortcut);
     addAction(toggleActivityBuilder);
     QObject::connect(toggleActivityBuilder, &QAction::triggered, this, [this]() {
+        emit userToggleSoundRequested();
         close();
     });
 
