@@ -29,7 +29,6 @@ GeoTools::GeoTools(QString name)
     if(panelFont.pointSizeF() > 0)
         panelFont.setPointSizeF(panelFont.pointSizeF() * 1.12);
     setFont(panelFont);
-    GuiFunct::applyEditorPanelStyle(this);
     int row = 0;
     
     buttonTools["mapTileShowTool"] = new QPushButton("Show/Hide Map", this);
@@ -45,22 +44,17 @@ GeoTools::GeoTools(QString name)
 
     QLabel *label0;
     QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    vbox->setSpacing(3);
+    vbox->setContentsMargins(4,3,4,4);
     auto addRule = [vbox]() {
-        QWidget *ruleRow = new QWidget;
-        ruleRow->setFixedHeight(7);
-        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
-        ruleLayout->setContentsMargins(6,3,6,3);
-        QFrame *rule = new QFrame;
-        rule->setFixedHeight(1);
-        rule->setStyleSheet("background-color: #484848; border: none;");
-        ruleLayout->addWidget(rule);
-        vbox->addWidget(ruleRow);
+        vbox->addSpacing(scaledUiSize(5));
     };
+    QLabel *panelTitle = new QLabel("GEODATA EDITOR");
+    GuiFunct::styleEditorTitle(panelTitle);
+    vbox->addWidget(panelTitle);
         
-    label0 = new QLabel("Map Layers:");
-    label0->setContentsMargins(3,0,0,0);
+    label0 = new QLabel("• Map Layers");
+    label0->setContentsMargins(12,0,0,0);
     label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     vbox->addWidget(buttonTools["mapTileShowTool"]);
@@ -69,15 +63,15 @@ GeoTools::GeoTools(QString name)
     vbox->addWidget(buttonTools["removeTileTextureTool"]);
     
     addRule();
-    label0 = new QLabel("Terrain Heightmap:");
-    label0->setContentsMargins(3,0,0,0);
+    label0 = new QLabel("• Terrain Heightmap");
+    label0->setContentsMargins(12,0,0,0);
     label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     vbox->addWidget(buttonTools["heightTileLoadTool"]);
     
     addRule();
-    label0 = new QLabel("Auto Tile Generation:");
-    label0->setContentsMargins(3,0,0,0);
+    label0 = new QLabel("• Auto Tile Generation");
+    label0->setContentsMargins(12,0,0,0);
     label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     QCheckBox *chAutoCreateTile = new QCheckBox("Create new tiles if not exist.");
@@ -88,8 +82,8 @@ GeoTools::GeoTools(QString name)
     vbox->addWidget(chAutoGeoTerrain);
     
     addRule();
-    label0 = new QLabel("Tiles From Marker File:");
-    label0->setContentsMargins(3,0,0,0);
+    label0 = new QLabel("• Tiles From Marker File");
+    label0->setContentsMargins(12,0,0,0);
     label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     vbox->addWidget(&markerFiles);
@@ -112,8 +106,8 @@ GeoTools::GeoTools(QString name)
     vbox->addWidget(generateTiles);
 
     addRule();
-    label0 = new QLabel("Distant Terrain:");
-    label0->setContentsMargins(3,0,0,0);
+    label0 = new QLabel("• Distant Terrain");
+    label0->setContentsMargins(12,0,0,0);
     label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     QPushButton * checkGeodataLoFiles = new QPushButton("Check if geodata files available.", this);

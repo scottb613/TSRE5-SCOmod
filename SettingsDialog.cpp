@@ -384,7 +384,7 @@ void SettingsDialog::createKeyAssignmentsTab(QTabWidget* tabs) {
             font.setUnderline(true);
             font.setPointSizeF(font.pointSizeF() + 1.5);
             section->setFont(font);
-            section->setForeground(QColor(Qt::white));
+            section->setForeground(QColor(Game::StyleMainLabel));
             section->setBackground(QColor("#303030"));
             table->setItem(row, 0, section);
             table->setSpan(row, 0, 1, 2);
@@ -704,7 +704,7 @@ bool SettingsDialog::save(const QString& filename) {
 
     QTextStream out(&file);
 
-    out << "// TSRE GenX v0.6 settings\n";
+    out << "// TSRE GenX v0.7 settings\n";
     out << "// Both # and // can be used for comments.\n";
     out << "// Recommended public uiScale range: 1.00 to 1.25. Scott's 32\" 2K setup uses 1.15.\n\n";
 

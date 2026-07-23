@@ -23,10 +23,7 @@ PropertiesStatic::PropertiesStatic(){
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     auto addRule = [vbox]() {
-        QFrame *rule = new QFrame;
-        rule->setFrameShape(QFrame::HLine);
-        rule->setFrameShadow(QFrame::Sunken);
-        vbox->addWidget(rule);
+        vbox->addSpacing(qRound(5.0f * qMax(1.0f, Game::uiScale)));
     };
     infoLabel = new QLabel("Object: Static Object");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");

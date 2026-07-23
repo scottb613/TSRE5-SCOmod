@@ -91,15 +91,14 @@ class GradeHelperWindow : public QWidget {
 public:
     explicit GradeHelperWindow(PropertiesTrackObj *owner)
         : QWidget(owner->window(), Qt::Tool), owner(owner) {
-        setWindowTitle("Grade Helper");
+        setWindowTitle(QString());
         setFixedWidth(gradeHelperScaledSize(300));
-        setStyleSheet(GuiFunct::scoEditorPanelStyle());
 
         QVBoxLayout *layout = new QVBoxLayout(this);
         layout->setSpacing(3);
         layout->setContentsMargins(4,4,4,4);
-        QLabel *heading = new QLabel("Grade Transition:");
-        heading->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+        QLabel *heading = new QLabel("GRADE HELPER");
+        GuiFunct::styleEditorTitle(heading);
         QHBoxLayout *headingRow = new QHBoxLayout;
         headingRow->setContentsMargins(0,0,0,0);
         headingRow->addWidget(heading);
@@ -118,7 +117,6 @@ public:
         updatePinAppearance();
         headingRow->addWidget(&pinButton);
         layout->addLayout(headingRow);
-
         QFormLayout *form = new QFormLayout;
         form->setSpacing(3);
         form->setContentsMargins(0,0,0,0);
@@ -128,7 +126,9 @@ public:
         nextGrade.setAlignment(Qt::AlignCenter);
         const QString gradeInputStyle =
             "QDoubleSpinBox { border: 1px solid #70590e; padding-right: 18px; }"
+            "QDoubleSpinBox:hover { border: 1px solid #f08200; }"
             "QDoubleSpinBox:focus { border: 1px solid #8a7116; }"
+            "QDoubleSpinBox:focus:hover { border: 1px solid #f08200; }"
             "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {"
             " width: 16px; background-color: #414141; border-left: 1px solid #555555; }"
             "QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover { background-color: #555555; }"
@@ -155,15 +155,7 @@ public:
         stepGrade.setMinimumHeight(fieldHeight);
         nextGrade.setMinimumHeight(fieldHeight);
 
-        QWidget *ruleRow = new QWidget;
-        ruleRow->setFixedHeight(7);
-        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
-        ruleLayout->setContentsMargins(3,3,3,3);
-        QFrame *rule = new QFrame;
-        rule->setFixedHeight(1);
-        rule->setStyleSheet("background-color: #484848; border: none;");
-        ruleLayout->addWidget(rule);
-        layout->addWidget(ruleRow);
+        layout->addSpacing(gradeHelperScaledSize(5));
 
         stateButton.setFocusPolicy(Qt::NoFocus);
         layout->addWidget(&stateButton);
@@ -196,6 +188,10 @@ public:
                 Game::savePinnedWindowPosition("gradeHelperUseDefault", QPoint(0, 0));
                 moveToDefaultPosition();
             }
+        });
+        QObject::connect(&pinButton, &QToolButton::clicked, this, [this](){
+            this->owner->userButtonPressed();
+            this->owner->requestMainFocus();
         });
         QObject::connect(&refreshTimer, &QTimer::timeout, this, [this](){ syncUi(); });
         refreshTimer.start(120);
@@ -460,15 +456,7 @@ PropertiesTrackObj::PropertiesTrackObj(){
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     auto addRule = [vbox]() {
-        QWidget *ruleRow = new QWidget;
-        ruleRow->setFixedHeight(7);
-        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
-        ruleLayout->setContentsMargins(6,3,6,3);
-        QFrame *rule = new QFrame;
-        rule->setFixedHeight(1);
-        rule->setStyleSheet("background-color: #484848; border: none;");
-        ruleLayout->addWidget(rule);
-        vbox->addWidget(ruleRow);
+        vbox->addSpacing(qRound(5.0f * qMax(1.0f, Game::uiScale)));
     };
     infoLabel = new QLabel("Object: Track");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");

@@ -106,7 +106,7 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     //this->setWindowFlags(Qt::WindowStaysOnTopHint);
     this->setFixedWidth(scaledUiSize(300));
     this->setFixedHeight(scaledUiSize(463));
-    this->setWindowTitle(tr("Control Panel"));
+    this->setWindowTitle(QString());
     const bool defaultPositionRequested = Game::pinnedWindowPosition("controlPanelUseDefault", NULL);
     QStringList winPos = Game::statusPos.split(",");
     if(!defaultPositionRequested && winPos.count() > 1)
@@ -133,7 +133,10 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     v->setContentsMargins(0,1,1,1);
 
     QHBoxLayout *pinRow = new QHBoxLayout;
-    pinRow->setContentsMargins(3,0,1,0);
+    pinRow->setContentsMargins(4,3,4,0);
+    QLabel *panelTitle = new QLabel("CONTROL PANEL");
+    GuiFunct::styleEditorTitle(panelTitle);
+    pinRow->addWidget(panelTitle);
     pinRow->addStretch();
     pinPositionButton.setCheckable(true);
     pinPositionButton.setChecked(positionPinned);
@@ -187,24 +190,16 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
 
     v->addItem(vbox);
 
-    QWidget *ruleRow = new QWidget;
-    ruleRow->setFixedHeight(7);
-    QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
-    ruleLayout->setContentsMargins(6,3,6,3);
-    QFrame *rule = new QFrame;
-    rule->setFixedHeight(1);
-    rule->setStyleSheet("background-color: #484848; border: none;");
-    ruleLayout->addWidget(rule);
-    v->addWidget(ruleRow);
+    v->addSpacing(scaledUiSize(5));
 
-    QLabel *markerFileLabel = new QLabel("Marker File:");
-    markerFileLabel->setContentsMargins(3,0,0,0);
+    QLabel *markerFileLabel = new QLabel("• Marker File");
+    markerFileLabel->setContentsMargins(12,0,0,0);
     markerFileLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    QLabel *markerLocationLabel = new QLabel("Marker Location:");
-    markerLocationLabel->setContentsMargins(3,0,0,0);
+    QLabel *markerLocationLabel = new QLabel("• Marker Location");
+    markerLocationLabel->setContentsMargins(12,0,0,0);
     markerLocationLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    QLabel *positionLabel = new QLabel("Position:");
-    positionLabel->setContentsMargins(3,0,0,0);
+    QLabel *positionLabel = new QLabel("• Position");
+    positionLabel->setContentsMargins(12,0,0,0);
     positionLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     v->addWidget(markerFileLabel);
     v->addWidget(&markerFiles);
@@ -260,6 +255,7 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     v->addWidget(&tileInfo);
     QPushButton *jumpButton = new QPushButton("Jump", this);
     jumpButton->setFocusPolicy(Qt::NoFocus);
+    jumpButton->setMinimumHeight(scaledUiSize(21));
     v->addWidget(jumpButton);
 
 

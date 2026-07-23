@@ -17,11 +17,13 @@
 #include <QTimer>
 
 class QSlider;
+class QLabel;
 class RouteEditorGLWidget;
 class ObjTools;
 class GeoTools;
 class TerrainTools;
 class ActivityTools;
+class ActivityBuilderWindow;
 class NaviBox;
 class AboutWindow;
 class StatusWindow;
@@ -128,12 +130,14 @@ private:
     void applyRestoredSessionGeometry();
     QWidget* box;
     QWidget* box2;
+    QLabel* propertiesPanelTitle = NULL;
     
     RouteEditorGLWidget *glWidget;
     ObjTools *objTools;
     GeoTools *geoTools;
     TerrainTools *terrainTools;
     ActivityTools *activityTools;
+    ActivityBuilderWindow *activityBuilderWindow;
     //NaviBox *naviBox;
     
     QMap<QString, PropertiesAbstract*> objProperties;

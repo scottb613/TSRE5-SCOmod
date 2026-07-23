@@ -16,6 +16,8 @@
 #include "Ref.h"
 #include <deque>
 
+class AutoPlacementWindow;
+
 class ObjTools : public QWidget{
     Q_OBJECT
 
@@ -48,6 +50,8 @@ public slots:
     void autoPlacementOffsetEnabled(QString val);
     void autoSnapableRadiusEnabled(QString val);
     void chSnapableOnlyRotation(int val);
+    void autoPlacementHelperEnabled(bool val);
+    void autoPlacementWindowClosed();
 
     void showLastItemsContextMenu(QPoint val);
     void lastItemsMenuFindSimilar();
@@ -86,6 +90,7 @@ private:
     QComboBox refOther;
     QPushButton resetSearchButton;
     QPushButton clearRecentButton;
+    QPushButton autoPlacementHelperButton;
     Ref::RefItem itemRef;
     std::deque<Ref::RefItem*> lastItemsPtr;
     QVector<Ref::RefItem*> currentItemList;
@@ -108,6 +113,7 @@ private:
     QLineEdit autoSnapableRadius;
     QComboBox autoPlacementRotType;
     QComboBox autoPlacementTarget;
+    AutoPlacementWindow *autoPlacementWindow = NULL;
 
     void resetCategoryCombos(QComboBox* keepActive);
     void populateObjectListForKey(QString key, QString searchText = QString());

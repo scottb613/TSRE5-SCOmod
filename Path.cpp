@@ -51,6 +51,15 @@ bool Path::isModified(){
     return modified;
 }
 
+void Path::markSaved(){
+    modified = false;
+}
+
+const QVector<QLineF>& Path::getMapLines(){
+    init3dShapes(false);
+    return mapLines;
+}
+
 void Path::load(){
     QString sh;
     pathid.replace("//", "/");
@@ -226,6 +235,8 @@ void Path::init3dShapes(bool initShapes){
     if(isinit2 && initShapes)
         return;
     lines.clear();
+    if(!isinit1)
+        mapLines.clear();
     int fail = 0;
     TDB* tdb = Game::trackDB;
     float posT[2];
@@ -382,21 +393,35 @@ void Path::init3dShapes(bool initShapes){
             pathObjects.push_back(it.value());
         }
         
-        if(!initShapes){
-            continue;
-        }
-        
-        OglObj *line = new OglObj();
-        float *ptr, *punkty;
+        float *ptr = NULL, *punkty = NULL;
         int length, len = 0;
         //qDebug() << "currentNodeId" << currentNodeId << distance1 << distance2 ;
         tdb->getVectorSectionLine(ptr, length, node[i].tilex, node[i].tilez, currentNodeId, true);
+        if(!isinit1 && ptr != NULL){
+            const QPointF tileOffset(node[i].tilex * 2048.0, node[i].tilez * 2048.0);
+            for(int ii = 0; ii + 11 < length; ii += 12){
+                if(ptr[ii + 5] < distance1)
+                    continue;
+                const bool endOfRange = ptr[ii + 11] > distance2;
+                mapLines.push_back(QLineF(QPointF(ptr[ii], ptr[ii + 2]) + tileOffset,
+                                          QPointF(ptr[ii + 6], ptr[ii + 8]) + tileOffset));
+                if(endOfRange)
+                    break;
+            }
+        }
+
+        if(!initShapes){
+            delete[] ptr;
+            continue;
+        }
+
+        OglObj *line = new OglObj();
         punkty = new float[length+6];
         bool endd = false;
         
         for(int ii = 0; ii < length; ii+=12){
             if(ptr[ii+5] < distance1) continue;
-            if(ptr[ii+5+12] > distance2)
+            if(ii + 17 >= length || ptr[ii + 17] > distance2)
                 endd = true;
             //if(len == 0)
             //    Vec3::set(tp1, posB[0], posB[1]+1, -posB[2]);

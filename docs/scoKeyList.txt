@@ -1,4 +1,4 @@
-TSRE GenX v0.6 - ROUTE EDITOR - MENU SHORTCUTS
+TSRE GenX v0.7 - ROUTE EDITOR - MENU SHORTCUTS
 Shift+Ctrl+S  Save route
 Alt+F4        Exit/close route editor
 Ctrl+Z        Undo
@@ -7,7 +7,7 @@ Ctrl+V        Paste
 F1            Show Objects tools
 F2            Show Terrain tools
 F3            Show Geo tools
-F4            Show Activity tools
+F4            Toggle full-screen Activity Builder
 F5            Toggle Properties window
 F7            Toggle Control Panel
 F8            Toggle Errors/Messages window

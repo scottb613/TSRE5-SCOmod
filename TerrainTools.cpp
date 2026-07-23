@@ -37,7 +37,6 @@ TerrainTools::TerrainTools(QString name)
     if(panelFont.pointSizeF() > 0)
         panelFont.setPointSizeF(panelFont.pointSizeF() * 1.12);
     setFont(panelFont);
-    GuiFunct::applyEditorPanelStyle(this);
     int row = 0;
     
     texPreview = new QPixmap(160,160);
@@ -152,22 +151,17 @@ TerrainTools::TerrainTools(QString name)
     
     QLabel *label0;
     QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    vbox->setSpacing(3);
+    vbox->setContentsMargins(4,3,4,4);
     auto addRule = [vbox]() {
-        QWidget *ruleRow = new QWidget;
-        ruleRow->setFixedHeight(7);
-        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
-        ruleLayout->setContentsMargins(6,3,6,3);
-        QFrame *rule = new QFrame;
-        rule->setFixedHeight(1);
-        rule->setStyleSheet("background-color: #484848; border: none;");
-        ruleLayout->addWidget(rule);
-        vbox->addWidget(ruleRow);
+        vbox->addSpacing(scaledUiSize(5));
     };
     
-    QLabel *textureSetLabel = new QLabel("Texture Set:");
-    textureSetLabel->setContentsMargins(3,0,0,0);
+    QLabel *panelTitle = new QLabel("TERRAIN EDITOR");
+    GuiFunct::styleEditorTitle(panelTitle);
+    vbox->addWidget(panelTitle);
+    QLabel *textureSetLabel = new QLabel("• Texture Set");
+    textureSetLabel->setContentsMargins(12,0,0,0);
     textureSetLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(textureSetLabel);
 
@@ -181,8 +175,8 @@ TerrainTools::TerrainTools(QString name)
     vbox->addWidget(seasonType);
 
     addRule();
-    label0 = new QLabel("Edit Terrain Layers:");
-    label0->setContentsMargins(3,0,0,0);
+    label0 = new QLabel("• Edit Terrain Layers");
+    label0->setContentsMargins(12,0,0,0);
     label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     vbox->addItem(vlist3);
@@ -192,16 +186,16 @@ TerrainTools::TerrainTools(QString name)
     vbox->addWidget(label0);
     vbox->addItem(vlist4);*/
     if(Game::serverClient == NULL){
-        label0 = new QLabel("Paint Texture:");
-        label0->setContentsMargins(3,0,0,0);
-        label0->setStyleSheet("QLabel { color: #d0d0d0; font-weight: bold; }");
+        label0 = new QLabel("• Paint Texture");
+        label0->setContentsMargins(12,0,0,0);
+        label0->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
         vbox->addWidget(label0);
         vbox->addItem(vlist0);
     }
 
     addRule();
-    label0 = new QLabel("Texture Preview:");
-    label0->setContentsMargins(3,0,0,0);
+    label0 = new QLabel("• Texture Preview");
+    label0->setContentsMargins(12,0,0,0);
     label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
     vbox->addItem(vlist1);
@@ -220,9 +214,9 @@ TerrainTools::TerrainTools(QString name)
     previewRow->addStretch(1);
     vbox->addItem(previewRow);
 
-    QLabel *presetLabel = new QLabel("Presets:");
-    presetLabel->setContentsMargins(3,0,0,0);
-    presetLabel->setStyleSheet("QLabel { color: #d0d0d0; font-weight: bold; }");
+    QLabel *presetLabel = new QLabel("• Presets");
+    presetLabel->setContentsMargins(12,0,0,0);
+    presetLabel->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
     vbox->addWidget(presetLabel);
 
     presetCombo = new QComboBox;
@@ -240,8 +234,8 @@ TerrainTools::TerrainTools(QString name)
     vbox->addItem(vlistPreset);
 
     addRule();
-    QLabel *label2 = new QLabel("Brush Settings:");
-    label2->setContentsMargins(3,0,0,0);
+    QLabel *label2 = new QLabel("• Brush Settings");
+    label2->setContentsMargins(12,0,0,0);
     label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label2);
     
@@ -338,9 +332,9 @@ TerrainTools::TerrainTools(QString name)
     setPinPoint = new QPushButton("Set Pinpoint", this);    
     
     addRule();
-    QLabel *label3 = new QLabel("Embankment Settings:");
+    QLabel *label3 = new QLabel("• Embankment Settings");
     label3->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label3->setContentsMargins(3,0,0,0);
+    label3->setContentsMargins(12,0,0,0);
     vbox->addWidget(label3);
 
     QGridLayout *vlist2 = new QGridLayout;

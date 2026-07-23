@@ -1,4 +1,4 @@
-TSRE GenX v0.6 Improvements
+TSRE GenX v0.7 Improvements
 
 ======================================================================================================
 
@@ -14,6 +14,11 @@ I do not intend this to become a separate production fork of Eric's work. This i
 
 HIGHLIGHTS
 
+- Added [F4 Activity Builder], a full-screen standalone path-editing workspace with a high-resolution TrackDB viewer.
+- Added switch-aware [water-flow routing], reverse points, duration and clock-time wait points, passing sidings, overlap display, validation, undo/redo, and MSTS/ORTS-compatible PAT writing.
+- Added selectable and deletable path controls, live switch state and recalculation, route rotation, scalable map labels, markers, signals, endpoints, and performance-aware overview rendering.
+- Reworked [F1-F4 and utility panels] around professional charcoal/orange title strips, cleaner hierarchy and spacing, consistent buttons and editable fields, square selectors, active-tool highlighting, and reliable focus return.
+- Added a pinnable [Auto Place] window and refined Grade Helper, Control Panel, Object Placement, Object Selection, Terrain Editor, and Activity Editor presentation.
 - Updated [code] to build with current MSYS2/MinGW tooling.
 - Reworked [F] terrain conforming for stronger, more practical track cuts and embankments, including improved low-end track-width behavior.
 - Added [Ctrl+F] selected-object tile conforming, [Shift+F] non-destructive smoothing, and the [F2] Conform DB brush for grade-following spot cleanup.

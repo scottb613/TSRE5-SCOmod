@@ -8,8 +8,8 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 
 ## Branches
 
-- `tsre-scomod-stable` is the stable/rescue branch, capped and tagged at `v0.5`.
-- `tsre-scomod-wip` is the continuing work-in-progress branch, beginning its next cycle at the `v0.6-wip` marker.
+- `tsre-scomod-stable` is the stable/rescue branch, capped and tagged at `v0.6`.
+- `tsre-scomod-wip` is the continuing work-in-progress branch, currently released for testing as `v0.7`.
 
 ## Highlights
 
@@ -49,6 +49,8 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Refined `route lighting` with warmer directional sunlight and cooler sky-facing ambient light while preserving MSTS texture artwork and neutral editor overlays.
 - Added `Save, Restart and Restore` in F12 plus optional UI sounds for startup actions, toggles, checkboxes, dropdown selections, and menu commands.
 - Added `property guidance` for Detail Level, MSTS StaticFlags, and MSTS Collision, clarified Alt+A in the key reference, and corrected read-only Control Panel hover behavior.
+- Added the `F4 Activity Builder` as a full-screen standalone path workspace with a high-resolution TrackDB viewer, switch-aware water-flow routing, reverse and wait points, passing sidings, path validation, and MSTS/ORTS-compatible path writing.
+- Standardized `F1-F4 and utility panels` with charcoal/orange title strips, consistent spacing and buttons, square choice indicators, pinnable helper windows, reliable focus return, and active-tool highlighting.
 
 ## Downloads
 

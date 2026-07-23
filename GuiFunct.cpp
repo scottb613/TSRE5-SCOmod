@@ -83,10 +83,10 @@ QString GuiFunct::scoPanelStyle(){
         " background-color: #f08200; border-color: #ffad3b;"
         "}"
         "QRadioButton::indicator {"
-        " width: 13px; height: 13px; background-color: #202020; border: 1px solid #9a9a9a; border-radius: 7px;"
+        " width: 13px; height: 13px; background-color: #202020; border: 1px solid #9a9a9a;"
         "}"
         "QRadioButton::indicator:hover { border-color: #f08200; }"
-        "QRadioButton::indicator:checked { background-color: #f08200; border-color: #ffad3b; border-radius: 7px; }"
+        "QRadioButton::indicator:checked { background-color: #f08200; border-color: #ffad3b; }"
         "QSlider::groove:horizontal { height: 4px; background: #1d1d1d; border: 1px solid #474747; border-radius: 2px; }"
         "QSlider::sub-page:horizontal { background: #b76512; border-radius: 2px; }"
         "QSlider::handle:horizontal { width: 10px; margin: -4px 0; background: #747474; border: 1px solid #989898; border-radius: 2px; }"
@@ -110,11 +110,23 @@ QString GuiFunct::scoEditorPanelStyle(){
         " QDateEdit:enabled:!read-only, QDateTimeEdit:enabled:!read-only {"
         " border: 1px solid #70590e;"
         "}"
+        "QLineEdit:enabled:!read-only:hover, QTextEdit:enabled:!read-only:hover,"
+        " QPlainTextEdit:enabled:!read-only:hover, QSpinBox:enabled:!read-only:hover,"
+        " QDoubleSpinBox:enabled:!read-only:hover, QTimeEdit:enabled:!read-only:hover,"
+        " QDateEdit:enabled:!read-only:hover, QDateTimeEdit:enabled:!read-only:hover {"
+        " border: 1px solid #f08200;"
+        "}"
         "QLineEdit:enabled:!read-only:focus, QTextEdit:enabled:!read-only:focus,"
         " QPlainTextEdit:enabled:!read-only:focus, QSpinBox:enabled:!read-only:focus,"
         " QDoubleSpinBox:enabled:!read-only:focus, QTimeEdit:enabled:!read-only:focus,"
         " QDateEdit:enabled:!read-only:focus, QDateTimeEdit:enabled:!read-only:focus {"
         " border: 1px solid #8a7116;"
+        "}"
+        "QLineEdit:enabled:!read-only:focus:hover, QTextEdit:enabled:!read-only:focus:hover,"
+        " QPlainTextEdit:enabled:!read-only:focus:hover, QSpinBox:enabled:!read-only:focus:hover,"
+        " QDoubleSpinBox:enabled:!read-only:focus:hover, QTimeEdit:enabled:!read-only:focus:hover,"
+        " QDateEdit:enabled:!read-only:focus:hover, QDateTimeEdit:enabled:!read-only:focus:hover {"
+        " border: 1px solid #f08200;"
         "}"
         "QLineEdit:read-only, QTextEdit:read-only, QPlainTextEdit:read-only, QSpinBox:read-only,"
         " QDoubleSpinBox:read-only, QTimeEdit:read-only, QDateEdit:read-only, QDateTimeEdit:read-only {"
@@ -135,6 +147,32 @@ QString GuiFunct::scoEditorPanelStyle(){
         " QTimeEdit::up-arrow, QTimeEdit::down-arrow, QDateEdit::up-arrow, QDateEdit::down-arrow,"
         " QDateTimeEdit::up-arrow, QDateTimeEdit::down-arrow { width: 7px; height: 7px; }"
     );
+}
+
+QString GuiFunct::editorTitleStyle(){
+    return QString(
+        "QLabel { color: %1; font-weight: bold;"
+        " background-color: #292929; border: none;"
+        " border-left: 3px solid %1;"
+        " padding: 6px 8px; }").arg(Game::StyleMainLabel);
+}
+
+QString GuiFunct::editorSubtitleStyle(){
+    return QString("QLabel { color: %1; font-weight: bold; }").arg(Game::StyleMainLabel);
+}
+
+void GuiFunct::styleEditorTitle(QLabel *label){
+    if(label == NULL)
+        return;
+    label->setStyleSheet(editorTitleStyle());
+    label->setContentsMargins(0,0,0,0);
+}
+
+void GuiFunct::styleEditorSubtitle(QLabel *label){
+    if(label == NULL)
+        return;
+    label->setStyleSheet(editorSubtitleStyle());
+    label->setContentsMargins(qRound(12.0f * qMax(1.0f, Game::uiScale)),0,0,0);
 }
 
 void GuiFunct::applyEditorPanelStyle(QWidget *panel){

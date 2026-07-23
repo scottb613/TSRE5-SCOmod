@@ -2385,7 +2385,7 @@ void TDB::getLines(float * &lineBuffer, int &length, float* playerT){
     lineBuffer = this->collisionLineBuffer;
 }
 
-void TDB::getVectorSectionLine(float * &buffer, int &len, int x, int y, int uid, bool useOffset){
+void TDB::getVectorSectionLine(float * &buffer, int &len, int x, int y, int uid, bool useOffset, int sampleStep){
     if (!loaded) return;
 
     Vector3f p;
@@ -2395,8 +2395,9 @@ void TDB::getVectorSectionLine(float * &buffer, int &len, int x, int y, int uid,
     TRnode* n = trackNodes[uid];
     if (n == NULL) return;
         
+    sampleStep = qMax(1, sampleStep);
     for (int i = 0; i < n->iTrv; i++) {
-        len += getLineBufferSize((int) n->trVectorSection[i].param[0], 6, 0, 1);
+        len += getLineBufferSize((int) n->trVectorSection[i].param[0], 6, 0, sampleStep);
     }
     //qDebug() << "len" << len;
     buffer = new float[len]; 
@@ -2418,7 +2419,7 @@ void TDB::getVectorSectionLine(float * &buffer, int &len, int x, int y, int uid,
 
         if(useOffset)
             offset = dlugosc;
-        getLine(ptr, p, o, (int) n->trVectorSection[i].param[0], uid, i, offset, 2);
+        getLine(ptr, p, o, (int) n->trVectorSection[i].param[0], uid, i, offset, sampleStep);
         if(tsection->sekcja[n->trVectorSection[i].param[0]] != NULL)
             dlugosc += tsection->sekcja[n->trVectorSection[i].param[0]]->getDlugosc();
     }

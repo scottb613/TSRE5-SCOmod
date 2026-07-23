@@ -13,6 +13,7 @@
 
 
 #include <QString>
+#include <QLineF>
 #include "GLUU.h"
 #include "GameObj.h"
 #include "TDB.h"
@@ -71,6 +72,8 @@ public:
     void initRoute();
     void init3dShapes(bool initShapes = true);
     bool isModified();
+    void markSaved();
+    const QVector<QLineF>& getMapLines();
     void render(GLUU* gluu, float * playerT, int selectionColor);
 private:
     bool modified = false;
@@ -81,6 +84,7 @@ private:
     QVector<OglObj*> lines;
     QVector<float> linesX;
     QVector<float> linesZ;
+    QVector<QLineF> mapLines;
     QMap<float, PathObject*> pathObjectsMap;
     QMap<int, int> junctionDirections;
     int startDirection = 0;

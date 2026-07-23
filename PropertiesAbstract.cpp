@@ -15,10 +15,12 @@
 #include "GLMatrix.h"
 #include "Undo.h"
 #include "GuiFunct.h"
+#include "Game.h"
 
 QString PropertiesAbstract::ElevTypeName = "Percent %";
 
 PropertiesAbstract::PropertiesAbstract() : QWidget() {
+    infoLabel = NULL;
     GuiFunct::applyEditorPanelStyle(this);
     foreach (QObject *child, children()) {
         if (child->isWidgetType()) {
@@ -228,6 +230,32 @@ void PropertiesAbstract::rtransformEnabled(){
 }
 
 void PropertiesAbstract::showEvent(QShowEvent *event){
+    if(infoLabel != NULL){
+        QString infoText = infoLabel->text().trimmed();
+        if(infoText.endsWith(':'))
+            infoText.chop(1);
+        const QString bullet = QString(QChar(0x2022));
+        if(!infoText.startsWith(bullet))
+            infoText.prepend(bullet + " ");
+        infoLabel->setText(infoText);
+        GuiFunct::styleEditorSubtitle(infoLabel);
+    }
+    const QList<QLabel*> labels = findChildren<QLabel*>();
+    foreach(QLabel *label, labels){
+        if(label == NULL || label == infoLabel)
+            continue;
+        const QString style = label->styleSheet();
+        if(!style.contains(Game::StyleMainLabel, Qt::CaseInsensitive) ||
+           !style.contains("font-weight", Qt::CaseInsensitive))
+            continue;
+        QString text = label->text().trimmed();
+        if(text.endsWith(':'))
+            text.chop(1);
+        if(!text.startsWith(QString::fromUtf8("•")))
+            text.prepend(QString::fromUtf8("• "));
+        label->setText(text);
+        GuiFunct::styleEditorSubtitle(label);
+    }
     QList<QPushButton*> buttons = findChildren<QPushButton*>();
     foreach (QPushButton *button, buttons){
         QObject::connect(button, SIGNAL(clicked()), this, SIGNAL(userButtonPressed()), Qt::UniqueConnection);

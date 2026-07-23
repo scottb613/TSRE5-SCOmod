@@ -1,4 +1,4 @@
-// TSRE GenX v0.6 settings
+// TSRE GenX v0.7 settings
 // Both # and // can be used for comments.
 // Recommended public uiScale range: 1.00 to 1.25. Scott's 32" 2K setup uses 1.15.
 

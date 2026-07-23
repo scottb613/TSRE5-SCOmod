@@ -19,6 +19,7 @@ class GameObj;
 class Activity;
 class ActivityServiceDefinition;
 class PreciseTileCoordinate;
+class Path;
 
 class ActivityTools : public QWidget{
     Q_OBJECT
@@ -33,6 +34,9 @@ public slots:
     void routeLoaded(Route* r);
     void actNewLooseConsistToolEnabled(bool val);
     void actPathsEditToolEnabled();
+    void actPathsNewEnabled();
+    void actPathsCloneEnabled();
+    void actPathsDeleteEnabled();
     void actConsistDeleteEnabled();
     void actConsistJumpEnabled();
     void actFailedSignalsJumpEnabled();
@@ -85,6 +89,7 @@ public slots:
     void reloadServicesList();
     void reloadTrafficsList();
     void reloadPathsList();
+    void selectedPathChanged(int index);
     void conFilesRefreshSelected();
     void actPathsRefreshListSelected();
     
@@ -101,6 +106,9 @@ signals:
     void showActivityTimetableEditor();
     void showTimetable(Activity *a);
     void jumpTo(PreciseTileCoordinate* c);
+    void pathSelectionChanged(Path *path);
+    void pathCreationStarted(Path *path);
+    void pathEditStarted(Path *path);
     
 private:
     Route *route = NULL;

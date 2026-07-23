@@ -50,15 +50,7 @@ PropertiesDyntrack::PropertiesDyntrack() {
     vbox->addItem(vlist);
 
     auto addRule = [vbox]() {
-        QWidget *ruleRow = new QWidget;
-        ruleRow->setFixedHeight(7);
-        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
-        ruleLayout->setContentsMargins(6,3,6,3);
-        QFrame *rule = new QFrame;
-        rule->setFixedHeight(1);
-        rule->setStyleSheet("background-color: #484848; border: none;");
-        ruleLayout->addWidget(rule);
-        vbox->addWidget(ruleRow);
+        vbox->addSpacing(qRound(5.0f * qMax(1.0f, Game::uiScale)));
     };
     addRule();
 

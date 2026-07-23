@@ -38,7 +38,6 @@ ActivityTools::ActivityTools(QString name)
     if(panelFont.pointSizeF() > 0)
         panelFont.setPointSizeF(panelFont.pointSizeF() * 1.12);
     setFont(panelFont);
-    GuiFunct::applyEditorPanelStyle(this);
     cSeason.setStyleSheet("combobox-popup: 0;");
     cSeason.addItem("Spring",0);
     cSeason.addItem("Summer",1);
@@ -72,22 +71,48 @@ ActivityTools::ActivityTools(QString name)
     QGridLayout *vlist1 = NULL;
     
     QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    vbox->setSpacing(3);
+    vbox->setContentsMargins(4,3,4,4);
     auto addRule = [vbox]() {
-        QWidget *ruleRow = new QWidget;
-        ruleRow->setFixedHeight(7);
-        QHBoxLayout *ruleLayout = new QHBoxLayout(ruleRow);
-        ruleLayout->setContentsMargins(6,3,6,3);
-        QFrame *rule = new QFrame;
-        rule->setFixedHeight(1);
-        rule->setStyleSheet("background-color: #484848; border: none;");
-        ruleLayout->addWidget(rule);
-        vbox->addWidget(ruleRow);
+        vbox->addSpacing(scaledUiSize(5));
     };
-    QLabel *label = new QLabel("Activity List:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    QLabel *label = new QLabel("PATH EDITOR");
+    GuiFunct::styleEditorTitle(label);
+    vbox->addWidget(label);
+    vbox->addWidget(&cPath);
+    cPath.setEditable(true);
+    cPath.setInsertPolicy(QComboBox::NoInsert);
+    cPath.lineEdit()->setReadOnly(true);
+    cPath.lineEdit()->setAlignment(Qt::AlignCenter);
+    cPath.setStyleSheet("combobox-popup: 0; QLineEdit { color: #b8bdc2; font-weight: bold; }");
+    cPath.setMaxVisibleItems(35);
+    cPath.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    vlist1 = new QGridLayout;
+    vlist1->setSpacing(2);
+    vlist1->setContentsMargins(0,0,1,0);
+    QPushButton *actPathsNew = new QPushButton("New Path");
+    QObject::connect(actPathsNew, SIGNAL(released()), this, SLOT(actPathsNewEnabled()));
+    QPushButton *actPathsEdit = new QPushButton("Edit");
+    QObject::connect(actPathsEdit, SIGNAL(released()), this, SLOT(actPathsEditToolEnabled()));
+    QPushButton *actPathsClone = new QPushButton("Clone");
+    QObject::connect(actPathsClone, SIGNAL(released()), this, SLOT(actPathsCloneEnabled()));
+    QPushButton *actPathsDelete = new QPushButton("Delete");
+    QObject::connect(actPathsDelete, SIGNAL(released()), this, SLOT(actPathsDeleteEnabled()));
+    vlist1->addWidget(actPathsNew,0,0);
+    vlist1->addWidget(actPathsEdit,0,1);
+    vlist1->addWidget(actPathsClone,1,0);
+    vlist1->addWidget(actPathsDelete,1,1);
+    vbox->addItem(vlist1);
+
+    vbox->addSpacing(scaledUiSize(19));
+    label = new QLabel("ACTIVITY EDITOR");
+    GuiFunct::styleEditorTitle(label);
+    vbox->addWidget(label);
+
+    vbox->addSpacing(scaledUiSize(5));
+    label = new QLabel("• Activity");
+    label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+    label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&actShow);
     actShow.setStyleSheet("combobox-popup: 0;");
@@ -96,9 +121,9 @@ ActivityTools::ActivityTools(QString name)
     vbox->addWidget(newActButton);
     
     addRule();
-    label = new QLabel("Player:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    label = new QLabel("• Player");
+    label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+    label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&cService);
     cService.setStyleSheet("combobox-popup: 0;");
@@ -109,9 +134,9 @@ ActivityTools::ActivityTools(QString name)
     vbox->addWidget(actServiceOpen);
     
     addRule();
-    label = new QLabel("Traffic:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    label = new QLabel("• Traffic");
+    label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+    label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&cTraffic);
     cTraffic.setStyleSheet("combobox-popup: 0;");
@@ -122,44 +147,18 @@ ActivityTools::ActivityTools(QString name)
     vbox->addWidget(actTrafficOpen);
     
     addRule();
-    label = new QLabel("Timetable:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    label = new QLabel("• Timetable");
+    label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+    label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
     QPushButton *actTimetableOpen = new QPushButton("Open Timetable Editor");
     QObject::connect(actTimetableOpen, SIGNAL(released()), this, SLOT(actTimetableOpenEnabled()));
     vbox->addWidget(actTimetableOpen);
     
     addRule();
-    label = new QLabel("Paths:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    vbox->addWidget(&cPath);
-    cPath.setStyleSheet("combobox-popup: 0;");
-    cPath.setMaxVisibleItems(35);
-    cPath.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    vlist1 = new QGridLayout;
-    vlist1->setSpacing(2);
-    vlist1->setContentsMargins(0,0,1,0);
-    QPushButton *actPathsNew = new QPushButton("New");
-    QPushButton *actPathsEdit = new QPushButton("Edit");
-    QObject::connect(actPathsEdit, SIGNAL(released()), this, SLOT(actPathsEditToolEnabled()));
-    QPushButton *actPathsClone = new QPushButton("Clone");
-    QPushButton *actPathsDelete = new QPushButton("Delete");
-    vlist1->addWidget(actPathsNew,0,0);
-    vlist1->addWidget(actPathsEdit,0,1);
-    vlist1->addWidget(actPathsClone,0,2);
-    vlist1->addWidget(actPathsDelete,0,3);
-    QPushButton *actPathsRefreshList = new QPushButton("Refresh List");
-    QObject::connect(actPathsRefreshList, SIGNAL(released()), this, SLOT(actPathsRefreshListSelected()));
-    vlist1->addWidget(actPathsRefreshList,1,1,1,3);
-    vbox->addItem(vlist1);    
-   
-    addRule();
-    label = new QLabel("Activity Objects List:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    label = new QLabel("• Activity Objects");
+    label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+    label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&consists);
     consists.setStyleSheet("combobox-popup: 0;");
@@ -189,9 +188,9 @@ ActivityTools::ActivityTools(QString name)
     vbox->addItem(vlist1);
     
     addRule();
-    label = new QLabel("Restricted Speed Zones List:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    label = new QLabel("• Restricted Speed Zones");
+    label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+    label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&speedZones);
     speedZones.setStyleSheet("combobox-popup: 0;");
@@ -214,9 +213,9 @@ ActivityTools::ActivityTools(QString name)
     vbox->addItem(vlist1);
     
     addRule();
-    label = new QLabel("Failed Signals List:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    label = new QLabel("• Failed Signals");
+    label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+    label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
     vbox->addWidget(&failedSignals);
     failedSignals.setStyleSheet("combobox-popup: 0;");
@@ -240,38 +239,29 @@ ActivityTools::ActivityTools(QString name)
     vbox->addItem(vlist1);
     
     addRule();
-    label = new QLabel("Events:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    label = new QLabel("• Events");
+    label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+    label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
     QPushButton *actEventsOpen = new QPushButton("Open Event Editor");
     QObject::connect(actEventsOpen, SIGNAL(released()), this, SLOT(actEventsOpenEnabled()));
     vbox->addWidget(actEventsOpen);
     
     addRule();
-    label = new QLabel("Activity Info:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    label = new QLabel("• Activity Details");
+    label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+    label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
     QPushButton *actSettingsOpen = new QPushButton("Open Settings ...");
     QObject::connect(actSettingsOpen, SIGNAL(released()), this, SLOT(actSettingsOpenEnabled()));
     vbox->addWidget(actSettingsOpen);
     
     addRule();
-    label = new QLabel("Experimental:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    label = new QLabel("• Save");
+    label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
+    label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
-    QPushButton *actPlayButton = new QPushButton("Play: Don't use!");
-    QObject::connect(actPlayButton, SIGNAL(released()), this, SLOT(actPlayEnabled()));
-    vbox->addWidget(actPlayButton);
-    
-    addRule();
-    label = new QLabel("General:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    QPushButton *actSaveButton = new QPushButton("Save Activities");
+    QPushButton *actSaveButton = new QPushButton("Save Activity Files");
     QObject::connect(actSaveButton, SIGNAL(released()), this, SLOT(actSaveEnabled()));
     vbox->addWidget(actSaveButton);
     
@@ -403,6 +393,8 @@ ActivityTools::ActivityTools(QString name)
                       this, SLOT(cServiceEnabled(QString)));
     QObject::connect(&cTraffic, SIGNAL(activated(QString)),
                       this, SLOT(cTrafficEnabled(QString)));
+    QObject::connect(&cPath, SIGNAL(currentIndexChanged(int)),
+                      this, SLOT(selectedPathChanged(int)));
     //QObject::connect(loadActFilesButton, SIGNAL(released()),
     //                  this, SLOT(loadActFiles()));
 }
@@ -509,14 +501,45 @@ void ActivityTools::reloadTrafficsList(){
 }
 
 void ActivityTools::reloadPathsList(){
-    int idx = cPath.currentIndex();
+    const int selectedRouteIndex = cPath.currentIndex() >= 0
+        ? cPath.currentData().toInt() : -1;
+    cPath.blockSignals(true);
     cPath.clear();
-    
+    cPath.addItem(tr("- - -  SELECT  - - -"), QVariant(-1));
+    QFont selectFont = cPath.font();
+    selectFont.setBold(true);
+    cPath.setItemData(0, selectFont, Qt::FontRole);
+    cPath.setItemData(0, QColor(184, 189, 194), Qt::ForegroundRole);
     for(int i = 0; i < route->path.size(); i++ )
         cPath.addItem(route->path[i]->displayName, QVariant(i));
-    
-    if(idx >= 0)
-        cPath.setCurrentIndex(idx);
+    const int restoredIndex = selectedRouteIndex >= 0
+        ? cPath.findData(QVariant(selectedRouteIndex)) : 0;
+    cPath.setCurrentIndex(restoredIndex >= 0 ? restoredIndex : 0);
+    cPath.blockSignals(false);
+    selectedPathChanged(cPath.currentIndex());
+}
+
+void ActivityTools::selectedPathChanged(int index){
+    if(route == NULL || index < 0){
+        if(cPath.lineEdit() != NULL)
+            cPath.lineEdit()->setAlignment(Qt::AlignCenter);
+        emit pathSelectionChanged(NULL);
+        return;
+    }
+    const int pathIndex = cPath.itemData(index).toInt();
+    if(pathIndex < 0 || pathIndex >= route->path.size()){
+        if(cPath.lineEdit() != NULL){
+            cPath.lineEdit()->setAlignment(Qt::AlignCenter);
+            cPath.lineEdit()->setStyleSheet("color: #b8bdc2; font-weight: bold;");
+        }
+        emit pathSelectionChanged(NULL);
+        return;
+    }
+    if(cPath.lineEdit() != NULL){
+        cPath.lineEdit()->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        cPath.lineEdit()->setStyleSheet("color: palette(text); font-weight: normal;");
+    }
+    emit pathSelectionChanged(route->path[pathIndex]);
 }
 void ActivityTools::conFilesShowEnabled(QString val){
     if(actShow.currentIndex() < 0)
@@ -713,13 +736,218 @@ void ActivityTools::actNewLooseConsistToolEnabled(bool val){
 }
 
 void ActivityTools::actPathsEditToolEnabled(){
+    if(route == NULL || cPath.currentIndex() < 0)
+        return;
     int currentPathId = cPath.currentData().toInt();
+    if(currentPathId < 0 || currentPathId >= route->path.size() ||
+       route->path[currentPathId] == NULL)
+        return;
     for(int i = 0; i < route->path.size(); i++){
         route->path[i]->unselect();
     }
-    if(Game::debugOutput) qDebug() << "aa";
-    //route->path[currentPathId]->select();
     emit objectSelected(route->path[currentPathId]);
+    emit pathEditStarted(route->path[currentPathId]);
+}
+
+void ActivityTools::actPathsCloneEnabled(){
+    if(route == NULL || cPath.currentIndex() < 0)
+        return;
+    const int sourceIndex = cPath.currentData().toInt();
+    if(sourceIndex < 0 || sourceIndex >= route->path.size() ||
+       route->path[sourceIndex] == NULL)
+        return;
+    Path *sourcePath = route->path[sourceIndex];
+    if(!QFileInfo::exists(sourcePath->pathid)){
+        QMessageBox::warning(this, tr("Save path first"),
+                             tr("The selected path has not been written to disk yet. Save it before cloning."));
+        return;
+    }
+
+    const QDir pathDir(Game::root + "/routes/" + Game::route + "/paths");
+    QString defaultBase = sourcePath->nameId + "_copy";
+    int suffix = 2;
+    while(QFileInfo::exists(pathDir.filePath(defaultBase + ".pat")))
+        defaultBase = sourcePath->nameId + QString("_copy_%1").arg(suffix++);
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Clone Standalone Path"));
+    QFormLayout *form = new QFormLayout(&dialog);
+    QLineEdit *fileName = new QLineEdit(defaultBase, &dialog);
+    QLineEdit *displayName = new QLineEdit(sourcePath->displayName + tr(" Copy"), &dialog);
+    form->addRow(tr("File name:"), fileName);
+    form->addRow(tr("Display name:"), displayName);
+    QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                                     Qt::Horizontal, &dialog);
+    form->addRow(buttons);
+    QObject::connect(buttons, SIGNAL(accepted()), &dialog, SLOT(accept()));
+    QObject::connect(buttons, SIGNAL(rejected()), &dialog, SLOT(reject()));
+
+    while(dialog.exec() == QDialog::Accepted){
+        QString base = fileName->text().trimmed();
+        if(base.endsWith(".pat", Qt::CaseInsensitive))
+            base.chop(4);
+        base.replace(QRegularExpression("[^A-Za-z0-9_-]+"), "_");
+        const QString label = displayName->text().trimmed();
+        const QString destination = pathDir.filePath(base + ".pat");
+        if(base.isEmpty() || label.isEmpty()){
+            QMessageBox::warning(&dialog, tr("Path details required"),
+                                 tr("Enter both a file name and a display name."));
+            continue;
+        }
+        if(QFileInfo::exists(destination)){
+            QMessageBox::warning(&dialog, tr("Path already exists"),
+                                 tr("A path file named %1.pat already exists.").arg(base));
+            continue;
+        }
+
+        QFile sourceFile(sourcePath->pathid);
+        if(!sourceFile.open(QIODevice::ReadOnly | QIODevice::Text)){
+            QMessageBox::warning(&dialog, tr("Clone failed"), sourceFile.errorString());
+            return;
+        }
+        QTextStream input(&sourceFile);
+        input.setCodec("UTF-16");
+        QString contents = input.readAll();
+        sourceFile.close();
+        contents.replace(QRegularExpression("(?m)^([ \\t]*)TrPathName\\s*\\([^\\r\\n]*\\)"),
+                         QString("\\1TrPathName ( \"%1\" )").arg(base));
+        contents.replace(QRegularExpression("(?m)^([ \\t]*)Name\\s*\\([^\\r\\n]*\\)"),
+                         QString("\\1Name ( \"%1\" )").arg(label));
+
+        QSaveFile output(destination);
+        if(!output.open(QIODevice::WriteOnly | QIODevice::Text)){
+            QMessageBox::warning(&dialog, tr("Clone failed"), output.errorString());
+            return;
+        }
+        QTextStream stream(&output);
+        stream.setCodec("UTF-16");
+        stream.setGenerateByteOrderMark(true);
+        stream << contents;
+        stream.flush();
+        if(stream.status() != QTextStream::Ok || !output.commit()){
+            QMessageBox::warning(&dialog, tr("Clone failed"),
+                                 tr("The cloned path could not be committed safely."));
+            return;
+        }
+
+        Path *clonedPath = new Path(pathDir.path(), base + ".pat", false);
+        route->path.push_back(clonedPath);
+        reloadPathsList();
+        cPath.setCurrentIndex(cPath.count() - 1);
+        emit pathSelectionChanged(clonedPath);
+        return;
+    }
+}
+
+void ActivityTools::actPathsDeleteEnabled(){
+    if(route == NULL || cPath.currentIndex() < 0)
+        return;
+    const int pathIndex = cPath.currentData().toInt();
+    if(pathIndex < 0 || pathIndex >= route->path.size() ||
+       route->path[pathIndex] == NULL)
+        return;
+    Path *path = route->path[pathIndex];
+    const QMessageBox::StandardButton answer = QMessageBox::warning(
+        this, tr("Delete standalone path"),
+        tr("Delete \"%1\" and its .pat file?\n\nActivities that refer to this path may need repair.")
+            .arg(path->displayName),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+    if(answer != QMessageBox::Yes)
+        return;
+    if(QFileInfo::exists(path->pathid) && !QFile::remove(path->pathid)){
+        QMessageBox::warning(this, tr("Delete failed"),
+                             tr("The path file could not be removed."));
+        return;
+    }
+
+    // This Path can be selected simultaneously by the 2D path viewer and the
+    // main route editor. Clear both live pointers before removing it from the
+    // route, then let Qt destroy it after the current button event completes.
+    cPath.blockSignals(true);
+    cPath.setCurrentIndex(-1);
+    cPath.blockSignals(false);
+    emit pathSelectionChanged(NULL);
+    emit objectSelected(NULL);
+    route->path.removeAt(pathIndex);
+    path->deleteLater();
+    reloadPathsList();
+    cPath.setCurrentIndex(0);
+}
+
+void ActivityTools::actPathsNewEnabled(){
+    if(route == NULL)
+        return;
+
+    int suffix = 1;
+    QString defaultBase;
+    const QDir pathDir(Game::root + "/routes/" + Game::route + "/paths");
+    do {
+        defaultBase = QString("new_path_%1").arg(suffix++);
+    } while(QFileInfo::exists(pathDir.filePath(defaultBase + ".pat")));
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Create Standalone Path"));
+    QFormLayout *form = new QFormLayout(&dialog);
+    QLabel *explanation = new QLabel(
+        tr("Paths belong to the route and can be used by any activity. "
+           "After creating the draft, click the Track Viewer to choose its start."), &dialog);
+    explanation->setWordWrap(true);
+    form->addRow(explanation);
+    QLineEdit *fileName = new QLineEdit(defaultBase, &dialog);
+    QLineEdit *displayName = new QLineEdit(tr("New Path %1").arg(suffix - 1), &dialog);
+    form->addRow(tr("File name:"), fileName);
+    form->addRow(tr("Display name:"), displayName);
+    QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                                     Qt::Horizontal, &dialog);
+    form->addRow(buttons);
+    QObject::connect(buttons, SIGNAL(accepted()), &dialog, SLOT(accept()));
+    QObject::connect(buttons, SIGNAL(rejected()), &dialog, SLOT(reject()));
+
+    while(dialog.exec() == QDialog::Accepted){
+        QString base = fileName->text().trimmed();
+        if(base.endsWith(".pat", Qt::CaseInsensitive))
+            base.chop(4);
+        base.replace(QRegularExpression("[^A-Za-z0-9_-]+"), "_");
+        const QString label = displayName->text().trimmed();
+        if(base.isEmpty() || label.isEmpty()){
+            QMessageBox::warning(&dialog, tr("Path details required"),
+                                 tr("Enter both a file name and a display name."));
+            continue;
+        }
+        if(QFileInfo::exists(pathDir.filePath(base + ".pat"))){
+            QMessageBox::warning(&dialog, tr("Path already exists"),
+                                 tr("A path file named %1.pat already exists.").arg(base));
+            continue;
+        }
+        bool duplicateDraft = false;
+        for(Path *existing : route->path){
+            if(existing != NULL && existing->name.compare(base + ".pat", Qt::CaseInsensitive) == 0){
+                duplicateDraft = true;
+                break;
+            }
+        }
+        if(duplicateDraft){
+            QMessageBox::warning(&dialog, tr("Path already exists"),
+                                 tr("A path draft with that file name already exists."));
+            continue;
+        }
+
+        Path *newPath = new Path(pathDir.path(), base + ".pat", true);
+        newPath->trPathName = base;
+        newPath->displayName = label;
+        newPath->trPathStart.clear();
+        newPath->trPathEnd.clear();
+        newPath->trPathFlags = 0;
+        route->path.push_back(newPath);
+
+        cPath.blockSignals(true);
+        cPath.addItem(newPath->displayName, QVariant(route->path.size() - 1));
+        cPath.setCurrentIndex(cPath.count() - 1);
+        cPath.blockSignals(false);
+        emit pathSelectionChanged(newPath);
+        emit pathCreationStarted(newPath);
+        return;
+    }
 }
 
 

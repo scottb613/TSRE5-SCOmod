@@ -26,6 +26,10 @@ public:
     static QAction* newMenuCheckAction(QString desc, QWidget* window, bool checked = true);
     static QString scoPanelStyle();
     static QString scoEditorPanelStyle();
+    static QString editorTitleStyle();
+    static QString editorSubtitleStyle();
+    static void styleEditorTitle(QLabel *label);
+    static void styleEditorSubtitle(QLabel *label);
     static void applyEditorPanelStyle(QWidget *panel);
 private:
 

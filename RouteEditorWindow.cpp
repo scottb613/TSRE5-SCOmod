@@ -26,6 +26,7 @@
 #include "TerrainTools.h"
 #include "GeoTools.h"
 #include "ActivityTools.h"
+#include "ActivityBuilderWindow.h"
 #include "NaviBox.h"
 #include "ShapeViewWindow.h"
 #include "AboutWindow.h"
@@ -99,6 +100,54 @@ static void tuneScaledPanel(QWidget *panel){
     }
 }
 
+static void restoreEditorFocusAfterButtons(QWidget *panel, RouteEditorGLWidget *editor){
+    if(panel == NULL || editor == NULL)
+        return;
+    const QList<QPushButton*> buttons = panel->findChildren<QPushButton*>();
+    for(QPushButton *button : buttons){
+        if(button == NULL)
+            continue;
+        QObject::connect(button, &QPushButton::clicked, editor, [editor](){
+            QTimer::singleShot(0, editor, &RouteEditorGLWidget::focusEditor);
+        });
+    }
+}
+
+static void restoreEditorFocusAfterToolButtons(QWidget *panel, RouteEditorGLWidget *editor){
+    if(panel == NULL || editor == NULL)
+        return;
+    const QList<QToolButton*> buttons = panel->findChildren<QToolButton*>();
+    for(QToolButton *button : buttons){
+        if(button == NULL)
+            continue;
+        QObject::connect(button, &QToolButton::clicked, editor, [editor](){
+            QTimer::singleShot(0, editor, &RouteEditorGLWidget::focusEditor);
+        });
+    }
+}
+
+static void addUserClickSoundToButtons(QWidget *panel, RouteEditorGLWidget *editor){
+    if(panel == NULL || editor == NULL)
+        return;
+    const QList<QPushButton*> buttons = panel->findChildren<QPushButton*>();
+    for(QPushButton *button : buttons){
+        if(button != NULL)
+            QObject::connect(button, &QPushButton::clicked,
+                             editor, &RouteEditorGLWidget::userModeChangeSound);
+    }
+}
+
+static void addUserClickSoundToToolButtons(QWidget *panel, RouteEditorGLWidget *editor){
+    if(panel == NULL || editor == NULL)
+        return;
+    const QList<QToolButton*> buttons = panel->findChildren<QToolButton*>();
+    for(QToolButton *button : buttons){
+        if(button != NULL)
+            QObject::connect(button, &QToolButton::clicked,
+                             editor, &RouteEditorGLWidget::userModeChangeSound);
+    }
+}
+
 
 RouteEditorWindow::RouteEditorWindow() {
 
@@ -106,6 +155,7 @@ RouteEditorWindow::RouteEditorWindow() {
     terrainTools = new TerrainTools("TerrainTools");
     geoTools = new GeoTools("GeoTools");
     activityTools = new ActivityTools("ActivityTools");
+    activityBuilderWindow = new ActivityBuilderWindow(activityTools, this);
     //naviBox = new NaviBox();
     glWidget = new RouteEditorGLWidget(this);
     
@@ -168,18 +218,21 @@ RouteEditorWindow::RouteEditorWindow() {
     mainLayout2->addWidget(objTools);
     mainLayout2->addWidget(terrainTools);
     mainLayout2->addWidget(geoTools);
-    if(Game::serverClient == NULL){
-        mainLayout2->addWidget(activityTools);
-    }
     //mainLayout2->addWidget(naviBox);
     //mainLayout2->setAlignment(naviBox, Qt::AlignBottom);
     box->setLayout(mainLayout2);
     
     
     QVBoxLayout *mainLayout3 = new QVBoxLayout;
-    mainLayout3->setContentsMargins(0,0,0,0);
+    mainLayout3->setContentsMargins(3,3,3,3);
+    mainLayout3->setSpacing(3);
     mainLayout2->setMargin(0);
     mainLayout2->setSpacing(0);
+    propertiesPanelTitle = new QLabel("OBJECT PLACEMENT", box2);
+    GuiFunct::styleEditorTitle(propertiesPanelTitle);
+    propertiesPanelTitle->hide();
+    mainLayout3->addWidget(propertiesPanelTitle);
+    mainLayout3->addSpacing(scaledUiSize(3));
     //mainLayout3->addWidget(propertiesUndefined);
     
     //for (std::vector<PropertiesAbstract*>::iterator it = objProperties.begin(); it != objProperties.end(); ++it) {
@@ -420,6 +473,8 @@ RouteEditorWindow::RouteEditorWindow() {
     activityAction->setShortcut(QKeySequence("F4"));
     toolsMenu->addAction(activityAction);
     QObject::connect(activityAction, SIGNAL(triggered(bool)), this, SLOT(showToolsActivity(bool)));
+    QObject::connect(activityBuilderWindow, SIGNAL(visibilityChanged(bool)),
+                     activityAction, SLOT(setChecked(bool)));
     // Settings
     terrainCameraAction = GuiFunct::newMenuCheckAction(tr("&Stick Camera To Terrain"), this); 
     terrainCameraAction->setChecked(Game::cameraStickToTerrain);
@@ -538,6 +593,10 @@ RouteEditorWindow::RouteEditorWindow() {
 
     QObject::connect(glWidget, SIGNAL(routeLoaded(Route*)),
                       activityTools, SLOT(routeLoaded(Route*)));
+    QObject::connect(glWidget, SIGNAL(routeLoaded(Route*)),
+                      activityBuilderWindow, SLOT(routeLoaded(Route*)));
+    QObject::connect(activityTools, SIGNAL(pathSelectionChanged(Path*)),
+                      activityBuilderWindow, SLOT(setSelectedPath(Path*)));
     
     QObject::connect(objTools, SIGNAL(enableTool(QString)),
                       glWidget, SLOT(enableTool(QString)));
@@ -606,6 +665,26 @@ RouteEditorWindow::RouteEditorWindow() {
                       glWidget, SLOT(userJumpSound()));
     QObject::connect(statusWindow, SIGNAL(requestMainFocus()),
                       glWidget, SLOT(focusEditor()));
+
+    // Command buttons should never strand keyboard focus in an editor panel.
+    // Input widgets are intentionally excluded so typing and dropdown use are
+    // unaffected.
+    restoreEditorFocusAfterButtons(objTools, glWidget);
+    restoreEditorFocusAfterButtons(terrainTools, glWidget);
+    restoreEditorFocusAfterButtons(geoTools, glWidget);
+    restoreEditorFocusAfterButtons(box2, glWidget);
+    restoreEditorFocusAfterButtons(statusWindow, glWidget);
+    restoreEditorFocusAfterToolButtons(objTools, glWidget);
+    restoreEditorFocusAfterToolButtons(statusWindow, glWidget);
+
+    // Object Selection, Object Placement, and Control Panel push buttons
+    // already have purpose-specific sound paths. Supply the same user-click
+    // sound to panels which historically lacked one, plus the pin buttons.
+    addUserClickSoundToButtons(terrainTools, glWidget);
+    addUserClickSoundToButtons(geoTools, glWidget);
+    addUserClickSoundToButtons(activityBuilderWindow, glWidget);
+    addUserClickSoundToToolButtons(objTools, glWidget);
+    addUserClickSoundToToolButtons(statusWindow, glWidget);
     
     QObject::connect(glWidget, SIGNAL(itemSelected(Ref::RefItem*)),
                       objTools, SLOT(itemSelected(Ref::RefItem*)));
@@ -899,13 +978,22 @@ void RouteEditorWindow::applyRestoredSessionGeometry(){
     pinPositionTimer.stop();
     applyingWindowPosition = true;
     statusWindow->setPositionPersistenceSuspended(true);
-    if(Game::restoreLastSessionWindowGeometry){
-        if(Game::restoreMainW > 0 && Game::restoreMainH > 0)
-            setGeometry(Game::restoreMainX, Game::restoreMainY, Game::restoreMainW, Game::restoreMainH);
-        if(Game::restoreMainMaximized)
-            showMaximized();
-        Game::restoreLastSessionWindowGeometry = false;
+    QRect pinnedMainGeometry;
+    bool pinnedMainMaximized = false;
+    const bool mainWindowPinned =
+        Game::pinnedWindowGeometry("mainWindow", &pinnedMainGeometry, &pinnedMainMaximized);
+    if(mainWindowPinned){
+        setWindowState(windowState() & ~Qt::WindowMaximized);
+        if(pinnedMainGeometry.width() > 0 && pinnedMainGeometry.height() > 0){
+            resize(pinnedMainGeometry.size());
+            move(Game::visibleWindowPosition(pinnedMainGeometry.topLeft(), size()));
+        }
+        if(pinnedMainMaximized)
+            setWindowState(windowState() | Qt::WindowMaximized);
+    } else {
+        showMaximized();
     }
+    Game::restoreLastSessionWindowGeometry = false;
 
     if(Game::restoreStatusGeometry && Game::restoreStatusW > 0 && Game::restoreStatusH > 0){
         statusWindow->setGeometry(Game::restoreStatusX, Game::restoreStatusY, Game::restoreStatusW, Game::restoreStatusH);
@@ -1061,10 +1149,16 @@ void RouteEditorWindow::showToolsGeo(bool show){
 
 void RouteEditorWindow::showToolsActivity(bool show){
     if(show){
-        hideShowToolWidget(true);
-        setToolbox("activityTools");
+        if(Game::serverClient == NULL){
+            hideShowToolWidget(false);
+            activityBuilderWindow->showMaximized();
+            activityBuilderWindow->raise();
+            activityBuilderWindow->activateWindow();
+            activityAction->setChecked(true);
+        }
     } else {
-        hideShowToolWidget(false);
+        activityBuilderWindow->hide();
+        activityAction->setChecked(false);
     }
 }
 
@@ -1101,11 +1195,7 @@ void RouteEditorWindow::setToolbox(QString name){
         geoAction->setChecked(true);
     }
     if(name == "activityTools"){
-        hideAllTools();
-        if(Game::serverClient == NULL){
-            activityTools->show();
-            activityAction->setChecked(true);
-        }
+        showToolsActivity(true);
     }
 }
 
@@ -1113,11 +1203,9 @@ void RouteEditorWindow::hideAllTools(){
     objTools->hide();
     terrainTools->hide();
     geoTools->hide();
-    activityTools->hide();
     objectsAction->setChecked(false);
     terrainAction->setChecked(false);     
     geoAction->setChecked(false);
-    activityAction->setChecked(false);
     objectsAndTerrainAction->setChecked(false);
     box->setFixedWidth(scaledUiSize(250));
 }
@@ -1130,7 +1218,11 @@ void RouteEditorWindow::showProperties(GameObj* obj){
         if(it == NULL) continue;
         it->hide();
     }
-    if(obj == NULL) return;
+    if(obj == NULL){
+        propertiesPanelTitle->hide();
+        return;
+    }
+    propertiesPanelTitle->show();
     // show 
     //qDebug() << obj->typeObj;
 

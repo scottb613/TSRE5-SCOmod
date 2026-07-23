@@ -4,6 +4,60 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.7 Activity Builder and interface release
+
+- TSRE5-Trainsim.Com-Fork-master/ActivityBuilderWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityBuilderWindow.h
+  - Added the full-screen F4 Activity Builder workspace, fixed left/right panels, map controls, path controls, wait-point inputs, active tool toggles, F4 close toggle, and standalone path selection workflow.
+
+- TSRE5-Trainsim.Com-Fork-master/ActivityTrackViewer.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTrackViewer.h
+  - Added the scalable TrackDB renderer, path import/edit/save, natural-end water flow, live switch throwing, reverse and wait points, overlap detection, passing sidings and recalculation, selection/deletion, labels, interactives, markers, and overview performance levels.
+
+- TSRE5-Trainsim.Com-Fork-master/ActivityTools.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTools.h
+  - Reorganized F4 path and activity controls, added standalone path creation/edit/clone/delete behavior, selection placeholder handling, and consistent panel styling.
+
+- TSRE5-Trainsim.Com-Fork-master/Path.cpp
+- TSRE5-Trainsim.Com-Fork-master/Path.h
+  - Extended PAT parsing and writing support used by the standalone path editor, including wait, reverse, and passing-path control data.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
+  - Integrated the F4 workspace, unified F1-F4 panel behavior, user-click sounds, focus restoration, main-window maximizing, and pinnable utility-window presentation.
+
+- TSRE5-Trainsim.Com-Fork-master/GuiFunct.cpp
+- TSRE5-Trainsim.Com-Fork-master/GuiFunct.h
+  - Added the shared professional charcoal/orange panel treatment, title strips, consistent editable/read-only field states, hover treatment, buttons, and square choice indicators.
+
+- TSRE5-Trainsim.Com-Fork-master/ObjTools.cpp
+- TSRE5-Trainsim.Com-Fork-master/ObjTools.h
+  - Reworked Object Selection and Auto Place presentation and moved Auto Place into its own pinnable workflow.
+
+- TSRE5-Trainsim.Com-Fork-master/GeoTools.cpp
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.cpp
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.h
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.cpp
+  - Carried the shared panel hierarchy, title, spacing, control, and button treatment through the F2/F3 and Control Panel surfaces.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesAbstract.cpp
+- TSRE5-Trainsim.Com-Fork-master/PropertiesDyntrack.cpp
+- TSRE5-Trainsim.Com-Fork-master/PropertiesStatic.cpp
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp
+  - Standardized property-panel subtitles, spacing, button behavior, helper launch treatment, and editable-field presentation.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.cpp
+- TSRE5-Trainsim.Com-Fork-master/TDB.h
+  - Exposed TrackDB information required by the Activity Builder path graph and switch-state operations.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/TSRE5_resource.rc
+  - Advanced application, settings-output, and Windows executable metadata to v0.7.
+
+- TSRE5-Trainsim.Com-Fork-master/nbproject/qt-Release_x64.pro
+  - Added the Activity Builder and Track Viewer sources to the release build.
+
 Primary source files edited
 
 - TSRE5-Trainsim.Com-Fork-master/main.cpp
