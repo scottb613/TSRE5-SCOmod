@@ -49,8 +49,13 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Refined `route lighting` with warmer directional sunlight and cooler sky-facing ambient light while preserving MSTS texture artwork and neutral editor overlays.
 - Added `Save, Restart and Restore` in F12 plus optional UI sounds for startup actions, toggles, checkboxes, dropdown selections, and menu commands.
 - Added `property guidance` for Detail Level, MSTS StaticFlags, and MSTS Collision, clarified Alt+A in the key reference, and corrected read-only Control Panel hover behavior.
-- Added the `F4 Activity Builder` as a full-screen standalone path workspace with a high-resolution TrackDB viewer, switch-aware water-flow routing, reverse and wait points, passing sidings, path validation, and MSTS/ORTS-compatible path writing.
-- Standardized `F1-F4 and utility panels` with charcoal/orange title strips, consistent spacing and buttons, square choice indicators, pinnable helper windows, reliable focus return, and active-tool highlighting.
+- Added the full-screen `F4 Activity Builder` and high-resolution TrackDB viewer.
+- Added standalone MSTS/ORTS path creation, editing, validation, and PAT writing.
+- Added natural-end `water flow` routing with live switch throwing and recalculation.
+- Added reverse points, duration and clock-time wait points, overlap visualization, and passing sidings.
+- Added selectable/deletable path controls, undo/redo, map rotation, route markers, labels, signals, stations, and service-point symbology.
+- Standardized `F1-F4 and utility panels` with the charcoal/orange visual system, square selectors, consistent controls, active-tool highlighting, focus restoration, and pinnable helper windows.
+- Added the pinnable `Auto Place` workflow and further Grade Helper, Control Panel, Object Selection, and Terrain Editor cleanup.
 
 ## Downloads
 
@@ -66,6 +71,7 @@ The ZIP also includes `LICENSE.md` and `THIRD-PARTY-NOTICES.txt`. TSRE GenX foll
 
 - `scoWorkList.txt` contains the detailed change summary.
 - `scoFileEdit.txt` lists the code/project files touched during the work.
+- `THIRD-PARTY-NOTICES.txt` records upstream authorship, acknowledgements, and bundled runtime-library notices.
 - `docs/` contains the release-facing documentation copies.
 
 ## Status

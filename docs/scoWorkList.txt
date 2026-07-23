@@ -14,11 +14,6 @@ I do not intend this to become a separate production fork of Eric's work. This i
 
 HIGHLIGHTS
 
-- Added [F4 Activity Builder], a full-screen standalone path-editing workspace with a high-resolution TrackDB viewer.
-- Added switch-aware [water-flow routing], reverse points, duration and clock-time wait points, passing sidings, overlap display, validation, undo/redo, and MSTS/ORTS-compatible PAT writing.
-- Added selectable and deletable path controls, live switch state and recalculation, route rotation, scalable map labels, markers, signals, endpoints, and performance-aware overview rendering.
-- Reworked [F1-F4 and utility panels] around professional charcoal/orange title strips, cleaner hierarchy and spacing, consistent buttons and editable fields, square selectors, active-tool highlighting, and reliable focus return.
-- Added a pinnable [Auto Place] window and refined Grade Helper, Control Panel, Object Placement, Object Selection, Terrain Editor, and Activity Editor presentation.
 - Updated [code] to build with current MSYS2/MinGW tooling.
 - Reworked [F] terrain conforming for stronger, more practical track cuts and embankments, including improved low-end track-width behavior.
 - Added [Ctrl+F] selected-object tile conforming, [Shift+F] non-destructive smoothing, and the [F2] Conform DB brush for grade-following spot cleanup.
@@ -55,6 +50,13 @@ HIGHLIGHTS
 - Refined [route lighting] with warmer directional sunlight and cooler sky-facing ambient light while preserving MSTS texture artwork and neutral editor overlays.
 - Added [Save, Restart and Restore] in F12 plus optional UI sounds for startup actions, toggles, checkboxes, dropdown selections, and menu commands.
 - Added [property guidance] for Detail Level, MSTS StaticFlags, and MSTS Collision, clarified Alt+A in the key reference, and corrected read-only Control Panel hover behavior.
+- Added the full-screen [F4 Activity Builder] and high-resolution TrackDB viewer.
+- Added standalone MSTS/ORTS path creation, editing, validation, and PAT writing.
+- Added natural-end [water flow] routing with live switch throwing and recalculation.
+- Added reverse points, duration and clock-time wait points, overlap visualization, and passing sidings.
+- Added selectable/deletable path controls, undo/redo, map rotation, route markers, labels, signals, stations, and service-point symbology.
+- Standardized [F1-F4 and utility panels] with the charcoal/orange visual system, square selectors, consistent controls, active-tool highlighting, focus restoration, and pinnable helper windows.
+- Added the pinnable [Auto Place] workflow and further Grade Helper, Control Panel, Object Selection, and Terrain Editor cleanup.
 
 ======================================================================================================
 
@@ -453,6 +455,69 @@ F12 now provides `Save, Restart and Restore`. It saves the displayed settings, c
    --- Property and Control Guidance ---
 
 Static and track-object properties now explain Detail Level, MSTS StaticFlags, and MSTS Collision fields in-place, including the difference between shape defaults and world-file overrides. The F12 key reference explicitly documents `Alt+A` as selecting every terrain texture patch on the selected tile. The Control Panel's elapsed-time-since-save readout remains warning-colored when stale but no longer presents hover or pressed feedback because it is display-only.
+
+
+   --- [F4] Activity Builder and TrackDB Viewer ---
+
+F4 now opens a dedicated full-screen Activity Builder instead of relying on the old activity panel to provide path context. The same F4 shortcut closes it, and opening the workspace maximizes the available map area while keeping fixed Path Editor and Activity Editor controls on the left and context-sensitive path controls on the right. Paths are standalone route resources: a user can create, inspect, edit, clone, delete, and save a path without first creating or selecting an activity.
+
+The central viewer reads the route TrackDB and renders the actual track graph at high resolution with antialiased, continuously scalable geometry. Curves, junction approaches, sidings, crossovers, endpoints, three-way junction data, and dense XTracks areas remain visible through deep zoom instead of collapsing into the broken low-resolution segments shown by the former preview. Rendering is clipped and simplified by scale so panning remains smooth across very large databases; junction symbols disappear beyond the useful inspection scale, while route-level reference markers remain visible for navigation.
+
+Orange junction symbols are painted over path lines and retain a practical screen-space click target when zoomed in. Their appearance distinguishes default alignment, a route whose stored default is diverging, and a switch thrown away from its default. Selecting a junction exposes its TrackDB node, pins, available exits, and chosen route so the operator can understand the switch state before changing it.
+
+
+   --- Standalone Path Creation, Validation, and PAT Writing ---
+
+`New Path` clears any previously displayed path and begins a route-level path with its own name and description. `Place Start` snaps the start to the TrackDB, `Reverse Start` changes the initial travel direction, and `Place Endpoint` fixes the desired destination after the preview has flowed across the route. Existing paths open through an explicit centered selection placeholder so no path is silently chosen merely because it is first in the list.
+
+The editor preserves separate visual states for a new or edited path, a saved path, track used twice, passing sidings, start, endpoint, reverse points, and wait points. Path points and switches are painted last where required so they remain selectable over route lines. Selected control points can be removed with the Delete key, and path deletion, cloning, editing, and saving are guarded against the empty-selection and stale-selection crashes found during testing.
+
+`Check Path` validates continuity, direction changes, switch transitions, alternate routes, and control-point order before writing. `Save Path` produces an MSTS/ORTS-compatible PAT file in the route's PATHS directory, including the path metadata and supported reverse, wait, overlap, and siding information. This replaces the former workflow of building a path in Open Rails Track Viewer and only selecting it later in TSRE.
+
+
+   --- Natural-End Water-Flow Routing and Live Switches ---
+
+Path construction now behaves like water on the TrackDB graph. After a start is placed, the preview follows the currently aligned route through each junction and continues to the natural end of track. Placing an endpoint corks that flow at the chosen location. Throwing any reachable switch removes the endpoint, recalculates from the affected junction, and resumes the flow until the operator places the new endpoint.
+
+Switches remain live throughout editing; changing one does not require a separate throw mode or force the operator to rebuild the path. Recalculation retains the valid prefix, recomputes the affected continuation, verifies every junction alignment along the replacement route, and restores the previous switch state if the requested route cannot reconnect. A failed operation flashes a red message for three seconds instead of leaving a partially broken path.
+
+The graph search accounts for crossovers and later valid reconnection points rather than stopping at the first geometric crossing or nearest turnout. Passing routes can therefore be shortened or lengthened at the same turnout, and their full chain of switches is checked during every recalculation.
+
+
+   --- Reverse, Wait, Overlap, and Passing-Path Operations ---
+
+Reverse points can be added to the active route, including after changing the initial direction. The outgoing path is recalculated in the reversed direction while the already-traversed portion remains intact. A reverse point can be selected and deleted safely; the dedicated removal action remains available where the extra path-state checks are useful.
+
+Wait points support either a duration in minutes and seconds or a wait-until clock time in hours and minutes. The chosen operation is attached to a selected location on the path and written with the path data. Square selectors replace small round radio indicators so the active wait mode is legible in the dark interface.
+
+Track traversed a second time is shown in cyan without breaking the magenta main path. Passing sidings are designated as orange alternates between two valid main-path junctions, may coexist on one path, and recalculate when a controlling switch is thrown. The editor validates that an alternate can return to the main path; an invalid throw is rejected, the original alignment is restored, and the existing valid siding remains unchanged. Undo and redo cover the path-building operations so experimentation does not require starting over.
+
+
+   --- Route Orientation, Markers, Labels, and Interactives ---
+
+`Rotate 90` turns the route view for clearer working angles and screenshots while the north arrow rotates with the map; the default orientation remains north-up. Fit Route, Fit Path, tile grid, junction, marker, label, and interactive overlays can be toggled independently without changing the underlying route or path.
+
+The marker overlay reads only the MKR file associated with the active route and limits route-level navigation flags to marker type 0. Those flags and their text remain useful as the view zooms out, while close-range labels scale for readability. Signals use paired green/red indications offset from the track, and stations, fuel points, water points, and other service interactives receive distinct selectable symbology instead of being indistinguishable TrackDB dots.
+
+The viewer keeps switches and path controls above track and path geometry, and preserves separate toggles for marker symbols, labels, interactives, junctions, and the tile grid. This creates a usable route-planning map rather than a path line floating without geographic or operating context.
+
+
+   --- F1-F4 and Utility-Panel Visual Standardization ---
+
+The F1-F4 editor panels and the Grade Helper, Control Panel, Auto Place, Object Selection, Object Placement, Terrain Editor, and Activity Builder utilities now share a flat charcoal visual system with narrow orange title accents. Major titles, bullet-style subsections, spacing, button geometry, dropdowns, editable fields, and active states follow the same hierarchy without replacing special-purpose cues such as the orange editable-field treatment.
+
+Boolean choices use clear square selectors, tool buttons turn orange while active, and user-triggered button presses use the established interface sound. Floating helper titlebar captions were removed where the styled in-panel title already identifies the tool. Button actions restore focus to the main editor so keyboard shortcuts continue working without an extra viewport click, while Pin still preserves the intended helper-window placement.
+
+F4 uses fixed side panels because its workflow benefits from a stable full-screen layout; the Panels menu can restore a hidden side panel. Status messages use the established green/red treatment at bottom center, the path key is aligned at the bottom of the right panel, and redundant controls were removed where selection plus the Delete key already provides the operation.
+
+
+   --- Auto Place and Supporting Editor Cleanup ---
+
+F2 now opens a focused pinnable `Auto Place...` helper rather than exposing a crowded block of placement controls in the Object Selection panel. Alignment and offset controls stay together, placement settings and actions sit at the bottom, and the workflow uses the concise `Commit`, `Undo Last`, and `Reset Rotation` commands. Editable numeric fields and dropdowns use the same border and hover treatment as equivalent controls elsewhere without incorrectly decorating read-only positional data.
+
+The accompanying cleanup gave F1 the `OBJECT SELECTION` title, F2 the `OBJECT EDITOR` context, the left property panel the `OBJECT PLACEMENT` title when an object is selected, and a cleaner no-selection state when it is not. Grade Helper no longer repeats an unnecessary subtitle, Control Panel and helper windows share the title-accent system, and the main editor starts maximized unless a pinned placement explicitly overrides it.
+
+Together, these changes carry the Activity Builder's clearer major-controls-left/details-right model into the rest of the editor without changing established tool behavior that was outside the visual cleanup.
 
 
 ======================================================================================================
