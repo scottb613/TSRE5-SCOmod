@@ -235,6 +235,7 @@ protected:
     void paintTextureOnTile(Brush* brush, int y, int u, float x, float z);
     static QString pairedTerrtexSubdir();
     static QString terrainPlaceholderPath(QString seasonSubdir);
+    static int loadTextureForPainting(QString path);
     void ensurePairedSeasonPlaceholder(QString textureName);
     void paintPairedSeasonTexture(Brush* brush, QString textureName, int patchIdx, float x, float z);
     void savePairedSeasonTexture(int patchIdx);

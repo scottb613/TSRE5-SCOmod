@@ -164,6 +164,20 @@ QString Terrain::terrainPlaceholderPath(QString seasonSubdir) {
     return contentPlaceholder;
 }
 
+int Terrain::loadTextureForPainting(QString path) {
+    int textureId = TexLib::getTex(path);
+    if (textureId >= 0
+            && TexLib::mtex.find(textureId) != TexLib::mtex.end()
+            && TexLib::mtex[textureId] != NULL
+            && TexLib::mtex[textureId]->loaded)
+        return textureId;
+
+    // Mirror painting uses the texture immediately. Force a synchronous load
+    // instead of racing the normal background texture loader on the first
+    // stroke after changing seasons.
+    return TexLib::addTex(path, true);
+}
+
 void Terrain::ensurePairedSeasonPlaceholder(QString textureName) {
     QString pairedSubdir = Terrain::pairedTerrtexSubdir();
     QString targetDir = Terrain::routeTerrtexPath(pairedSubdir);
@@ -193,20 +207,26 @@ void Terrain::paintPairedSeasonTexture(Brush* brush, QString textureName, int pa
     if (!QFile::exists(pairedBrushPath))
         return;
 
-    int pairedBrushTexId = TexLib::addTex(pairedBrushPath);
-    if (pairedBrushTexId < 0 || TexLib::mtex.find(pairedBrushTexId) == TexLib::mtex.end() || TexLib::mtex[pairedBrushTexId] == NULL)
+    int pairedBrushTexId = Terrain::loadTextureForPainting(pairedBrushPath);
+    if (pairedBrushTexId < 0
+            || TexLib::mtex.find(pairedBrushTexId) == TexLib::mtex.end()
+            || TexLib::mtex[pairedBrushTexId] == NULL
+            || !TexLib::mtex[pairedBrushTexId]->loaded)
         return;
 
     if (texMirrorId[patchIdx] < 0) {
         if (QFile::exists(target)) {
-            texMirrorId[patchIdx] = TexLib::addTex(target);
+            texMirrorId[patchIdx] = Terrain::loadTextureForPainting(target);
         } else {
             QString placeholder = Terrain::terrainPlaceholderPath(pairedSubdir);
             if (!QFile::exists(placeholder))
                 return;
 
-            int placeholderTexId = TexLib::addTex(placeholder);
-            if (placeholderTexId < 0)
+            int placeholderTexId = Terrain::loadTextureForPainting(placeholder);
+            if (placeholderTexId < 0
+                    || TexLib::mtex.find(placeholderTexId) == TexLib::mtex.end()
+                    || TexLib::mtex[placeholderTexId] == NULL
+                    || !TexLib::mtex[placeholderTexId]->loaded)
                 return;
 
             texMirrorId[patchIdx] = TexLib::cloneTex(placeholderTexId);
@@ -215,12 +235,16 @@ void Terrain::paintPairedSeasonTexture(Brush* brush, QString textureName, int pa
         }
     }
 
-    if (texMirrorId[patchIdx] < 0 || TexLib::mtex.find(texMirrorId[patchIdx]) == TexLib::mtex.end() || TexLib::mtex[texMirrorId[patchIdx]] == NULL)
+    if (texMirrorId[patchIdx] < 0
+            || TexLib::mtex.find(texMirrorId[patchIdx]) == TexLib::mtex.end()
+            || TexLib::mtex[texMirrorId[patchIdx]] == NULL
+            || !TexLib::mtex[texMirrorId[patchIdx]]->loaded)
         return;
 
     Brush pairedBrush = *brush;
     pairedBrush.texId = pairedBrushTexId;
     pairedBrush.tex = TexLib::mtex[pairedBrushTexId];
+    TexLib::mtex[texMirrorId[patchIdx]]->sendToUndo(texMirrorId[patchIdx]);
     TexLib::mtex[texMirrorId[patchIdx]]->paint(&pairedBrush, z, x);
     TexLib::mtex[texMirrorId[patchIdx]]->update();
     texMirrorModified[patchIdx] = true;
@@ -3243,9 +3267,11 @@ void Terrain::save() {
     int patches = tfile->patchsetNpatches;
     for (int u = 0; u < patches; u++)
         for (int y = 0; y < patches; y++) {
-            if (this->texModified[y * patches + u] == false) continue;
+            if (!this->texModified[y * patches + u] && !this->texMirrorModified[y * patches + u])
+                continue;
             //QString name = this->getTileName(mojex, -mojez) + "_" + QString::number(y) + "_" + QString::number(u) + ".ace";
-            TexLib::save("ace", TexLib::mtex[texid[y * patches + u]]->pathid, texid[y * patches + u]);
+            if (this->texModified[y * patches + u])
+                TexLib::save("ace", TexLib::mtex[texid[y * patches + u]]->pathid, texid[y * patches + u]);
             if (this->texMirrorModified[y * patches + u]) {
                 savePairedSeasonTexture(y * patches + u);
             }

@@ -25,6 +25,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QFileInfo>
+#include <QSignalBlocker>
 
 static int scaledUiSize(int base){
     return qRound(base * qMax(1.0f, Game::uiScale));
@@ -858,28 +859,66 @@ void TerrainTools::setHtype(int val){
 }
 
 void TerrainTools::setSeasonType(int val){
+    QString requestedSeason = "Summer";
+    if(val == 1)
+        requestedSeason = "Spring";
+    else if(val == 2)
+        requestedSeason = "Autumn";
+    else if(val == 3)
+        requestedSeason = "Winter";
+    else if(val == 4)
+        requestedSeason = "Night";
+
+    if (requestedSeason.compare(Game::season, Qt::CaseInsensitive) == 0)
+        return;
+
+    QVector<QString> unsavedTerrain;
+    if (Game::terrainLib != NULL)
+        Game::terrainLib->getUnsavedInfo(unsavedTerrain);
+    if (!unsavedTerrain.isEmpty()) {
+        QMessageBox::warning(this, "Texture Set",
+                QString("Save the current terrain changes before switching texture sets.\n\n"
+                        "%1 terrain tile(s) have unsaved changes, including terrain paint.")
+                .arg(unsavedTerrain.size()));
+
+        int previousIndex = 0;
+        QString previousSeason = Game::season.trimmed().toLower();
+        if (previousSeason == "spring")
+            previousIndex = 1;
+        else if (previousSeason == "autumn" || previousSeason == "fall")
+            previousIndex = 2;
+        else if (previousSeason == "winter" || previousSeason == "snow")
+            previousIndex = 3;
+        else if (previousSeason == "night")
+            previousIndex = 4;
+
+        QSignalBlocker blocker(seasonType);
+        seasonType->setCurrentIndex(previousIndex);
+        return;
+    }
+
     if(val == 1) {
-        Game::season = "Spring";
+        Game::season = requestedSeason;
         Game::sunLightDirection[0] = -1;
         Game::sunLightDirection[1] = 2;
         Game::sunLightDirection[2] = 1;
     } else if(val == 2) {
-        Game::season = "Autumn";
+        Game::season = requestedSeason;
         Game::sunLightDirection[0] = -1;
         Game::sunLightDirection[1] = 2;
         Game::sunLightDirection[2] = 1;
     } else if(val == 3) {
-        Game::season = "Winter";
+        Game::season = requestedSeason;
         Game::sunLightDirection[0] = 2;
         Game::sunLightDirection[1] = 2;
         Game::sunLightDirection[2] = 2;
     } else if(val == 4) {
-        Game::season = "Night";
+        Game::season = requestedSeason;
         Game::sunLightDirection[0] = -10;
         Game::sunLightDirection[1] = -10;
         Game::sunLightDirection[2] = -10;
     } else {
-        Game::season = "Summer";
+        Game::season = requestedSeason;
         Game::sunLightDirection[0] = -1;
         Game::sunLightDirection[1] = 2;
         Game::sunLightDirection[2] = 1;
