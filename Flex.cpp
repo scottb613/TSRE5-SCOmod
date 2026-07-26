@@ -533,14 +533,16 @@ bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2, float*
     p22[0] +=  2048*(x2 - x1);
     p22[2] +=  2048*(z2 - z1);
     const float rise = p22[1] - p11[1];
-    float dist1 = 0.0f;
-    if (success)
-        dist1 = totalCenterlineLength(dyntrackSections);
-    if (dist1 <= 0.001f) {
-        p11[1] = 0.0f;
-        p22[1] = 0.0f;
-        dist1 = Vec3::dist(p11, p22);
-    }
+    // Dyntrack is a flat mesh tilted around its local X axis. Its endpoint
+    // height is therefore controlled by the endpoint's forward displacement
+    // in the starting track frame, not by the curved centerline length.
+    // Using centerline length leaves long S-curves visibly above/below the
+    // target even though their reported average grade looks correct.
+    const float deltaX = p22[0] - p11[0];
+    const float deltaZ = -(p22[2] - p11[2]);
+    float dist1 = std::fabs(deltaX * std::sin(q1[1]) + deltaZ * std::cos(q1[1]));
+    if (dist1 <= 0.001f)
+        dist1 = std::sqrt(deltaX * deltaX + deltaZ * deltaZ);
     
     if (dist1 > 0.001f)
         elev = rise*(1000.0/dist1);
