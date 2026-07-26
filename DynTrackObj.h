@@ -56,12 +56,15 @@ private:
     int sidxSelected = 0;
     OglObj *gradeMarker = NULL;
     OglObj *gradeMarkerMirror = NULL;
+    OglObj *selectionOutline = NULL;
     int gradeMarkerDirection = 99;
     int gradeMarkerTransition = -1;
     bool getSimpleBorder(float* border);
     bool getBoxPoints(QVector<float> &points);
     void renderGradeMarker(float lod, int renderMode, int selectionColor);
     void rebuildGradeMarker(int direction, int transition);
+    void renderSelectionOutline();
+    void rebuildSelectionOutline();
 };
 
 #endif	/* DYNTRACKOBJ_H */

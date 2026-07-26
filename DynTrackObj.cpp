@@ -28,6 +28,8 @@
 #include "ComplexLine.h"
 #include "OglObj.h"
 #include <QCoreApplication>
+#include <algorithm>
+#include <cmath>
 #include <math.h>
 
 #ifndef M_PI
@@ -74,6 +76,7 @@ DynTrackObj::~DynTrackObj() {
     shape.clear();
     delete gradeMarker;
     delete gradeMarkerMirror;
+    delete selectionOutline;
 }
 
 bool DynTrackObj::allowNew(){
@@ -152,6 +155,8 @@ void DynTrackObj::deleteVBO(){
         gradeMarker->deleteVBO();
     if(gradeMarkerMirror != NULL)
         gradeMarkerMirror->deleteVBO();
+    if(selectionOutline != NULL)
+        selectionOutline->deleteVBO();
     gradeMarkerDirection = 99;
     gradeMarkerTransition = -1;
 }
@@ -428,11 +433,106 @@ void DynTrackObj::render(GLUU* gluu, float lod, float posx, float posz, float* p
     }
     
     if(selected){
-        drawBox();
+        renderSelectionOutline();
     }
 
     renderGradeMarker(lod, renderMode, selectionColor);
 };
+
+void DynTrackObj::renderSelectionOutline(){
+    if(selectionOutline == NULL || !selectionOutline->loaded)
+        rebuildSelectionOutline();
+    if(selectionOutline == NULL || !selectionOutline->loaded)
+        return;
+
+    selectionOutline->setMaterial(
+            Game::selectedColor->redF(),
+            Game::selectedColor->greenF(),
+            Game::selectedColor->blueF());
+    selectionOutline->setLineWidth(Game::selectedWidth);
+    selectionOutline->render();
+}
+
+void DynTrackObj::rebuildSelectionOutline(){
+    if(selectionOutline == NULL)
+        selectionOutline = new OglObj();
+    else
+        selectionOutline->deleteVBO();
+
+    QVector<TSection> tsections;
+    for(int i = 0; i < 5; i++){
+        if(sections[i].sectIdx > 100000000)
+            continue;
+        tsections.push_back(TSection(0, sections[i].type, sections[i].a, sections[i].r));
+    }
+    if(tsections.isEmpty())
+        return;
+
+    ComplexLine line;
+    line.init(tsections);
+    const float length = line.getLength();
+    if(length < 0.001f)
+        return;
+
+    const float sampleSpacing = 5.0f;
+    const int segmentCount = std::max(1, (int)std::ceil(length / sampleSpacing));
+    QVector<float> centers;
+    centers.resize((segmentCount + 1) * 3);
+    for(int i = 0; i <= segmentCount; i++){
+        float posRot[6] = { 0, 0, 0, 0, 0, 0 };
+        line.getDrawPosition(posRot, length * ((float)i / (float)segmentCount));
+        centers[i * 3 + 0] = posRot[0];
+        centers[i * 3 + 1] = 0.38f;
+        centers[i * 3 + 2] = posRot[2];
+    }
+
+    QVector<float> left;
+    QVector<float> right;
+    left.resize((segmentCount + 1) * 3);
+    right.resize((segmentCount + 1) * 3);
+    constexpr float halfWidth = 2.65f;
+    for(int i = 0; i <= segmentCount; i++){
+        const int previous = std::max(0, i - 1);
+        const int next = std::min(segmentCount, i + 1);
+        const float tangentX = centers[next * 3 + 0] - centers[previous * 3 + 0];
+        const float tangentZ = centers[next * 3 + 2] - centers[previous * 3 + 2];
+        const float tangentLength = std::sqrt(tangentX * tangentX + tangentZ * tangentZ);
+        const float sideX = tangentLength > 0.0001f ? -tangentZ / tangentLength : 1.0f;
+        const float sideZ = tangentLength > 0.0001f ? tangentX / tangentLength : 0.0f;
+
+        left[i * 3 + 0] = centers[i * 3 + 0] + sideX * halfWidth;
+        left[i * 3 + 1] = centers[i * 3 + 1];
+        left[i * 3 + 2] = centers[i * 3 + 2] + sideZ * halfWidth;
+        right[i * 3 + 0] = centers[i * 3 + 0] - sideX * halfWidth;
+        right[i * 3 + 1] = centers[i * 3 + 1];
+        right[i * 3 + 2] = centers[i * 3 + 2] - sideZ * halfWidth;
+    }
+
+    QVector<float> points;
+    points.reserve(segmentCount * 12 + 12);
+    auto appendPoint = [&](const QVector<float> &source, int index) {
+        points.push_back(source[index * 3 + 0]);
+        points.push_back(source[index * 3 + 1]);
+        points.push_back(source[index * 3 + 2]);
+    };
+    for(int i = 0; i < segmentCount; i++){
+        appendPoint(left, i);
+        appendPoint(left, i + 1);
+        appendPoint(right, i);
+        appendPoint(right, i + 1);
+    }
+    appendPoint(left, 0);
+    appendPoint(right, 0);
+    appendPoint(left, segmentCount);
+    appendPoint(right, segmentCount);
+
+    selectionOutline->setMaterial(
+            Game::selectedColor->redF(),
+            Game::selectedColor->greenF(),
+            Game::selectedColor->blueF());
+    selectionOutline->setLineWidth(Game::selectedWidth);
+    selectionOutline->init(points.data(), points.size(), RenderItem::V, GL_LINES);
+}
 
 void DynTrackObj::rebuildGradeMarker(int direction, int transition){
     if(gradeMarker == NULL)
