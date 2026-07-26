@@ -39,6 +39,7 @@
 DynTrackObj::DynTrackObj() {
     sectionIdx = -1;
     sections = NULL;
+    elevation = 0.0f;
     collideFlags = 39;    
     staticFlags = 0x100000;
 }
@@ -90,14 +91,29 @@ float DynTrackObj::getElevation(){
     return this->endp[3]*asin(-vect[1]/1000.0);
 }
 
+float DynTrackObj::getAverageElevation(){
+    return asin(qBound(-1.0f, elevation / 1000.0f, 1.0f));
+}
+
+float DynTrackObj::getAverageGradePermille(){
+    return elevation;
+}
+
 void DynTrackObj::setElevation(float prom){
-    // Keep the serialized Dyntrack elevation in sync with the rotation applied below.
-    elevation = prom;
+    setElevation(prom, prom);
+}
+
+void DynTrackObj::setElevation(float visualProm, float averageProm){
+    // A curved Dyntrack needs two related values. The quaternion tilts the
+    // planar rendered object far enough to meet the endpoint, while the
+    // serialized Elevation/TDB value is the average rise over rail length.
+    elevation = averageProm;
     float * q = qDirection;
     float vect[3];
     vect[0] = 0; vect[1] = 0; vect [2] = 1000;
     Vec3::transformQuat(vect, vect, q);
-    rotate(asin((vect[1]*this->endp[3]+prom)/1000.0),0,0);
+    rotate(asin(qBound(-1.0f,
+            (vect[1]*this->endp[3]+visualProm)/1000.0f, 1.0f)),0,0);
 }
 
 void DynTrackObj::rotate(float x, float y, float z){
@@ -689,7 +705,7 @@ void DynTrackObj::renderGradeMarker(float lod, int renderMode, int selectionColo
     if(lod > 650.0f)
         return;
 
-    const float gradePercent = std::tan(getElevation()) * 100.0f;
+    const float gradePercent = std::tan(getAverageElevation()) * 100.0f;
     if(qAbs(gradePercent) <= 0.01f)
         return;
     int direction = gradePercent > 0.0f ? 1 : -1;

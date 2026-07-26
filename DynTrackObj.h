@@ -34,7 +34,10 @@ public:
     bool allowNew();
     void load(int x, int y);
     float getElevation();
+    float getAverageElevation();
+    float getAverageGradePermille();
     void setElevation(float prom);
+    void setElevation(float visualProm, float averageProm);
     void rotate(float x, float y, float z);
     void set(int sh, FileBuffer* val);
     void set(QString sh, FileBuffer* data);

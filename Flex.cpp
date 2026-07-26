@@ -511,7 +511,9 @@ private:
 
 } // namespace
 
-bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2, float* dyntrackSections, float &elev, float preferredMinCurveRadius, bool classicMode){
+bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
+        float* dyntrackSections, float &visualElev, float &averageElev,
+        float preferredMinCurveRadius, bool classicMode){
     TDB* tdb = Game::trackDB;
     qDebug() <<"flex "<< x1 << " " << z1 << " " << p1[0] << " " << p1[1] << " " << p1[2];
     qDebug() <<"flex "<< x2 << " " << z2 << " " << p2[0] << " " << p2[1] << " " << p2[2];
@@ -545,9 +547,15 @@ bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2, float*
         dist1 = std::sqrt(deltaX * deltaX + deltaZ * deltaZ);
     
     if (dist1 > 0.001f)
-        elev = rise*(1000.0/dist1);
+        visualElev = rise*(1000.0/dist1);
     else
-        elev = 0.0f;
+        visualElev = 0.0f;
+
+    const float railLength = success ? totalCenterlineLength(dyntrackSections) : 0.0f;
+    if (railLength > 0.001f)
+        averageElev = rise*(1000.0f/railLength);
+    else
+        averageElev = visualElev;
     qDebug() << "elev" << dist1 << p2[1] << p1[1] << "success" << success;
 
     delete[] p11;

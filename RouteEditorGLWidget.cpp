@@ -73,6 +73,7 @@
 #include "TerrainTools.h" // Include the dialog header
 #include "TRitem.h"
 #include "TrackObj.h"
+#include "DynTrackObj.h"
 #include "TDB.h"
 
 
@@ -2346,8 +2347,11 @@ void RouteEditorGLWidget::copySelectionInfo() {
 
         if (obj->typeID == WorldObj::trackobj || obj->typeID == WorldObj::dyntrack) {
             info << "Track Section Index: " + QString::number(obj->sectionIdx);
-            info << "Grade: " + number(tan(obj->getElevation()) * 100.0) + "%";
-            info << "Elevation Radians: " + number(obj->getElevation());
+            const float displayedElevation = obj->typeID == WorldObj::dyntrack
+                    ? static_cast<DynTrackObj*>(obj)->getAverageElevation()
+                    : obj->getElevation();
+            info << "Grade: " + number(tan(displayedElevation) * 100.0) + "%";
+            info << "Elevation Radians: " + number(displayedElevation);
         }
 
         info << "Static Flags: 0x" + QString::number(obj->staticFlags, 16).toUpper();

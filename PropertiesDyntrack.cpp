@@ -307,19 +307,15 @@ void PropertiesDyntrack::showObj(GameObj* obj){
     ///////////
     elevType.setCurrentText(ElevTypeName);
     
-    float * q = dobj->qDirection;
-    float vect[3];
-    vect[0] = 0; vect[1] = 0; vect [2] = 1000.0;
-    Vec3::transformQuat(vect, vect, q);
-    vect[1] = -vect[1];
+    const float gradePermille = dobj->getAverageGradePermille();
      
     float oneInXm = 0.0;
-    float prog = qRadiansToDegrees(qAtan(vect[1]/1000.0));
-    float prop = vect[1]/10.0;
+    float prog = qRadiansToDegrees(qAtan(gradePermille/1000.0));
+    float prop = gradePermille/10.0;
 
-    //if(vect[1] > 0)
-        oneInXm = 1000.0/vect[1];
-    this->elevProm.setText(QString::number(vect[1]));
+    //if(gradePermille > 0)
+        oneInXm = 1000.0/gradePermille;
+    this->elevProm.setText(QString::number(gradePermille));
     this->elevProg.setText(QString::number(prog));
     this->elevProp.setText(QString::number(prop));
     this->elev1inXm.setText(QString::number(oneInXm));
@@ -335,19 +331,15 @@ void PropertiesDyntrack::updateObj(GameObj* obj){
         return;
     }
     dobj = (DynTrackObj*)obj;
-    float * q = dobj->qDirection;
-    float vect[3];
-    vect[0] = 0; vect[1] = 0; vect [2] = 1000.0;
-    Vec3::transformQuat(vect, vect, q);
-    vect[1] = -vect[1];
+    const float gradePermille = dobj->getAverageGradePermille();
      
     float oneInXm = 0.0;
-    oneInXm = 1000.0/vect[1];
-    float prog = qRadiansToDegrees(qAtan(vect[1]/1000.0));
-    float prop = vect[1]/10.0;
+    oneInXm = 1000.0/gradePermille;
+    float prog = qRadiansToDegrees(qAtan(gradePermille/1000.0));
+    float prop = gradePermille/10.0;
        
     if(!this->elevProm.hasFocus() && !this->elev1inXm.hasFocus() && !this->elevProg.hasFocus() && !this->elevProp.hasFocus()){
-        this->elevProm.setText(QString::number(vect[1]));
+        this->elevProm.setText(QString::number(gradePermille));
         this->elevProg.setText(QString::number(prog));
         this->elevProp.setText(QString::number(prop));
         this->elev1inXm.setText(QString::number(oneInXm));
@@ -435,13 +427,15 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
     p2[2] = p[2];
     
     float dyntrackData[10];
-    float elev = 0;
+    float visualElev = 0;
+    float averageElev = 0;
     
-    bool success = Flex::AutoFlex(dobj->x, dobj->y, (float*)p1, x, z, (float*)p2, (float*)dyntrackData, elev, 0.0f, flexClassic.isChecked());
-    if(Game::debugOutput) qDebug() << "flex2" << elev;
+    bool success = Flex::AutoFlex(dobj->x, dobj->y, (float*)p1, x, z, (float*)p2,
+            (float*)dyntrackData, visualElev, averageElev, 0.0f, flexClassic.isChecked());
+    if(Game::debugOutput) qDebug() << "flex2" << visualElev << averageElev;
     if(success){
         dobj->set("dyntrackdata", (float*)dyntrackData);
-        dobj->setElevation(elev);
+        dobj->setElevation(visualElev, averageElev);
         this->showObj(dobj);
     }
     emit flexResult(success);
