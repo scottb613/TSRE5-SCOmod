@@ -50,6 +50,7 @@ private:
     int tex1;
     int tex2;
     bool init;
+    bool shapeIsShared = false;
     float elevation;
     float* jNodePosn = NULL;
     int sidxSelected = 0;

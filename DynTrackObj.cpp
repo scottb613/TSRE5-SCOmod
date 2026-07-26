@@ -67,6 +67,11 @@ WorldObj* DynTrackObj::clone(){
 }
 
 DynTrackObj::~DynTrackObj() {
+    if (!shapeIsShared) {
+        for (int i = 0; i < shape.size(); i++)
+            delete shape[i];
+    }
+    shape.clear();
     delete gradeMarker;
     delete gradeMarkerMirror;
 }
@@ -135,11 +140,14 @@ void DynTrackObj::rotate(float x, float y, float z){
 void DynTrackObj::deleteVBO(){
     //this->shape.deleteVBO();
     this->init = false;
-    for(int i = 0; i < shape.size(); i++){
-        shape[i]->deleteVBO();
-        delete shape[i];
+    if (!shapeIsShared) {
+        for(int i = 0; i < shape.size(); i++){
+            shape[i]->deleteVBO();
+            delete shape[i];
+        }
     }
     shape.clear();
+    shapeIsShared = false;
     if(gradeMarker != NULL)
         gradeMarker->deleteVBO();
     if(gradeMarkerMirror != NULL)
@@ -405,8 +413,12 @@ void DynTrackObj::render(GLUU* gluu, float lod, float posx, float posz, float* p
                 }
             }
             ProceduralShape::GetShape(templateName, shape, tsh, angles);
+            // ProceduralShape owns and caches these objects. DynTrackObj only
+            // borrows them and must never destroy their VBOs or pointers.
+            shapeIsShared = true;
         } else {
             ProceduralMstsDyntrack::GenShape(shape, tsections);
+            shapeIsShared = false;
         }
         init = true;
     } else {

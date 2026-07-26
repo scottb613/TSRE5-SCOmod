@@ -54,6 +54,15 @@ void OglObj::setMaterial(QString* path) {
     res = path;
 }
 
+void OglObj::setMaterial(const QString &path) {
+    if (res == NULL || *res != path) {
+        texId = -1;
+    }
+    ownedRes = path;
+    materialType = TEXTURE;
+    res = &ownedRes;
+}
+
 void OglObj::deleteVBO(){
     if(loaded){
         VBO.destroy();

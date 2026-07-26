@@ -1550,6 +1550,7 @@ bool Route::setTerrainToTrackObj(WorldObj* obj, Brush* brush){
         Game::terrainLib->setTerrainToTrackObj(brush, punkty, length, obj->x, obj->y, obj->matrix);
         delete[] punkty;
     }
+    return true;
 }
 
 void Route::smoothTerrainToTrackObj(WorldObj* obj, Brush* brush){
@@ -1597,7 +1598,6 @@ void Route::smoothTerrainToTrackObj(WorldObj* obj, Brush* brush){
         Game::terrainLib->smoothTerrainToTrackObj(brush, punkty, length, obj->x, obj->y, obj->matrix);
         delete[] punkty;
     }
-    return true;
 }
 
 int Route::setTerrainToNearestDbTile(int x, int y, float *pos, Brush* brush){

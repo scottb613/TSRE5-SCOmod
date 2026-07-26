@@ -14,30 +14,23 @@
 
 #include "Vector3f.h"
 #include "OglObj.h"
+#include "TexLib.h"
 
 #include <algorithm>
 #include <cmath>
 #include <vector>
 
 #include <QCoreApplication>
-#include <QFileInfo>
 
 namespace {
 
 QString dyntrackTexturePath(const QString &fileName) {
-    const QString routePath = (Game::root + "/routes/" + Game::route + "/textures/" + fileName).toLower();
-    if (QFileInfo::exists(routePath))
-        return routePath;
-
-    const QString contentPath = QCoreApplication::applicationDirPath() + "/content/dyntrack/" + fileName.toLower();
-    if (QFileInfo::exists(contentPath))
-        return contentPath;
-
-    const QString templatePath = QCoreApplication::applicationDirPath() + "/tsre_assets/templateRoute_0.6/textures/" + fileName.toLower();
-    if (QFileInfo::exists(templatePath))
-        return templatePath;
-
-    return routePath;
+    QStringList basePaths;
+    basePaths
+            << (Game::root + "/routes/" + Game::route + "/textures")
+            << (QCoreApplication::applicationDirPath() + "/content/dyntrack")
+            << (QCoreApplication::applicationDirPath() + "/tsre_assets/templateRoute_0.6/textures");
+    return TexLib::resolveTexturePath(basePaths, fileName.toLower());
 }
 
 }
@@ -827,12 +820,10 @@ void ProceduralMstsDyntrack::GenShape(QVector<OglObj*> &shape, QVector<TSection>
     Q_UNUSED(bufferTrimmed);
     //qDebug() << ptr << "" << str;
     
-    QString* texturePath = new QString(dyntrackTexturePath("acleantrack1.ace"));
     shape.push_back(new OglObj());
     shape.push_back(new OglObj());
-    shape[0]->setMaterial(texturePath);
-    texturePath = new QString(dyntrackTexturePath("acleantrack2.ace"));
-    shape[1]->setMaterial(texturePath);
+    shape[0]->setMaterial(dyntrackTexturePath("acleantrack1.ace"));
+    shape[1]->setMaterial(dyntrackTexturePath("acleantrack2.ace"));
     shape[0]->init(pd, ptr, RenderItem::VNTA, GL_TRIANGLES );
     shape[1]->init(sk, str, RenderItem::VNTA, GL_TRIANGLES );
     

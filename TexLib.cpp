@@ -15,13 +15,44 @@
 #include "MapLib.h"
 #include "Texture.h"
 #include <QDebug>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include "Game.h"
 #include "Route.h"
 
 int TexLib::jesttextur = 0;
 std::unordered_map<int, Texture*> TexLib::mtex;
 QHash<int, int> TexLib::disabledTextures;
+
+QString TexLib::resolveTexturePath(const QStringList &basePaths, const QString &fileName, bool tryAceDdsAlternative) {
+    QStringList candidateNames;
+    candidateNames.append(fileName);
+
+    if (tryAceDdsAlternative) {
+        const QFileInfo requested(fileName);
+        const QString suffix = requested.suffix().toLower();
+        if (suffix == "ace" || suffix == "dds") {
+            const QString alternativeSuffix = (suffix == "ace") ? "dds" : "ace";
+            QString alternativeName = requested.path() == "."
+                    ? requested.completeBaseName() + "." + alternativeSuffix
+                    : requested.path() + "/" + requested.completeBaseName() + "." + alternativeSuffix;
+            candidateNames.append(alternativeName);
+        }
+    }
+
+    for (const QString &basePath : basePaths) {
+        for (const QString &candidateName : candidateNames) {
+            const QString candidatePath = QDir::cleanPath(basePath + "/" + candidateName).replace("\\", "/");
+            if (QFileInfo::exists(candidatePath))
+                return candidatePath;
+        }
+    }
+
+    if (basePaths.isEmpty())
+        return fileName;
+    return QDir::cleanPath(basePaths.first() + "/" + fileName).replace("\\", "/");
+}
 
 void TexLib::reset() {
     jesttextur = 0;

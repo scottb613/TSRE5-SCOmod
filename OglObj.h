@@ -30,6 +30,7 @@ public:
     virtual void render(int selectionColor, float lod = 0);
     void deleteVBO();
     void setMaterial(float r, float g, float b);
+    void setMaterial(const QString &path);
     void setMaterial(QString* path);
     int getTexId();
     void setDistanceRange(float min, float max);
@@ -50,6 +51,7 @@ private:
     float minDistance = -1;
     float maxDistance = 999999;
     QString *res;
+    QString ownedRes;
     Vector4f *color = NULL;
     RenderItem::VertexAttr vAttribures = RenderItem::NO_ATTR;
 };

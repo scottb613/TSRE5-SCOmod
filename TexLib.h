@@ -10,6 +10,7 @@
 
 #include <unordered_map>
 #include <QString>
+#include <QStringList>
 #include <QHash>
 #include "Texture.h"
 
@@ -32,6 +33,7 @@ public:
     static int addTex(QString path, QString name, bool reload = false);
     static int addTex(QString pathid, bool reload = false);
     static int getTex(QString pathid);
+    static QString resolveTexturePath(const QStringList &basePaths, const QString &fileName, bool tryAceDdsAlternative = true);
     static int cloneTex(int id);
     static void save(QString type, QString path, int id);
 private:
