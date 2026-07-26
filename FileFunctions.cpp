@@ -1,0 +1,27 @@
+/*  This file is part of TSRE5.
+ *
+ *  TSRE5 - train sim game engine and MSTS/OR Editors. 
+ *  Copyright (C) 2016 Piotr Gadecki <pgadecki@gmail.com>
+ *
+ *  Licensed under GNU General Public License 3.0 or later. 
+ *
+ *  See LICENSE.md or https://www.gnu.org/licenses/gpl.html
+ */
+
+#include "FileFunctions.h"
+#include <QFile>
+#include <QDir>
+#include <QDebug>
+
+void FileFunctions::copyFiles(QString dirIn, QString dirOut){
+    QDir dir(dirIn);
+    qDebug() << dirIn << dirOut;
+    dir.setNameFilters(QStringList() << "*.*");
+    dir.setFilter(QDir::Files);
+    foreach(QString dirFile, dir.entryList())
+    {
+        qDebug() << dirFile;
+        if(!QDir(dirFile).exists())
+            QFile::copy(dirIn +"/"+ dirFile, dirOut +"/"+ dirFile);
+    }
+}

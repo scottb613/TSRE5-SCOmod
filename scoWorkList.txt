@@ -1,0 +1,535 @@
+TSRE GenX v0.7 Improvements
+
+======================================================================================================
+
+SCOPE
+
+I have been working through a set of practical TSRE route-editor improvements, mainly focused on making terrain work less painful for MSTS/Open Rails route building. The work started with track cuts and embankments, then expanded into route painting, water-edge detection, texture cleanup, and some editor quality-of-life items.
+
+There has been talk for years about a new Open Rails route editor, and I would still welcome one, but we also have to be realistic. TSRE is what we actually have today. It can be cumbersome, awkward, and less than ideal, but it is also a working route editor with real capability. Rather than waiting indefinitely for a replacement, I think it makes sense to embrace the tool we have and keep improving it where practical.
+
+I do not intend this to become a separate production fork of Eric's work. This is a test branch for debugging, experimentation, and evaluation. Eric's code should remain the production copy. My goal is to make focused improvements in the areas I know best, then hand them back to Eric for consideration and, hopefully, eventual inclusion in the main project. As history has proven, my interest around here tends to ebb and flow, sometimes disappearing for months at a time, which makes me a poor candidate to host or maintain production code long term. I have compiled an operational TSRE test build, though I will spare everyone the embarrassing details of how long it took me to get a clean compile.
+
+======================================================================================================
+
+HIGHLIGHTS
+
+- Updated [code] to build with current MSYS2/MinGW tooling.
+- Reworked [F] terrain conforming for stronger, more practical track cuts and embankments, including improved low-end track-width behavior.
+- Added [Ctrl+F] selected-object tile conforming, [Shift+F] non-destructive smoothing, and the [F2] Conform DB brush for grade-following spot cleanup.
+- Added [Alt+A] selection of all 256 terrain texture patches on the selected tile.
+- Added [autopaint] tile-level track and road painting plus shoreline-aware water-edge painting based on the actual terrain/water contour.
+- Added [F2] confirmed route-wide and current-tile TERRTEX reset tools for returning painted terrain to [terrain.ace].
+- Added [F2] route-local terrain paint presets covering texture, brush, intensity, shape, and rotation.
+- Added [F2] full 0-360 degree terrain texture rotation for directional ground textures.
+- Rebuilt [F2 seasonal textures] around a visible Summer, Spring, Autumn, Winter, and Night selector instead of hidden settings-file switches.
+- Added [seasonal textures] active-season refresh and per-file ORTS-style fallback for terrain, route objects, transfers, Dynamic Track, forests, and polyforests, including ACE/DDS alternatives.
+- Added [Terrtex: Mirror Season] for paired default/snow painting, with safe opposite-side placeholder creation when matching seasonal swatches are missing.
+- Protected [seasonal TERRTEX] 1024x1024 files from accidental downsampling during painting and corrected transfer/material cache refresh behavior.
+- Reduced [route performance] stutter with forest-generation controls, a Forest Regions view toggle, and texture-cache invalidation only when material paths change.
+- Improved [load] reliability with single-instance protection, corrected route-table refresh, and validated editable recent MSTS/ORTS root selection.
+- Added [Restore Last Session] for reopening the last route and camera context, plus compact [Pin] controls that remember the main window, Control Panel, and Grade Helper placement between sessions.
+- Added [Windows] the GenX executable icon, desktop-shortcut helper, and Route > Open Route Folder command.
+- Consolidated [Control Panel] Status and Navi functions into a scalable F7 panel with editing-state controls, navigation, movement locks, and delayed edge snapping.
+- Improved [Object Panel] with category-aware search and reset, cleaner Scale Rail grouping, and 30 Recent Items in a bounded scrollable history with Clear Recent.
+- Reworked [F1-F4 panels] property panels, Object Panel, Control Panel, Settings Editor, and startup screens into a consistent scalable interface.
+- Substantially reorganized [F2 textures] around a larger selected-texture preview, a compact two-column Recent Texture bank, clearer paint/preset/brush groups, and texture-name tooltips.
+- Added [global UI] scaling, consistent manual-action sound feedback, cleaner square F12 boolean selectors, and coordinated state colors without false responses during passive refreshes.
+- Added [Place Guard] validation with automatic undo and distinct feedback for dangerous or invalid scenery, track, and interactive-object placements.
+- Reorganized [F12 Settings] into practical categories with direct settings saves, timestamped backups, full-sentence tooltips, and an integrated key-assignment reference.
+- Repaired [F3 maps] OSM Vector Map HTTPS support, hardened failed-response handling, and increased generated map imagery to 4096 resolution.
+- Preserved [Dynamic Track] Classic Flex while adding a Classic/NextGen selector and adapting GokuMK's work as the foundation for compound and full S-curve NextGen connections.
+- Improved [Dynamic Track] editing with database rebuilding after Flex, synchronized elevation data, clearer section/length information, fallback textures, and consistent naming.
+- Added [splash screens] runtime-discovered artwork with a persistent shuffled cycle shared by the Route Loader, Consist Loader, and About window during each session.
+- Improved [track properties] grade-unit presentation and added Lock Grade so newly placed track or road pieces can inherit the selected piece's physical grade.
+- Added [Grade Helper] for dock-friendly, validated, connected, per-piece vertical transitions to an exact target grade, with remembered placement and automatic Lock Grade handoff.
+- Added [Grade Symbols] connectivity-aware markers for static and Dynamic Track, including steady-grade, transition, and direct crest/gully classifications.
+- Added [View and Markers] reversible overlay toggling and improved marker placement, color, height, and label reliability.
+- Added [Edit > Copy Info] selection diagnostics for clipboard-ready troubleshooting and reporting.
+- Reduced [route display] overhead by rebuilding Grade Symbol connectivity only at safe tile/database boundaries, reusing unchanged pointer-depth results, and throttling unchanged Control Panel updates.
+- Refined [route lighting] with warmer directional sunlight and cooler sky-facing ambient light while preserving MSTS texture artwork and neutral editor overlays.
+- Added [Save, Restart and Restore] in F12 plus optional UI sounds for startup actions, toggles, checkboxes, dropdown selections, and menu commands.
+- Added [property guidance] for Detail Level, MSTS StaticFlags, and MSTS Collision, clarified Alt+A in the key reference, and corrected read-only Control Panel hover behavior.
+- Added the full-screen [F4 Activity Builder] and high-resolution TrackDB viewer.
+- Added standalone MSTS/ORTS path creation, editing, validation, and PAT writing.
+- Added natural-end [water flow] routing with live switch throwing and recalculation.
+- Added reverse points, duration and clock-time wait points, overlap visualization, and passing sidings.
+- Added selectable/deletable path controls, undo/redo, map rotation, route markers, labels, signals, stations, and service-point symbology.
+- Standardized [F1-F4 and utility panels] with the charcoal/orange visual system, square selectors, consistent controls, active-tool highlighting, focus restoration, and pinnable helper windows.
+- Added the pinnable [Auto Place] workflow and further Grade Helper, Control Panel, Object Selection, and Terrain Editor cleanup.
+
+======================================================================================================
+
+GITHUB
+
+Test branch, forked from Eric's TSRE master branch:
+
+https://github.com/scottb613/TSRE5-SCOmod
+
+This branch includes the current experimental code and an operational test executable package for evaluation. Look for "RELEASES" on the right side panel and download the ZIP. In the root folder I added a small program, AddShortcutDesktop.cmd, to add a desktop shortcut for TSRE. When unzipping the folder, I suggest you keep this copy completely separate from your production copy of TSRE.
+
+======================================================================================================
+
+WORK DETAIL
+
+
+   --- Build and Compiler Cleanup ---
+
+The codebase needed a few small fixes to build cleanly under the current MSYS2/MinGW toolchain.
+
+Changes included:
+
+  - added missing standard includes for GCC 16 compatibility
+  - fixed OpenAL/freeglut library references in the Qt release project file
+  - added missing project entries for new helper/test files
+  - fixed two accidental assignment-in-condition debug checks in WorldObj.cpp
+
+I also added a small terrain math helper/test so the nearest-track terrain shaping math can be tested independently.
+
+
+   --- Terrain Conforming Tools ---
+
+The first major area was the [F] key terrain-to-track conforming tool. The old behavior produced very soft, wide terrain swells and did not make much visible use of the embankment/cutting sliders. I changed the terrain shaping logic so the track bed is held flatter and wider, with the cutting and embankment settings having a much stronger effect on the shoulder profile.
+
+The goal was:
+
+  - no holes under track when building embankments
+  - no terrain encroaching on track in cuts
+  - a flatter track bed
+  - smoother shoulder transitions
+  - much steeper cut/berm walls when the cut/embankment sliders are set high
+  - more useful results at common settings such as 2-10-10-2
+
+The F-tool track-width setting was also adjusted. The old width 1 behavior was effectively a single terrain data point, which was too narrow to be useful and could leave the result looking pinched. The low-end sizing now treats the first useful width more like the old width 2 behavior, so the 1/2/3 settings step through practical terrain-bed widths instead of starting with an unusably thin strip.
+
+I also added a [Shift+F] smoothing pass for the selected track/ruler object. The smoothing pass was revised so it does not round the track bed into a trough or move the locked track-elevation points vertically. The important limitation is that MSTS terrain vertices have fixed horizontal X/Z positions, so the tool can only change heights; it cannot physically move jagged vertices sideways away from the track.
+
+
+I added a selected-object [Ctrl+F] terrain conform pass. This is intended for faster controlled terrain shaping without relying on the pointer's nearest database line.
+
+The workflow is:
+
+  - select one track or road object
+  - press [Ctrl+F]
+  - TSRE finds that selected object's track/road database vector
+  - TSRE applies the same F-style terrain conforming only to the portions of that vector that fall inside the current tile
+
+This keeps the command understandable and avoids accidentally conforming terrain to the wrong nearby track or road. The current tile remains the break point so longer track or road runs can be handled a tile at a time.
+
+I also added a new [F2] Height type called Conform DB for spot cleanup along track or road grades after the broader [F] key terrain conforming pass. Instead of flattening the whole brush to one height, each terrain sample under the brush checks the nearest track or road database line and moves toward that database elevation at that exact X/Z point. The brush is range-limited, while the existing brush size and intensity control the affected area and feathering.
+
+
+   --- Tile Terrain Selection and Autopaint ---
+
+I added [Alt+A] for selecting every terrain patch on the currently selected tile. The command requires a terrain patch to be selected first; when no terrain patch is selected, it quietly does nothing. With a valid patch selected, it selects the complete 16x16 patch grid, or all 256 terrain patches on that tile, so tile-wide terrain and texture operations can be performed without selecting patches one at a time.
+
+
+The existing route painting workflow was expanded with tile-level commands instead of only object-by-object painting. The goal was to make repeated texture operations much faster without requiring a full route-wide processing pass.
+
+Current tile-level tools:
+
+  - Track on Tile
+  - Roads on Tile
+  - Water on Tile
+
+These use the current brush texture, size, and intensity. Track and road tile painting now share the same implementation path; the only difference is whether the track database or road database is used as the vector source.
+
+The water tool started as a simple water-patch painter, but that painted the 16x16 terrain swatches rather than the actual shoreline. It was then changed to detect the real water/terrain contour by comparing terrain heights against the tile water plane. This produces a shoreline-style feather around actual water edges, including shallow-water cases where terrain pokes above the water surface.
+
+The water edge tool uses the pointer tile, so the tile being pointed at is the one processed.
+
+
+   --- Route and Tile TERRTEX Reset Tools ---
+
+I added destructive-but-confirmed cleanup tools for terrain paint reset work.
+
+Reset Route Terrtex Paint:
+
+  - asks for confirmation
+  - refuses to run when there are pending route changes
+  - walks every .t file in the current route tiles folder
+  - resets every terrain patch material to terrain.ace
+  - saves the .t files
+  - deletes per-tile .ace/.dds files in terrtex whose filenames start with real tile names
+
+Reset Tile Paint:
+
+  - is available as a separate right-click menu item below Auto Paint
+  - works on the tile under the pointer
+  - refuses to run when there are pending route changes
+  - resets that tile to terrain.ace
+  - deletes generated ACE/DDS files for that tile
+  - reloads the tile afterward
+
+These tools do not delete shared/default textures such as terrain.ace or microtex.ace. They are intended as cleanup/reset tools after experimenting with lots of tile texture swatches.
+
+
+   --- Terrain Paint Presets and Rotation ---
+
+I added a first pass at route-local terrain paint presets above Brush Settings in the [F2] terrain tools panel.
+
+Each preset stores:
+
+  - preset name
+  - texture filename/path
+  - brush size
+  - brush intensity
+  - brush shape
+  - texture rotation
+
+The UI has:
+
+  - preset dropdown
+  - Apply
+  - Save
+  - Remove
+
+Presets are saved per route under the user's AppData TSRE folder, with a separate route-specific folder for each MSTS root/route combination:
+
+tsre_terrain_paint_presets.json
+
+This keeps route-specific paint workflows separated by route while avoiding extra editor-only JSON files in either the TSRE program folder or MSTS/ORTS route folders.
+
+
+I added a full 0-360 degree texture rotation control under the [F2] terrain paint intensity slider. This is intended for seamless textures where angle matters, such as crop rows, plowed fields, and other directional ground textures.
+
+The existing 0/90/180/270 rotation choices still work, but the slider allows finer control. A rotation of 0 remains the normal default texture orientation.
+
+
+   --- Seasonal Terrain and Texture Workflow ---
+
+The old hidden settings-file seasonal editing workflow was replaced for terrain painting. The [F2] terrain paint panel now exposes the texture set directly, using Summer, Spring, Autumn, Winter, and Night choices. Changing the texture set reloads the currently loaded terrain, object shape textures, transfer textures, dynamic track textures, and generated forest/polyforest texture bindings so the editor display matches the selected season as closely as the route's available files allow.
+
+The old startup warning, Settings-panel entries, and settings-file parser hook for the seasonal editing workaround were removed. Old `season = ...` and `seasonalEditing = ...` settings are now ignored/forced off, so older settings files cannot silently override the [F2] selector. Terrain painting and dynamic-track seasonal display now follow the active [F2] season selection instead of a hidden settings switch.
+
+I also fixed transfer-object reload behavior so switching from Winter back to Summer invalidates cached transfer geometry/materials and rebuilds transfers against the active texture set.
+
+To significantly speed up seasonal route building, I restored the [F2] Mirror Season button under Brush Settings as `Terrtex: Mirror Season`. TERRTEX painting only has two real output targets: the default `TERRTEX` folder and the snow `TERRTEX/SNOW` folder. Spring, Autumn/Fall, and Night can affect display/texture lookup for route objects, but TERRTEX mirror painting does not write to Spring, Autumn, Fall, or Night terrain folders.
+
+Seasonal texture loading now follows an ORTS-style fallback model for route object, transfer, dynamic track, forest, and polyforest textures. When Spring, Autumn/Fall, Winter/Snow, or Night is selected, TSRE searches the matching seasonal subfolder first for each individual texture file, then falls back to the root texture folder if that file is missing. Object textures now try the active editor season first even when the old SD alternative-texture flags are missing or incomplete. The resolver also checks ACE/DDS alternatives, so a seasonal DDS can satisfy a material that originally referenced an ACE file.
+
+For TERRTEX painting, Mirror Season mirrors only between default and snow. Painting while using a non-winter/default TERRTEX set mirrors toward `TERRTEX/SNOW`; painting while using Winter/Snow mirrors back toward the default `TERRTEX` folder. The same brush/autopaint trace is applied to the paired side, but the paired side must have a matching source texture with the same filename. Default painting uses the default source texture, snow painting uses the snow source texture. No matching paired source texture means no mirror paint for that stroke.
+
+When Mirror Season is off, terrain painting still protects the opposite TERRTEX side from missing tile swatches. If painting creates a new per-tile TERRTEX patch in the active side, TSRE creates a matching placeholder patch in the paired default/snow folder only when that opposite patch does not already exist. The placeholder is copied from the route's paired-side `terrain.ace` when available, or from the bundled GenX content `terrain.ace` fallback. This prevents blank tiles if only one TERRTEX side has been painted, but it does not fake a mirrored texture paint.
+
+A follow-up texture-cache bug was also fixed after testing on a large populated route. Generated objects such as forest regions may reapply their same material path frequently, so TSRE now invalidates cached texture IDs only when the material path actually changes. This avoids severe stutter and wrong texture reuse while still allowing seasonal texture refreshes to bind new material paths correctly.
+
+
+I found a probable cause for occasional cases where 1024x1024 terrain texture swatches were saved back out as 512x512. TSRE's textureQuality setting could downsample textures when making them editable, and then the terrain paint save path wrote that reduced in-memory size back to the ACE file.
+
+The fix prevents route-editing paint buffers from being downsampled before saving. In other words, textureQuality can still be useful for viewing/runtime, but should not permanently reduce editable terrtex files.
+
+
+   --- Performance/Stutter Pass ---
+
+I investigated severe editor stutters on populated routes, especially with forests. The main finding was that forest generation was happening lazily in the render path on the GUI/render thread. I added budgeted forest generation and stall logging so long bursts are reduced and easier to diagnose.
+
+I also added a View menu toggle for Forest Region. When unchecked, TSRE skips drawing normal forest and polyforest regions, and also avoids generating their tree geometry while the layer is hidden. This gives route builders a quick way to work through dense routes without forest regions constantly filling the view or adding extra render/generation cost.
+
+Related default settings were tuned for smoother editor startup/use:
+
+  - lower default object/tile load pressure
+  - reduced object lag burst behavior
+  - disabled a few expensive/default visual options
+  - mouseSpeed adjusted in the test dist settings
+
+
+   --- Startup, Root Selection, and Session Restore ---
+
+I added a startup guard so only one TSRE instance can run at a time. If TSRE is already open, a second launch now reports that TSRE is already running and exits before opening another editor window.
+
+I also fixed the route-selection startup screen. When switching MSTS root folders, the route table was clearing cell contents but not removing the existing rows, which left blank rows/cells mixed into the display. The table now resets its row count before repopulating. Route loading was also tightened so it always loads from the route-name column, even if the selected cell is in the Last Modified column.
+
+I added a proper TSRE icon to the Windows executable resource, using the icon stored in the local content folder. I also added a small AddShortcutDesktop.cmd helper, modeled after the SCO LIDEX shortcut helper, which creates a TSRE GenX desktop shortcut pointing at the local executable and using the same icon.
+
+
+I added a Restore Last Session button to the first startup screen. Before a route is selected, the old full-width Exit button is now split into Restore Last Session and Exit. When TSRE closes normally, it writes a small lastSession.json file under the user's AppData TSRE folder. That file records the last route root, selected route, main window size and position, Control Panel position, and the editor camera tile, position, and rotation.
+
+The intent is simple: if you were deep in a route, looking at a specific trouble spot, you can restart TSRE and return to that same working context without reselecting the MSTS folder, reselecting the route, and manually flying back to the same location.
+
+The startup loader itself now opens centered on the primary screen. Independent compact `Pin` controls remember normal working geometry between sessions: the main window stores position, size, and maximized state, while the Control Panel stores its position. Unpinning returns a window to its normal default placement instead of leaving another group of manual position settings in F12.
+
+
+I added `Open Route Folder` under the Route menu, placed with the other route-level commands. It opens the active route directory directly in Windows Explorer and reports a clear warning if the route folder cannot be found.
+
+The startup window now presents the MSTS/ORTS root as an editable recent-root field beside a compact `Browse...` button. A path can be selected from the saved list, entered directly, or chosen from the folder dialog. TSRE validates that the selected folder contains the expected Train Simulator root structure before enabling route startup controls.
+
+Invalid paths remain visible for correction with an inline explanation. Valid selections move to the front of the recent-root list without case-sensitive duplicates, retain their original path casing, and immediately refresh the available route table.
+
+
+   --- Control Panel ---
+
+The old Status Window was mostly a passive readout. I changed it into a compact clickable Control Panel. It now shows and controls common editing states such as Select, Place New, Rotate, Translate, Resize, AutoTDB, Stick To Terrain, Terrain Brush direction, Camera lock, Camera Terrain lock, movement speed locks, and Place Guard. The former Navi controls are appended below these controls for marker selection, pointer/camera coordinates, latitude/longitude entry, object count, and Jump.
+
+The button colors now show state at a glance: active/on states are highlighted, neutral states stay dark, and terrain-brush direction uses different colors for plus and minus. The selected-object type readout is now useful as well, showing broad selection categories such as Terrain, Track, Road, Interactive, Static Object, Forest, Transfer, Sound, Ruler, Group, Activity, and Consist. Clicking the selected object type on the Control Panel clears the current selection.
+
+The `Move: Fast` and `Move: Slow` movement-speed locks provide persistent, mutually exclusive camera movement modes with a clear active state. Focus is immediately returned to the viewport so keyboard movement works without an extra click.
+
+I also added gentle delayed snapping for the Control Panel. The snap only triggers when the panel is very close to another window edge, waits briefly until dragging pauses, and uses the visible window frame so the windows touch cleanly rather than overlapping.
+
+The former Navi controls now live inside the Control Panel and use its darker visual treatment. The pointer readout fields are protected from editing without using dimmed disabled text. The separate Navi window, F6 action, duplicate geometry settings, and duplicate session state were removed; F7 now toggles the single Control Panel.
+
+The Control Panel `Pin` is intentionally small and unobtrusive. Its title treatment indicates the pinned state, and normal unpinned placement remains independent of Restore Last Session. Legacy Status Window session data remains readable during migration.
+
+I also updated the visible program titlebars so the startup screen and main editor window identify the build as TSRE GenX instead of the older Trainsim.Com Fork title.
+
+   --- Object Panel Search and History ---
+
+The right-side object panel search was also tightened up. The Tracks, Roads, and Other category dropdowns now include `ALL` as their default value. Selecting a real category in one of those three dropdowns resets the other two to `ALL`, so only one category filter is active at a time. Search text is then applied inside that active category instead of searching the entire library and ignoring the category choice.
+
+The new `Reset` button beside Search clears the search text, sets Tracks/Roads/Other back to `ALL`, and repopulates the full object list. This should make it much faster to narrow down track pieces, road pieces, signals, forests, sound regions, route-shapes-directory objects, or other TSRE object categories without losing track of which bucket is being searched.
+
+Scale Rail categories now stop at the functional family/type portion of each filename. For example, pieces are grouped under `sr1t`, `sr1t Crv`, `sr1t Str`, `sr1t Swt`, `sr2t Tun`, or `sr4t Crv`, while lengths, radii, weather variants, and side suffixes remain individual pieces inside the category. This prevents the Scale Rail selector from becoming a separate category for every track file.
+
+The Object Panel now retains up to 30 Recent Items while keeping the visible area bounded to 15 rows with a scrollbar. A `Clear Recent` button resets the displayed list and internal item references, then returns keyboard focus to the main editor viewport.
+
+
+   --- GUI Panels, Scaling, and Feedback ---
+
+I brought the normal Track property panel, Dynamic Track property panel, shared property controls, right-side object selector, and F1-F4 tool panels into one visual language. The panels use the same dark control surfaces, restrained three-dimensional button treatment, bold orange Title Case category headings, orange checked states, and subtle inset horizontal separators between real work groups. This keeps dense controls readable without turning every row into a separate box.
+
+The normal Track panel now identifies the selection as `Object: Track`. Its Shape Template, Position & Rotation, Detail Level, Flags, Elevation, MSTS Collision, and Advanced headings all use the same title treatment. The Dynamic Track panel identifies the selection as `Object: Dynamic Track` and uses the same styling for Flex Mode, Sections, and Elevation.
+
+The F2 terrain texture area was reorganized around a larger primary texture preview and a compact two-column thumbnail bank. Mirror Season moved into the paint controls, and the preset, brush, and embankment groups now follow the same spacing and heading system as the other tool panels. F1 Objects, F3 Geo, and F4 Activity use the shared treatment as well.
+
+The right-side selector now follows that same style for Objects and Recent Items, with matching checkbox treatment and clear separation between the object list, placement controls, and recent history. Dynamic-track reference groups, object-list entries, and recent items now use the consistent name `Dynamic Track` instead of internal or legacy labels.
+
+Manual push-button activations in the property panels and right-side object selector now play `SCOpress.wav` exactly once. Programmatic checked-state refreshes remain silent, so changing selection or refreshing a panel does not create false button sounds.
+
+
+I added a global `uiScale` setting so the editor can be made easier to read on modern high-resolution monitors. The packaged setting currently uses:
+
+`uiScale = 1.15`
+
+The recommended range is roughly 1.00 to 1.25. The setting scales the application font, menu/dropdown controls, startup screen, [F2]/[F3] style panels, object list side panel, and Control Panel. The side panels now widen with the scale value so the larger text has room to breathe. A value of 1.00 should keep the editor close to the older TSRE look, while 1.15 is a useful middle ground on a large 2K monitor.
+
+
+I added light sound feedback for editor actions while keeping the sounds separated so they do not stomp on each other unnecessarily:
+
+  - `SCOclick.wav` plays only after a successful guarded object placement.
+  - `SCObuzz.wav` plays only after a Place Guard placement failure.
+  - `SCOpress.wav` plays for deliberate user-commanded mode/status changes and manual panel button presses, such as Control Panel controls, keyboard shortcuts that change the active edit mode, property-panel buttons, and right-side object-panel buttons.
+
+Passive status refreshes do not play sounds. This avoids double audio when the editor merely updates button states after a placement or automatic mode change.
+
+The same GUI pass standardized active, neutral, success, warning, and failure states across the startup screen, Control Panel, editor menus, and supporting panels. Deliberate commands and completed actions provide consistent visual and sound feedback without allowing programmatic refreshes to create false responses.
+
+Yellow button and indicator states now use the same clear Control Panel palette instead of the older mustard shades. F12 True/False choices retain mutually exclusive radio-button behavior but use the cleaner square checkbox-style indicator artwork.
+
+
+   --- Place Guard ---
+
+I added a Place Guard system to catch the most common accidental object-placement mistakes after TSRE performs its normal placement operation. The idea is to leave the old placement workflow intact, then validate what was just created. If the placement fails validation, TSRE automatically undoes the placement, flashes the Place Guard button red with `ERROR` for three seconds, and plays `SCObuzz.wav`. If the placement passes validation, TSRE plays `SCOclick.wav`.
+
+The current rules are:
+
+  - All guarded placements must finish on the camera tile or one of the eight immediately adjacent tiles. Anything farther away is rejected as a likely long-distance miscast.
+  - Track-linked interactive objects, such as signals and other track/road database items, must be started with the pointer within 3 meters of the target track or road database line. This prevents clicking far away and having TSRE silently place the item on some distant nearest database point.
+  - Track-linked interactive objects must also finish near their database elevation. TSRE samples the nearest database height around the placed object and rejects the placement if the object height is more than 10 meters away from that database height.
+  - Normal scenery/static objects must be placed on loaded terrain and within 1 meter above or below the terrain surface.
+  - Track objects and dynamic track are allowed a wider terrain-height tolerance because they can legitimately be above or below local terrain during editing. They are currently accepted from 50 meters below terrain to 100 meters above terrain.
+  - If Place Guard is turned off from the Control Panel, these checks are bypassed and TSRE uses the normal legacy placement behavior.
+
+This is intentionally a guardrail, not a new placement engine. It should catch the route-damaging mistakes: objects cast into the sky, objects dropped below terrain, and interactives being thrown onto a far-away database line.
+
+
+   --- Settings Editor Cleanup ---
+
+I reworked the F12 Settings Editor so it follows the same organization as the cleaned settings.txt file. The old broad tabs have been replaced with practical sections such as General, Logging, Startup, UI, Camera, Rendering, Overlays, Objects, Terrain, Map, Cleanup, Advanced, and Consist. The Settings screen now saves directly to the active settings.txt file instead of writing settings.txt.new, and it creates a timestamped backup before overwriting the existing file.
+
+The visible comment clutter was removed from the rows and replaced with full-sentence tooltips on the labels and controls. I also added a Key Assignments tab with a two-column, striped table so shortcuts are easier to scan inside the editor. The Settings Editor now uses the same dark visual treatment as the rest of the GenX interface.
+
+
+   --- [F3] Map Loading ---
+
+I fixed an [F3] OSM Vector Map loading failure that was showing up as a no-connection message followed by a crash to desktop. The log showed TLS initialization failures before TSRE ever received valid OSM data. The test package now includes the current OpenSSL 3 runtime DLLs required by the MSYS2/Qt network stack.
+
+The OSM loader was also hardened so failed HTTPS/HTTP/empty/non-XML replies are treated as no-data responses instead of being parsed as valid map data. That should return control to the editor instead of crashing.
+
+The packaged map imagery resolution is now set to 4096. The OSM vector loader still requests the tile area in four smaller quadrants, but the final per-tile rendered map image is controlled by mapImageResolution. 4096 gives a much clearer tile map than the old 512 default.
+
+
+   --- Dynamic Track Flex ---
+
+The familiar Classic Dynamic Track Flex workflow already existed and remains available as `Classic Flex S-C-S`, meaning Straight-Curve-Straight. GenX added an explicit Classic/NextGen mode choice so the established one-curve connection method remains available alongside the broader NextGen workflow.
+
+The old Flex diagnostic graph window is hidden by default because it was more distracting than helpful during normal route work. A settings flag remains available when the diagnostic view is needed. Packaged fallback Dynamic Track textures were also added so routes that do not contain the usual procedural-track texture files can still display Dynamic Track in the editor. The TSRE rendering remains an editor preview; Open Rails is still the final judge of runtime track appearance and behavior.
+
+
+For NextGen, I adapted GokuMK's newer Flex code from his TSRE5/TSRE5vc work as the foundation, with credit to Goku for that source work and direction. The Dynamic Track panel now offers `NextGen Flex S-C-S-C-S` and the existing `Classic Flex S-C-S` as explicit choices, with NextGen selected by default. The Flex action is named `Auto-Flex` so its purpose is clearer.
+
+I also implemented the NextGen connection algorithms that evaluate Straight-Curve-Straight-Curve-Straight candidates, allowing up to two curve sections for compound alignments and full S-curve connections. Classic continues to restrict solutions to its established one-curve pattern. NextGen uses the solved Dynamic Track path length for elevation calculations when available instead of relying only on straight-line endpoint distance, producing more sensible joins when the endpoints are at different elevations.
+
+   --- Dynamic Track Editing and Reliability ---
+
+The Dynamic Track panel now reports the selected object's section index, total calculated length, and active curve count. The five editable section labels use the current Straight/Curve naming convention: First Straight, First Curve, Second Straight, Second Curve, and Third Straight. Together with the Classic and NextGen mode labels, this makes the generated section pattern visible without requiring the user to infer it from raw section values.
+
+Flex completion now updates the object first and reports success afterward. On a successful solve, TSRE removes the old Dynamic Track entry from the track database and rebuilds it from the new sections before playing the success sound. This prevents the editor from retaining stale database geometry that can appear as endpoint gaps or duplicate-looking track-database markers after Flex.
+
+Dynamic Track elevation changes now update both the applied object rotation and the serialized elevation value, keeping saved data synchronized with what is shown in the editor. Dynamic Track naming is also normalized across the property panel, reference selector, object list, and Recent Items list so the user-facing label is consistently `Dynamic Track`.
+
+
+   --- Startup Splash Rotation ---
+
+The Route Loader, Consist Loader, and About window now share one splash image for the lifetime of each application session. The first splash request advances a persistent shuffled queue, and every later splash-bearing window in that process reuses the selected image. A new application launch advances to the next image, so each available splash receives equal time before a new shuffled cycle begins. The cycle also avoids repeating the same image across a cycle boundary when more than one image is available.
+
+Splash artwork is discovered at runtime from the active versioned `tsre_appdata` folder. Files beginning with `Splash_` are accepted in PNG, JPG, JPEG, BMP, and WebP formats. Adding, removing, or renaming matching artwork automatically resets and reshuffles the queue without a code change or rebuild.
+
+The queue is stored in the user's local TSRE application-data folder as `splash-cycle.json` and is written atomically so repeated launch-and-close testing advances reliably instead of becoming stuck on one image.
+
+
+   --- Track Grade Editing and Lock ---
+
+Track properties now open with Percent selected as the default grade unit, while Permille, 1-in-X, and Angle remain available. The labels distinguish grade units from the general movement/rotation adjustment sensitivity so the controls are less likely to be confused.
+
+`Lock Grade` captures the selected track or road piece's physical percent grade and applies that grade to each newly placed track/road piece. The lock state and captured grade remain visible in the Track properties panel. Turning the lock off returns placement to the normal TSRE elevation behavior.
+
+
+   --- Grade Helper ---
+
+The Track properties panel now includes a separate `Grade Helper...` tool for building controlled vertical transitions one connected piece at a time. The helper shows Current Grade, Target Grade, Step Per Piece, and Next Grade in percent. It can snap beside the Control Panel or other editor windows and returns focus to the viewport when the operator starts, stops, or closes the workflow.
+
+When Grade Assist is active, TSRE verifies that the next placement is physically connected to the previously selected track/road database endpoint and that the starting grade still matches the expected current grade. A disconnected or mismatched placement is automatically rejected through the existing undo/Place Guard path. Each accepted piece receives the calculated next grade, advances by no more than the requested step, and stops exactly on the target instead of overshooting it. Reaching the target changes the helper to a holding state and enables the normal grade lock at the achieved value.
+
+The placement endpoint information used by this check is transient editor state only and is never written into route world files.
+
+Opening Grade Helper clears an existing manual Lock Grade so the two placement workflows cannot compete. Reaching the requested target silently hands the achieved value back to Lock Grade. Automatic state changes remain silent; accepted placement uses the normal track-placement click, followed by the existing delayed completion chirp when the target is reached.
+
+Grade Helper has its own `Pin`, which remembers only the helper's position. It never causes the helper to open automatically on the next session; the operator must still click `Grade Helper...` when it is needed.
+
+
+   --- Grade Symbols Overlay ---
+
+The View menu exposes the global `Grade Symbols` toggle. It is enabled by default, while the redundant Track properties checkbox and introductory viewport legend have been removed. When enabled, graded static track, road pieces, and Dynamic Track receive square, direction-aware symbols above the track:
+
+  - orange: steady grade
+  - cyan: a transition because the piece differs in grade magnitude from a connected neighbor at either end
+  - red: a direct crest or gully warning where two graded pieces meet without an intervening level section
+
+The transition rule deliberately does not classify grades as increasing or decreasing. Each non-level piece checks both connected ends, including connections that cross vector-node and junction boundaries. Any grade-magnitude mismatch is cyan regardless of database traversal, object origin, or the visible uphill direction. A direct meeting where both uphill arrows face toward the joint (crest) or away from it (gully) is red because proper construction needs a level separator. Nearby parallel track does not count as connected.
+
+Each symbol is placed at the exact distance midpoint of the ordered TSECTION path and aligned to the local path tangent. This keeps the marker centered lengthwise and on the same centerline used to draw long curves. Multi-path shapes use their declared main route when available and otherwise average valid paths. Mirrored artwork keeps the marking readable from either face of reversed/POS-NEG-swapped pieces.
+
+The overlay cache is invalidated by grade rotation and track-database refresh operations. Because world tiles load incrementally, a rendered track piece missing from the cache now triggers a rebuild. This prevents later-loaded pieces and their already-visible neighbors from remaining incorrectly orange after Grade Symbols initialize at startup.
+
+
+The Grade Helper follows the Track properties Units selection for both target and step values. Permille, percent, 1-in-X, and angle modes use compact unit symbols. Required operator inputs remain visually distinct from current and calculated readouts, spin controls retain visible arrows, and redundant Grade Symbols controls were removed.
+
+Track properties now presents its unit-specific grade value in one stacked row, eliminating the vertical gaps caused by hidden rows. Position and rotation values are explicitly read-only. A shared editor-panel style extends the same field background, normal font, editable/read-only border distinction, spin controls, and vertical spacing to the remaining object/property panels, activity tools, settings window, and editor popups. The Control Panel keeps its separate established styling.
+
+
+   --- View and Marker Tools ---
+
+`View > Toggle All` replaces the old one-way Unselect All command. The first press remembers the current checked View actions and disables them; the next press restores exactly those selections. Compass is intentionally excluded so orientation remains available while overlays are temporarily hidden.
+
+Marker label placement is deterministic after initializing the shared TextObj height offset and keeping `setHeight()` synchronized with its render position. Point markers now use four closely spaced vertical lines arranged as a small square, colored orange, cyan, or magenta from the MKR type value. The lines extend to three times the configured marker height so labels remain above surrounding scenery, while the original black camera-facing label treatment and sizing behavior are retained.
+
+
+   --- Selection Diagnostic Clipboard ---
+
+The right-click menu now includes `Edit > Copy Info` whenever an object or other editor item is selected. It creates a plain-text diagnostic block suitable for a forum post, bug report, or AI troubleshooting conversation. The common header includes the TSRE version and active route, followed by the most useful fields available for the selected type.
+
+For world objects this includes the object class and filename, UID, tile and terrain-tile name, local position, quaternion, flags, detail level, and load/modified/flipped state. Track pieces also include section index, percent grade, and elevation radians. Terrain patches, track items, activity objects, consists, paths, and groups add their own relevant identifiers, positions, names, and member details where available.
+
+
+   --- Route Display Performance and Lighting ---
+
+The Grade Symbols connectivity cache now uses a compact typed tile/UID key instead of repeatedly constructing strings. Tile loads and track-database edits invalidate the cache once at a safe boundary; rendering a previously unseen piece no longer launches a complete database traversal from inside the frame. This removes a real populated-route hot path while retaining correct orange, cyan, and red classifications after tile loading completes.
+
+Pointer depth sampling now reuses its last OpenGL depth result until the mouse or camera actually changes, and it no longer queries the viewport state every frame. Control Panel object counts, camera position, and pointer position are emitted at a bounded update rate, while the panel itself skips rewriting unchanged coordinate fields. These changes reduce CPU/UI traffic and synchronous graphics readbacks without deliberately lowering the viewport refresh rate.
+
+The normal-lit route shader now applies a warmer directional sunlight tint and a cooler sky-facing ambient tint for a less flat, more Open Rails-like preview. Unlit editor overlays retain neutral colors, and the change does not replace or reinterpret MSTS textures. Both legacy and OpenGL 3.3 shader copies are packaged because TSRE selects the appropriate external shader at startup.
+
+F2 terrain texture previews now expose the source texture filename as a tooltip on both the large preview and Recent Texture thumbnails.
+
+
+   --- Settings Restart and Interface Sounds ---
+
+The F12 editor now places `UI Sounds` directly below `UI Scale`. The setting controls editor interaction feedback including placement/error/success sounds plus `SCOtic.wav` for radio buttons, checkboxes, combo-box selections, and chosen menu actions. Route Loader pushbuttons always play the normal press sound immediately, before route loading begins, so startup feedback does not depend on the saved UI Sounds state.
+
+Menu-command feedback covers selections from the Route, Edit, View, Tools, Settings, and Help menus. Sounds are tied to deliberate operator input; programmatic toggles and status synchronization remain silent.
+
+F12 now provides `Save, Restart and Restore`. It saves the displayed settings, checks the route's existing unsaved-item list, and refuses to restart while route, terrain, database, or activity changes are pending. With a clean route it records the existing last-session route, camera, and window state; relaunches TSRE; and restores that session through the same startup restoration path used by the Route Loader. The existing Route menu reload command remains available for settings that can safely change in a running process.
+
+
+   --- Property and Control Guidance ---
+
+Static and track-object properties now explain Detail Level, MSTS StaticFlags, and MSTS Collision fields in-place, including the difference between shape defaults and world-file overrides. The F12 key reference explicitly documents `Alt+A` as selecting every terrain texture patch on the selected tile. The Control Panel's elapsed-time-since-save readout remains warning-colored when stale but no longer presents hover or pressed feedback because it is display-only.
+
+
+   --- [F4] Activity Builder and TrackDB Viewer ---
+
+F4 now opens a dedicated full-screen Activity Builder instead of relying on the old activity panel to provide path context. The same F4 shortcut closes it, and opening the workspace maximizes the available map area while keeping fixed Path Editor and Activity Editor controls on the left and context-sensitive path controls on the right. Paths are standalone route resources: a user can create, inspect, edit, clone, delete, and save a path without first creating or selecting an activity.
+
+The central viewer reads the route TrackDB and renders the actual track graph at high resolution with antialiased, continuously scalable geometry. Curves, junction approaches, sidings, crossovers, endpoints, three-way junction data, and dense XTracks areas remain visible through deep zoom instead of collapsing into the broken low-resolution segments shown by the former preview. Rendering is clipped and simplified by scale so panning remains smooth across very large databases; junction symbols disappear beyond the useful inspection scale, while route-level reference markers remain visible for navigation.
+
+Orange junction symbols are painted over path lines and retain a practical screen-space click target when zoomed in. Their appearance distinguishes default alignment, a route whose stored default is diverging, and a switch thrown away from its default. Selecting a junction exposes its TrackDB node, pins, available exits, and chosen route so the operator can understand the switch state before changing it.
+
+
+   --- Standalone Path Creation, Validation, and PAT Writing ---
+
+`New Path` clears any previously displayed path and begins a route-level path with its own name and description. `Place Start` snaps the start to the TrackDB, `Reverse Start` changes the initial travel direction, and `Place Endpoint` fixes the desired destination after the preview has flowed across the route. Existing paths open through an explicit centered selection placeholder so no path is silently chosen merely because it is first in the list.
+
+The editor preserves separate visual states for a new or edited path, a saved path, track used twice, passing sidings, start, endpoint, reverse points, and wait points. Path points and switches are painted last where required so they remain selectable over route lines. Selected control points can be removed with the Delete key, and path deletion, cloning, editing, and saving are guarded against the empty-selection and stale-selection crashes found during testing.
+
+`Check Path` validates continuity, direction changes, switch transitions, alternate routes, and control-point order before writing. `Save Path` produces an MSTS/ORTS-compatible PAT file in the route's PATHS directory, including the path metadata and supported reverse, wait, overlap, and siding information. This replaces the former workflow of building a path in Open Rails Track Viewer and only selecting it later in TSRE.
+
+
+   --- Natural-End Water-Flow Routing and Live Switches ---
+
+Path construction now behaves like water on the TrackDB graph. After a start is placed, the preview follows the currently aligned route through each junction and continues to the natural end of track. Placing an endpoint corks that flow at the chosen location. Throwing any reachable switch removes the endpoint, recalculates from the affected junction, and resumes the flow until the operator places the new endpoint.
+
+Switches remain live throughout editing; changing one does not require a separate throw mode or force the operator to rebuild the path. Recalculation retains the valid prefix, recomputes the affected continuation, verifies every junction alignment along the replacement route, and restores the previous switch state if the requested route cannot reconnect. A failed operation flashes a red message for three seconds instead of leaving a partially broken path.
+
+The graph search accounts for crossovers and later valid reconnection points rather than stopping at the first geometric crossing or nearest turnout. Passing routes can therefore be shortened or lengthened at the same turnout, and their full chain of switches is checked during every recalculation.
+
+
+   --- Reverse, Wait, Overlap, and Passing-Path Operations ---
+
+Reverse points can be added to the active route, including after changing the initial direction. The outgoing path is recalculated in the reversed direction while the already-traversed portion remains intact. A reverse point can be selected and deleted safely; the dedicated removal action remains available where the extra path-state checks are useful.
+
+Wait points support either a duration in minutes and seconds or a wait-until clock time in hours and minutes. The chosen operation is attached to a selected location on the path and written with the path data. Square selectors replace small round radio indicators so the active wait mode is legible in the dark interface.
+
+Track traversed a second time is shown in cyan without breaking the magenta main path. Passing sidings are designated as orange alternates between two valid main-path junctions, may coexist on one path, and recalculate when a controlling switch is thrown. The editor validates that an alternate can return to the main path; an invalid throw is rejected, the original alignment is restored, and the existing valid siding remains unchanged. Undo and redo cover the path-building operations so experimentation does not require starting over.
+
+
+   --- Route Orientation, Markers, Labels, and Interactives ---
+
+`Rotate 90` turns the route view for clearer working angles and screenshots while the north arrow rotates with the map; the default orientation remains north-up. Fit Route, Fit Path, tile grid, junction, marker, label, and interactive overlays can be toggled independently without changing the underlying route or path.
+
+The marker overlay reads only the MKR file associated with the active route and limits route-level navigation flags to marker type 0. Those flags and their text remain useful as the view zooms out, while close-range labels scale for readability. Signals use paired green/red indications offset from the track, and stations, fuel points, water points, and other service interactives receive distinct selectable symbology instead of being indistinguishable TrackDB dots.
+
+The viewer keeps switches and path controls above track and path geometry, and preserves separate toggles for marker symbols, labels, interactives, junctions, and the tile grid. This creates a usable route-planning map rather than a path line floating without geographic or operating context.
+
+
+   --- F1-F4 and Utility-Panel Visual Standardization ---
+
+The F1-F4 editor panels and the Grade Helper, Control Panel, Auto Place, Object Selection, Object Placement, Terrain Editor, and Activity Builder utilities now share a flat charcoal visual system with narrow orange title accents. Major titles, bullet-style subsections, spacing, button geometry, dropdowns, editable fields, and active states follow the same hierarchy without replacing special-purpose cues such as the orange editable-field treatment.
+
+Boolean choices use clear square selectors, tool buttons turn orange while active, and user-triggered button presses use the established interface sound. Floating helper titlebar captions were removed where the styled in-panel title already identifies the tool. Button actions restore focus to the main editor so keyboard shortcuts continue working without an extra viewport click, while Pin still preserves the intended helper-window placement.
+
+F4 uses fixed side panels because its workflow benefits from a stable full-screen layout; the Panels menu can restore a hidden side panel. Status messages use the established green/red treatment at bottom center, the path key is aligned at the bottom of the right panel, and redundant controls were removed where selection plus the Delete key already provides the operation.
+
+
+   --- Auto Place and Supporting Editor Cleanup ---
+
+F2 now opens a focused pinnable `Auto Place...` helper rather than exposing a crowded block of placement controls in the Object Selection panel. Alignment and offset controls stay together, placement settings and actions sit at the bottom, and the workflow uses the concise `Commit`, `Undo Last`, and `Reset Rotation` commands. Editable numeric fields and dropdowns use the same border and hover treatment as equivalent controls elsewhere without incorrectly decorating read-only positional data.
+
+The accompanying cleanup gave F1 the `OBJECT SELECTION` title, F2 the `OBJECT EDITOR` context, the left property panel the `OBJECT PLACEMENT` title when an object is selected, and a cleaner no-selection state when it is not. Grade Helper no longer repeats an unnecessary subtitle, Control Panel and helper windows share the title-accent system, and the main editor starts maximized unless a pinned placement explicitly overrides it.
+
+Together, these changes carry the Activity Builder's clearer major-controls-left/details-right model into the rest of the editor without changing established tool behavior that was outside the visual cleanup.
+
+
+======================================================================================================
+
+DISTRIBUTION NOTES
+
+The test package is intended for evaluation and should be kept separate from any production TSRE install.
+
+======================================================================================================
+
+GOAL
+
+The general direction is to make TSRE more practical as a production route editor: better track terrain shaping, faster tile-based painting, cleaner shoreline texturing, safer texture handling, safer route database saves, and fewer repetitive manual cleanup steps.
+
+======================================================================================================

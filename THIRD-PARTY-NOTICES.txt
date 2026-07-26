@@ -1,0 +1,56 @@
+TSRE5-SCOmod third-party notices
+
+TSRE5-SCOmod is based on TSRE5 by Piotr Gadecki / GokuMK and the
+Trainsim.Com fork maintained by Eric Olesen / eric-from-trainsim. The TSRE5
+source code is distributed under the GNU General Public License version 3.
+See LICENSE.md.
+
+Acknowledgements
+
+Special thanks to Piotr Gadecki (GokuMK), the original creator of TSRE5, for
+the enormous body of code that made this editor possible and for his
+willingness to publish and share that work. Every later TSRE5 fork, including
+TSRE GenX, stands on the foundation he created.
+
+Special thanks also to Eric Olesen (eric-from-trainsim) at Trainsim.Com for
+years of support to the train-simulation community and for continuing the
+development and maintenance of the Trainsim.Com TSRE5 fork. Eric's
+TSRE8.006 codebase is the direct starting point for TSRE GenX.
+
+This binary package also includes runtime libraries from the MSYS2/MinGW and
+Qt runtime environment so the program can run as a standalone Windows folder.
+These libraries remain under their own upstream licenses. The package may
+include components from, or associated with, the following projects:
+
+- Qt 5 runtime libraries and plugins
+- MinGW-w64 / GCC runtime libraries
+- OpenSSL runtime libraries
+- OpenAL Soft runtime library
+- zlib
+- libpng
+- FreeType
+- HarfBuzz
+- ICU
+- GLib
+- PCRE2
+- Brotli
+- bzip2
+- zstd
+- libiconv / gettext runtime components
+- other transitive MSYS2 runtime support DLLs present in the package
+
+Where practical, the included DLL filenames retain their upstream project names.
+The authoritative license terms for those runtime components are provided by
+their respective upstream projects and MSYS2 package metadata.
+
+Source code for this TSRE5-SCOmod build is available at:
+
+https://github.com/scottb613/TSRE5-SCOmod/tree/tsre-scomod-wip
+
+Upstream projects:
+
+- Original TSRE5: https://github.com/GokuMK/TSRE5
+- Trainsim.Com fork: https://github.com/eric-from-trainsim/TSRE5-Trainsim.Com-Fork
+- MSYS2 packages: https://packages.msys2.org/
+- Qt: https://www.qt.io/
+- OpenSSL: https://www.openssl.org/
