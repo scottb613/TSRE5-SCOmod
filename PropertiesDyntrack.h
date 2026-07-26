@@ -65,12 +65,9 @@ private:
     QLineEdit elevProg;
     QLineEdit elevProp;
     QLineEdit elev1inXm;
-    QLabel elevPromLabel;
-    QLabel elevProgLabel;
-    QLabel elevPropLabel;
-    QLabel elev1inXmLabel;
+    QLabel elevValueLabel;
+    QStackedWidget elevValueStack;
     
-    void hideElevBoxes();
     void showElevBox(QString val);
     void setStepValue(float step);
     float getStepValue(float step);

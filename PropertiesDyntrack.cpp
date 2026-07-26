@@ -133,12 +133,12 @@ PropertiesDyntrack::PropertiesDyntrack() {
     vbox->addWidget(&wSect[4]);
     
     addRule();
-    QLabel *label = new QLabel("Elevation:");
+    QLabel *label = new QLabel("Grade:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
-    vlist->setSpacing(0);
+    vlist->setSpacing(qRound(3.0f * qMax(1.0f, Game::uiScale)));
     vlist->setContentsMargins(0,0,0,0);
     QDoubleValidator* doubleValidator = new QDoubleValidator(-10000, 10000, 6, this); 
     doubleValidator->setNotation(QDoubleValidator::StandardNotation);
@@ -146,7 +146,15 @@ PropertiesDyntrack::PropertiesDyntrack() {
     doubleValidator1->setNotation(QDoubleValidator::StandardNotation);
     
     //‰
-    vlist->addRow("Value: ",&this->elevType);
+    const int gradeFieldHeight = qRound(22.0f * qMax(1.0f, Game::uiScale));
+    elevType.setMinimumHeight(gradeFieldHeight);
+    elevProm.setMinimumHeight(gradeFieldHeight);
+    elev1inXm.setMinimumHeight(gradeFieldHeight);
+    elevProg.setMinimumHeight(gradeFieldHeight);
+    elevProp.setMinimumHeight(gradeFieldHeight);
+    elevStep.setMinimumHeight(gradeFieldHeight);
+
+    vlist->addRow("Units: ",&this->elevType);
     elevType.addItem("Permille ‰");
     elevType.addItem("Percent %");
     elevType.addItem("1 in 'X' m");
@@ -155,29 +163,25 @@ PropertiesDyntrack::PropertiesDyntrack() {
     QObject::connect(&elevType, SIGNAL(currentTextChanged(QString)),
                       this, SLOT(elevTypeEdited(QString)));
     
-    elevPromLabel.setText("‰");
-    vlist->addRow(&elevPromLabel,&elevProm);
     elevProm.setValidator(doubleValidator1);
     QObject::connect(&elevProm, SIGNAL(textEdited(QString)), this, SLOT(elevPromEnabled(QString)));
     //oneInXm
-    elev1inXmLabel.setText("1 in 'x' m");
-    vlist->addRow(&elev1inXmLabel,&elev1inXm);
     elev1inXm.setValidator(doubleValidator);
     QObject::connect(&elev1inXm, SIGNAL(textEdited(QString)), this, SLOT(elev1inXmEnabled(QString)));
     //º
-    elevProgLabel.setText("º");
-    vlist->addRow(&elevProgLabel,&elevProg);
     elevProg.setValidator(doubleValidator1);
     QObject::connect(&elevProg, SIGNAL(textEdited(QString)), this, SLOT(elevProgEnabled(QString)));
     //%
-    elevPropLabel.setText("%");
-    vlist->addRow(&elevPropLabel,&elevProp);
     elevProp.setValidator(doubleValidator1);
     QObject::connect(&elevProp, SIGNAL(textEdited(QString)), this, SLOT(elevPropEnabled(QString)));
-    vlist->addRow("Step:",&elevStep);
+    elevValueStack.addWidget(&elevProm);
+    elevValueStack.addWidget(&elevProp);
+    elevValueStack.addWidget(&elev1inXm);
+    elevValueStack.addWidget(&elevProg);
+    elevValueStack.setContentsMargins(0,0,0,0);
+    vlist->addRow(&elevValueLabel, &elevValueStack);
     elevStep.setValidator(doubleValidator);
     QObject::connect(&elevStep, SIGNAL(textEdited(QString)), this, SLOT(elevStepEnabled(QString)));
-    hideElevBoxes();
     elevType.setCurrentIndex(Game::DefaultElevationBox);
     showElevBox(elevType.currentText());
     vbox->addItem(vlist);
@@ -445,40 +449,23 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
 }
 
 void PropertiesDyntrack::elevTypeEdited(QString val){
-    hideElevBoxes();
     showElevBox(val);
     ElevTypeName = val;
 }
 
 void PropertiesDyntrack::showElevBox(QString val){
-    if(val == "Permille ‰"){
-        elevProm.show();
-        elevPromLabel.show();
-    }
-    if(val == "Percent %"){
-        elevProp.show();
-        elevPropLabel.show();
-    }
-    if(val == "1 in 'X' m"){
-        elev1inXm.show();
-        elev1inXmLabel.show();
-    }
-    if(val == "Angle º"){
-        elevProg.show();
-        elevProgLabel.show();
-    }    
+    Q_UNUSED(val);
+    const int units = elevType.currentIndex();
+    elevValueStack.setCurrentIndex(units);
+    if(units == 0)
+        elevValueLabel.setText("‰");
+    else if(units == 1)
+        elevValueLabel.setText("%");
+    else if(units == 2)
+        elevValueLabel.setText("m");
+    else
+        elevValueLabel.setText("°");
     setStepValue(Game::DefaultMoveStep);
-}
-
-void PropertiesDyntrack::hideElevBoxes(){
-    elevProm.hide();
-    elevProg.hide();
-    elevProp.hide();
-    elev1inXm.hide();
-    elevPromLabel.hide();
-    elevProgLabel.hide();
-    elevPropLabel.hide();
-    elev1inXmLabel.hide();
 }
 
 void PropertiesDyntrack::setStepValue(float step){
