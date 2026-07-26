@@ -157,6 +157,8 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
 /// EFO
     vbox->setSpacing(2);
     vbox->setContentsMargins(3,0,1,0);
+    vbox->setColumnStretch(0, 1);
+    vbox->setColumnStretch(1, 1);
     QList<QPushButton*> buttons;
     buttons << &status0 << &status1 << &status2 << &status3 << &status4 << &status5
             << &status6 << &status7 << &status8 << &status9 << &status10 << &status11
@@ -164,6 +166,10 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     for(int i = 0; i < buttons.size(); i++){
         buttons[i]->setFlat(false);
         buttons[i]->setFocusPolicy(Qt::NoFocus);
+        // The status text changes at runtime.  Ignore its size hint so the
+        // two grid columns remain equal instead of Select shrinking beside
+        // the longer "Place New" label.
+        buttons[i]->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
         buttons[i]->setFixedHeight(scaledUiSize(21));
         buttons[i]->setContentsMargins(0,0,0,0);
     }

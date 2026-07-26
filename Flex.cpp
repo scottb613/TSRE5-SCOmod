@@ -378,7 +378,18 @@ inline bool betterCandidate(const FlexCandidate &a, const FlexCandidate &b) {
     if (a.meetsPreferredMin != b.meetsPreferredMin)
         return a.meetsPreferredMin;
 
-    // Default objective: maximize the minimum curve radius.
+    // A large radius is useful only when it does not send the track on a
+    // substantial detour.  Previously radius was the first objective, so a
+    // near-180 degree, 150m-radius loop could beat a much more direct flex.
+    if (a.initialWrongWay != b.initialWrongWay)
+        return b.initialWrongWay;
+
+    float shorterLen = std::min(a.trimmedLen, b.trimmedLen);
+    float materialDetour = std::max(25.0f, 0.10f * shorterLen);
+    if (std::fabs(a.trimmedLen - b.trimmedLen) > materialDetour)
+        return a.trimmedLen < b.trimmedLen;
+
+    // Within the same general route length, maximize the minimum curve radius.
     auto radiusValue = [](float r) -> float {
         if (std::isfinite(r))
             return r;
@@ -392,10 +403,6 @@ inline bool betterCandidate(const FlexCandidate &a, const FlexCandidate &b) {
     float rTol = std::max(0.5f, 0.02f * rmax); // tie-break window: 0.5m or 2%
     if (std::fabs(ra - rb) > rTol)
         return ra > rb;
-
-    // If radii are similar, prefer solutions that start by turning toward the target.
-    if (a.initialWrongWay != b.initialWrongWay)
-        return b.initialWrongWay;
 
     // Prefer simpler geometry if still tied.
     if (a.curveCount != b.curveCount)
