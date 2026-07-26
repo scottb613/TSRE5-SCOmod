@@ -92,11 +92,29 @@ float DynTrackObj::getElevation(){
 }
 
 float DynTrackObj::getAverageElevation(){
-    return asin(qBound(-1.0f, elevation / 1000.0f, 1.0f));
+    QVector<TSection> tsections;
+    for(int i = 0; i < 5; i++){
+        if(sections == NULL || sections[i].sectIdx > 100000000)
+            continue;
+        tsections.push_back(TSection(0, sections[i].type, sections[i].a, sections[i].r));
+    }
+    if(tsections.isEmpty())
+        return getElevation();
+
+    ComplexLine line;
+    line.init(tsections);
+    const float railLength = line.getLength();
+    if(railLength <= 0.001f)
+        return getElevation();
+
+    float endpoint[6] = {0, 0, 0, 0, 0, 0};
+    line.getDrawPosition(endpoint, railLength);
+    const float averageSin = std::sin(getElevation()) * endpoint[2] / railLength;
+    return std::asin(qBound(-1.0f, averageSin, 1.0f));
 }
 
 float DynTrackObj::getAverageGradePermille(){
-    return elevation;
+    return std::tan(getAverageElevation()) * 1000.0f;
 }
 
 void DynTrackObj::setElevation(float prom){
@@ -104,10 +122,10 @@ void DynTrackObj::setElevation(float prom){
 }
 
 void DynTrackObj::setElevation(float visualProm, float averageProm){
-    // A curved Dyntrack needs two related values. The quaternion tilts the
-    // planar rendered object far enough to meet the endpoint, while the
-    // serialized Elevation/TDB value is the average rise over rail length.
-    elevation = averageProm;
+    // The serialized value and quaternion describe the same planar transform.
+    // Average centerline grade remains a derived display value only.
+    Q_UNUSED(averageProm);
+    elevation = visualProm;
     float * q = qDirection;
     float vect[3];
     vect[0] = 0; vect[1] = 0; vect [2] = 1000;
@@ -783,7 +801,7 @@ for(int i = 0; i < 5; i++){
 }
 *(out) << "		)\n";
 *(out) << "		SectionIdx ( "<<this->sectionIdx<<" )\n";
-*(out) << "		Elevation ( "<<this->elevation<<" )\n";
+*(out) << "		Elevation ( "<<std::tan(getElevation()) * 1000.0f<<" )\n";
 if(this->jNodePosn!=NULL)
 *(out) << "		JNodePosn ( "<<this->jNodePosn[0]<<" "<<this->jNodePosn[1]<<" "<<this->jNodePosn[2]<<" "<<this->jNodePosn[3]<<" "<<this->jNodePosn[4]<<" )\n";
 *(out) << "		CollideFlags ( "<<this->collideFlags<<" )\n";

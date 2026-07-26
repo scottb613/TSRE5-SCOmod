@@ -698,12 +698,7 @@ int TDB::appendTrack(int id, int* ends, int r, int sect, int uid) {
         //qDebug() <<"dlugosc"<< dlugosc;
         Vector3f aa;
         this->tsection->sekcja[sect]->getDrawPosition(&aa, dlugosc);
-        const float horizontalZ = aa.z;
         aa.rotateX(endNode->UiD[9], 0);  
-        if(tsection->shape[r] != NULL && tsection->shape[r]->dyntrack){
-            aa.y = -std::sin(endNode->UiD[9]) * dlugosc;
-            aa.z = horizontalZ;
-        }
         aa.rotateY(M_PI + endNode->UiD[10], 0);
         float angle = this->tsection->sekcja[sect]->getAngle();
         int sid = sect;
@@ -854,12 +849,7 @@ int TDB::newTrack(int x, int z, float* p, float* qe, int* ends, int r, int sect,
     //    aa->rotateX(-qe[0], 0);
     //else
     
-    const float horizontalZ = aa.z;
     aa.rotateX(qe[0], 0);  
-    if(tsection->shape[r] != NULL && tsection->shape[r]->dyntrack){
-        aa.y = -std::sin(qe[0]) * dlugosc;
-        aa.z = horizontalZ;
-    }
     aa.rotateY(M_PI + qe[1], 0);
     
     

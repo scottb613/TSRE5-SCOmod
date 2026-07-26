@@ -2427,15 +2427,10 @@ void Route::addToTDB(WorldObj* obj) {
             if(Game::debugOutput) qDebug() << "DT SectionIDX " << dynTrack->sectionIdx << " being written to tSection... ";
         }
         //qDebug() << "A2TDB 2038";
-        // The rendered Dyntrack is one planar object, so its quaternion uses
-        // endpoint projection. ORTS advances elevation along rail length, so
-        // the TDB must instead carry the sectional-length average grade.
-        float tdbQ[4];
-        Quat::copy(tdbQ, q);
-        const float direction = dynTrack->endp != NULL ? dynTrack->endp[3] : 1.0f;
-        Quat::rotateX(tdbQ, tdbQ,
-                (dynTrack->getAverageElevation() - dynTrack->getElevation()) * direction);
-        this->trackDB->placeTrack(x, z, (float*) &p, tdbQ, dynTrack->sectionIdx, obj->UiD);
+        // Mesh, TDB sections and the yellow database line must use the same
+        // planar transform.  A separate average-grade quaternion introduces
+        // a vertical break at every curve/straight section boundary.
+        this->trackDB->placeTrack(x, z, (float*) &p, (float*) &q, dynTrack->sectionIdx, obj->UiD);
         obj->setPosition(p);
         obj->setQdirection(q);
         obj->setModified();
