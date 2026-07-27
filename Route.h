@@ -135,7 +135,6 @@ public:
     virtual void getUnsavedInfo(QVector<QString> &items);
     void showTrkEditr(Trk * val = NULL);
     void paintHeightMap(Brush* brush, int x, int z, float* p);
-    WorldObj* makeFlexTrack(int x, int z, float* pos);
     WorldObj* placeObject(int x, int z, float* p);
     WorldObj* placeObject(int x, int z, float* p, float* q, float elev = 0);
     WorldObj* placeObject(int x, int z, float* p, float* q, float elev, Ref::RefItem* r);

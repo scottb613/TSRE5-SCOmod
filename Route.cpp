@@ -32,7 +32,6 @@
 #include "DynTrackObj.h"
 #include "PlatformObj.h"
 #include "CarSpawnerObj.h"
-#include "Flex.h"
 #include "ForestObj.h"
 #include "Coords.h"
 #include "CoordsMkr.h"
@@ -2327,34 +2326,6 @@ void Route::replaceWorldObjPointer(WorldObj* o, WorldObj* n){
             return;
         }
     }
-}
-
-WorldObj* Route::makeFlexTrack(int x, int z, float* p) {
-    float qe[4];
-    qe[0] = 0;
-    qe[1] = 0;
-    qe[2] = 0;
-    qe[3] = 1;
-    this->trackDB->findNearestNode(x, z, p,(float*) &qe);
-    float* dyntrackData[10];
-    bool success = Flex::NewFlexDeprecatedStaged(x, z, p, (float*)qe, (float*)dyntrackData);
-    if(!success) return NULL;
-    
-    Ref::RefItem r;
-    r.type = "dyntrack";
-    r.value = -1;
-    if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":" << "1";
-    qe[0] = 0;
-    qe[1] = 0;
-    qe[2] = 0;
-    qe[3] = 1;
-    DynTrackObj* track = (DynTrackObj*)placeObject(x, z, p, (float*)&qe, 0, &r);
-    if(track != NULL){
-        if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":" << "2";
-        QString sh = "dyntrackdata";
-        track->set(sh, (float*)dyntrackData);
-    }
-    return track;
 }
 
 void Route::addToTDB(WorldObj* obj) {

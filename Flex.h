@@ -20,7 +20,6 @@ class QPen;
 class Flex {
 public:
 
-    static bool NewFlexDeprecatedStaged(int x, int z, float *p, float *q, float * dyntrackSections);
     static bool NewFlex(int x1, int z1, float *p1, float *q1, int x2, int z2, float *p2, float *q2, float * dyntrackSections, float preferredMinCurveRadius = 0.0f, bool classicMode = false);
     static bool AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
             float* dyntrackSections, float &visualElev, float &averageElev,
@@ -29,11 +28,6 @@ public:
             const float *destinationQ = nullptr,
             float *resolvedSourceYaw = nullptr);
 private:
-    static int FlexStage;
-    static float FlexP0[3];
-    static float FlexQ0[4];
-    static int FlexX;
-    static int FlexZ;
     static QWidget* window;
     static QPainter* painter;
     static QImage* img;
