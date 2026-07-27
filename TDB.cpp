@@ -33,6 +33,7 @@
 #include "ErrorMessagesLib.h"
 #include "ErrorMessage.h"
 #include "Route.h"
+#include "Tile.h"
 #include "TrackObj.h"
 
 std::unordered_map<int, TRitem*>* TDB::StaticTrackItems;
@@ -122,6 +123,26 @@ bool vectorSectionEndpoint(TSectionDAT *tsection, const float *sectionData,
     outP[2] = -sectionData[12] + delta.z;
     Game::check_coords(outX, outZ, outP);
     return true;
+}
+
+// Object deletion removes its world object and TDB section through separate
+// editor paths.  Until both paths have settled, a deleted track can remain the
+// closest geometric candidate and steal a new Flex connection from the live
+// track beneath it.  Only reject an orphan when its owning world tile is
+// already loaded; a section in an unloaded tile is still a valid route record.
+bool vectorSectionOwnerIsMissing(const float *sectionData) {
+    if(Game::currentRoute == NULL)
+        return false;
+
+    const int ownerX = (int)sectionData[2];
+    const int ownerY = -(int)sectionData[3];
+    Tile *ownerTile = Game::currentRoute->tile.value(
+            ownerX * 10000 + ownerY, NULL);
+    if(ownerTile == NULL || ownerTile->loaded != 1)
+        return false;
+
+    return Game::currentRoute->findWorldObjByUid(
+            ownerX, ownerY, (unsigned int)sectionData[4]) == NULL;
 }
 
 }
@@ -812,6 +833,8 @@ int TDB::findNearestTrackConnection(int &x, int &z, float *p, float *q,
         for(int sectionId = 0; sectionId < vector->iTrv; ++sectionId){
             const float *sectionData =
                     vector->trVectorSection[sectionId].param;
+            if(vectorSectionOwnerIsMissing(sectionData))
+                continue;
             if((int)sectionData[2] == excludedTrackX
                     && (int)sectionData[3] == -excludedTrackY
                     && (unsigned int)sectionData[4] == excludedTrackUid)
