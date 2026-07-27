@@ -3968,7 +3968,6 @@ void TDB::fixTDBVectorElevation(int x, int y, int UiD){
     y = -y;
     
     TRnode *n;
-    int tid = -1;
     for (int i = 1; i <= iTRnodes; i++) {
             n = trackNodes[i];
             if (n == NULL) continue;
