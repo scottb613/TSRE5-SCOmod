@@ -524,7 +524,7 @@ private:
 bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
         float* dyntrackSections, float &visualElev, float &averageElev,
         float preferredMinCurveRadius, bool classicMode, const float *sourceQ,
-        float *resolvedSourceYaw){
+        const float *destinationQ, float *resolvedSourceYaw){
     TDB* tdb = Game::trackDB;
     qDebug() <<"flex "<< x1 << " " << z1 << " " << p1[0] << " " << p1[1] << " " << p1[2];
     qDebug() <<"flex "<< x2 << " " << z2 << " " << p2[0] << " " << p2[1] << " " << p2[2];
@@ -540,11 +540,15 @@ bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
             return false;
     }
 
-    const int destinationNode = tdb->findNearestNode(
-            x2, z2, p2, destinationAxis);
-    if(destinationNode < 0){
-        qWarning() << "Auto-Flex rejected: no destination track endpoint";
-        return false;
+    if(destinationQ != NULL)
+        Quat::copy(destinationAxis, const_cast<float*>(destinationQ));
+    else {
+        const int destinationNode = tdb->findNearestNode(
+                x2, z2, p2, destinationAxis);
+        if(destinationNode < 0){
+            qWarning() << "Auto-Flex rejected: no destination track endpoint";
+            return false;
+        }
     }
 
     float destinationWorld[3] = {
@@ -578,6 +582,8 @@ bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
         const float rightZ = -std::sin(sourceYaw);
         const float forwardDistance = deltaX * forwardX + deltaZ * forwardZ;
         const float lateralDistance = deltaX * rightX + deltaZ * rightZ;
+        if(forwardDistance <= 0.001f)
+            continue;
         const float unpitchedForward = std::copysign(
                 std::sqrt(forwardDistance * forwardDistance + rise * rise),
                 std::fabs(forwardDistance) > 0.001f ? forwardDistance : 1.0f);
@@ -595,8 +601,14 @@ bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
         for(int destinationDirection = 0;
                 destinationDirection < 2; ++destinationDirection){
             float q1[4] = {0, sourceYaw, 0, 1};
-            float q2[4] = {0, wrapPi(destinationAxis[1]
-                    + destinationDirection * (float)M_PI), 0, 1};
+            const float destinationYaw = wrapPi(destinationAxis[1]
+                    + destinationDirection * (float)M_PI);
+            const float destinationForward = deltaX
+                    * std::sin(destinationYaw)
+                    + deltaZ * std::cos(destinationYaw);
+            if(destinationForward <= 0.001f)
+                continue;
+            float q2[4] = {0, destinationYaw, 0, 1};
             float candidateSections[10] = {0};
             if(!Flex::NewFlex(x1, z1, p1, q1, x2, z2, adjustedP2, q2,
                     candidateSections, preferredMinCurveRadius, classicMode))

@@ -47,6 +47,13 @@ float wrapTdbAngle(float angle) {
     return angle;
 }
 
+void matrixToTdbAngles(const float *matrix, float *out) {
+    out[0] = std::asin(qBound(-1.0f, -matrix[9], 1.0f));
+    const float baseYaw = std::atan2(matrix[8], matrix[10]);
+    out[1] = wrapTdbAngle((float)M_PI - baseYaw);
+    out[2] = -std::atan2(matrix[1], matrix[5]);
+}
+
 // Express the orientation of one subsection of a single, planar world
 // object in the three angles stored by TrVectorSections.  Once the horizontal
 // path turns, preserving the parent plane requires both pitch and roll.
@@ -56,14 +63,7 @@ void planarDyntrackAngles(const float *worldQ, float cumulativeAngle, float *out
     Mat4::rotate(matrix, matrix, (float)M_PI, 0.0f, -1.0f, 0.0f);
     Mat4::rotate(matrix, matrix, -cumulativeAngle, 0.0f, 1.0f, 0.0f);
 
-    out[0] = std::asin(qBound(-1.0f, -matrix[9], 1.0f));
-    const float baseYaw = std::atan2(matrix[8], matrix[10]);
-    out[1] = wrapTdbAngle((float)M_PI - baseYaw);
-    // Vector sections apply their stored roll with the opposite sign to the
-    // matrix convention used above.  Keeping the matrix sign made every
-    // turned subsection leave the parent plane, accumulating a vertical
-    // error at the far end of the dynamic track.
-    out[2] = -std::atan2(matrix[1], matrix[5]);
+    matrixToTdbAngles(matrix, out);
 }
 
 bool planarDyntrackTransformMatches(const float *worldQ,
@@ -99,6 +99,29 @@ bool planarDyntrackTransformMatches(const float *worldQ,
     const float dy = physicalDelta.y - databaseDelta.y;
     const float dz = physicalDelta.z - databaseDelta.z;
     return std::sqrt(dx * dx + dy * dy + dz * dz) < 0.001f;
+}
+
+bool vectorSectionEndpoint(TSectionDAT *tsection, const float *sectionData,
+        int &outX, int &outZ, float *outP) {
+    const int sectionId = (int)sectionData[0];
+    auto sectionIt = tsection->sekcja.find(sectionId);
+    if(sectionIt == tsection->sekcja.end() || sectionIt->second == NULL)
+        return false;
+
+    TSection *section = sectionIt->second;
+    Vector3f delta;
+    section->getDrawPosition(&delta, section->getDlugosc());
+    delta.rotateZ(sectionData[15], 0);
+    delta.rotateX(sectionData[13], 0);
+    delta.rotateY((float)M_PI + sectionData[14], 0);
+
+    outX = (int)sectionData[8];
+    outZ = -(int)sectionData[9];
+    outP[0] = sectionData[10] + delta.x;
+    outP[1] = sectionData[11] + delta.y;
+    outP[2] = -sectionData[12] + delta.z;
+    Game::check_coords(outX, outZ, outP);
+    return true;
 }
 
 }
@@ -746,6 +769,88 @@ int TDB::findNearestNodeIgnoringTrack(int &x, int &z, float *p, float *q,
     return nearestID;
 }
 
+int TDB::findNearestTrackConnection(int &x, int &z, float *p, float *q,
+        int excludedTrackX, int excludedTrackY,
+        unsigned int excludedTrackUid, float maxD,
+        bool updatePosition) const {
+    int nearestVectorId = -1;
+    float nearestDistance = maxD;
+    int bestX = x;
+    int bestZ = z;
+    float bestP[3] = {p[0], p[1], p[2]};
+    float bestYaw = 0.0f;
+
+    auto consider = [&](int vectorId, int candidateX, int candidateZ,
+            const float *candidateP, float candidateYaw) {
+        const float dx = (candidateX - x) * 2048.0f
+                + candidateP[0] - p[0];
+        const float dy = candidateP[1] - p[1];
+        const float dz = (candidateZ - z) * 2048.0f
+                + candidateP[2] - p[2];
+        const float distance = std::fabs(dx) + std::fabs(dy)
+                + std::fabs(dz);
+        if(distance >= nearestDistance)
+            return;
+        nearestDistance = distance;
+        nearestVectorId = vectorId;
+        bestX = candidateX;
+        bestZ = candidateZ;
+        bestP[0] = candidateP[0];
+        bestP[1] = candidateP[1];
+        bestP[2] = candidateP[2];
+        bestYaw = wrapTdbAngle(candidateYaw);
+    };
+
+    for(int vectorId = 1; vectorId <= iTRnodes; ++vectorId){
+        auto nodeIt = trackNodes.find(vectorId);
+        if(nodeIt == trackNodes.end() || nodeIt->second == NULL)
+            continue;
+        TRnode *vector = nodeIt->second;
+        if(vector->typ != 1 || vector->trVectorSection == NULL)
+            continue;
+
+        for(int sectionId = 0; sectionId < vector->iTrv; ++sectionId){
+            const float *sectionData =
+                    vector->trVectorSection[sectionId].param;
+            if((int)sectionData[2] == excludedTrackX
+                    && (int)sectionData[3] == -excludedTrackY
+                    && (unsigned int)sectionData[4] == excludedTrackUid)
+                continue;
+
+            const int startX = (int)sectionData[8];
+            const int startZ = -(int)sectionData[9];
+            const float startP[3] = {
+                sectionData[10], sectionData[11], -sectionData[12]
+            };
+            consider(vectorId, startX, startZ, startP, sectionData[14]);
+
+            int endX;
+            int endZ;
+            float endP[3];
+            if(!vectorSectionEndpoint(tsection, sectionData,
+                    endX, endZ, endP))
+                continue;
+            TSection *section =
+                    tsection->sekcja[(int)sectionData[0]];
+            consider(vectorId, endX, endZ, endP,
+                    sectionData[14] + section->getAngle());
+        }
+    }
+
+    if(nearestVectorId >= 0 && updatePosition){
+        x = bestX;
+        z = bestZ;
+        p[0] = bestP[0];
+        p[1] = bestP[1];
+        p[2] = bestP[2];
+        q[0] = 0.0f;
+        q[1] = bestYaw;
+        q[2] = 0.0f;
+        q[3] = 1.0f;
+    }
+    return nearestVectorId;
+}
+
 bool TDB::getPreviousSectionEndpoint(int x, int y, unsigned int uid,
         int &outX, int &outZ, float *outP, float *outQ) const {
     const int databaseY = -y;
@@ -792,24 +897,17 @@ bool TDB::getPreviousSectionEndpoint(int x, int y, unsigned int uid,
             }
 
             float *previous = node->trVectorSection[sectionId - 1].param;
-            const int previousSectionId = (int)previous[0];
-            auto sectionIt = tsection->sekcja.find(previousSectionId);
-            if(sectionIt == tsection->sekcja.end() || sectionIt->second == NULL)
+            int previousEndX;
+            int previousEndZ;
+            float previousEndP[3];
+            if(!vectorSectionEndpoint(tsection, previous,
+                    previousEndX, previousEndZ, previousEndP))
                 return false;
-
-            TSection *section = sectionIt->second;
-            Vector3f delta;
-            section->getDrawPosition(&delta, section->getDlugosc());
-            delta.rotateZ(previous[15], 0);
-            delta.rotateX(previous[13], 0);
-            delta.rotateY((float)M_PI + previous[14], 0);
-
-            outX = (int)previous[8];
-            outZ = -(int)previous[9];
-            outP[0] = previous[10] + delta.x;
-            outP[1] = previous[11] + delta.y;
-            outP[2] = -previous[12] + delta.z;
-            Game::check_coords(outX, outZ, outP);
+            outX = previousEndX;
+            outZ = previousEndZ;
+            outP[0] = previousEndP[0];
+            outP[1] = previousEndP[1];
+            outP[2] = previousEndP[2];
 
             Quat::fill(outQ);
             // Use the dynamic subsection's own tangent.  The previous
@@ -1203,12 +1301,14 @@ int TDB::joinVectorSections(int id1, int id2) {
     }
     else if (section1e2->equals(section2e2)) {
         if(Game::debugOutput) qDebug() << "rot2";
-        rotate(id2);
+        if(rotate(id2) < 0)
+            return -1;
         return joinVectorSections(id1, id2);
     }
     else if (section1e1->equals(section2e1)) {
        if(Game::debugOutput)  qDebug() << "rot1";
-        rotate(id1);
+        if(rotate(id1) < 0)
+            return -1;
         return joinVectorSections(id1, id2);
     }
 
@@ -1670,44 +1770,89 @@ int TDB::rotate(int id){
     TRnode* vect = trackNodes[id];
     TRnode* e1 = trackNodes[vect->TrPinS[0]];
     TRnode* e2 = trackNodes[vect->TrPinS[1]];
-    
-    for(int i = 0; i < vect->iTrv; i++){
-        if(i < vect->iTrv - 1){
-            vect->trVectorSection[i].param[8] = vect->trVectorSection[i+1].param[8];
-            vect->trVectorSection[i].param[9] = vect->trVectorSection[i+1].param[9];
-            vect->trVectorSection[i].param[10] = vect->trVectorSection[i+1].param[10];
-            vect->trVectorSection[i].param[11] = vect->trVectorSection[i+1].param[11];
-            vect->trVectorSection[i].param[12] = vect->trVectorSection[i+1].param[12];
-            vect->trVectorSection[i].param[13] = -vect->trVectorSection[i].param[13]; //fix ????
-            vect->trVectorSection[i].param[14] = vect->trVectorSection[i+1].param[14];
-            vect->trVectorSection[i].param[15] = vect->trVectorSection[i+1].param[15];
-        } else {
-            vect->trVectorSection[i].param[8] = e2->UiD[4];
-            vect->trVectorSection[i].param[9] = e2->UiD[5];
-            vect->trVectorSection[i].param[10] = e2->UiD[6];
-            vect->trVectorSection[i].param[11] = e2->UiD[7];
-            vect->trVectorSection[i].param[12] = e2->UiD[8];
-            vect->trVectorSection[i].param[13] = -vect->trVectorSection[i].param[13];
-            vect->trVectorSection[i].param[14] = e2->UiD[10];
-            vect->trVectorSection[i].param[15] = e2->UiD[11];
+
+    // Build the reversed vector from an untouched copy.  The legacy in-place
+    // reversal copied the next section's pitch/yaw and merely negated pitch;
+    // that is not valid when a planar curved track carries roll, and made the
+    // yellow line diverge whenever a graded vector joined in reverse order.
+    TRnode::TRSect *reversed = new TRnode::TRSect[vect->iTrv];
+    for(int oldIndex = 0; oldIndex < vect->iTrv; ++oldIndex){
+        const TRnode::TRSect &oldSection =
+                vect->trVectorSection[oldIndex];
+        TRnode::TRSect &newSection =
+                reversed[vect->iTrv - 1 - oldIndex];
+        newSection = oldSection;
+
+        int endX;
+        int endZ;
+        float endP[3];
+        if(!vectorSectionEndpoint(tsection, oldSection.param,
+                endX, endZ, endP)){
+            delete[] reversed;
+            return -1;
         }
-        float angle = this->tsection->sekcja[vect->trVectorSection[i].param[0]]->getAngle();
-        if (angle > 0) vect->trVectorSection[i].param[0]--;
-        if (angle < 0) vect->trVectorSection[i].param[0]++;
-        
-        int tmp = vect->trVectorSection[i].param[5];
-        vect->trVectorSection[i].param[5] = vect->trVectorSection[i].param[6];
-        vect->trVectorSection[i].param[6] = tmp;
-        
-        vect->trVectorSection[i].param[14] += M_PI;
-        if(vect->trVectorSection[i].param[14] > 2*M_PI)
-            vect->trVectorSection[i].param[14] -= 2*M_PI;
+        newSection.param[8] = endX;
+        newSection.param[9] = -endZ;
+        newSection.param[10] = endP[0];
+        newSection.param[11] = endP[1];
+        newSection.param[12] = -endP[2];
+
+        TSection *section =
+                tsection->sekcja[(int)oldSection.param[0]];
+        const float angle = section->getAngle();
+        if(angle > 0.0f)
+            newSection.param[0]--;
+        else if(angle < 0.0f)
+            newSection.param[0]++;
+
+        const float oldEnd = newSection.param[5];
+        newSection.param[5] = newSection.param[6];
+        newSection.param[6] = oldEnd;
+
+        // Reconstruct the complete original section frame, advance to its
+        // end tangent, reverse that tangent, then serialize all three Euler
+        // angles.  This handles pitch and roll symmetrically.
+        float frame[16];
+        Mat4::identity(frame);
+        Mat4::rotateY(frame, frame,
+                -(float)M_PI - oldSection.param[14]);
+        Mat4::rotateX(frame, frame, oldSection.param[13]);
+        Mat4::rotateZ(frame, frame, -oldSection.param[15]);
+        Mat4::rotate(frame, frame, -angle - (float)M_PI,
+                0.0f, 1.0f, 0.0f);
+        float reversedAngles[3];
+        matrixToTdbAngles(frame, reversedAngles);
+        newSection.param[13] = reversedAngles[0];
+        newSection.param[14] = reversedAngles[1];
+        newSection.param[15] = reversedAngles[2];
+
+        int reversedEndX;
+        int reversedEndZ;
+        float reversedEndP[3];
+        if(!vectorSectionEndpoint(tsection, newSection.param,
+                reversedEndX, reversedEndZ, reversedEndP)){
+            delete[] reversed;
+            return -1;
+        }
+        const int oldStartX = (int)oldSection.param[8];
+        const int oldStartZ = -(int)oldSection.param[9];
+        const float reverseDx = (reversedEndX - oldStartX) * 2048.0f
+                + reversedEndP[0] - oldSection.param[10];
+        const float reverseDy =
+                reversedEndP[1] - oldSection.param[11];
+        const float reverseDz = (reversedEndZ - oldStartZ) * 2048.0f
+                + reversedEndP[2] + oldSection.param[12];
+        if(std::sqrt(reverseDx * reverseDx + reverseDy * reverseDy
+                + reverseDz * reverseDz) >= 0.002f){
+            qWarning() << "TDB vector reversal rejected: endpoint mismatch"
+                    << id << oldIndex;
+            delete[] reversed;
+            return -1;
+        }
     }
-    for(int i = 0; i < vect->iTrv/2; i++){
-        TRnode::TRSect t = vect->trVectorSection[i];
-        vect->trVectorSection[i] = vect->trVectorSection[vect->iTrv - 1 - i];
-        vect->trVectorSection[vect->iTrv - 1 - i] = t;
-    }
+
+    delete[] vect->trVectorSection;
+    vect->trVectorSection = reversed;
     
     e1->setTrPinK(id, 0);
     e2->setTrPinK(id, 1);

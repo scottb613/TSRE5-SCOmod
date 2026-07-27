@@ -431,16 +431,10 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
     int sourceX = dobj->x;
     int sourceZ = dobj->y;
     float sourceQ[4] = {0, 0, 0, 1};
-    bool hasSnappedSource = false;
-    if(Game::trackDB != NULL){
-        hasSnappedSource = Game::trackDB->getPreviousSectionEndpoint(
-                dobj->x, dobj->y, dobj->UiD,
-                sourceX, sourceZ, p1, sourceQ);
-        if(!hasSnappedSource)
-            hasSnappedSource = Game::trackDB->findNearestNodeIgnoringTrack(
+    const bool hasSnappedSource = Game::trackDB != NULL
+            && Game::trackDB->findNearestTrackConnection(
                     sourceX, sourceZ, p1, sourceQ,
                     dobj->x, dobj->y, dobj->UiD) >= 0;
-    }
     if(!hasSnappedSource){
         qWarning() << "Auto-Flex rejected: no external source connection";
         emit flexResult(false);
@@ -463,10 +457,25 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
     float visualElev = 0;
     float averageElev = 0;
     float resolvedSourceYaw = sourceQ[1];
+
+    int destinationX = x;
+    int destinationZ = z;
+    float destinationQ[4] = {0, 0, 0, 1};
+    if(Game::trackDB == NULL
+            || Game::trackDB->findNearestTrackConnection(
+                    destinationX, destinationZ, p2, destinationQ,
+                    dobj->x, dobj->y, dobj->UiD) < 0){
+        qWarning() << "Auto-Flex rejected: no destination track connection";
+        emit flexResult(false);
+        emit enableTool("selectTool");
+        return;
+    }
     
-    bool success = Flex::AutoFlex(sourceX, sourceZ, (float*)p1, x, z, (float*)p2,
+    bool success = Flex::AutoFlex(sourceX, sourceZ, (float*)p1,
+            destinationX, destinationZ, (float*)p2,
             (float*)dyntrackData, visualElev, averageElev, 0.0f,
-            flexClassic.isChecked(), sourceQ, &resolvedSourceYaw);
+            flexClassic.isChecked(), sourceQ, destinationQ,
+            &resolvedSourceYaw);
     if(Game::debugOutput) qDebug() << "flex2" << visualElev << averageElev;
     if(success){
         // The solver always uses the exact database source.  Move the world
