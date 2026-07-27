@@ -37,6 +37,33 @@
 
 std::unordered_map<int, TRitem*>* TDB::StaticTrackItems;
 
+namespace {
+
+float wrapTdbAngle(float angle) {
+    while(angle > (float)M_PI)
+        angle -= (float)(2.0 * M_PI);
+    while(angle <= (float)-M_PI)
+        angle += (float)(2.0 * M_PI);
+    return angle;
+}
+
+// Express the orientation of one subsection of a single, planar world
+// object in the three angles stored by TrVectorSections.  Once the horizontal
+// path turns, preserving the parent plane requires both pitch and roll.
+void planarDyntrackAngles(const float *worldQ, float cumulativeAngle, float *out) {
+    float matrix[16];
+    Mat4::fromQuat(matrix, const_cast<float*>(worldQ));
+    Mat4::rotate(matrix, matrix, (float)M_PI, 0.0f, -1.0f, 0.0f);
+    Mat4::rotate(matrix, matrix, -cumulativeAngle, 0.0f, 1.0f, 0.0f);
+
+    out[0] = std::asin(qBound(-1.0f, -matrix[9], 1.0f));
+    const float baseYaw = std::atan2(matrix[8], matrix[10]);
+    out[1] = wrapTdbAngle((float)M_PI - baseYaw);
+    out[2] = std::atan2(matrix[1], matrix[5]);
+}
+
+}
+
 TDB::TDB(TSectionDAT* tsection, bool road) {
     loaded = false;
     this->road = road;
@@ -637,6 +664,53 @@ int TDB::findNearestNode(int &x, int &z, float* p, float* q, float maxD, bool up
     return nearestID;
 }
 
+bool TDB::getPreviousSectionEndpoint(int x, int y, unsigned int uid,
+        int &outX, int &outZ, float *outP, float *outQ) const {
+    const int databaseY = -y;
+    for(int nodeId = 1; nodeId <= iTRnodes; ++nodeId){
+        auto nodeIt = trackNodes.find(nodeId);
+        if(nodeIt == trackNodes.end() || nodeIt->second == NULL)
+            continue;
+        TRnode *node = nodeIt->second;
+        if(node->typ != 1 || node->trVectorSection == NULL)
+            continue;
+
+        for(int sectionId = 0; sectionId < node->iTrv; ++sectionId){
+            float *current = node->trVectorSection[sectionId].param;
+            if((int)current[2] != x || (int)current[3] != databaseY
+                    || (unsigned int)current[4] != uid)
+                continue;
+            if(sectionId == 0)
+                return false;
+
+            float *previous = node->trVectorSection[sectionId - 1].param;
+            const int previousSectionId = (int)previous[0];
+            auto sectionIt = tsection->sekcja.find(previousSectionId);
+            if(sectionIt == tsection->sekcja.end() || sectionIt->second == NULL)
+                return false;
+
+            TSection *section = sectionIt->second;
+            Vector3f delta;
+            section->getDrawPosition(&delta, section->getDlugosc());
+            delta.rotateZ(previous[15], 0);
+            delta.rotateX(previous[13], 0);
+            delta.rotateY((float)M_PI + previous[14], 0);
+
+            outX = (int)previous[8];
+            outZ = -(int)previous[9];
+            outP[0] = previous[10] + delta.x;
+            outP[1] = previous[11] + delta.y;
+            outP[2] = -previous[12] + delta.z;
+            Game::check_coords(outX, outZ, outP);
+
+            Quat::fill(outQ);
+            outQ[1] = wrapTdbAngle(previous[14] + section->getAngle());
+            return true;
+        }
+    }
+    return false;
+}
+
 bool TDB::endpointBelongsToTrack(int endpointId, int x, int y, unsigned int uid) const {
     auto endpointIt = trackNodes.find(endpointId);
     if(endpointIt == trackNodes.end() || endpointIt->second == NULL)
@@ -698,6 +772,7 @@ int TDB::appendTrack(int id, int* ends, int r, int sect, int uid) {
         //qDebug() <<"dlugosc"<< dlugosc;
         Vector3f aa;
         this->tsection->sekcja[sect]->getDrawPosition(&aa, dlugosc);
+        aa.rotateZ(endNode->UiD[11], 0);
         aa.rotateX(endNode->UiD[9], 0);  
         aa.rotateY(M_PI + endNode->UiD[10], 0);
         float angle = this->tsection->sekcja[sect]->getAngle();
@@ -849,6 +924,7 @@ int TDB::newTrack(int x, int z, float* p, float* qe, int* ends, int r, int sect,
     //    aa->rotateX(-qe[0], 0);
     //else
     
+    aa.rotateZ(qe[2], 0);
     aa.rotateX(qe[0], 0);  
     aa.rotateY(M_PI + qe[1], 0);
     
@@ -1766,6 +1842,7 @@ bool TDB::placeTrack(int x, int z, float* p, float* q, int sectionIdx, int uid, 
         qDebug() << "SectionIdx " << sectionIdx << " not found in TSection";
         // return false;  //// EFO commenting this out as it might be causing a problem
     }
+    const bool planarDyntrack = shp != NULL && shp->dyntrack;
     
     float pp[3];
     float qee[3];
@@ -1814,9 +1891,12 @@ bool TDB::placeTrack(int x, int z, float* p, float* q, int sectionIdx, int uid, 
         if(fabs(shp->path[i].rotDeg) > 90)
             qee[0] = -qe[0];
         else
-            qee[0] = qe[0];
+        qee[0] = qe[0];
         qee[1] = qe[1] + shp->path[i].rotDeg*M_PI/180;
         qee[2] = qe[2];
+        float cumulativeDyntrackAngle = 0.0f;
+        if(planarDyntrack)
+            planarDyntrackAngles(q, cumulativeDyntrackAngle, qee);
         
         ends[0] = endsNumbres[i*2];
         ends[1] = endsNumbres[i*2+1];
@@ -1836,10 +1916,34 @@ bool TDB::placeTrack(int x, int z, float* p, float* q, int sectionIdx, int uid, 
         }
 
         endp = newTrack(x, z, pp, qee, (int*)ends, sectionIdx, shp->path[i].sect[0], uid, &start);
+        if(planarDyntrack && endp > 0){
+            TSection *firstSection = tsection->sekcja[shp->path[i].sect[0]];
+            if(firstSection != NULL)
+                cumulativeDyntrackAngle += firstSection->getAngle();
+            planarDyntrackAngles(q, cumulativeDyntrackAngle, qee);
+            TRnode *endNode = trackNodes[endp];
+            if(endNode != NULL){
+                endNode->UiD[9] = qee[0];
+                endNode->UiD[10] = qee[1];
+                endNode->UiD[11] = qee[2];
+            }
+        }
 
         for (int j = 1; j < shp->path[i].n; j++) {
             if (endp > 0) {
                 endp = appendTrack(endp, (int*)ends, sectionIdx, shp->path[i].sect[j], uid);
+                if(planarDyntrack && endp > 0){
+                    TSection *appendedSection = tsection->sekcja[shp->path[i].sect[j]];
+                    if(appendedSection != NULL)
+                        cumulativeDyntrackAngle += appendedSection->getAngle();
+                    planarDyntrackAngles(q, cumulativeDyntrackAngle, qee);
+                    TRnode *endNode = trackNodes[endp];
+                    if(endNode != NULL){
+                        endNode->UiD[9] = qee[0];
+                        endNode->UiD[10] = qee[1];
+                        endNode->UiD[11] = qee[2];
+                    }
+                }
             }
         }
         
@@ -2554,6 +2658,7 @@ bool TDB::getDrawPositionOnTrNode(float* out, int id, float metry, float *sElev)
         Quat::fromRotationXYZ(q, rot);
         Mat4::fromRotationTranslation(matrix, q, pos);
         Mat4::rotate(matrix, matrix, -n->trVectorSection[i].param[13], 1, 0, 0);
+        Mat4::rotate(matrix, matrix, -n->trVectorSection[i].param[15], 0, 0, 1);
 
         pos[0] = position.x;
         pos[1] = position.y;
@@ -2672,6 +2777,7 @@ void TDB::getLine(float* &ptr, Vector3f p, Vector3f o, int idx, int id, int vid,
     Quat::fromRotationXYZ(q, rot);
     Mat4::fromRotationTranslation(matrix, q, reinterpret_cast<float *> (&p));
     Mat4::rotate(matrix, matrix, o.x, 1, 0, 0);
+    Mat4::rotate(matrix, matrix, o.z, 0, 0, 1);
 
     /// Wire
     // EFO don't add lwireLineHeight for 0 here -- it's used for other things like platform and siding objects
@@ -2694,7 +2800,7 @@ void TDB::drawLine(GLUU *gluu, float* &ptr, Vector3f p, Vector3f o, int idx) {
     Mat4::fromRotationTranslation(matrix, q, reinterpret_cast<float *> (&p));
     //Mat4::rotate(matrix, matrix, -o.y+M_PI, 0, 1, 0);
     Mat4::rotate(matrix, matrix, o.x, 1, 0, 0);
-    //Mat4::rotate(matrix, matrix, o.z, 0, 0, 1);
+    Mat4::rotate(matrix, matrix, o.z, 0, 0, 1);
     
     float point1[3];
     point1[0] = 0;
@@ -3045,6 +3151,7 @@ void TDB::getVectorSectionPoints(int x, int y, int nId, int sId, QVector<float> 
     Quat::fromRotationXYZ(q, rot);
     Mat4::fromRotationTranslation(matrix, q, p);
     Mat4::rotate(matrix, matrix, n->trVectorSection[sId].param[13], 1, 0, 0);
+    Mat4::rotate(matrix, matrix, n->trVectorSection[sId].param[15], 0, 0, 1);
     //Mat4::fromRotationTranslation(matrix, q, objMatrix);
     if(tsection->sekcja[(int) n->trVectorSection[sId].param[0]] == NULL){
         if(Game::debugOutput) qDebug() << "nie ma sekcji " << (int) n->trVectorSection[sId].param[0];

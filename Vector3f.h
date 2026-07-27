@@ -24,6 +24,7 @@ public:
     void set(float *pos);
     void rotateY(float a, float r);
     void rotateX(float a, float r);
+    void rotateZ(float a, float r);
     void rotate(Vector3f o);
     void setFromAdd(Vector3f v1, Vector3f v2);
     void add(Vector3f v);

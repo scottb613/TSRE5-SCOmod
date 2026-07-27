@@ -9,11 +9,13 @@
  */
 
 #include "PropertiesDyntrack.h"
+#include <cmath>
 #include "DynTrackObj.h"
 #include "Flex.h"
 #include "Game.h"
 #include "GLMatrix.h"
 #include "GuiFunct.h"
+#include "TDB.h"
 
 PropertiesDyntrack::PropertiesDyntrack() {
     buttonTools["FlexTool"] = new QPushButton("Auto-Flex", this);
@@ -425,15 +427,36 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
     p2[0] = p[0];
     p2[1] = p[1];
     p2[2] = p[2];
+
+    int sourceX = dobj->x;
+    int sourceZ = dobj->y;
+    float sourceQ[4] = {0, 0, 0, 1};
+    const bool hasConnectedSource = Game::trackDB != NULL
+            && Game::trackDB->getPreviousSectionEndpoint(
+                    dobj->x, dobj->y, dobj->UiD,
+                    sourceX, sourceZ, p1, sourceQ);
+    if(hasConnectedSource){
+        const float sourceDx = (sourceX - dobj->x) * 2048.0f + p1[0] - dobj->position[0];
+        const float sourceDy = p1[1] - dobj->position[1];
+        const float sourceDz = (sourceZ - dobj->y) * 2048.0f + p1[2] - dobj->position[2];
+        if(std::sqrt(sourceDx * sourceDx + sourceDy * sourceDy + sourceDz * sourceDz) > 4.0f){
+            emit flexResult(false);
+            emit enableTool("selectTool");
+            return;
+        }
+    }
     
     float dyntrackData[10];
     float visualElev = 0;
     float averageElev = 0;
     
-    bool success = Flex::AutoFlex(dobj->x, dobj->y, (float*)p1, x, z, (float*)p2,
-            (float*)dyntrackData, visualElev, averageElev, 0.0f, flexClassic.isChecked());
+    bool success = Flex::AutoFlex(sourceX, sourceZ, (float*)p1, x, z, (float*)p2,
+            (float*)dyntrackData, visualElev, averageElev, 0.0f,
+            flexClassic.isChecked(), hasConnectedSource ? sourceQ : NULL);
     if(Game::debugOutput) qDebug() << "flex2" << visualElev << averageElev;
     if(success){
+        if(hasConnectedSource)
+            dobj->setPosition(sourceX, sourceZ, p1);
         dobj->set("dyntrackdata", (float*)dyntrackData);
         dobj->setElevation(visualElev, averageElev);
         this->showObj(dobj);

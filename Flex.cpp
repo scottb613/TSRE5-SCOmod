@@ -520,7 +520,7 @@ private:
 
 bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
         float* dyntrackSections, float &visualElev, float &averageElev,
-        float preferredMinCurveRadius, bool classicMode){
+        float preferredMinCurveRadius, bool classicMode, const float *sourceQ){
     TDB* tdb = Game::trackDB;
     qDebug() <<"flex "<< x1 << " " << z1 << " " << p1[0] << " " << p1[1] << " " << p1[2];
     qDebug() <<"flex "<< x2 << " " << z2 << " " << p2[0] << " " << p2[1] << " " << p2[2];
@@ -528,33 +528,58 @@ bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
     float q1[4] = {0,0,0,1};
     float q2[4] = {0,0,0,1};
 
-    tdb->findNearestNode(x1, z1, p1,(float*) &q1);
+    if(sourceQ != NULL)
+        Quat::copy(q1, const_cast<float*>(sourceQ));
+    else {
+        const int sourceNode = tdb->findNearestNode(x1, z1, p1,(float*) &q1);
+        if(sourceNode < 0)
+            return false;
+    }
     //q1[1] = wrapPi(q1[1] + (float)M_PI);
     float *p11 = Vec3::clone(p1);
-    tdb->findNearestNode(x2, z2, p2,(float*) &q2);
+    const int destinationNode = tdb->findNearestNode(x2, z2, p2,(float*) &q2);
+    if(destinationNode < 0){
+        delete[] p11;
+        return false;
+    }
     q2[1] = wrapPi(q2[1] + (float)M_PI);
     //q2[1] = wrapPi(M_PI - q2[1]); // convert to dyntrack convention (heading is direction toward which we turn left)
 
     float *p22 = Vec3::clone(p2);
 
-    bool success = Flex::NewFlex(x1, z1, p1, (float*)q1, x2, z2, p2, (float*)q2, dyntrackSections, preferredMinCurveRadius, classicMode);
-
     p22[0] +=  2048*(x2 - x1);
     p22[2] +=  2048*(z2 - z1);
     const float rise = p22[1] - p11[1];
-    // Dyntrack is a flat mesh tilted around its local X axis. Its endpoint
-    // height is therefore controlled by the endpoint's forward displacement
-    // in the starting track frame, not by the curved centerline length.
-    // Using centerline length leaves long S-curves visibly above/below the
-    // target even though their reported average grade looks correct.
     const float deltaX = p22[0] - p11[0];
     const float deltaZ = -(p22[2] - p11[2]);
-    float dist1 = std::fabs(deltaX * std::sin(q1[1]) + deltaZ * std::cos(q1[1]));
-    if (dist1 <= 0.001f)
-        dist1 = std::sqrt(deltaX * deltaX + deltaZ * deltaZ);
+    const float forwardX = std::sin(q1[1]);
+    const float forwardZ = std::cos(q1[1]);
+    const float rightX = std::cos(q1[1]);
+    const float rightZ = -std::sin(q1[1]);
+    const float forwardDistance = deltaX * forwardX + deltaZ * forwardZ;
+    const float lateralDistance = deltaX * rightX + deltaZ * rightZ;
+
+    // The finished object is pitched about its source. Inverse-project the
+    // destination before solving the flat path so the pitched endpoint keeps
+    // its requested horizontal position instead of contracting by cos(pitch).
+    const float unpitchedForward = std::copysign(
+            std::sqrt(forwardDistance * forwardDistance + rise * rise),
+            std::fabs(forwardDistance) > 0.001f ? forwardDistance : 1.0f);
+    const float adjustedDeltaX = rightX * lateralDistance + forwardX * unpitchedForward;
+    const float adjustedDeltaZ = rightZ * lateralDistance + forwardZ * unpitchedForward;
+    float adjustedP2[3];
+    adjustedP2[0] = p11[0] + adjustedDeltaX - 2048.0f * (x2 - x1);
+    adjustedP2[1] = p2[1];
+    adjustedP2[2] = -( -p11[2] + adjustedDeltaZ ) - 2048.0f * (z2 - z1);
+
+    bool success = Flex::NewFlex(x1, z1, p1, (float*)q1,
+            x2, z2, adjustedP2, (float*)q2, dyntrackSections,
+            preferredMinCurveRadius, classicMode);
+
+    float dist1 = std::fabs(unpitchedForward);
     
     if (dist1 > 0.001f)
-        visualElev = rise*(1000.0/dist1);
+        visualElev = rise * (1000.0f / dist1);
     else
         visualElev = 0.0f;
 

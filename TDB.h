@@ -113,6 +113,8 @@ public:
     int getGradeMarkerTransition(int x, int y, int UiD);
     bool removeTrackFromTDB(int x, int y, int UiD);
     int findNearestNode(int &x, int &z, float* p, float* q, float maxD = 4, bool updatePosition = true);
+    bool getPreviousSectionEndpoint(int x, int y, unsigned int uid,
+            int &outX, int &outZ, float *outP, float *outQ) const;
     bool endpointBelongsToTrack(int endpointId, int x, int y, unsigned int uid) const;
     int findVectorNodeBetweenTwoNodes(int first, int second);
     int joinTracks(int iendp);
