@@ -12,6 +12,47 @@
 #include <QtWidgets>
 #include "Game.h"
 
+namespace {
+class WindowPinIconEngine : public QIconEngine {
+public:
+    QIconEngine *clone() const override {
+        return new WindowPinIconEngine(*this);
+    }
+
+    QPixmap pixmap(const QSize &size, QIcon::Mode mode,
+                   QIcon::State state) override {
+        QPixmap result(size);
+        result.fill(Qt::transparent);
+        QPainter painter(&result);
+        paint(&painter, result.rect(), mode, state);
+        return result;
+    }
+
+    void paint(QPainter *painter, const QRect &rect,
+               QIcon::Mode mode, QIcon::State state) override {
+        if(painter == NULL || rect.isEmpty())
+            return;
+        QColor color = state == QIcon::On ? QColor(35, 35, 35)
+                                          : QColor(231, 234, 236);
+        if(mode == QIcon::Disabled)
+            color = QColor(133, 133, 133);
+
+        const qreal side = qMin(rect.width(), rect.height());
+        const QPointF center = rect.center();
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->setBrush(Qt::NoBrush);
+        painter->setPen(QPen(color, qMax<qreal>(1.2, side * 0.16),
+                             Qt::SolidLine, Qt::RoundCap));
+        painter->drawEllipse(center, side * 0.34, side * 0.34);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(color);
+        painter->drawEllipse(center, side * 0.105, side * 0.105);
+        painter->restore();
+    }
+};
+}
+
 QLabel* GuiFunct::newQLabel(QString text, int width){
     QLabel* label = new QLabel(text);
     label->setFixedWidth(width);
@@ -217,4 +258,13 @@ void GuiFunct::applyEditorPanelStyle(QWidget *panel){
         foreach(QGridLayout *layout, panel->findChildren<QGridLayout*>())
             layout->setVerticalSpacing(rowSpacing);
     });
+}
+
+void GuiFunct::setupWindowPinButton(QToolButton *button){
+    if(button == NULL)
+        return;
+    button->setText(QString());
+    button->setIcon(QIcon(new WindowPinIconEngine));
+    const int iconSide = qRound(15.0f * qMax(1.0f, Game::uiScale));
+    button->setIconSize(QSize(iconSide, iconSide));
 }

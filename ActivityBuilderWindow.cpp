@@ -45,6 +45,16 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     QObject::connect(viewer, SIGNAL(pathDraftStatus(QString)), this, SLOT(showJunctionDetails(QString)));
     QObject::connect(tools, SIGNAL(pathCreationStarted(Path*)), this, SLOT(beginPathCreation(Path*)));
     QObject::connect(tools, SIGNAL(pathEditStarted(Path*)), viewer, SLOT(beginPathEdit(Path*)));
+    QObject::connect(viewer, SIGNAL(pathEditingStateChanged(bool)),
+                     this, SLOT(setPathControlsActive(bool)));
+    QObject::connect(viewer, SIGNAL(pathMetadataChanged(Path*)),
+                     tools, SLOT(refreshPathLabel(Path*)));
+    QObject::connect(viewer, SIGNAL(pathMetadataChanged(Path*)),
+                     this, SLOT(refreshPathMetadata(Path*)));
+    QObject::connect(viewer, SIGNAL(pathSaved(Path*)),
+                     tools, SLOT(finishPathSave(Path*)));
+    QObject::connect(tools, SIGNAL(pathEditCancelRequested()),
+                     viewer, SLOT(cancelPathEdit()));
 
     QDockWidget *activityDock = new QDockWidget(tr("Activity"), this);
     activityDock->setObjectName("activityBuilderActivityDock");
@@ -81,23 +91,29 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     junctionInfo->setWordWrap(true);
     junctionInfo->setStyleSheet("margin-top: 8px; padding: 6px; background: #292d31;");
     detailsLayout->addWidget(junctionInfo);
+    QLabel *trackLegendHeading = new QLabel(
+        QString(QChar(0x2022)) + tr(" TrackDB"), details);
+    GuiFunct::styleEditorSubtitle(trackLegendHeading);
     QLabel *legend = new QLabel(
-        tr("<b>TrackDB</b><br>"
-           "<span style='color:#b8bdc2'>■</span>&nbsp; Track<br>"
-           "<span style='color:#ffae38'>■</span>&nbsp; Switch at default<br>"
-           "<span style='color:#00ebff'>■</span>&nbsp; Switch changed<br>"
-           "<span style='color:#69aef5'>■</span>&nbsp; Endpoint<br>"
-           "<span style='color:#ffe140'>■</span>&nbsp; Selected path<br>"
-           "<span style='color:#41dc69'>■</span>&nbsp; Path start<br>"
-           "<span style='color:#eb4b4b'>■</span>&nbsp; Path end"), details);
+        tr("<span style='color:#b8bdc2; font-size:140%'>&#9632;</span>&nbsp; Track<br>"
+           "<span style='color:#ffae38; font-size:140%'>&#9632;</span>&nbsp; Switch at default<br>"
+           "<span style='color:#00ebff; font-size:140%'>&#9632;</span>&nbsp; Switch changed<br>"
+           "<span style='color:#69aef5; font-size:140%'>&#9632;</span>&nbsp; Endpoint<br>"
+           "<span style='color:#ffe140; font-size:140%'>&#9632;</span>&nbsp; Selected path<br>"
+           "<span style='color:#41dc69; font-size:140%'>&#9632;</span>&nbsp; Path start<br>"
+           "<span style='color:#eb4b4b; font-size:140%'>&#9632;</span>&nbsp; Path end"), details);
     legend->setWordWrap(true);
+    QLabel *interactiveLegendHeading = new QLabel(
+        QString(QChar(0x2022)) + tr(" Interactives"), details);
+    GuiFunct::styleEditorSubtitle(interactiveLegendHeading);
     QLabel *interactiveLegend = new QLabel(
-        tr("<b>Interactives</b><br>"
-           "<span style='color:#5ae17d'>■</span>&nbsp; Signal<br>"
-           "<span style='color:#55aff5'>■</span>&nbsp; Station/platform<br>"
-           "<span style='color:#73a5eb'>■</span>&nbsp; Siding<br>"
-           "<span style='color:#f5b941'>■</span>&nbsp; Service point<br>"
-           "<span style='color:#cd78f0'>■</span>&nbsp; Route marker"), details);
+        tr("<span style='color:#5ae17d; font-size:140%'>&#9679;</span>"
+           "<span style='color:#e14b4b; font-size:140%'>&#9679;</span>&nbsp; Signal<br>"
+           "<span style='color:#55aff5; font-size:140%'>&#9644;</span>&nbsp; Station/platform<br>"
+           "<span style='color:#73a5eb; font-size:140%'>&#9670;</span>&nbsp; Siding<br>"
+           "<span style='color:#f5b941; font-size:130%'><b>[P]</b></span>&nbsp; Service point<br>"
+           "<span style='color:#f59137; font-size:170%'><b>&#10005;</b></span>&nbsp; Level crossing<br>"
+           "<span style='color:#cd78f0; font-size:140%'>&#9873;</span>&nbsp; Route marker"), details);
     interactiveLegend->setWordWrap(true);
     QLabel *phase = new QLabel(tr("Path Builder: magenta is the unsaved path preview. "
                                   "Completed paths remain independent of activities."), details);
@@ -105,7 +121,9 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     phase->setStyleSheet("color: #aeb5bb;");
     detailsLayout->addWidget(phase);
     detailsLayout->addStretch(1);
+    detailsLayout->addWidget(trackLegendHeading);
     detailsLayout->addWidget(legend);
+    detailsLayout->addWidget(interactiveLegendHeading);
     detailsLayout->addWidget(interactiveLegend);
     detailsDock->setWidget(details);
     detailsDock->setMinimumWidth(qRound(190 * qMax(1.0f, Game::uiScale)));
@@ -146,7 +164,6 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     pathButtons->addWidget(undoEdit, 3, 0);
     pathButtons->addWidget(redoEdit, 3, 1);
     pathButtons->addWidget(validate, 4, 0, 1, 2);
-    pathButtons->addWidget(savePath, 5, 0, 1, 2);
     undoEdit->setShortcut(QKeySequence::Undo);
     redoEdit->setShortcut(QKeySequence::Redo);
     pathLayout->addLayout(pathButtons);
@@ -266,6 +283,11 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     QPushButton *addAdvanced = new QPushButton(tr("Place Horn Point"), pathControls);
     addAdvanced->setCheckable(true);
     pathLayout->addWidget(addAdvanced);
+    pathLayout->addSpacing(qRound(12 * qMax(1.0f, Game::uiScale)));
+    QPushButton *editMetadata = new QPushButton(tr("Meta Data"), pathControls);
+    editMetadata->setToolTip(tr("Set the ORTS Path ID, name, start and end labels, and player-path use."));
+    pathLayout->addWidget(editMetadata);
+    pathLayout->addWidget(savePath);
     const std::function<int()> advancedValue =
         [advancedOperation, hornSeconds, uncoupleEnd, uncoupleCars, uncouplePause]() {
         switch(advancedOperation->currentIndex()){
@@ -298,7 +320,9 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     pathDock->setMinimumWidth(qRound(260 * qMax(1.0f, Game::uiScale)));
     addDockWidget(Qt::RightDockWidgetArea, pathDock);
     tabifyDockWidget(detailsDock, pathDock);
-    pathDock->raise();
+    pathControlsDock = pathDock;
+    pathDock->hide();
+    detailsDock->raise();
 
     QObject::connect(setStart, SIGNAL(clicked()), viewer, SLOT(choosePathStart()));
     QObject::connect(reverseDirection, SIGNAL(clicked()), viewer, SLOT(reverseStartDirection()));
@@ -308,6 +332,7 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     QObject::connect(undoEdit, SIGNAL(clicked()), viewer, SLOT(undoDraftEdit()));
     QObject::connect(redoEdit, SIGNAL(clicked()), viewer, SLOT(redoDraftEdit()));
     QObject::connect(validate, SIGNAL(clicked()), viewer, SLOT(validateDraftPath()));
+    QObject::connect(editMetadata, SIGNAL(clicked()), viewer, SLOT(editPathMetadata()));
     QObject::connect(savePath, SIGNAL(clicked()), viewer, SLOT(saveDraftPath()));
     QObject::connect(waitForDuration, &QCheckBox::toggled, this,
                      [waitMinutes, waitSeconds, waitUntilHour, waitUntilMinute](bool duration) {
@@ -387,7 +412,8 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     QAction *interactivesAction = mapTools->addAction(tr("Interactives"));
     interactivesAction->setCheckable(true);
     interactivesAction->setChecked(true);
-    interactivesAction->setToolTip(tr("Show signals, stations, sidings, and service points."));
+    interactivesAction->setToolTip(
+        tr("Show signals, stations, sidings, service points, and level crossings."));
     QObject::connect(interactivesAction, SIGNAL(toggled(bool)), viewer, SLOT(setShowInteractives(bool)));
     QAction *markersAction = mapTools->addAction(tr("Markers"));
     markersAction->setCheckable(true);
@@ -429,15 +455,33 @@ void ActivityBuilderWindow::routeLoaded(Route *route){
 
 void ActivityBuilderWindow::setSelectedPath(Path *path){
     viewer->setSelectedPath(path);
+    refreshPathMetadata(path);
+}
+
+void ActivityBuilderWindow::refreshPathMetadata(Path *path){
     if(path == NULL){
         pathInfo->setText(tr("No path selected"));
         return;
     }
+    const QString name = path->displayName.trimmed().isEmpty()
+        ? tr("Meta Data required") : path->displayName;
+    const QString start = path->trPathStart.trimmed().isEmpty()
+        ? tr("Start label required") : path->trPathStart;
+    const QString end = path->trPathEnd.trimmed().isEmpty()
+        ? tr("End label required") : path->trPathEnd;
     pathInfo->setText(tr("<b>%1</b><br>%2 → %3<br>%4 path control points")
-                      .arg(path->displayName.toHtmlEscaped())
-                      .arg(path->trPathStart.toHtmlEscaped())
-                      .arg(path->trPathEnd.toHtmlEscaped())
+                      .arg(name.toHtmlEscaped())
+                      .arg(start.toHtmlEscaped())
+                      .arg(end.toHtmlEscaped())
                       .arg(path->node.size()));
+}
+
+void ActivityBuilderWindow::setPathControlsActive(bool active){
+    if(pathControlsDock == NULL)
+        return;
+    pathControlsDock->setVisible(active);
+    if(active)
+        pathControlsDock->raise();
 }
 
 void ActivityBuilderWindow::showJunctionDetails(QString text){

@@ -810,6 +810,25 @@ void RouteEditorWindow::exitToLoadWindow(){
         loadWindow->show();        
 }
 
+void RouteEditorWindow::completeApplicationClose(QCloseEvent *event){
+    saveLastSession();
+    emit exitNow();
+    event->accept();
+    SoundManager::CloseAl();
+
+    // Several editor helpers are independent Qt tool windows. Closing Main
+    // must end the application even if one of those windows ignores close in
+    // order to implement its normal hide-on-close behavior.
+    QTimer::singleShot(0, qApp, [](){
+        const QWidgetList windows = QApplication::topLevelWidgets();
+        for(QWidget *window : windows){
+            if(window != NULL)
+                window->hide();
+        }
+        QCoreApplication::quit();
+    });
+}
+
 void RouteEditorWindow::closeEvent(QCloseEvent * event ){
     QVector<QString> unsavedItems;
     glWidget->getUnsavedInfo(unsavedItems);
@@ -840,12 +859,7 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
         
     if(unsavedItems.size() == 0){
         if(Game::debugOutput) qDebug() << "Nothing to Save";
-        saveLastSession();
-        emit exitNow();
-        event->accept();
-        SoundManager::CloseAl();              
-        //exitToLoadWindow();
-        //qApp->quit();
+        completeApplicationClose(event);
         return;
     }
    
@@ -861,12 +875,7 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
         return;
     }
     if(unsavedDialog.changed == 2){
-        saveLastSession();
-        emit exitNow();
-        event->accept();
-        SoundManager::CloseAl();        
-        //exitToLoadWindow();                
-        //qApp->quit();
+        completeApplicationClose(event);
         return;
     }
 
@@ -874,14 +883,7 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
     save();
 
 
-    saveLastSession();
-    
-    emit exitNow();
-    event->accept();
-    
-    SoundManager::CloseAl();
-    //exitToLoadWindow();    
-    //qApp->quit();
+    completeApplicationClose(event);
     
 }
 

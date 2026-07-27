@@ -39,8 +39,10 @@ Path::Path(QString p, QString n, bool nowe) {
     if(!nowe){
         loaded = -1;
         load();
-        if(loaded == 1)
+        if(loaded == 1){
+            metadataConfirmed = true;
             initRoute();
+        }
     } else {
         loaded = 1;
         modified = true;
@@ -204,6 +206,21 @@ float* Path::getStartPositionTXZ(float* out){
 }
 
 void Path::initRoute(){
+    node.clear();
+    junctionDirections.clear();
+    mapLines.clear();
+    linesX.clear();
+    linesZ.clear();
+    for(OglObj *line : lines)
+        delete line;
+    lines.clear();
+    pathObjects.clear();
+    for(auto it = pathObjectsMap.begin(); it != pathObjectsMap.end(); ++it)
+        delete it.value();
+    pathObjectsMap.clear();
+    isinit1 = false;
+    isinit2 = false;
+
     if(Game::trackDB == NULL)
         return;
     if(trPathNode.size() < 1)

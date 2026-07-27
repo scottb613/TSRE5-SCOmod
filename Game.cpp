@@ -48,7 +48,7 @@
 //////// Version
 //////////////////////////////////
 
-QString Game::AppVersion = "v0.7";  // over-ride from main.cpp
+QString Game::AppVersion = "v0.8";  // over-ride from main.cpp
 
 
 bool Game::ServerMode = false;
@@ -579,7 +579,6 @@ QStringList getFilesInDirectory(const QString& directoryPath) {
     
 void Game::InitAssets() {
     QString path;
-    bool newInstallation = false;
     path = "./tsre_assets/";
     QFile appFile3(path);
     if (!appFile3.exists()){
@@ -590,7 +589,6 @@ void Game::InitAssets() {
     
     QFile appFile1(path);
     if (!appFile1.exists()){
-        newInstallation = true;
         QMessageBox msgBox;
         msgBox.setWindowTitle("TSRE");
         msgBox.setText("Welcome in TSRE!\n\nThis is experimental version.\nUsing it may seriously damage your data."

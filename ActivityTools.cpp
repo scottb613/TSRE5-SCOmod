@@ -91,17 +91,35 @@ ActivityTools::ActivityTools(QString name)
     vlist1 = new QGridLayout;
     vlist1->setSpacing(2);
     vlist1->setContentsMargins(0,0,1,0);
-    QPushButton *actPathsNew = new QPushButton("New Path");
-    QObject::connect(actPathsNew, SIGNAL(released()), this, SLOT(actPathsNewEnabled()));
-    QPushButton *actPathsEdit = new QPushButton("Edit");
-    QObject::connect(actPathsEdit, SIGNAL(released()), this, SLOT(actPathsEditToolEnabled()));
-    QPushButton *actPathsClone = new QPushButton("Clone");
-    QObject::connect(actPathsClone, SIGNAL(released()), this, SLOT(actPathsCloneEnabled()));
+    pathNewButton = new QPushButton("New Path");
+    pathEditButton = new QPushButton("Edit");
+    pathCloneButton = new QPushButton("Clone");
+    pathNewButton->setCheckable(true);
+    pathEditButton->setCheckable(true);
+    pathCloneButton->setCheckable(true);
+    QObject::connect(pathNewButton, &QPushButton::clicked, this, [this](bool checked) {
+        if(checked)
+            actPathsNewEnabled();
+        else
+            cancelActivePathSession();
+    });
+    QObject::connect(pathEditButton, &QPushButton::clicked, this, [this](bool checked) {
+        if(checked)
+            actPathsEditToolEnabled();
+        else
+            cancelActivePathSession();
+    });
+    QObject::connect(pathCloneButton, &QPushButton::clicked, this, [this](bool checked) {
+        if(checked)
+            actPathsCloneEnabled();
+        else
+            cancelActivePathSession();
+    });
     QPushButton *actPathsDelete = new QPushButton("Delete");
     QObject::connect(actPathsDelete, SIGNAL(released()), this, SLOT(actPathsDeleteEnabled()));
-    vlist1->addWidget(actPathsNew,0,0);
-    vlist1->addWidget(actPathsEdit,0,1);
-    vlist1->addWidget(actPathsClone,1,0);
+    vlist1->addWidget(pathNewButton,0,0);
+    vlist1->addWidget(pathEditButton,0,1);
+    vlist1->addWidget(pathCloneButton,1,0);
     vlist1->addWidget(actPathsDelete,1,1);
     vbox->addItem(vlist1);
 
@@ -511,13 +529,103 @@ void ActivityTools::reloadPathsList(){
     selectFont.setBold(true);
     cPath.setItemData(0, selectFont, Qt::FontRole);
     cPath.setItemData(0, QColor(184, 189, 194), Qt::ForegroundRole);
-    for(int i = 0; i < route->path.size(); i++ )
-        cPath.addItem(route->path[i]->displayName, QVariant(i));
+    for(int i = 0; i < route->path.size(); i++ ){
+        Path *path = route->path[i];
+        if(path == NULL)
+            continue;
+        if(!path->metadataConfirmed && !QFileInfo::exists(path->pathid))
+            continue;
+        const QString label = path->displayName.trimmed().isEmpty()
+            ? path->nameId
+            : path->displayName;
+        cPath.addItem(label, QVariant(i));
+    }
     const int restoredIndex = selectedRouteIndex >= 0
         ? cPath.findData(QVariant(selectedRouteIndex)) : 0;
     cPath.setCurrentIndex(restoredIndex >= 0 ? restoredIndex : 0);
     cPath.blockSignals(false);
     selectedPathChanged(cPath.currentIndex());
+}
+
+void ActivityTools::refreshPathLabel(Path *path){
+    if(route == NULL || path == NULL)
+        return;
+    const int pathIndex = route->path.indexOf(path);
+    const int comboIndex = cPath.findData(QVariant(pathIndex));
+    if(comboIndex < 0)
+        return;
+    const QString label = path->displayName.trimmed().isEmpty()
+        ? path->nameId
+        : path->displayName;
+    cPath.setItemText(comboIndex, label);
+}
+
+void ActivityTools::startPathSession(PathSessionMode mode, Path *path, QPushButton *button){
+    activePathSessionMode = mode;
+    activePathSession = path;
+    pathNewButton->setChecked(button == pathNewButton);
+    pathEditButton->setChecked(button == pathEditButton);
+    pathCloneButton->setChecked(button == pathCloneButton);
+    pathNewButton->setEnabled(button == pathNewButton);
+    pathEditButton->setEnabled(button == pathEditButton);
+    pathCloneButton->setEnabled(button == pathCloneButton);
+    cPath.setEnabled(false);
+}
+
+void ActivityTools::resetPathSessionButtons(){
+    activePathSession = NULL;
+    activePathSessionMode = NoPathSession;
+    pathNewButton->setChecked(false);
+    pathEditButton->setChecked(false);
+    pathCloneButton->setChecked(false);
+    pathNewButton->setEnabled(true);
+    pathEditButton->setEnabled(true);
+    pathCloneButton->setEnabled(true);
+    cPath.setEnabled(true);
+}
+
+void ActivityTools::cancelActivePathSession(){
+    if(activePathSessionMode == NoPathSession){
+        resetPathSessionButtons();
+        return;
+    }
+
+    Path *cancelledPath = activePathSession;
+    const PathSessionMode cancelledMode = activePathSessionMode;
+    emit pathEditCancelRequested();
+
+    if(route != NULL && cancelledPath != NULL &&
+       (cancelledMode == NewPathSession || cancelledMode == ClonePathSession)){
+        bool removeCancelledPath = true;
+        if(cancelledMode == ClonePathSession && QFileInfo::exists(cancelledPath->pathid) &&
+           !QFile::remove(cancelledPath->pathid)){
+            removeCancelledPath = false;
+            QMessageBox::warning(this, tr("Clone cancellation incomplete"),
+                                 tr("The cloned PAT file could not be removed. It has been left in the path list."));
+        }
+        if(removeCancelledPath){
+            const int pathIndex = route->path.indexOf(cancelledPath);
+            if(pathIndex >= 0)
+                route->path.removeAt(pathIndex);
+            cancelledPath->deleteLater();
+        }
+    }
+
+    resetPathSessionButtons();
+    reloadPathsList();
+    cPath.setCurrentIndex(0);
+    emit pathSelectionChanged(NULL);
+}
+
+void ActivityTools::finishPathSave(Path *path){
+    resetPathSessionButtons();
+    reloadPathsList();
+    if(route == NULL || path == NULL)
+        return;
+    const int pathIndex = route->path.indexOf(path);
+    const int comboIndex = cPath.findData(QVariant(pathIndex));
+    if(comboIndex >= 0)
+        cPath.setCurrentIndex(comboIndex);
 }
 
 void ActivityTools::selectedPathChanged(int index){
@@ -737,12 +845,24 @@ void ActivityTools::actNewLooseConsistToolEnabled(bool val){
 }
 
 void ActivityTools::actPathsEditToolEnabled(){
-    if(route == NULL || cPath.currentIndex() < 0)
+    if(route == NULL || cPath.currentIndex() < 0){
+        resetPathSessionButtons();
         return;
+    }
     int currentPathId = cPath.currentData().toInt();
     if(currentPathId < 0 || currentPathId >= route->path.size() ||
-       route->path[currentPathId] == NULL)
+       route->path[currentPathId] == NULL){
+        resetPathSessionButtons();
         return;
+    }
+    if(route->path[currentPathId]->trPathNode.isEmpty() ||
+       route->path[currentPathId]->trackPdp.isEmpty()){
+        QMessageBox::warning(this, tr("Path cannot be edited"),
+                             tr("The selected path has no readable path nodes."));
+        resetPathSessionButtons();
+        return;
+    }
+    startPathSession(EditPathSession, route->path[currentPathId], pathEditButton);
     for(int i = 0; i < route->path.size(); i++){
         route->path[i]->unselect();
     }
@@ -751,16 +871,21 @@ void ActivityTools::actPathsEditToolEnabled(){
 }
 
 void ActivityTools::actPathsCloneEnabled(){
-    if(route == NULL || cPath.currentIndex() < 0)
+    if(route == NULL || cPath.currentIndex() < 0){
+        resetPathSessionButtons();
         return;
+    }
     const int sourceIndex = cPath.currentData().toInt();
     if(sourceIndex < 0 || sourceIndex >= route->path.size() ||
-       route->path[sourceIndex] == NULL)
+       route->path[sourceIndex] == NULL){
+        resetPathSessionButtons();
         return;
+    }
     Path *sourcePath = route->path[sourceIndex];
     if(!QFileInfo::exists(sourcePath->pathid)){
         QMessageBox::warning(this, tr("Save path first"),
                              tr("The selected path has not been written to disk yet. Save it before cloning."));
+        resetPathSessionButtons();
         return;
     }
 
@@ -833,11 +958,14 @@ void ActivityTools::actPathsCloneEnabled(){
 
         Path *clonedPath = new Path(pathDir.path(), base + ".pat", false);
         route->path.push_back(clonedPath);
+        startPathSession(ClonePathSession, clonedPath, pathCloneButton);
         reloadPathsList();
-        cPath.setCurrentIndex(cPath.count() - 1);
+        cPath.setCurrentIndex(cPath.findData(QVariant(route->path.size() - 1)));
         emit pathSelectionChanged(clonedPath);
+        emit pathEditStarted(clonedPath);
         return;
     }
+    resetPathSessionButtons();
 }
 
 void ActivityTools::actPathsDeleteEnabled(){
@@ -882,73 +1010,32 @@ void ActivityTools::actPathsNewEnabled(){
     int suffix = 1;
     QString defaultBase;
     const QDir pathDir(Game::root + "/routes/" + Game::route + "/paths");
+    bool nameInUse = false;
     do {
         defaultBase = QString("new_path_%1").arg(suffix++);
-    } while(QFileInfo::exists(pathDir.filePath(defaultBase + ".pat")));
-
-    QDialog dialog(this);
-    dialog.setWindowTitle(tr("Create Standalone Path"));
-    QFormLayout *form = new QFormLayout(&dialog);
-    QLabel *explanation = new QLabel(
-        tr("Paths belong to the route and can be used by any activity. "
-           "After creating the draft, click the Track Viewer to choose its start."), &dialog);
-    explanation->setWordWrap(true);
-    form->addRow(explanation);
-    QLineEdit *fileName = new QLineEdit(defaultBase, &dialog);
-    QLineEdit *displayName = new QLineEdit(tr("New Path %1").arg(suffix - 1), &dialog);
-    form->addRow(tr("File name:"), fileName);
-    form->addRow(tr("Display name:"), displayName);
-    QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
-                                                     Qt::Horizontal, &dialog);
-    form->addRow(buttons);
-    QObject::connect(buttons, SIGNAL(accepted()), &dialog, SLOT(accept()));
-    QObject::connect(buttons, SIGNAL(rejected()), &dialog, SLOT(reject()));
-
-    while(dialog.exec() == QDialog::Accepted){
-        QString base = fileName->text().trimmed();
-        if(base.endsWith(".pat", Qt::CaseInsensitive))
-            base.chop(4);
-        base.replace(QRegularExpression("[^A-Za-z0-9_-]+"), "_");
-        const QString label = displayName->text().trimmed();
-        if(base.isEmpty() || label.isEmpty()){
-            QMessageBox::warning(&dialog, tr("Path details required"),
-                                 tr("Enter both a file name and a display name."));
-            continue;
-        }
-        if(QFileInfo::exists(pathDir.filePath(base + ".pat"))){
-            QMessageBox::warning(&dialog, tr("Path already exists"),
-                                 tr("A path file named %1.pat already exists.").arg(base));
-            continue;
-        }
-        bool duplicateDraft = false;
+        nameInUse = QFileInfo::exists(pathDir.filePath(defaultBase + ".pat"));
         for(Path *existing : route->path){
-            if(existing != NULL && existing->name.compare(base + ".pat", Qt::CaseInsensitive) == 0){
-                duplicateDraft = true;
+            if(existing != NULL &&
+               existing->name.compare(defaultBase + ".pat", Qt::CaseInsensitive) == 0){
+                nameInUse = true;
                 break;
             }
         }
-        if(duplicateDraft){
-            QMessageBox::warning(&dialog, tr("Path already exists"),
-                                 tr("A path draft with that file name already exists."));
-            continue;
-        }
+    } while(nameInUse);
 
-        Path *newPath = new Path(pathDir.path(), base + ".pat", true);
-        newPath->trPathName = base;
-        newPath->displayName = label;
-        newPath->trPathStart.clear();
-        newPath->trPathEnd.clear();
-        newPath->trPathFlags = 0;
-        route->path.push_back(newPath);
+    Path *newPath = new Path(pathDir.path(), defaultBase + ".pat", true);
+    newPath->trPathName.clear();
+    newPath->displayName.clear();
+    newPath->trPathStart.clear();
+    newPath->trPathEnd.clear();
+    newPath->trPathFlags = 0;
+    newPath->metadataConfirmed = false;
+    route->path.push_back(newPath);
 
-        cPath.blockSignals(true);
-        cPath.addItem(newPath->displayName, QVariant(route->path.size() - 1));
-        cPath.setCurrentIndex(cPath.count() - 1);
-        cPath.blockSignals(false);
-        emit pathSelectionChanged(newPath);
-        emit pathCreationStarted(newPath);
-        return;
-    }
+    startPathSession(NewPathSession, newPath, pathNewButton);
+    cPath.setCurrentIndex(0);
+    emit pathSelectionChanged(newPath);
+    emit pathCreationStarted(newPath);
 }
 
 

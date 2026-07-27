@@ -16,8 +16,18 @@
 #include "TSectionDAT.h"
 
 #include <QMouseEvent>
+#include <QCheckBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDir>
+#include <QFileInfo>
+#include <QFormLayout>
 #include <QKeyEvent>
+#include <QLabel>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <QPainter>
+#include <QRegularExpression>
 #include <QResizeEvent>
 #include <QSaveFile>
 #include <QSet>
@@ -38,6 +48,37 @@ ActivityTrackViewer::ActivityTrackViewer(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     setCursor(Qt::CrossCursor);
     setAutoFillBackground(false);
+}
+
+void ActivityTrackViewer::capturePathSessionMetadata(Path *path){
+    pathSessionMetadataValid = path != NULL;
+    if(path == NULL)
+        return;
+    sessionPath = path->path;
+    sessionName = path->name;
+    sessionNameId = path->nameId;
+    sessionPathId = path->pathid;
+    sessionTrPathName = path->trPathName;
+    sessionDisplayName = path->displayName;
+    sessionTrPathStart = path->trPathStart;
+    sessionTrPathEnd = path->trPathEnd;
+    sessionTrPathFlags = path->trPathFlags;
+    sessionMetadataConfirmed = path->metadataConfirmed;
+}
+
+void ActivityTrackViewer::restorePathSessionMetadata(){
+    if(!pathSessionMetadataValid || selectedPath == NULL)
+        return;
+    selectedPath->path = sessionPath;
+    selectedPath->name = sessionName;
+    selectedPath->nameId = sessionNameId;
+    selectedPath->pathid = sessionPathId;
+    selectedPath->trPathName = sessionTrPathName;
+    selectedPath->displayName = sessionDisplayName;
+    selectedPath->trPathStart = sessionTrPathStart;
+    selectedPath->trPathEnd = sessionTrPathEnd;
+    selectedPath->trPathFlags = sessionTrPathFlags;
+    selectedPath->metadataConfirmed = sessionMetadataConfirmed;
 }
 
 QString ActivityTrackViewer::waitPointKind(int value) const {
@@ -106,6 +147,7 @@ void ActivityTrackViewer::setRoute(Route *newRoute){
     endpoints.clear();
     mapInteractives.clear();
     platformLines.clear();
+    crossingTrackLines.clear();
     routeBounds = QRectF();
     segmentCount = 0;
     selectedJunction = -1;
@@ -121,6 +163,7 @@ void ActivityTrackViewer::setRoute(Route *newRoute){
 }
 
 void ActivityTrackViewer::setSelectedPath(Path *path){
+    emit pathEditingStateChanged(false);
     selectedPath = path;
     creatingPath = false;
     draftStartSelected = false;
@@ -154,6 +197,7 @@ void ActivityTrackViewer::setSelectedPath(Path *path){
 }
 
 void ActivityTrackViewer::beginPathCreation(Path *path){
+    capturePathSessionMetadata(path);
     selectedPath = path;
     creatingPath = true;
     draftStartSelected = false;
@@ -183,14 +227,17 @@ void ActivityTrackViewer::beginPathCreation(Path *path){
     draftForward = true;
     rebuildPathCache();
     emit pathDraftStatus(tr("<b>Creating standalone path: %1</b><br>"
-                            "Click a track line to choose the starting point. "
-                            "The previous path has been cleared.")
-                         .arg(path != NULL ? path->displayName.toHtmlEscaped() : tr("Untitled")));
+                            "Click a track line to choose the starting point, then complete Meta Data before saving.")
+                         .arg(path != NULL && !path->displayName.trimmed().isEmpty()
+                              ? path->displayName.toHtmlEscaped()
+                              : tr("metadata required")));
+    emit pathEditingStateChanged(true);
     updateStatus();
     update();
 }
 
 void ActivityTrackViewer::beginPathEdit(Path *path){
+    emit pathEditingStateChanged(false);
     if(path == NULL || path->trPathNode.isEmpty() || path->trackPdp.isEmpty()){
         emit pathDraftStatus(tr("<b>Path cannot be edited</b><br>The selected path has no readable path nodes."));
         return;
@@ -198,6 +245,7 @@ void ActivityTrackViewer::beginPathEdit(Path *path){
     if(cacheDirty)
         rebuildTrackCache();
 
+    capturePathSessionMetadata(path);
     selectedPath = path;
     creatingPath = true;
     draftStartSelected = false;
@@ -573,6 +621,7 @@ void ActivityTrackViewer::beginPathEdit(Path *path){
                             "%2 reverse point(s), %3 wait point(s), %4 passing siding(s). Click a point to select it; press Delete to remove it.")
                          .arg(path->displayName.toHtmlEscaped())
                          .arg(draftReversePoints.size()).arg(draftWaitPoints.size()).arg(passingCount));
+    emit pathEditingStateChanged(true);
     updateStatus();
     update();
 }
@@ -732,13 +781,151 @@ void ActivityTrackViewer::validateDraftPath(){
                          .arg(draftPassingSidings.size())
                          .arg(draftOverlapLines.isEmpty()
                               ? tr(" No overlapping track.")
-                             : tr(" Cyan marks track used more than once.")));
+                              : tr(" Cyan marks track used more than once.")));
+}
+
+void ActivityTrackViewer::editPathMetadata(){
+    if(selectedPath == NULL || !creatingPath){
+        emit pathDraftStatus(tr("<b>No editable path selected</b><br>Choose New Path, Edit, or Clone first."));
+        showTransientMessage(tr("METADATA NOT AVAILABLE - open a path for editing"), true);
+        return;
+    }
+
+    const bool fileAlreadySaved = QFileInfo::exists(selectedPath->pathid);
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Path Meta Data"));
+    QFormLayout *form = new QFormLayout(&dialog);
+    QLabel *explanation = new QLabel(
+        tr("These values are written into the PAT file and used by Open Rails. "
+           "Start and end are the labels shown for the two endpoint markers."), &dialog);
+    explanation->setWordWrap(true);
+    form->addRow(explanation);
+
+    QLineEdit *fileName = new QLineEdit(selectedPath->nameId, &dialog);
+    if(fileName->text().trimmed().isEmpty())
+        fileName->setText(tr("new_path"));
+    fileName->setReadOnly(fileAlreadySaved);
+    if(fileAlreadySaved)
+        fileName->setToolTip(tr("The filename of a saved path is kept stable so activities do not lose their path reference."));
+
+    QLineEdit *pathName = new QLineEdit(selectedPath->displayName, &dialog);
+    QLineEdit *pathStart = new QLineEdit(selectedPath->trPathStart, &dialog);
+    QLineEdit *pathEnd = new QLineEdit(selectedPath->trPathEnd, &dialog);
+    QCheckBox *playerPath = new QCheckBox(tr("Available as a player path"), &dialog);
+    playerPath->setChecked((selectedPath->trPathFlags & 0x20u) == 0u);
+
+    form->addRow(tr("Path file / ID:"), fileName);
+    form->addRow(tr("Path name:"), pathName);
+    form->addRow(tr("Start label:"), pathStart);
+    form->addRow(tr("End label:"), pathEnd);
+    form->addRow(QString(), playerPath);
+
+    QDialogButtonBox *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, &dialog);
+    form->addRow(buttons);
+    QObject::connect(buttons, SIGNAL(accepted()), &dialog, SLOT(accept()));
+    QObject::connect(buttons, SIGNAL(rejected()), &dialog, SLOT(reject()));
+
+    while(dialog.exec() == QDialog::Accepted){
+        QString base = fileName->text().trimmed();
+        if(base.endsWith(".pat", Qt::CaseInsensitive))
+            base.chop(4);
+        const QString cleanedBase =
+            QString(base).replace(QRegularExpression("[^A-Za-z0-9_-]+"), "_");
+        const QString name = pathName->text().trimmed();
+        const QString start = pathStart->text().trimmed();
+        const QString end = pathEnd->text().trimmed();
+        if(cleanedBase.isEmpty() || name.isEmpty() ||
+           start.isEmpty() || end.isEmpty()){
+            QMessageBox::warning(&dialog, tr("Complete meta data required"),
+                                 tr("Enter a Path file / ID, Path name, Start label, and End label."));
+            continue;
+        }
+        if(base != cleanedBase){
+            QMessageBox::warning(&dialog, tr("Invalid file name"),
+                                 tr("Use only letters, numbers, underscores, and hyphens in the path filename."));
+            fileName->setText(cleanedBase);
+            continue;
+        }
+
+        const QDir pathDirectory(Game::root + "/routes/" + Game::route + "/paths");
+        const QString destination = pathDirectory.filePath(cleanedBase + ".pat");
+        if(!fileAlreadySaved){
+            bool destinationInUse = QFileInfo::exists(destination);
+            if(route != NULL){
+                for(Path *other : route->path){
+                    if(other != NULL && other != selectedPath &&
+                       other->pathid.compare(destination, Qt::CaseInsensitive) == 0){
+                        destinationInUse = true;
+                        break;
+                    }
+                }
+            }
+            if(destinationInUse){
+                QMessageBox::warning(&dialog, tr("Path already exists"),
+                                     tr("A path named %1.pat already exists.").arg(cleanedBase));
+                continue;
+            }
+            selectedPath->path = pathDirectory.path();
+            selectedPath->name = cleanedBase + ".pat";
+            selectedPath->nameId = cleanedBase;
+            selectedPath->pathid = destination;
+        }
+
+        selectedPath->trPathName = cleanedBase;
+        selectedPath->displayName = name;
+        selectedPath->trPathStart = start;
+        selectedPath->trPathEnd = end;
+        if(playerPath->isChecked())
+            selectedPath->trPathFlags &= ~0x20u;
+        else
+            selectedPath->trPathFlags |= 0x20u;
+        selectedPath->metadataConfirmed = true;
+        emit pathMetadataChanged(selectedPath);
+        emit pathDraftStatus(tr("<b>Path meta data ready</b><br>%1: %2 to %3")
+                             .arg(name.toHtmlEscaped())
+                             .arg(start.toHtmlEscaped())
+                             .arg(end.toHtmlEscaped()));
+        showTransientMessage(tr("META DATA READY"), false);
+        update();
+        return;
+    }
+}
+
+void ActivityTrackViewer::cancelPathEdit(){
+    Path *cancelledPath = selectedPath;
+    restorePathSessionMetadata();
+    pathSessionMetadataValid = false;
+    if(cancelledPath != NULL)
+        emit pathMetadataChanged(cancelledPath);
+    setSelectedPath(NULL);
+    emit pathDraftStatus(tr("<b>Path edit cancelled</b><br>No unsaved path changes were written."));
+    showTransientMessage(tr("PATH EDIT CANCELLED"), false);
 }
 
 void ActivityTrackViewer::saveDraftPath(){
     setPathPlacementMode(PlaceAutomatic);
     if(selectedPath == NULL || !creatingPath){
         emit pathDraftStatus(tr("<b>No editable path selected</b><br>Create or edit a standalone path first."));
+        return;
+    }
+    QStringList missingMetadata;
+    if(!selectedPath->metadataConfirmed)
+        missingMetadata << tr("Meta Data has not been confirmed");
+    if(selectedPath->nameId.trimmed().isEmpty())
+        missingMetadata << tr("file name");
+    if(selectedPath->trPathName.trimmed().isEmpty())
+        missingMetadata << tr("Path ID");
+    if(selectedPath->displayName.trimmed().isEmpty())
+        missingMetadata << tr("Path name");
+    if(selectedPath->trPathStart.trimmed().isEmpty())
+        missingMetadata << tr("Start label");
+    if(selectedPath->trPathEnd.trimmed().isEmpty())
+        missingMetadata << tr("End label");
+    if(!missingMetadata.isEmpty()){
+        emit pathDraftStatus(tr("<b>Path not saved</b><br>Complete Meta Data first: %1.")
+                             .arg(missingMetadata.join(tr(", ")).toHtmlEscaped()));
+        showTransientMessage(tr("PATH NOT SAVED - META DATA INCOMPLETE"), true);
         return;
     }
     if(!draftStartSelected || !draftEndSelected){
@@ -966,6 +1153,11 @@ void ActivityTrackViewer::saveDraftPath(){
         if(control.type == 2)
             junctionPdp.insert(control.junctionId, pdpIndex);
     }
+    if(controls.size() < 2 || pdps.size() < 2){
+        emit pathDraftStatus(tr("<b>Path not saved</b><br>The path needs distinct start and endpoint controls."));
+        showTransientMessage(tr("PATH NOT SAVED - INCOMPLETE CONTROL POINTS"), true);
+        return;
+    }
 
     QSaveFile file(selectedPath->pathid);
     if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
@@ -987,10 +1179,6 @@ void ActivityTrackViewer::saveDraftPath(){
     };
     const QString pathName = selectedPath->trPathName.isEmpty()
         ? selectedPath->nameId : selectedPath->trPathName;
-    if(selectedPath->trPathStart.isEmpty())
-        selectedPath->trPathStart = tr("START");
-    if(selectedPath->trPathEnd.isEmpty())
-        selectedPath->trPathEnd = tr("END");
     out << "SIMISA@@@@@@@@@@JINX0P0t______\n\n";
     out << "Serial ( 1 )\n";
     out << "TrackPDPs (\n";
@@ -1001,7 +1189,9 @@ void ActivityTrackViewer::saveDraftPath(){
     out << ")\n";
     out << "TrackPath (\n";
     out << "\tTrPathName ( " << quoted(pathName) << " )\n";
-    out << "\tTrPathFlags ( 00000000 )\n";
+    out << "\tTrPathFlags ( "
+        << QString("%1").arg(selectedPath->trPathFlags, 8, 16, QChar('0'))
+        << " )\n";
     out << "\tName ( " << quoted(selectedPath->displayName) << " )\n";
     out << "\tTrPathStart ( " << quoted(selectedPath->trPathStart) << " )\n";
     out << "\tTrPathEnd ( " << quoted(selectedPath->trPathEnd) << " )\n";
@@ -1044,7 +1234,6 @@ void ActivityTrackViewer::saveDraftPath(){
         selectedPath->trPathNode.push_back(values);
     }
     selectedPath->trPathName = pathName;
-    selectedPath->trPathFlags = 0;
     selectedPath->initRoute();
     selectedPath->markSaved();
     const int savedControlCount = controls.size();
@@ -1054,7 +1243,9 @@ void ActivityTrackViewer::saveDraftPath(){
     // Saving completes the edit session. Rebuild the normal selected-path
     // cache immediately so magenta/orange changes to saved yellow without
     // requiring the user to select another path first.
+    pathSessionMetadataValid = false;
     setSelectedPath(savedPath);
+    emit pathSaved(savedPath);
     showTransientMessage(tr("PATH SAVED - %1 nodes, %2 passing path(s)")
                          .arg(savedControlCount).arg(savedPassingCount), false);
     emit pathDraftStatus(tr("<b>Path saved</b><br>%1<br>%2 main/passing nodes written in MSTS/ORTS format.")
@@ -1215,12 +1406,15 @@ void ActivityTrackViewer::rebuildTrackCache(){
     }
 
     TDB *tdb = Game::trackDB;
+    QHash<int, int> trackItemVectorIds;
     for(const auto &entry : tdb->trackNodes){
         TRnode *node = entry.second;
         if(node == NULL || node->typ < 0)
             continue;
 
         if(node->typ == 1 && node->iTrv > 0){
+            for(int itemIndex = 0; itemIndex < node->iTri; itemIndex++)
+                trackItemVectorIds.insert(node->trItemRef[itemIndex], entry.first);
             float *lineBuffer = NULL;
             int length = 0;
             // Keep the generated floats close to zero. At route-scale absolute
@@ -1308,6 +1502,7 @@ void ActivityTrackViewer::rebuildTrackCache(){
     QSet<int> pairedPlatformItems;
     QSet<QString> stationNames;
     QSet<QString> sidingNames;
+    QHash<int, QVector<QPointF>> crossingPointsByVector;
     auto trackItemPoint = [](const TRitem *item) {
         if(item == NULL || item->trItemRData == NULL)
             return QPointF();
@@ -1383,6 +1578,51 @@ void ActivityTrackViewer::rebuildTrackCache(){
             pickup.sourceId = entry.first;
             pickup.label = tr("Service point");
             mapInteractives.push_back(pickup);
+        } else if(item->type == "levelcritem"){
+            // Each rail TrackDB item is an authoritative crossing point.
+            // Keep every item so a road crossing two or more tracks marks
+            // every affected track; label collision handling avoids clutter.
+            MapInteractive crossing;
+            crossing.type = MapCrossing;
+            crossing.position = point;
+            crossing.sourceId = entry.first;
+            // The X symbol and legend carry the meaning; repeated text is
+            // especially noisy where one road crosses several parallel tracks.
+            crossing.label.clear();
+            mapInteractives.push_back(crossing);
+            const int vectorId = trackItemVectorIds.value(entry.first, -1);
+            if(vectorId >= 0)
+                crossingPointsByVector[vectorId].push_back(point);
+        }
+    }
+
+    // Some roadway crossings provide two nearby rail intersection records,
+    // effectively bracketing the roadway. Pair only points on the same TrackDB
+    // vector and follow its sampled geometry between them.
+    for(auto crossingIt = crossingPointsByVector.constBegin();
+        crossingIt != crossingPointsByVector.constEnd(); ++crossingIt){
+        const QVector<QPointF> &points = crossingIt.value();
+        QSet<int> pairedPoints;
+        for(int i = 0; i < points.size(); i++){
+            if(pairedPoints.contains(i))
+                continue;
+            int nearestIndex = -1;
+            qreal nearestDistance = 60.0;
+            for(int j = i + 1; j < points.size(); j++){
+                if(pairedPoints.contains(j))
+                    continue;
+                const qreal distance = QLineF(points[i], points[j]).length();
+                if(distance < nearestDistance){
+                    nearestDistance = distance;
+                    nearestIndex = j;
+                }
+            }
+            if(nearestIndex < 0)
+                continue;
+            pairedPoints.insert(i);
+            pairedPoints.insert(nearestIndex);
+            appendVectorSlice(crossingIt.key(), points[i], points[nearestIndex],
+                              crossingTrackLines);
         }
     }
 
@@ -1430,6 +1670,7 @@ void ActivityTrackViewer::rebuildTrackCache(){
 void ActivityTrackViewer::rebuildPathCache(){
     selectedPathLine = QPainterPath();
     pathPoints.clear();
+    savedReversePoints.clear();
     selectedPathBounds = QRectF();
     if(selectedPath == NULL)
         return;
@@ -1442,6 +1683,28 @@ void ActivityTrackViewer::rebuildPathCache(){
     for(const Path::PathNode &node : selectedPath->node)
         pathPoints.push_back(QPointF(node.tilex * 2048.0 + node.pos[0],
                                      node.tilez * 2048.0 + node.pos[2]));
+
+    // Follow only the saved main linked list. Bit 0 marks an ORTS/MSTS
+    // reversal node; passing-path branches are intentionally excluded.
+    QSet<unsigned int> visitedNodes;
+    unsigned int nodeIndex = 0;
+    while(nodeIndex < static_cast<unsigned int>(selectedPath->trPathNode.size()) &&
+          !visitedNodes.contains(nodeIndex)){
+        visitedNodes.insert(nodeIndex);
+        const unsigned int *pathNode = selectedPath->trPathNode[nodeIndex];
+        if(pathNode == NULL)
+            break;
+        const unsigned int pdpIndex = pathNode[3];
+        if((pathNode[0] & 1u) != 0u &&
+           pdpIndex < static_cast<unsigned int>(selectedPath->trackPdp.size())){
+            const float *pdp = selectedPath->trackPdp[pdpIndex];
+            if(pdp != NULL)
+                savedReversePoints.push_back(
+                    QPointF(pdp[0] * 2048.0 + pdp[2],
+                            -pdp[1] * 2048.0 - pdp[4]));
+        }
+        nodeIndex = pathNode[1];
+    }
 
     selectedPathBounds = selectedPathLine.boundingRect();
     if(selectedPathBounds.isEmpty() && !pathPoints.isEmpty()){
@@ -1782,6 +2045,8 @@ void ActivityTrackViewer::paintEvent(QPaintEvent *){
         painter.setPen(endPen);
         painter.setBrush(QColor(235, 50, 155));
         painter.drawEllipse(end, 7.0 * pointScale, 7.0 * pointScale);
+        painter.drawLine(end + QPointF(-11 * pointScale, 0), end + QPointF(11 * pointScale, 0));
+        painter.drawLine(end + QPointF(0, -11 * pointScale), end + QPointF(0, 11 * pointScale));
     }
 
     // Path controls are deliberately painted after every magenta/cyan/orange
@@ -1815,14 +2080,78 @@ void ActivityTrackViewer::paintEvent(QPaintEvent *){
     }
 
     if(!pathPoints.isEmpty()){
-        painter.setWorldTransform(transform);
-        const qreal markerRadius = qBound<qreal>(5.25 / pixelsPerMeter, 6.0, 140.0);
-        painter.setPen(Qt::NoPen);
+        painter.resetTransform();
+        const qreal markerRadius = 7.0;
+        const qreal crosshairRadius = 11.0;
+        const QPointF start = transform.map(pathPoints.first());
+        painter.setPen(QPen(QColor(225, 255, 230), 2.0));
         painter.setBrush(QColor(65, 220, 105));
-        painter.drawEllipse(pathPoints.first(), markerRadius, markerRadius);
+        painter.drawEllipse(start, markerRadius, markerRadius);
+        painter.drawLine(start + QPointF(-crosshairRadius, 0),
+                         start + QPointF(crosshairRadius, 0));
+        painter.drawLine(start + QPointF(0, -crosshairRadius),
+                         start + QPointF(0, crosshairRadius));
         if(pathPoints.size() > 1){
+            const QPointF end = transform.map(pathPoints.last());
+            painter.setPen(QPen(QColor(255, 225, 230), 2.0));
             painter.setBrush(QColor(235, 75, 75));
-            painter.drawEllipse(pathPoints.last(), markerRadius, markerRadius);
+            painter.drawEllipse(end, markerRadius, markerRadius);
+            painter.drawLine(end + QPointF(-crosshairRadius, 0),
+                             end + QPointF(crosshairRadius, 0));
+            painter.drawLine(end + QPointF(0, -crosshairRadius),
+                             end + QPointF(0, crosshairRadius));
+        }
+    }
+
+    if(!creatingPath && !savedReversePoints.isEmpty()){
+        painter.resetTransform();
+        painter.setPen(QPen(QColor(230, 255, 255), 2.0));
+        painter.setBrush(QColor(0, 190, 220));
+        const qreal radius = 9.0;
+        for(const QPointF &reversePoint : savedReversePoints){
+            const QPointF center = transform.map(reversePoint);
+            QPolygonF diamond;
+            diamond << center + QPointF(0, -radius)
+                    << center + QPointF(radius, 0)
+                    << center + QPointF(0, radius)
+                    << center + QPointF(-radius, 0);
+            painter.drawPolygon(diamond);
+        }
+    }
+
+    if(showMapLabels && selectedPath != NULL){
+        painter.resetTransform();
+        auto drawEndpointLabel = [&painter](const QPointF &point, const QString &text,
+                                             const QColor &accent) {
+            if(text.trimmed().isEmpty())
+                return;
+            QFont labelFont = painter.font();
+            labelFont.setBold(true);
+            painter.setFont(labelFont);
+            const QFontMetrics metrics(labelFont);
+            QRectF labelRect = metrics.boundingRect(text);
+            labelRect.adjust(-6, -3, 6, 3);
+            labelRect.moveTopLeft(point + QPointF(12, -labelRect.height() - 6));
+            painter.setPen(QPen(accent, 1.4));
+            painter.setBrush(QColor(12, 15, 18, 220));
+            painter.drawRoundedRect(labelRect, 3, 3);
+            painter.setPen(QColor(235, 240, 244));
+            painter.drawText(labelRect.adjusted(5, 1, -5, -1),
+                             Qt::AlignLeft | Qt::AlignVCenter, text);
+        };
+        if(creatingPath){
+            if(draftStartSelected)
+                drawEndpointLabel(transform.map(draftStart), selectedPath->trPathStart,
+                                  QColor(65, 220, 105));
+            if(draftEndSelected)
+                drawEndpointLabel(transform.map(draftEnd), selectedPath->trPathEnd,
+                                  QColor(235, 75, 75));
+        } else if(!pathPoints.isEmpty()){
+            drawEndpointLabel(transform.map(pathPoints.first()), selectedPath->trPathStart,
+                              QColor(65, 220, 105));
+            if(pathPoints.size() > 1)
+                drawEndpointLabel(transform.map(pathPoints.last()), selectedPath->trPathEnd,
+                                  QColor(235, 75, 75));
         }
     }
 
@@ -1859,6 +2188,22 @@ void ActivityTrackViewer::paintEvent(QPaintEvent *){
     painter.resetTransform();
     if((showInteractives || showMarkers) && !mapInteractives.isEmpty()){
         painter.setRenderHint(QPainter::Antialiasing, true);
+        if(showInteractives && pixelsPerMeter >= 0.15 &&
+           !crossingTrackLines.isEmpty()){
+            QVector<QLineF> screenCrossingLines;
+            screenCrossingLines.reserve(crossingTrackLines.size());
+            for(const QLineF &line : crossingTrackLines)
+                screenCrossingLines.push_back(
+                    QLineF(transform.map(line.p1()), transform.map(line.p2())));
+            QPen crossingHalo(QColor(8, 10, 12, 225), 5.0,
+                              Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            painter.setPen(crossingHalo);
+            painter.drawLines(screenCrossingLines);
+            QPen crossingPen(QColor(245, 145, 55), 2.6,
+                             Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            painter.setPen(crossingPen);
+            painter.drawLines(screenCrossingLines);
+        }
         QVector<QRectF> occupiedLabels;
         QFont labelFont = painter.font();
         const qreal closeZoomGrowth = qBound<qreal>(
@@ -1888,13 +2233,14 @@ void ActivityTrackViewer::paintEvent(QPaintEvent *){
                 case MapStation: return QColor(85, 175, 245);
                 case MapSiding: return QColor(115, 165, 235);
                 case MapPickup: return QColor(245, 185, 65);
+                case MapCrossing: return QColor(245, 145, 55);
                 case MapMarker: return QColor(205, 120, 240);
             }
             return QColor(220, 220, 220);
         };
 
         const MapInteractiveType priorities[] = {
-            MapStation, MapSignal, MapPickup, MapSiding, MapMarker
+            MapStation, MapSignal, MapPickup, MapSiding, MapCrossing, MapMarker
         };
         for(MapInteractiveType priority : priorities){
             for(const MapInteractive &item : mapInteractives){
@@ -1947,6 +2293,17 @@ void ActivityTrackViewer::paintEvent(QPaintEvent *){
                     painter.setPen(QPen(QColor(35, 28, 10), 1.4));
                     painter.drawText(QRectF(center - QPointF(5, 7), QSizeF(10, 14)),
                                      Qt::AlignCenter, tr("P"));
+                } else if(item.type == MapCrossing){
+                    // A circled X reads as a road/rail crossing and remains
+                    // distinct from the orange switch arrows.
+                    painter.setPen(QPen(QColor(8, 10, 12, 235), 3.5));
+                    painter.setBrush(QColor(25, 29, 32));
+                    painter.drawEllipse(center, 7.0, 7.0);
+                    painter.setPen(QPen(color, 2.8, Qt::SolidLine, Qt::RoundCap));
+                    painter.drawLine(center + QPointF(-4.0, -4.0),
+                                     center + QPointF(4.0, 4.0));
+                    painter.drawLine(center + QPointF(-4.0, 4.0),
+                                     center + QPointF(4.0, -4.0));
                 } else {
                     // Type-0 route landmarks remain visible at every overview
                     // scale. The coordinate is the anchor dot; the compact

@@ -9,7 +9,7 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 ## Branches
 
 - `tsre-scomod-stable` is the stable/rescue branch, capped and tagged at `v0.6`.
-- `tsre-scomod-wip` is the development branch; its current work-in-progress release is `v0.7`.
+- `tsre-scomod-wip` is the development branch; its current work-in-progress release is `v0.8`.
 
 ## Highlights
 
@@ -17,7 +17,8 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Reworked `F` terrain conforming for stronger, more practical track cuts and embankments, including improved low-end track-width behavior.
 - Added `Ctrl+F` selected-object tile conforming, `Shift+F` non-destructive smoothing, and the `F2` Conform DB brush for grade-following spot cleanup.
 - Added `Alt+A` selection of all 256 terrain texture patches on the selected tile.
-- Added `autopaint` tile-level track and road painting plus shoreline-aware water-edge painting based on the actual terrain/water contour.
+- Added `autopaint` tile-level track and road painting for faster route-wide texture work.
+- Added `Water Edge` detection and painting that compares terrain elevation against the tile water plane, follows the actual shoreline with a feathered texture transition, and handles shallow-water terrain breaks instead of painting coarse 16x16 patches.
 - Added `F2` confirmed route-wide and current-tile TERRTEX reset tools for returning painted terrain to `terrain.ace`.
 - Added `F2` route-local terrain paint presets covering texture, brush, intensity, shape, and rotation.
 - Added `F2` full 0-360 degree terrain texture rotation for directional ground textures.
@@ -56,6 +57,15 @@ The goal is not to replace Eric's main TSRE work. This is a test branch for debu
 - Added selectable/deletable path controls, undo/redo, map rotation, route markers, labels, signals, stations, and service-point symbology.
 - Standardized `F1-F4 and utility panels` with the charcoal/orange visual system, square selectors, consistent controls, active-tool highlighting, focus restoration, and pinnable helper windows.
 - Added the pinnable `Auto Place` workflow and further Grade Helper, Control Panel, Object Selection, and Terrain Editor cleanup.
+- Replaced legacy `settings.txt` with per-user `settings.json`, atomic saves, timestamped backups, defaults reset, and damaged-file recovery.
+- Added independent TrackDB and RoadDB terrain-conform height-bias settings without reloading the live editor.
+- Hardened Dynamic Track procedural/fallback material handling without requiring Open Rails track profiles or seasonal matching.
+- Reworked Dynamic Track selection, percent-grade presentation, object controls, and the continuous world-space yellow TrackDB overlay.
+- Rebuilt NextGen Auto-Flex as a direction-neutral transactional solve that rejects U-turns, backtracking, one-ended joins, and bad seams.
+- Aligned the Dynamic Track mesh and TrackDB on one endpoint plane with exact joint tangents and smooth internal curve/straight transitions, verified by Open Rails train tests.
+- Finished F4 New/Edit/Clone path sessions with required metadata, cancellation rollback, stable saved filenames, player-path flags, atomic PAT output, and stronger validation.
+- Improved F4 endpoint, reverse-point, service-point, selected-path, and editing-control presentation.
+- Standardized compact Pin icons, movement-state colors, equal Select/Place controls, and reliable shutdown with helper windows open.
 
 ## Downloads
 

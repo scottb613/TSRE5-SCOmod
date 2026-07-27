@@ -4,6 +4,56 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.8 Dynamic Track, JSON settings, and Activity Builder completion release
+
+- SCOmodWIP/Game.cpp
+- SCOmodWIP/SettingsDialog.cpp
+- SCOmodWIP/SettingsDialog.h
+- SCOmodWIP/TSRE5_resource.rc
+  - Replaced the legacy settings.txt location with per-user settings.json, atomic save/backup/recovery, defaults reset, terrain database height-bias settings, and v0.8 application metadata.
+  - Kept restart-and-restore as the safe way to apply process-wide settings instead of re-invoking Game::Load in a live editor.
+
+- SCOmodWIP/DynTrackObj.cpp
+- SCOmodWIP/DynTrackObj.h
+- SCOmodWIP/Flex.cpp
+- SCOmodWIP/Flex.h
+- SCOmodWIP/ProceduralMstsDyntrack.cpp
+- SCOmodWIP/ProceduralShape.cpp
+- SCOmodWIP/PropertiesDyntrack.cpp
+- SCOmodWIP/PropertiesDyntrack.h
+  - Hardened Dynamic Track materials, replaced the selection box with a track outline, standardized Grade controls, and rebuilt direction-neutral NextGen Flex candidate generation and validation.
+  - Added transactional failure handling and exact endpoint, tangent, plane, internal-seam, non-backtracking, and two-connection requirements.
+
+- SCOmodWIP/TDB.cpp
+- SCOmodWIP/TDB.h
+- SCOmodWIP/Route.cpp
+- SCOmodWIP/RouteEditorGLWidget.cpp
+- SCOmodWIP/TextObj.cpp
+- SCOmodWIP/Vector3f.cpp
+  - Aligned Dynamic Track database geometry with the rendered mesh, corrected reverse graded frames, ignored deleted snap records, preferred fixed endpoints, and restored a continuous world-space yellow TrackDB overlay.
+  - Cleaned compiler warnings exposed by the TDB changes and corrected TextObj render overload selection.
+
+- SCOmodWIP/ActivityBuilderWindow.cpp
+- SCOmodWIP/ActivityBuilderWindow.h
+- SCOmodWIP/ActivityTools.cpp
+- SCOmodWIP/ActivityTools.h
+- SCOmodWIP/ActivityTrackViewer.cpp
+- SCOmodWIP/ActivityTrackViewer.h
+- SCOmodWIP/Path.cpp
+- SCOmodWIP/Path.h
+  - Completed explicit New/Edit/Clone sessions, metadata editing, cancellation rollback, stable filenames, player-path flags, PAT validation/output, endpoint labels, reverse markers, service symbols, and selected-path presentation.
+
+- SCOmodWIP/GuiFunct.cpp
+- SCOmodWIP/GuiFunct.h
+- SCOmodWIP/ObjTools.cpp
+- SCOmodWIP/PropertiesTrackObj.cpp
+- SCOmodWIP/RouteEditorWindow.cpp
+- SCOmodWIP/RouteEditorWindow.h
+- SCOmodWIP/StatusWindow.cpp
+- SCOmodWIP/StatusWindow.h
+- SCOmodWIP/TerrainTools.cpp
+  - Added shared scale-aware Pin icons, equal Select/Place button sizing, distinct movement-state color, and consolidated clean application shutdown with helper windows open.
+
 v0.7 Activity Builder and interface release
 
 - TSRE5-Trainsim.Com-Fork-master/ActivityBuilderWindow.cpp

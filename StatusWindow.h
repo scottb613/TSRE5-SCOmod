@@ -97,6 +97,7 @@ private:
     QString statG;
     QString statY;
     QString statS;
+    QString statC;
     QString statReadout;
     QString statReadoutY;
     QString statR;

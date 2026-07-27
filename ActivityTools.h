@@ -89,6 +89,8 @@ public slots:
     void reloadServicesList();
     void reloadTrafficsList();
     void reloadPathsList();
+    void refreshPathLabel(Path *path);
+    void finishPathSave(Path *path);
     void selectedPathChanged(int index);
     void conFilesRefreshSelected();
     void actPathsRefreshListSelected();
@@ -109,9 +111,25 @@ signals:
     void pathSelectionChanged(Path *path);
     void pathCreationStarted(Path *path);
     void pathEditStarted(Path *path);
+    void pathEditCancelRequested();
     
 private:
+    enum PathSessionMode {
+        NoPathSession,
+        NewPathSession,
+        EditPathSession,
+        ClonePathSession
+    };
+    void startPathSession(PathSessionMode mode, Path *path, QPushButton *button);
+    void cancelActivePathSession();
+    void resetPathSessionButtons();
+
     Route *route = NULL;
+    Path *activePathSession = NULL;
+    PathSessionMode activePathSessionMode = NoPathSession;
+    QPushButton *pathNewButton = NULL;
+    QPushButton *pathEditButton = NULL;
+    QPushButton *pathCloneButton = NULL;
     QComboBox consists;
     QComboBox speedZones;
     QComboBox failedSignals;

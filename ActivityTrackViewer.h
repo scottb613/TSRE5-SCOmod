@@ -62,7 +62,9 @@ public slots:
     void redoDraftEdit();
     void deleteSelectedDraftObject();
     void validateDraftPath();
+    void editPathMetadata();
     void saveDraftPath();
+    void cancelPathEdit();
     void clearTransientMessage();
 
 signals:
@@ -70,6 +72,9 @@ signals:
     void junctionSelected(QString text);
     void pathDraftStatus(QString text);
     void pathPlacementModeChanged(int mode);
+    void pathEditingStateChanged(bool active);
+    void pathMetadataChanged(Path *path);
+    void pathSaved(Path *path);
 
 protected:
     void paintEvent(QPaintEvent *event);
@@ -128,6 +133,8 @@ private:
     QString waitPointDescription(int value) const;
     QString waitPointMarker(int value) const;
     static QVector<QLineF> simplifiedLines(const QVector<QLineF> &source, qreal minimumLength);
+    void capturePathSessionMetadata(Path *path);
+    void restorePathSessionMetadata();
 
     struct JunctionInfo {
         int nodeId = -1;
@@ -138,7 +145,9 @@ private:
         bool hasShapeMainRoute = false;
         QPointF directions[3];
     };
-    enum MapInteractiveType { MapSignal, MapStation, MapSiding, MapPickup, MapMarker };
+    enum MapInteractiveType {
+        MapSignal, MapStation, MapSiding, MapPickup, MapCrossing, MapMarker
+    };
     struct MapInteractive {
         MapInteractiveType type = MapMarker;
         QPointF position;
@@ -156,8 +165,10 @@ private:
     QVector<JunctionInfo> junctions;
     QVector<MapInteractive> mapInteractives;
     QVector<QLineF> platformLines;
+    QVector<QLineF> crossingTrackLines;
     QVector<QPointF> endpoints;
     QVector<QPointF> pathPoints;
+    QVector<QPointF> savedReversePoints;
     QRectF routeBounds;
     QRectF selectedPathBounds;
     QPointF viewCenter;
@@ -247,6 +258,17 @@ private:
     QPointF creationPressPosition;
     QString transientMessage;
     bool transientMessageIsError = false;
+    bool pathSessionMetadataValid = false;
+    QString sessionPath;
+    QString sessionName;
+    QString sessionNameId;
+    QString sessionPathId;
+    QString sessionTrPathName;
+    QString sessionDisplayName;
+    QString sessionTrPathStart;
+    QString sessionTrPathEnd;
+    unsigned int sessionTrPathFlags = 0;
+    bool sessionMetadataConfirmed = false;
 };
 
 #endif

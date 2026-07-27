@@ -107,7 +107,7 @@ public:
         headingRow->addWidget(heading);
         headingRow->addStretch();
 
-        pinButton.setText("Pin");
+        GuiFunct::setupWindowPinButton(&pinButton);
         pinButton.setCheckable(true);
         pinButton.setFocusPolicy(Qt::NoFocus);
         QFont pinFont = pinButton.font();
@@ -340,8 +340,8 @@ ObjTools::ObjTools(QString name)
     vlist3->setSpacing(2);
     vlist3->setContentsMargins(3,0,1,0);    
     int row = 0;
-    vlist3->addWidget(buttonTools["selectTool"],row,0);
-    vlist3->addWidget(buttonTools["placeTool"],row++,1,1,3);
+    vlist3->addWidget(buttonTools["selectTool"],row,0,1,2);
+    vlist3->addWidget(buttonTools["placeTool"],row++,2,1,2);
     autoPlacementHelperButton.setText("Auto Place...");
     autoPlacementHelperButton.setCheckable(true);
     autoPlacementHelperButton.setMinimumHeight(scaledUiSize(20));

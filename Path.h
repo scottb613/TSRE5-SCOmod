@@ -53,7 +53,8 @@ public:
     QString trPathName;
     QString trPathStart;
     QString trPathEnd;
-    unsigned int trPathFlags;
+    unsigned int trPathFlags = 0;
+    bool metadataConfirmed = false;
     int ref = 0;
     int loaded;
     

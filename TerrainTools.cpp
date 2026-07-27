@@ -187,7 +187,7 @@ public:
         headingRow->addWidget(heading);
         headingRow->addStretch();
 
-        pinButton.setText("Pin");
+        GuiFunct::setupWindowPinButton(&pinButton);
         pinButton.setCheckable(true);
         pinButton.setFocusPolicy(Qt::NoFocus);
         QFont pinFont = pinButton.font();

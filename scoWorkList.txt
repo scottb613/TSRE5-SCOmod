@@ -1,4 +1,4 @@
-TSRE GenX v0.7 Improvements
+TSRE GenX v0.8 Improvements
 
 ======================================================================================================
 
@@ -18,7 +18,8 @@ HIGHLIGHTS
 - Reworked [F] terrain conforming for stronger, more practical track cuts and embankments, including improved low-end track-width behavior.
 - Added [Ctrl+F] selected-object tile conforming, [Shift+F] non-destructive smoothing, and the [F2] Conform DB brush for grade-following spot cleanup.
 - Added [Alt+A] selection of all 256 terrain texture patches on the selected tile.
-- Added [autopaint] tile-level track and road painting plus shoreline-aware water-edge painting based on the actual terrain/water contour.
+- Added [autopaint] tile-level track and road painting for faster route-wide texture work.
+- Added [Water Edge] detection and painting that compares terrain elevation against the tile water plane, follows the actual shoreline with a feathered texture transition, and handles shallow-water terrain breaks instead of painting coarse 16x16 patches.
 - Added [F2] confirmed route-wide and current-tile TERRTEX reset tools for returning painted terrain to [terrain.ace].
 - Added [F2] route-local terrain paint presets covering texture, brush, intensity, shape, and rotation.
 - Added [F2] full 0-360 degree terrain texture rotation for directional ground textures.
@@ -57,6 +58,15 @@ HIGHLIGHTS
 - Added selectable/deletable path controls, undo/redo, map rotation, route markers, labels, signals, stations, and service-point symbology.
 - Standardized [F1-F4 and utility panels] with the charcoal/orange visual system, square selectors, consistent controls, active-tool highlighting, focus restoration, and pinnable helper windows.
 - Added the pinnable [Auto Place] workflow and further Grade Helper, Control Panel, Object Selection, and Terrain Editor cleanup.
+- Replaced the legacy [settings.txt] workflow with per-user [settings.json], atomic saves, timestamped backups, reset-to-default support, and automatic preservation/recovery of damaged JSON.
+- Added [terrain conform settings] for independent TrackDB and RoadDB height bias without re-invoking the full Game load path.
+- Hardened [Dynamic Track textures] so procedural and fallback materials follow one dependable loading path without requiring an Open Rails track profile.
+- Reworked [Dynamic Track display] with a track-following selection outline, normal percent-grade presentation, equal Select/Place controls, and a continuous world-space yellow TrackDB overlay.
+- Rebuilt [NextGen Auto-Flex] around direction-neutral, transactional connection solving that rejects U-turns, backtracking paths, one-ended joins, and bad internal or external seams.
+- Corrected [Dynamic Track geometry] so the object mesh and TrackDB share the same endpoint plane, tangent, grade frame, and curve-to-straight transitions; verified with smooth Open Rails train tests in both grade directions.
+- Finished [F4 path sessions] with explicit New/Edit/Clone states, metadata editing, cancellation rollback, stable saved filenames, player-path flags, and stronger PAT save validation.
+- Improved [F4 path presentation] with named endpoints, reverse-point markers, service-point identification, selected-path emphasis, and a focused path-controls dock shown only while editing.
+- Standardized [utility window controls] with compact icon Pin buttons, clearer movement-state colors, and reliable application shutdown even when hide-on-close helper windows remain open.
 
 ======================================================================================================
 
@@ -335,7 +345,11 @@ This is intentionally a guardrail, not a new placement engine. It should catch t
 
    --- Settings Editor Cleanup ---
 
-I reworked the F12 Settings Editor so it follows the same organization as the cleaned settings.txt file. The old broad tabs have been replaced with practical sections such as General, Logging, Startup, UI, Camera, Rendering, Overlays, Objects, Terrain, Map, Cleanup, Advanced, and Consist. The Settings screen now saves directly to the active settings.txt file instead of writing settings.txt.new, and it creates a timestamped backup before overwriting the existing file.
+I reworked the F12 Settings Editor around practical sections such as General, Logging, Startup, UI, Camera, Rendering, Overlays, Objects, Terrain, Map, Cleanup, Advanced, and Consist. The legacy settings.txt path has now been retired. Settings are stored per Windows user as settings.json in the TSRE application-data folder, so a packaged editor can remain read-only and separate users do not overwrite one another.
+
+The Settings screen writes JSON atomically and keeps a timestamped backup before replacing an existing file. A Reset to Defaults action also preserves the current JSON first. If settings.json is damaged, TSRE preserves the unreadable file with a timestamped corrupt name, creates a clean default JSON document, and warns the operator. This avoids the memory leaks and invalid child pointers encountered when trying to apply every setting by calling Game::Load again inside an active editor session; restart-and-restore remains the safe path for settings that require a fresh process.
+
+The JSON migration retains the complete settings set, including the route-building defaults previously kept in the text file. Independent TrackDB and RoadDB terrain height-bias settings were added for conforming work without changing the saved database geometry.
 
 The visible comment clutter was removed from the rows and replaced with full-sentence tooltips on the labels and controls. I also added a Key Assignments tab with a two-column, striped table so shortcuts are easier to scan inside the editor. The Settings Editor now uses the same dark visual treatment as the rest of the GenX interface.
 
@@ -518,6 +532,40 @@ F2 now opens a focused pinnable `Auto Place...` helper rather than exposing a cr
 The accompanying cleanup gave F1 the `OBJECT SELECTION` title, F2 the `OBJECT EDITOR` context, the left property panel the `OBJECT PLACEMENT` title when an object is selected, and a cleaner no-selection state when it is not. Grade Helper no longer repeats an unnecessary subtitle, Control Panel and helper windows share the title-accent system, and the main editor starts maximized unless a pinned placement explicitly overrides it.
 
 Together, these changes carry the Activity Builder's clearer major-controls-left/details-right model into the rest of the editor without changing established tool behavior that was outside the visual cleanup.
+
+
+   --- Dynamic Track Connection Accuracy and Validation ---
+
+The NextGen Flex work was taken through a second reliability pass after train testing exposed cases where a Dynamic Track object could look close in the editor but still contain a vertical step, a curve-to-straight kink, or only one valid database connection. The source and destination connections are now solved without depending on which end is selected first. The generated object, procedural mesh, and TrackDB vectors use the same world-space endpoint plane and tangent frames, including reverse-direction connections on climbing track.
+
+The vertical profile between the two known endpoints is intentionally one physical plane. The panel's percent grade is derived from the endpoint rise over the solved path length; the intermediate displayed grade is not allowed to move either joint. Internal section boundaries are rebuilt on that same plane so transitions between straight and curved subsections do not introduce a train-visible bump.
+
+Flex is transactional: the existing object and database record remain intact until a candidate has passed the complete validation set. Candidates are discarded when they backtrack, form an unintended U-turn, fail to make two solid endpoint joins, miss either endpoint or tangent tolerance, or create an invalid internal seam. Deleted TrackDB records are ignored during snapping, while fixed overlapping endpoints are preferred over ambiguous vector samples.
+
+The final test route was rebuilt and run in Open Rails across level-to-level, level-to-grade, and grade-direction-reversed connections. The physical joints and internal transitions were reported silky smooth in both travel directions. The yellow TrackDB guide is now rendered as a continuous world-space overlay with raised vertical markers. This corrects the misleading broken/pitched visual without modifying the verified physical track geometry.
+
+
+   --- Dynamic Track Materials and Property Presentation ---
+
+Dynamic Track material lookup now follows a single guarded path for procedural track and packaged fallback textures. It does not require an Open Rails track-profile parser or seasonal matching to provide a recognizable editor surface. Missing or incomplete route textures fall back safely without leaving invalid material pointers.
+
+The selected-object visualization follows the actual Dynamic Track path instead of drawing a large rectangular object box. The F1 panel presents Grade in the same percent format used by normal track, reports section index, total length, and curve count, and gives the section fields the established vertical spacing. Select and Place New share equal width in the object panel.
+
+
+   --- Activity Builder Path Session Completion ---
+
+New Path, Edit, and Clone now operate as explicit editing sessions. While a session is active, its button and path selection state remain stable and the focused path-controls dock is visible. Cancelling restores the selected path's original metadata and geometry; cancelling a new or cloned unsaved session also removes its temporary route entry and clone file safely.
+
+The Meta Data dialog requires a valid PAT filename/ID, display name, start label, and end label before Save Path can proceed. A saved filename remains read-only during later edits so activities do not silently lose their path reference. The dialog also preserves the MSTS/ORTS player-path flag. New paths remain out of the normal path list until their metadata is confirmed or a PAT file exists.
+
+Save Path now rejects missing metadata, missing or coincident endpoint controls, and discontinuous routing before writing. PAT output retains the path flags and uses atomic file replacement. The map distinguishes the selected route, start and end markers, reverse points, and service interactives; endpoint labels use the path metadata at both editing and saved-path display time.
+
+
+   --- Utility Controls and Clean Shutdown ---
+
+The Control Panel, Grade Helper, Auto Place, and Terrain Editor now use the same compact scale-aware Pin icon instead of a text button that changed width between windows. Fast and Slow movement states use a distinct cyan active color, and the main Select and Place New buttons keep equal width.
+
+Application close handling was consolidated so the saved session is recorded once, sound is shut down once, and every remaining top-level helper is hidden before Qt exits. This prevents a hide-on-close tool window from keeping the process alive after the main editor has closed.
 
 
 ======================================================================================================

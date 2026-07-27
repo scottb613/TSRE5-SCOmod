@@ -1,4 +1,4 @@
-TSRE GenX v0.7 - ROUTE EDITOR - MENU SHORTCUTS
+TSRE GenX v0.8 - ROUTE EDITOR - MENU SHORTCUTS
 Shift+Ctrl+S  Save route
 Alt+F4        Exit/close route editor
 Ctrl+Z        Undo

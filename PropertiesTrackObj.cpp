@@ -103,7 +103,7 @@ public:
         headingRow->setContentsMargins(0,0,0,0);
         headingRow->addWidget(heading);
         headingRow->addStretch();
-        pinButton.setText("Pin");
+        GuiFunct::setupWindowPinButton(&pinButton);
         pinButton.setCheckable(true);
         pinButton.setFocusPolicy(Qt::NoFocus);
         QFont pinFont = pinButton.font();
@@ -301,7 +301,7 @@ private:
     }
 
     void updatePinAppearance(){
-        pinButton.setText("Pin");
+        GuiFunct::setupWindowPinButton(&pinButton);
         pinButton.setToolTip(positionPinned
             ? "The Grade Helper position is saved between sessions. Click to return to default placement."
             : "Save the current Grade Helper position between sessions.");
@@ -465,7 +465,7 @@ public:
         headingRow->addWidget(heading);
         headingRow->addStretch();
 
-        pinButton.setText("Pin");
+        GuiFunct::setupWindowPinButton(&pinButton);
         pinButton.setCheckable(true);
         pinButton.setFocusPolicy(Qt::NoFocus);
         QFont pinFont = pinButton.font();

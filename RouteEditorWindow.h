@@ -125,6 +125,7 @@ protected:
     void hideAllTools();
 
 private:
+    void completeApplicationClose(QCloseEvent *event);
     void saveLastSession();
     void applyRestoredSessionGeometry();
     QWidget* box;

@@ -11,6 +11,7 @@
 
 class ActivityTools;
 class ActivityTrackViewer;
+class QDockWidget;
 class QLabel;
 class Path;
 class Route;
@@ -27,6 +28,8 @@ public slots:
     void savePinnedGeometry();
     void showJunctionDetails(QString text);
     void beginPathCreation(Path *path);
+    void setPathControlsActive(bool active);
+    void refreshPathMetadata(Path *path);
 
 signals:
     void visibilityChanged(bool visible);
@@ -43,6 +46,7 @@ private:
     void moveToDefaultPosition();
 
     ActivityTrackViewer *viewer = NULL;
+    QDockWidget *pathControlsDock = NULL;
     QLabel *pathInfo = NULL;
     QLabel *junctionInfo = NULL;
     QAction *pinAction = NULL;

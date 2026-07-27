@@ -17,6 +17,7 @@ class QLabel;
 class QLineEdit;
 class QAction;
 class QWidget;
+class QToolButton;
 
 class GuiFunct {
 public:
@@ -31,6 +32,7 @@ public:
     static void styleEditorTitle(QLabel *label);
     static void styleEditorSubtitle(QLabel *label);
     static void applyEditorPanelStyle(QWidget *panel);
+    static void setupWindowPinButton(QToolButton *button);
 private:
 
 };

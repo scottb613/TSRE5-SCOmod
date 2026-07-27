@@ -141,7 +141,7 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     pinPositionButton.setCheckable(true);
     pinPositionButton.setChecked(positionPinned);
     pinPositionButton.setFocusPolicy(Qt::NoFocus);
-    pinPositionButton.setText(tr("Pin"));
+    GuiFunct::setupWindowPinButton(&pinPositionButton);
     QFont pinFont = pinPositionButton.font();
     pinFont.setBold(false);
     if(pinFont.pointSizeF() > 0)
@@ -277,6 +277,7 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     statS = statusButtonStyle("#26292c", "#303438", "#e7eaec", "#383d41", "#191b1d");
     statG = statusButtonStyle("#176c25", "#1e8430", "#f2fff4", "#319344", "#104b1a");
     statY = statusButtonStyle("#b3b300", "#d0d020", "#232323", "#e0e03a", "#707000");
+    statC = statusButtonStyle("#176a73", "#1e838f", "#effdff", "#3193a0", "#104a51");
     statReadout = statusReadoutStyle("#26292c", "#e7eaec", "#383d41");
     statReadoutY = statusReadoutStyle("#b3b300", "#232323", "#e0e03a");
     statR = statusButtonStyle("#8d3030", "#a63b3b", "#fff0f0", "#bd5151", "#602020");
@@ -381,7 +382,7 @@ void StatusWindow::setPositionPersistenceSuspended(bool suspended){
 }
 
 void StatusWindow::updatePositionPinAppearance(){
-    pinPositionButton.setText(tr("Pin"));
+    GuiFunct::setupWindowPinButton(&pinPositionButton);
     pinPositionButton.setToolTip(positionPinned
         ? tr("The Control Panel position is saved between sessions. Click to unpin and return to default placement.")
         : tr("Save the current Control Panel position between sessions."));
@@ -491,8 +492,8 @@ void StatusWindow::recStatus(QString statName, QString statVal ){
     if(statName.contains("timer"))     { status10.setText(statVal + "m Since Save"); if(statVal.toInt() > 10) status10.setStyleSheet(statReadoutY); else status10.setStyleSheet(statReadout);  }
     if(statName.contains("object"))    { if(statVal.size() > 0) {status11.setText(statVal + " Selected"); status11.setStyleSheet(statY); } else {status11.setText(""); status11.setStyleSheet(statS);}  }
     if(statName.contains("guard"))     { lastGuardStatus = statVal; if(guardErrorActive) return; status12.setText(statVal); if(statVal.endsWith("ON")) status12.setStyleSheet(statS); else status12.setStyleSheet(statY);  }
-    if(statName.contains("movefast"))  { moveFast.setStyleSheet(statVal.endsWith("ON") ? statY : statS); }
-    if(statName.contains("moveslow"))  { moveSlow.setStyleSheet(statVal.endsWith("ON") ? statY : statS); }
+    if(statName.contains("movefast"))  { moveFast.setStyleSheet(statVal.endsWith("ON") ? statC : statS); }
+    if(statName.contains("moveslow"))  { moveSlow.setStyleSheet(statVal.endsWith("ON") ? statC : statS); }
 }
 
 void StatusWindow::latLonChanged(QString){
