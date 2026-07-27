@@ -59,7 +59,11 @@ void planarDyntrackAngles(const float *worldQ, float cumulativeAngle, float *out
     out[0] = std::asin(qBound(-1.0f, -matrix[9], 1.0f));
     const float baseYaw = std::atan2(matrix[8], matrix[10]);
     out[1] = wrapTdbAngle((float)M_PI - baseYaw);
-    out[2] = std::atan2(matrix[1], matrix[5]);
+    // Vector sections apply their stored roll with the opposite sign to the
+    // matrix convention used above.  Keeping the matrix sign made every
+    // turned subsection leave the parent plane, accumulating a vertical
+    // error at the far end of the dynamic track.
+    out[2] = -std::atan2(matrix[1], matrix[5]);
 }
 
 }

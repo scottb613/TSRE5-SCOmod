@@ -421,7 +421,10 @@ inline bool validatePose(const float *sections10, FlexVec2 targetPos, float targ
     FlexPose2 end = simulate(sections10);
     float posErr = length(sub(end.pos, targetPos));
     float angErr = std::fabs(wrapPi(end.heading - targetHeading));
-    return posErr < 0.2f && angErr < 0.02f;
+    // A visibly plausible candidate is not sufficient for rail geometry.
+    // Reject anything that cannot form a genuinely solid positional and
+    // tangent connection at both ends.
+    return posErr < 0.002f && angErr < 0.0001f;
 }
 
 inline void flipCurveAngleSignsForDyntrack(float *sections10) {
@@ -933,6 +936,10 @@ bool Flex::NewFlex(int x1, int z1, float *p1, float *q1, int x2, int z2, float *
         canonicalize(dyntrackSections);
         trimToLength(2048.0f, dyntrackSections);
         canonicalize(dyntrackSections);
+        if (!validatePose(dyntrackSections, targetPos, phi)) {
+            logFlexCase(false);
+            return false;
+        }
         if (Game::gui && myLabel != nullptr && img != nullptr)
             myLabel->setPixmap(QPixmap::fromImage(*img));
 
@@ -978,6 +985,8 @@ bool Flex::NewFlex(int x1, int z1, float *p1, float *q1, int x2, int z2, float *
         std::copy(tmp, tmp + 10, trimmed);
         trimToLength(2048.0f, trimmed);
         canonicalize(trimmed);
+        if (!validatePose(trimmed, targetPos, phi))
+            return;
 
         FlexCandidate cand;
         std::copy(trimmed, trimmed + 10, cand.sections);
