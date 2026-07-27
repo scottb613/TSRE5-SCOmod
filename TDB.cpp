@@ -245,7 +245,10 @@ void TDB::loadUtf16Data(FileBuffer *data){
                         if(sh == "tracknode"){
                             t = (int) ParserX::GetNumber(data); // odczytanie numeru sciezki
                             trackNodes[t] = new TRnode();
-                            if (t>(prevnode+1)) qDebug() << "TDB132: Node out of sequence: expecting " << prevnode << " got " << t;  prevnode = t;  /// EFO 
+                            if(t > prevnode + 1)
+                                qDebug() << "TDB132: Node out of sequence: expecting"
+                                        << prevnode << "got" << t;
+                            prevnode = t;
                             while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
                                 if(sh == "trendnode"){
                                     trackNodes[t]->typ = 0; //typ endnode
@@ -1856,7 +1859,8 @@ int TDB::rotate(int id){
         Mat4::rotateY(frame, frame,
                 -(float)M_PI - oldSection.param[14]);
         Mat4::rotateX(frame, frame, oldSection.param[13]);
-        Mat4::rotateZ(frame, frame, -oldSection.param[15]);
+        Mat4::rotate(frame, frame, -oldSection.param[15],
+                0.0f, 0.0f, 1.0f);
         Mat4::rotate(frame, frame, -angle - (float)M_PI,
                 0.0f, 1.0f, 0.0f);
         float reversedAngles[3];

@@ -18,6 +18,9 @@
 
 class TextObj : public OglObj{
 public:
+    using OglObj::pushRenderItem;
+    using OglObj::render;
+
     bool inUse = false;
     float pos[3];
     TextObj(QString val, float s = 0, float sc = 0, int resm = 1);
