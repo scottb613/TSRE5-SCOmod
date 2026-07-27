@@ -3140,9 +3140,35 @@ void TDB::drawLine(GLUU *gluu, float* &ptr, Vector3f p, Vector3f o, int idx) {
     Mat4::rotate(matrix, matrix, o.x, 1, 0, 0);
     Mat4::rotate(matrix, matrix, o.z, 0, 0, 1);
 
+    float point1[3];
+    point1[0] = 0;
+    point1[1] = 0;
+    point1[2] = 0;
+    float point2[3];
+    point2[0] = 0;
+    point2[1] = 0;
+    point2[2] = 0;
+    Vec3::transformMat4(point1, point1, matrix);
+    Vec3::transformMat4(point2, point2, matrix);
+    point2[1] += lwireLineHeight;
+    *ptr++ = point1[0];
+    *ptr++ = point1[1];
+    *ptr++ = point1[2];
+    *ptr++ = point2[0];
+    *ptr++ = point2[1];
+    *ptr++ = point2[2];
+
     /// Wire
     if(tsection->sekcja[idx] != NULL){
-        tsection->sekcja[idx]->drawSection(ptr, matrix, lwireLineHeight, -1, 0, 0, 0);
+        // Generate the database centerline in the subsection's complete
+        // track frame, then raise the finished world-space vertices.  Using
+        // lwireLineHeight as a local Y coordinate rotates that offset with
+        // pitch and roll, so otherwise-perfect graded joints appear broken.
+        float *wireStart = ptr;
+        tsection->sekcja[idx]->drawSection(
+                ptr, matrix, 0.0f, -1, 0, 0, 0);
+        for(float *vertex = wireStart; vertex < ptr; vertex += 3)
+            vertex[1] += lwireLineHeight;
     }
 }
 
