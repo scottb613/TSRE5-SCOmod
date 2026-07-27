@@ -25,7 +25,7 @@ public:
     static bool AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
             float* dyntrackSections, float &visualElev, float &averageElev,
             float preferredMinCurveRadius = 0.0f, bool classicMode = false,
-            const float *sourceQ = nullptr);
+            const float *sourceQ = nullptr, float *resolvedSourceYaw = nullptr);
 private:
     static int FlexStage;
     static float FlexP0[3];

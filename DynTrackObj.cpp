@@ -134,6 +134,32 @@ void DynTrackObj::setElevation(float visualProm, float averageProm){
             (vect[1]*this->endp[3]+visualProm)/1000.0f, 1.0f)),0,0);
 }
 
+void DynTrackObj::setElevationFromSource(float visualProm, float averageProm){
+    // Auto-Flex defines the world-object origin as its immutable source
+    // connection.  The legacy rotate() path translates the object while
+    // rotating in order to preserve the opposite endpoint, which silently
+    // re-opens the source joint.  Apply the same pitch adjustment directly
+    // to the quaternion so position/placedAtPosition remain the source.
+    Q_UNUSED(averageProm);
+    elevation = visualProm;
+
+    // Auto-Flex installs a level source-axis quaternion immediately before
+    // this call, so this is an absolute plane pitch, independent of whichever
+    // endpoint happened to be selected previously.
+    const float adjustment = std::asin(qBound(
+            -1.0f, visualProm / 1000.0f, 1.0f));
+    if(adjustment != 0.0f)
+        Quat::rotateX(qDirection, qDirection, adjustment);
+
+    tRotation[0] += adjustment;
+    if(adjustment != 0.0f)
+        ++Game::gradeOverlayRevision;
+    if(matrix3x3 != NULL)
+        matrix3x3 = NULL;
+    setModified();
+    setMartix();
+}
+
 void DynTrackObj::rotate(float x, float y, float z){
     this->tRotation[0] += x;
     this->tRotation[1] += y;

@@ -523,80 +523,141 @@ private:
 
 bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
         float* dyntrackSections, float &visualElev, float &averageElev,
-        float preferredMinCurveRadius, bool classicMode, const float *sourceQ){
+        float preferredMinCurveRadius, bool classicMode, const float *sourceQ,
+        float *resolvedSourceYaw){
     TDB* tdb = Game::trackDB;
     qDebug() <<"flex "<< x1 << " " << z1 << " " << p1[0] << " " << p1[1] << " " << p1[2];
     qDebug() <<"flex "<< x2 << " " << z2 << " " << p2[0] << " " << p2[1] << " " << p2[2];
 
-    float q1[4] = {0,0,0,1};
-    float q2[4] = {0,0,0,1};
+    float sourceAxis[4] = {0,0,0,1};
+    float destinationAxis[4] = {0,0,0,1};
 
     if(sourceQ != NULL)
-        Quat::copy(q1, const_cast<float*>(sourceQ));
+        Quat::copy(sourceAxis, const_cast<float*>(sourceQ));
     else {
-        const int sourceNode = tdb->findNearestNode(x1, z1, p1,(float*) &q1);
+        const int sourceNode = tdb->findNearestNode(x1, z1, p1, sourceAxis);
         if(sourceNode < 0)
             return false;
     }
-    //q1[1] = wrapPi(q1[1] + (float)M_PI);
-    float *p11 = Vec3::clone(p1);
-    const int destinationNode = tdb->findNearestNode(x2, z2, p2,(float*) &q2);
+
+    const int destinationNode = tdb->findNearestNode(
+            x2, z2, p2, destinationAxis);
     if(destinationNode < 0){
-        delete[] p11;
+        qWarning() << "Auto-Flex rejected: no destination track endpoint";
         return false;
     }
-    q2[1] = wrapPi(q2[1] + (float)M_PI);
-    //q2[1] = wrapPi(M_PI - q2[1]); // convert to dyntrack convention (heading is direction toward which we turn left)
 
-    float *p22 = Vec3::clone(p2);
+    float destinationWorld[3] = {
+        p2[0] + 2048.0f * (x2 - x1),
+        p2[1],
+        p2[2] + 2048.0f * (z2 - z1)
+    };
+    const float rise = destinationWorld[1] - p1[1];
+    const float deltaX = destinationWorld[0] - p1[0];
+    const float deltaZ = -(destinationWorld[2] - p1[2]);
 
-    p22[0] +=  2048*(x2 - x1);
-    p22[2] +=  2048*(z2 - z1);
-    const float rise = p22[1] - p11[1];
-    const float deltaX = p22[0] - p11[0];
-    const float deltaZ = -(p22[2] - p11[2]);
-    const float forwardX = std::sin(q1[1]);
-    const float forwardZ = std::cos(q1[1]);
-    const float rightX = std::cos(q1[1]);
-    const float rightZ = -std::sin(q1[1]);
-    const float forwardDistance = deltaX * forwardX + deltaZ * forwardZ;
-    const float lateralDistance = deltaX * rightX + deltaZ * rightZ;
+    struct SolvedCandidate {
+        bool valid = false;
+        float sections[10] = {0};
+        float sourceYaw = 0.0f;
+        float visualGrade = 0.0f;
+        float averageGrade = 0.0f;
+        float length = std::numeric_limits<float>::max();
+    } best;
 
-    // The finished object is pitched about its source. Inverse-project the
-    // destination before solving the flat path so the pitched endpoint keeps
-    // its requested horizontal position instead of contracting by cos(pitch).
-    const float unpitchedForward = std::copysign(
-            std::sqrt(forwardDistance * forwardDistance + rise * rise),
-            std::fabs(forwardDistance) > 0.001f ? forwardDistance : 1.0f);
-    const float adjustedDeltaX = rightX * lateralDistance + forwardX * unpitchedForward;
-    const float adjustedDeltaZ = rightZ * lateralDistance + forwardZ * unpitchedForward;
-    float adjustedP2[3];
-    adjustedP2[0] = p11[0] + adjustedDeltaX - 2048.0f * (x2 - x1);
-    adjustedP2[1] = p2[1];
-    adjustedP2[2] = -( -p11[2] + adjustedDeltaZ ) - 2048.0f * (z2 - z1);
+    // Track tangents are axes, not arrows.  Try both directions at both
+    // connections and choose the shortest fully validated centerline.  This
+    // makes A->B and B->A the same geometric problem instead of relying on
+    // TDB traversal order.
+    for(int sourceDirection = 0; sourceDirection < 2; ++sourceDirection){
+        const float sourceYaw = wrapPi(sourceAxis[1]
+                + sourceDirection * (float)M_PI);
+        const float forwardX = std::sin(sourceYaw);
+        const float forwardZ = std::cos(sourceYaw);
+        const float rightX = std::cos(sourceYaw);
+        const float rightZ = -std::sin(sourceYaw);
+        const float forwardDistance = deltaX * forwardX + deltaZ * forwardZ;
+        const float lateralDistance = deltaX * rightX + deltaZ * rightZ;
+        const float unpitchedForward = std::copysign(
+                std::sqrt(forwardDistance * forwardDistance + rise * rise),
+                std::fabs(forwardDistance) > 0.001f ? forwardDistance : 1.0f);
 
-    bool success = Flex::NewFlex(x1, z1, p1, (float*)q1,
-            x2, z2, adjustedP2, (float*)q2, dyntrackSections,
-            preferredMinCurveRadius, classicMode);
+        const float adjustedDeltaX = rightX * lateralDistance
+                + forwardX * unpitchedForward;
+        const float adjustedDeltaZ = rightZ * lateralDistance
+                + forwardZ * unpitchedForward;
+        float adjustedP2[3] = {
+            p1[0] + adjustedDeltaX - 2048.0f * (x2 - x1),
+            p2[1],
+            -(-p1[2] + adjustedDeltaZ) - 2048.0f * (z2 - z1)
+        };
 
-    float dist1 = std::fabs(unpitchedForward);
-    
-    if (dist1 > 0.001f)
-        visualElev = rise * (1000.0f / dist1);
-    else
-        visualElev = 0.0f;
+        for(int destinationDirection = 0;
+                destinationDirection < 2; ++destinationDirection){
+            float q1[4] = {0, sourceYaw, 0, 1};
+            float q2[4] = {0, wrapPi(destinationAxis[1]
+                    + destinationDirection * (float)M_PI), 0, 1};
+            float candidateSections[10] = {0};
+            if(!Flex::NewFlex(x1, z1, p1, q1, x2, z2, adjustedP2, q2,
+                    candidateSections, preferredMinCurveRadius, classicMode))
+                continue;
 
-    const float railLength = success ? totalCenterlineLength(dyntrackSections) : 0.0f;
-    if (railLength > 0.001f)
-        averageElev = rise*(1000.0f/railLength);
-    else
-        averageElev = visualElev;
-    qDebug() << "elev" << dist1 << p2[1] << p1[1] << "success" << success;
+            // NewFlex returns angles in dyntrack convention.  Convert a copy
+            // back to solver convention so the exact endpoint can be checked
+            // after applying the proposed source-plane pitch.
+            float solverSections[10];
+            std::copy(candidateSections, candidateSections + 10,
+                    solverSections);
+            flipCurveAngleSignsForDyntrack(solverSections);
+            const FlexPose2 flatEnd = simulate(solverSections);
+            if(std::fabs(flatEnd.pos.y) <= 0.001f)
+                continue;
 
-    delete[] p11;
-    delete[] p22;
+            const float pitchSin = rise / flatEnd.pos.y;
+            if(!std::isfinite(pitchSin) || std::fabs(pitchSin) > 1.0f)
+                continue;
+            const float pitchCos = std::sqrt(qMax(0.0f,
+                    1.0f - pitchSin * pitchSin));
+            const float lateralError = flatEnd.pos.x - lateralDistance;
+            const float forwardError =
+                    flatEnd.pos.y * pitchCos - forwardDistance;
+            const float verticalError = flatEnd.pos.y * pitchSin - rise;
+            const float endpointError = std::sqrt(
+                    lateralError * lateralError
+                    + forwardError * forwardError
+                    + verticalError * verticalError);
+            if(endpointError >= 0.002f)
+                continue;
 
-    return success;
+            const float railLength =
+                    totalCenterlineLength(candidateSections);
+            if(railLength <= 0.001f || railLength >= best.length)
+                continue;
+
+            best.valid = true;
+            std::copy(candidateSections, candidateSections + 10,
+                    best.sections);
+            best.sourceYaw = sourceYaw;
+            best.visualGrade = pitchSin * 1000.0f;
+            best.averageGrade = rise * (1000.0f / railLength);
+            best.length = railLength;
+        }
+    }
+
+    if(!best.valid){
+        qWarning() << "Auto-Flex rejected: no direction produced solid"
+                << "position, tangent, and grade connections";
+        return false;
+    }
+
+    std::copy(best.sections, best.sections + 10, dyntrackSections);
+    visualElev = best.visualGrade;
+    averageElev = best.averageGrade;
+    if(resolvedSourceYaw != NULL)
+        *resolvedSourceYaw = best.sourceYaw;
+    qDebug() << "elev" << best.length << p2[1] << p1[1]
+            << "source yaw" << best.sourceYaw << "success" << true;
+    return true;
 }
 
 bool Flex::NewFlexDeprecatedStaged(int x, int z, float* p, float* q, float * dyntrackSections){

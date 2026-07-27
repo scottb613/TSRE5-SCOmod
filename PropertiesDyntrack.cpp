@@ -437,10 +437,12 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
                 dobj->x, dobj->y, dobj->UiD,
                 sourceX, sourceZ, p1, sourceQ);
         if(!hasSnappedSource)
-            hasSnappedSource = Game::trackDB->findNearestNode(
-                    sourceX, sourceZ, p1, sourceQ) >= 0;
+            hasSnappedSource = Game::trackDB->findNearestNodeIgnoringTrack(
+                    sourceX, sourceZ, p1, sourceQ,
+                    dobj->x, dobj->y, dobj->UiD) >= 0;
     }
     if(!hasSnappedSource){
+        qWarning() << "Auto-Flex rejected: no external source connection";
         emit flexResult(false);
         emit enableTool("selectTool");
         return;
@@ -450,6 +452,8 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
     const float sourceDy = p1[1] - dobj->position[1];
     const float sourceDz = (sourceZ - dobj->y) * 2048.0f + p1[2] - dobj->position[2];
     if(std::sqrt(sourceDx * sourceDx + sourceDy * sourceDy + sourceDz * sourceDz) > 4.0f){
+        qWarning() << "Auto-Flex rejected: source connection is more than"
+                << "4 metres from the dynamic-track origin";
         emit flexResult(false);
         emit enableTool("selectTool");
         return;
@@ -458,17 +462,23 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
     float dyntrackData[10];
     float visualElev = 0;
     float averageElev = 0;
+    float resolvedSourceYaw = sourceQ[1];
     
     bool success = Flex::AutoFlex(sourceX, sourceZ, (float*)p1, x, z, (float*)p2,
             (float*)dyntrackData, visualElev, averageElev, 0.0f,
-            flexClassic.isChecked(), sourceQ);
+            flexClassic.isChecked(), sourceQ, &resolvedSourceYaw);
     if(Game::debugOutput) qDebug() << "flex2" << visualElev << averageElev;
     if(success){
         // The solver always uses the exact database source.  Move the world
         // object to that same point regardless of how the source was found.
         dobj->setPosition(sourceX, sourceZ, p1);
+        float sourceOrientation[4];
+        Quat::fill(sourceOrientation);
+        Quat::rotateY(sourceOrientation, sourceOrientation,
+                -resolvedSourceYaw);
+        dobj->setQdirection(sourceOrientation);
         dobj->set("dyntrackdata", (float*)dyntrackData);
-        dobj->setElevation(visualElev, averageElev);
+        dobj->setElevationFromSource(visualElev, averageElev);
         this->showObj(dobj);
     }
     emit flexResult(success);

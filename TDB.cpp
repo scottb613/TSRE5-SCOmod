@@ -66,6 +66,41 @@ void planarDyntrackAngles(const float *worldQ, float cumulativeAngle, float *out
     out[2] = -std::atan2(matrix[1], matrix[5]);
 }
 
+bool planarDyntrackTransformMatches(const float *worldQ,
+        float cumulativeAngle, TSection *section) {
+    if(section == NULL)
+        return false;
+
+    Vector3f localDelta;
+    section->getDrawPosition(&localDelta, section->getDlugosc());
+
+    // Direct physical-object transform.
+    float matrix[16];
+    Mat4::fromQuat(matrix, const_cast<float*>(worldQ));
+    Mat4::rotate(matrix, matrix, (float)M_PI, 0.0f, -1.0f, 0.0f);
+    Mat4::rotate(matrix, matrix, -cumulativeAngle, 0.0f, 1.0f, 0.0f);
+    Vector3f physicalDelta;
+    physicalDelta.x = matrix[0] * localDelta.x
+            + matrix[4] * localDelta.y + matrix[8] * localDelta.z;
+    physicalDelta.y = matrix[1] * localDelta.x
+            + matrix[5] * localDelta.y + matrix[9] * localDelta.z;
+    physicalDelta.z = matrix[2] * localDelta.x
+            + matrix[6] * localDelta.y + matrix[10] * localDelta.z;
+
+    // Serialized TDB transform used by the yellow line and ORTS.
+    float tdbAngles[3];
+    planarDyntrackAngles(worldQ, cumulativeAngle, tdbAngles);
+    Vector3f databaseDelta = localDelta;
+    databaseDelta.rotateZ(tdbAngles[2], 0);
+    databaseDelta.rotateX(tdbAngles[0], 0);
+    databaseDelta.rotateY((float)M_PI + tdbAngles[1], 0);
+
+    const float dx = physicalDelta.x - databaseDelta.x;
+    const float dy = physicalDelta.y - databaseDelta.y;
+    const float dz = physicalDelta.z - databaseDelta.z;
+    return std::sqrt(dx * dx + dy * dy + dz * dz) < 0.001f;
+}
+
 }
 
 TDB::TDB(TSectionDAT* tsection, bool road) {
@@ -668,6 +703,49 @@ int TDB::findNearestNode(int &x, int &z, float* p, float* q, float maxD, bool up
     return nearestID;
 }
 
+int TDB::findNearestNodeIgnoringTrack(int &x, int &z, float *p, float *q,
+        int trackX, int trackY, unsigned int trackUid,
+        float maxD, bool updatePosition) {
+    int nearestID = -1;
+    float nearestD = 999.0f;
+    for(int nodeId = 1; nodeId <= iTRnodes; ++nodeId){
+        auto nodeIt = trackNodes.find(nodeId);
+        if(nodeIt == trackNodes.end() || nodeIt->second == NULL)
+            continue;
+        TRnode *node = nodeIt->second;
+        if(node->typ != 0 && node->typ != 2)
+            continue;
+        if(endpointBelongsToTrack(nodeId, trackX, trackY, trackUid))
+            continue;
+
+        const float lenX = (node->UiD[4] - x) * 2048.0f
+                + node->UiD[6] - p[0];
+        const float lenY = node->UiD[7] - p[1];
+        const float lenZ = (-node->UiD[5] - z) * 2048.0f
+                - node->UiD[8] - p[2];
+        const float distance = std::fabs(lenX) + std::fabs(lenY)
+                + std::fabs(lenZ);
+        if(distance < nearestD && distance < maxD){
+            nearestID = nodeId;
+            nearestD = distance;
+        }
+    }
+
+    if(nearestID >= 0 && updatePosition){
+        TRnode *node = trackNodes.at(nearestID);
+        x = (int)node->UiD[4];
+        z = -(int)node->UiD[5];
+        p[0] = node->UiD[6];
+        p[1] = node->UiD[7];
+        p[2] = -node->UiD[8];
+        q[0] = 0.0f;
+        q[1] = node->UiD[10];
+        q[2] = node->UiD[11];
+        q[3] = 1.0f;
+    }
+    return nearestID;
+}
+
 bool TDB::getPreviousSectionEndpoint(int x, int y, unsigned int uid,
         int &outX, int &outZ, float *outP, float *outQ) const {
     const int databaseY = -y;
@@ -684,8 +762,34 @@ bool TDB::getPreviousSectionEndpoint(int x, int y, unsigned int uid,
             if((int)current[2] != x || (int)current[3] != databaseY
                     || (unsigned int)current[4] != uid)
                 continue;
-            if(sectionId == 0)
-                return false;
+
+            // The dynamic object's origin is the beginning of its first TDB
+            // subsection.  If that subsection is also first in the vector,
+            // there is no "previous" section to inspect; the vector's first
+            // endpoint node is the authoritative shared connection instead.
+            // This is the mirror case that previously made Auto-Flex depend
+            // on database traversal order.
+            if(sectionId == 0){
+                auto endpointIt = trackNodes.find(node->TrPinS[0]);
+                if(endpointIt == trackNodes.end() || endpointIt->second == NULL)
+                    return false;
+                TRnode *endpoint = endpointIt->second;
+                if(endpoint->typ != 0 && endpoint->typ != 2)
+                    return false;
+                if(endpoint->typ == 0
+                        && endpointBelongsToTrack(node->TrPinS[0],
+                                x, y, uid))
+                    return false;
+
+                outX = (int)endpoint->UiD[4];
+                outZ = -(int)endpoint->UiD[5];
+                outP[0] = endpoint->UiD[6];
+                outP[1] = endpoint->UiD[7];
+                outP[2] = -endpoint->UiD[8];
+                Quat::fill(outQ);
+                outQ[1] = wrapTdbAngle(current[14]);
+                return true;
+            }
 
             float *previous = node->trVectorSection[sectionId - 1].param;
             const int previousSectionId = (int)previous[0];
@@ -708,7 +812,10 @@ bool TDB::getPreviousSectionEndpoint(int x, int y, unsigned int uid,
             Game::check_coords(outX, outZ, outP);
 
             Quat::fill(outQ);
-            outQ[1] = wrapTdbAngle(previous[14] + section->getAngle());
+            // Use the dynamic subsection's own tangent.  The previous
+            // section supplies the exact shared position, but its traversal
+            // direction may be reversed after vector joins.
+            outQ[1] = wrapTdbAngle(current[14]);
             return true;
         }
     }
@@ -1847,6 +1954,29 @@ bool TDB::placeTrack(int x, int z, float* p, float* q, int sectionIdx, int uid, 
         // return false;  //// EFO commenting this out as it might be causing a problem
     }
     const bool planarDyntrack = shp != NULL && shp->dyntrack;
+
+    // Preflight the complete representation before allocating or joining any
+    // TDB nodes.  A candidate is not committable unless the physical parent
+    // plane and every serialized yellow-line subsection produce the same
+    // displacement to within one millimetre.
+    if(planarDyntrack){
+        for(int pathId = 0; pathId < shp->numpaths; ++pathId){
+            float cumulativeAngle = 0.0f;
+            for(int sectionId = 0; sectionId < shp->path[pathId].n;
+                    ++sectionId){
+                const int tsectionId = shp->path[pathId].sect[sectionId];
+                auto sectionIt = tsection->sekcja.find(tsectionId);
+                if(sectionIt == tsection->sekcja.end()
+                        || !planarDyntrackTransformMatches(
+                                q, cumulativeAngle, sectionIt->second)){
+                    qWarning() << "Dynamic track TDB transform rejected"
+                            << sectionIdx << tsectionId;
+                    return false;
+                }
+                cumulativeAngle += sectionIt->second->getAngle();
+            }
+        }
+    }
     
     float pp[3];
     float qee[3];
