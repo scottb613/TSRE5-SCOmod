@@ -3105,6 +3105,7 @@ void TDB::getLine(float* &ptr, Vector3f p, Vector3f o, int idx, int id, int vid,
 }
 
 void TDB::drawLine(GLUU *gluu, float* &ptr, Vector3f p, Vector3f o, int idx) {
+    Q_UNUSED(gluu);
 
     float matrix[16];
     float q[4];
@@ -3119,24 +3120,6 @@ void TDB::drawLine(GLUU *gluu, float* &ptr, Vector3f p, Vector3f o, int idx) {
     //Mat4::rotate(matrix, matrix, -o.y+M_PI, 0, 1, 0);
     Mat4::rotate(matrix, matrix, o.x, 1, 0, 0);
     Mat4::rotate(matrix, matrix, o.z, 0, 0, 1);
-    
-    float point1[3];
-    point1[0] = 0;
-    point1[1] = 0;
-    point1[2] = 0;
-    float point2[3];
-    point2[0] = 0;
-    // EFO Adds
-    point2[1] = lwireLineHeight;
-    point2[2] = 0;
-    Vec3::transformMat4(point1, point1, matrix);
-    Vec3::transformMat4(point2, point2, matrix);
-    *ptr++ = point1[0];
-    *ptr++ = point1[1];
-    *ptr++ = point1[2];
-    *ptr++ = point2[0];
-    *ptr++ = point2[1];
-    *ptr++ = point2[2];
 
     /// Wire
     if(tsection->sekcja[idx] != NULL){
