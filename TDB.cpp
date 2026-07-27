@@ -2992,7 +2992,7 @@ bool TDB::getDrawPositionOnTrNode(float* out, int id, float metry, float *sElev)
         //position->y += n->trVectorSection[i].param[11];
         //position->z += (-n->trVectorSection[i].param[9] - playerT[1])*2048 - n->trVectorSection[i].param[12];
         
-        if(sElev != NULL)
+        if(sElev != NULL){
             if(Game::useSuperelevation){
                 if(i < n->iTrv - 1)
                     *sElev = -(n->trVectorSection[i].param[15]*(1.0 - sDistance/sectionLength) + n->trVectorSection[i+1].param[15]*(sDistance/sectionLength));
@@ -3001,6 +3001,7 @@ bool TDB::getDrawPositionOnTrNode(float* out, int id, float metry, float *sElev)
             } else {
                 *sElev = 0;
             }
+        }
             
         return true;
     }
