@@ -229,7 +229,7 @@ void TDB::loadTdb(){
 }
 
 void TDB::loadUtf16Data(FileBuffer *data){
-    int i, j, ii, uu;
+    int j, ii, uu;
     float xx;
     int t;
     bool ok;
@@ -441,7 +441,7 @@ void TDB::loadTit(){
     
     while (!((sh = ParserX::NextTokenInside(bufor).toLower()) == "")) {
         if(sh == "tritemtable"){
-            int iiTRitems = (int) ParserX::GetNumber(bufor); //odczytanie ilosci sciezek
+            ParserX::GetNumber(bufor); // stored item count
             TRitem* nowy = new TRitem();
             nowy->titLoading = true;
             
@@ -1975,8 +1975,6 @@ bool TDB::findPosition(int &x, int &z, float* p, float* q, float* endp, int sect
     if(findValue < 0) return false;
     if(Game::debugOutput) qDebug() << "TDB1563: " << findValue;
     
-    bool b;
-    
     if(sectionIdx < 0){
         Quat::fill(q);
         Quat::rotateY(q, q, -qe[1]);
@@ -3139,7 +3137,6 @@ int TDB::findNearestPositionOnTDB(float* posT, float* pos, float * q, float* tpo
     best[0] = 99999;
     float dist = 0;
     float intersectionPoint[3];
-    int uu;
     for(int i = 0; i < length*12; i+=12){
         //qDebug() << i/12;
         //qDebug() << lineBuffer[i+0] << " "<< lineBuffer[i+1] << " " << lineBuffer[i+2] << " "<< lineBuffer[i+3] << " "<< lineBuffer[i+4] << " " << lineBuffer[i+5] ;
@@ -3230,7 +3227,6 @@ void TDB::fillNearestSquaredDistanceToTDBXZ(float* posT, QVector<Vector4f> &poin
     getLines(lineBuffer, length, posT);
     
     float dist = 0;
-    int yyy = 0;
     for(int i = 0; i < length*12; i+=12){
         if(bbox != NULL){
             if((lineBuffer[i] < bbox[0] && lineBuffer[i+6] < bbox[0] ) || (lineBuffer[i] > bbox[1] && lineBuffer[i+6] > bbox[1] )){
@@ -3248,7 +3244,6 @@ void TDB::fillNearestSquaredDistanceToTDBXZ(float* posT, QVector<Vector4f> &poin
                 points[j].c = dist;
         }
     }
-    //qDebug() << yyy << length;
 }
 
 bool TDB::getSegmentIntersectionPositionOnTDB(float* posT, float* segment, float len, float* pos, float * q, float* tpos){
@@ -3262,7 +3257,6 @@ bool TDB::getSegmentIntersectionPositionOnTDB(float* posT, float* segment, float
     float dist = 0;
     float intersectionPoint[3];
     intersectionPoint[1] = pos[1];
-    int uu;
     for(int i = 0; i < length*12; i+=12){
         //qDebug() << i/12;
         //qDebug() << lineBuffer[i+0] << " "<< lineBuffer[i+1] << " " << lineBuffer[i+2] << " "<< lineBuffer[i+3] << " "<< lineBuffer[i+4] << " " << lineBuffer[i+5] ;
@@ -3329,12 +3323,9 @@ bool TDB::getSegmentIntersectionPositionOnTDB(QVector<TDB::IntersectionPoint> &i
     getLines(lineBuffer, length, posT);
     
     if(Game::debugOutput) qDebug() << "lines length" << length;
-    float best[7];
-    best[0] = 99999;
     float dist = 0;
     float intersectionPoint[3];
     intersectionPoint[1] = pos[1];
-    int uu;
     float metry;
     float dist1, dist2;
     
@@ -3925,7 +3916,7 @@ void TDB::deleteTrItem(int trid){
         updateTrItem(trid);
     }
     QVector<int> ids;
-    int nid = findTrItemNodeIds(trid, ids);
+    findTrItemNodeIds(trid, ids);
     if(ids.size() == 0) 
         return;
     for(int i = 0; i < ids.size(); i++)
