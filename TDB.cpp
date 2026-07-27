@@ -1312,7 +1312,7 @@ int TDB::joinTracks(int iendp) {
     return 0;
 }
 
-int TDB::fillJunction(int id){
+int TDB::fillJunction(int){
     
     return 0;
 }
@@ -2847,7 +2847,7 @@ void TDB::getVectorSectionLine(float * &buffer, int &len, int x, int y, int uid,
     //qDebug() << "len" << len;
 }
 
-void TDB::renderLines(GLUU *gluu, float* playerT, float playerRot) {
+void TDB::renderLines(GLUU *gluu, float* playerT, float) {
 
     if (!loaded) return;
     int hash = (int)playerT[0] * 10000 + (int)playerT[1];
