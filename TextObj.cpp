@@ -144,6 +144,10 @@ void TextObj::pushRenderItem() {
     pushRenderItem(0);
 }
 
+void TextObj::pushRenderItem(int selectionColor, float lod) {
+    OglObj::pushRenderItem(selectionColor, lod);
+}
+
 void TextObj::pushRenderItem(float rot) {
     if(!isInit)
         init();
@@ -170,4 +174,8 @@ void TextObj::render(float rot) {
     OglObj::render();
 
     gluu->mvPopMatrix();
+}
+
+void TextObj::render(int selectionColor, float lod) {
+    OglObj::render(selectionColor, lod);
 }

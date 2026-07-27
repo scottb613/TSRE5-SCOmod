@@ -18,9 +18,6 @@
 
 class TextObj : public OglObj{
 public:
-    using OglObj::pushRenderItem;
-    using OglObj::render;
-
     bool inUse = false;
     float pos[3];
     TextObj(QString val, float s = 0, float sc = 0, int resm = 1);
@@ -28,9 +25,11 @@ public:
     TextObj(int val, float s = 0, float sc = 0, int resm = 1);
     TextObj(const TextObj& orig);
     virtual ~TextObj();
-    void pushRenderItem();
+    void pushRenderItem() override;
+    void pushRenderItem(int selectionColor, float lod) override;
     void pushRenderItem(float rot);
-    void render();
+    void render() override;
+    void render(int selectionColor, float lod) override;
     void render(float rot);
     void setColor(int r, int g, int b);
     void setOColor(int r, int g, int b);
