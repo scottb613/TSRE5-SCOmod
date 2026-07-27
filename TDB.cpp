@@ -13,6 +13,7 @@
 #include <array>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include "Game.h"
 #include "ParserX.h"
 #include "ReadFile.h"
@@ -795,14 +796,15 @@ int TDB::findNearestTrackConnection(int &x, int &z, float *p, float *q,
         unsigned int excludedTrackUid, float maxD,
         bool updatePosition) const {
     int nearestVectorId = -1;
-    float nearestDistance = maxD;
     int bestX = x;
     int bestZ = z;
     float bestP[3] = {p[0], p[1], p[2]};
     float bestYaw = 0.0f;
+    float bestScore = std::numeric_limits<float>::max();
 
     auto consider = [&](int vectorId, int candidateX, int candidateZ,
-            const float *candidateP, float candidateYaw) {
+            const float *candidateP, float candidateYaw,
+            bool dynamicCandidate) {
         const float dx = (candidateX - x) * 2048.0f
                 + candidateP[0] - p[0];
         const float dy = candidateP[1] - p[1];
@@ -810,9 +812,15 @@ int TDB::findNearestTrackConnection(int &x, int &z, float *p, float *q,
                 + candidateP[2] - p[2];
         const float distance = std::fabs(dx) + std::fabs(dy)
                 + std::fabs(dz);
-        if(distance >= nearestDistance)
+        // When an old dynamic object and the fixed track beneath it both
+        // remain candidates during replacement, favor the fixed connection
+        // only inside a very small overlap window.  A live dynamic endpoint
+        // still wins whenever it is materially closer, and remains the only
+        // choice for normal dynamic-to-dynamic Flex.
+        const float score = distance + (dynamicCandidate ? 0.025f : 0.0f);
+        if(distance >= maxD || score >= bestScore)
             return;
-        nearestDistance = distance;
+        bestScore = score;
         nearestVectorId = vectorId;
         bestX = candidateX;
         bestZ = candidateZ;
@@ -840,12 +848,19 @@ int TDB::findNearestTrackConnection(int &x, int &z, float *p, float *q,
                     && (unsigned int)sectionData[4] == excludedTrackUid)
                 continue;
 
+            bool dynamicCandidate = false;
+            auto shapeIt = tsection->shape.find((int)sectionData[1]);
+            if(shapeIt != tsection->shape.end()
+                    && shapeIt->second != NULL)
+                dynamicCandidate = shapeIt->second->dyntrack;
+
             const int startX = (int)sectionData[8];
             const int startZ = -(int)sectionData[9];
             const float startP[3] = {
                 sectionData[10], sectionData[11], -sectionData[12]
             };
-            consider(vectorId, startX, startZ, startP, sectionData[14]);
+            consider(vectorId, startX, startZ, startP, sectionData[14],
+                    dynamicCandidate);
 
             int endX;
             int endZ;
@@ -856,7 +871,8 @@ int TDB::findNearestTrackConnection(int &x, int &z, float *p, float *q,
             TSection *section =
                     tsection->sekcja[(int)sectionData[0]];
             consider(vectorId, endX, endZ, endP,
-                    sectionData[14] + section->getAngle());
+                    sectionData[14] + section->getAngle(),
+                    dynamicCandidate);
         }
     }
 
