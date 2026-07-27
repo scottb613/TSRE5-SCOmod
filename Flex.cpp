@@ -327,6 +327,26 @@ inline bool hasSelfIntersection(const float *sections10) {
     return false;
 }
 
+inline bool makesOnlyForwardProgress(const float *sections10,
+        FlexVec2 targetPos) {
+    const float chordLength = length(targetPos);
+    if(chordLength <= 0.001f)
+        return false;
+
+    const FlexVec2 chordDirection = scale(targetPos, 1.0f / chordLength);
+    std::vector<FlexVec2> points;
+    samplePath(sections10, points);
+    for(size_t i = 0; i + 1 < points.size(); ++i){
+        const FlexVec2 step = sub(points[i + 1], points[i]);
+        // A direct flex may run across the chord, but it must never turn back
+        // toward its source.  This rejects U-shaped solutions which happen
+        // to land on the requested endpoint with the right final tangent.
+        if(dot(step, chordDirection) < -0.001f)
+            return false;
+    }
+    return true;
+}
+
 struct FlexCandidate {
     float sections[10] = {0};
     float minRadius = 0.0f;
@@ -932,7 +952,6 @@ bool Flex::NewFlex(int x1, int z1, float *p1, float *q1, int x2, int z2, float *
     float yaw1Calc = yaw1;
 
     FlexVec2 v0 = {std::sin(yaw0Calc), std::cos(yaw0Calc)};
-    FlexVec2 v1 = {std::sin(yaw1Calc), std::cos(yaw1Calc)};
 
     offx = (int)((P0.x + P1.x) * 0.5f);
     offy = (int)((P0.y + P1.y) * 0.5f);
@@ -1052,6 +1071,8 @@ bool Flex::NewFlex(int x1, int z1, float *p1, float *q1, int x2, int z2, float *
         std::copy(rawSections10, rawSections10 + 10, tmp);
         canonicalize(tmp);
         if (!validatePose(tmp, targetPos, phi))
+            return;
+        if (!makesOnlyForwardProgress(tmp, targetPos))
             return;
 
         float trimmed[10];

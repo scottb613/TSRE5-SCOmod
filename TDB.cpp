@@ -841,14 +841,22 @@ int TDB::findNearestTrackConnection(int &x, int &z, float *p, float *q,
         if(vector->typ != 1 || vector->trVectorSection == NULL)
             continue;
 
+        auto belongsToExcludedTrack = [&](int sectionId) {
+            if(sectionId < 0 || sectionId >= vector->iTrv)
+                return false;
+            const float *candidate =
+                    vector->trVectorSection[sectionId].param;
+            return (int)candidate[2] == excludedTrackX
+                    && (int)candidate[3] == -excludedTrackY
+                    && (unsigned int)candidate[4] == excludedTrackUid;
+        };
+
         for(int sectionId = 0; sectionId < vector->iTrv; ++sectionId){
             const float *sectionData =
                     vector->trVectorSection[sectionId].param;
             if(vectorSectionOwnerIsMissing(sectionData))
                 continue;
-            if((int)sectionData[2] == excludedTrackX
-                    && (int)sectionData[3] == -excludedTrackY
-                    && (unsigned int)sectionData[4] == excludedTrackUid)
+            if(belongsToExcludedTrack(sectionId))
                 continue;
 
             bool dynamicCandidate = false;
@@ -862,8 +870,14 @@ int TDB::findNearestTrackConnection(int &x, int &z, float *p, float *q,
             const float startP[3] = {
                 sectionData[10], sectionData[11], -sectionData[12]
             };
-            consider(vectorId, startX, startZ, startP, sectionData[14],
-                    dynamicCandidate);
+            // An internal subsection seam is not a place where joinTracks()
+            // can attach a new vector.  It is a valid replacement target
+            // only when removing the selected dynamic object will expose
+            // that seam as a real vector end.
+            if(sectionId == 0
+                    || belongsToExcludedTrack(sectionId - 1))
+                consider(vectorId, startX, startZ, startP, sectionData[14],
+                        dynamicCandidate);
 
             int endX;
             int endZ;
@@ -873,9 +887,11 @@ int TDB::findNearestTrackConnection(int &x, int &z, float *p, float *q,
                 continue;
             TSection *section =
                     tsection->sekcja[(int)sectionData[0]];
-            consider(vectorId, endX, endZ, endP,
-                    sectionData[14] + section->getAngle(),
-                    dynamicCandidate);
+            if(sectionId == vector->iTrv - 1
+                    || belongsToExcludedTrack(sectionId + 1))
+                consider(vectorId, endX, endZ, endP,
+                        sectionData[14] + section->getAngle(),
+                        dynamicCandidate);
         }
     }
 
