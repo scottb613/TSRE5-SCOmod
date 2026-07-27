@@ -4229,19 +4229,19 @@ void TDB::saveEmpty(bool road) {
     
 }
     
-void TDB::updateTrNode(int nid){
+void TDB::updateTrNode(int){
     
 }
 
-void TDB::updateTrItem(int iid){
+void TDB::updateTrItem(int){
     
 }
 
-void TDB::updateTrackSection(int id){
+void TDB::updateTrackSection(int){
     
 }
 
-void TDB::updateTrackShape(int id){
+void TDB::updateTrackShape(int){
     
 }
 
