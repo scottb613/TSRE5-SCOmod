@@ -11,6 +11,7 @@
 #include "TFile.h"
 #include <QDebug>
 #include <QFile>
+#include <QSaveFile>
 #include "ReadFile.h"
 #include <QDataStream>
 #include "Game.h"
@@ -596,6 +597,28 @@ void TFile::save(QString name){
     save(write);
     write.unsetDevice();
     file->close();
+}
+
+bool TFile::saveAtomic(QString name){
+    name.replace("//", "/");
+    if(Game::debugOutput)
+        qDebug() << "atomic save .t " << name;
+
+    QSaveFile file(name);
+    if(!file.open(QIODevice::WriteOnly))
+        return false;
+
+    QDataStream write(&file);
+    write.setByteOrder(QDataStream::LittleEndian);
+    write.setFloatingPointPrecision(QDataStream::SinglePrecision);
+    save(write);
+    const bool streamOk = write.status() == QDataStream::Ok;
+    write.unsetDevice();
+    if(!streamOk){
+        file.cancelWriting();
+        return false;
+    }
+    return file.commit();
 }
 
 void TFile::save(QDataStream &write){

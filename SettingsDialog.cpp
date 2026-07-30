@@ -25,16 +25,15 @@
 #include <QIntValidator>
 #include <QDateTime>
 #include <QMessageBox>
-#include <QDebug>
 
 SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent) {
     GuiFunct::applyEditorPanelStyle(this);
-    setWindowTitle("TSRE5 Settings Editor");
+    setWindowTitle(Game::AppName + " Settings");
     resize(1100, 850);
     setupUi();
 }
 
-QWidget* SettingsDialog::createScrollTab(QFormLayout*& layout, QTabWidget* tabs, const QString& title) {
+void SettingsDialog::createScrollTab(QFormLayout*& layout, QTabWidget* tabs, const QString& title) {
     QScrollArea* sa = new QScrollArea(tabs);
     sa->setWidgetResizable(true);
     
@@ -70,7 +69,6 @@ QWidget* SettingsDialog::createScrollTab(QFormLayout*& layout, QTabWidget* tabs,
 
     sa->setWidget(container);
     tabs->addTab(sa, title);
-    return container;
 }
 
 void SettingsDialog::addRow(QFormLayout* l, const QString& key, const QString& type, const QString& label, const QString& helpText) {
@@ -208,10 +206,9 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     QString k = key.toLower();
     if (k == "consoleoutput") return "Shows log output in the command window while TSRE is running. Leave this off for normal use unless you are troubleshooting.";
     if (k == "debugoutput") return "Enables extra diagnostic logging. Use this only while chasing a problem because it can create noisy logs.";
-    if (k == "fullscreen") return "Starts the editor maximized. Leave this off if you prefer TSRE to restore normal window placement.";
+    if (k == "fullscreen") return "Starts the editor maximized. Leave this off if you prefer TSRE to restore its saved window size.";
     if (k == "soundenabled") return "Controls legacy TSRE sound support. This is separate from GenX interface sounds.";
     if (k == "scosoundenabled") return "Enables GenX interface sounds such as placement clicks, error buzzes, and mode-change chirps.";
-    if (k == "startapp") return "Selects the startup tool. Use r for Route Editor, c for Consist Editor, or s for Shape Viewer.";
     if (k == "systemtheme") return "Uses the Windows system palette instead of TSRE's built-in dark interface colors.";
     if (k == "unsafemode") return "Enables advanced maintenance operations that can alter route data. Keep this off unless you know a tool requires it.";
     if (k == "useimperial") return "Displays supported measurements in imperial units where TSRE provides that conversion.";
@@ -222,7 +219,6 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "logfilemax") return "Keeps at most this many log files. Larger values preserve history but can clutter the TSRE folder.";
     if (k == "gameroot") return "Optional path to the MSTS or ORTS Train Simulator folder. If set, it can bypass folder browsing at startup.";
     if (k == "routename") return "Optional route folder name to open directly. Leave blank to use the route selection screen.";
-    if (k == "createnewifnotexist") return "Creates the named route if routeName is set and the route does not already exist.";
     if (k == "starttilex") return "Optional startup tile X coordinate. Leave blank unless you want TSRE to jump to a specific tile.";
     if (k == "starttiley") return "Optional startup tile Y coordinate. Leave blank unless you want TSRE to jump to a specific tile.";
     if (k == "geopath") return "Folder containing SRTM HGT elevation files used by the F3 terrain tools.";
@@ -232,9 +228,8 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "routemergetdb") return "Allows route merge operations to merge track database data. Use only with a planned merge workflow.";
     if (k == "routemergeterrain") return "Allows route merge operations to overwrite overlapping terrain heights.";
     if (k == "routemergeterrtex") return "Allows route merge operations to overwrite overlapping terrain texture assignments.";
-    if (k == "mainwindowlayout") return "Controls the main editor panel order. P is Properties, T is Tools, W is World, and C is Control Panel.";
     if (k == "toolshidden") return "Starts with tool panels hidden so the viewport gets more room.";
-    if (k == "uiscale") return "Scales editor fonts and panel widths. Recommended public range is 1.00 to 1.25; 1.15 works well on Scott's 32-inch 2K display.";
+    if (k == "uiscale") return "Scales editor fonts and panel widths. The recommended range is 1.00 to 1.25.";
     if (k == "camerafov") return "Sets the camera field of view in degrees. Lower values feel more zoomed in; higher values show more peripheral view.";
     if (k == "cameraspeedmax") return "Camera movement speed while holding Shift.";
     if (k == "cameraspeedmin") return "Camera movement speed while holding Ctrl.";
@@ -257,8 +252,6 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "texturequality") return "Controls texture quality level used by the renderer.";
     if (k == "tilelod") return "Number of terrain tiles loaded in each direction around the camera. Higher values show farther terrain but cost memory and startup time.";
     if (k == "usequadtree") return "Uses quadtree object organization for route rendering and lookup performance.";
-    if (k == "hudenabled") return "Shows the simple editor HUD overlay.";
-    if (k == "hudscale") return "Scales HUD overlay text.";
     if (k == "markerheight") return "Height of route marker sticks.";
     if (k == "markerlines") return "Shows marker guide lines when a route loads.";
     if (k == "markertext") return "Text size used for marker labels.";
@@ -270,7 +263,6 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "selectedterrcolor") return "Color used for selected terrain patch outlines.";
     if (k == "selectedterrwidth") return "Line width used for selected terrain patch outlines.";
     if (k == "skycolor") return "Viewport sky color used by the route editor.";
-    if (k == "usesuperelevation") return "Applies superelevation when rendering curves that contain it.";
     if (k == "viewcompass") return "Shows the compass heading display at the top center of the viewport.";
     if (k == "viewmarkers") return "Shows markers selected through the Control Panel.";
     if (k == "viewtrlabels") return "Shows labels for track database items.";
@@ -311,14 +303,14 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "deletetrwatermarks") return "Deletes TrWatermark entries that are not used by Open Rails.";
     if (k == "deleteviewdbspheres") return "Deletes ViewDBSphere entries that are not used by Open Rails.";
     if (k == "legacysupport") return "Retains legacy ViewDBSphere and VDBID data when saving.";
-    if (k == "listfiles") return "Creates used and unused file lists when exiting. Useful for route cleanup.";
+    if (k == "listfiles") return "Builds the full-route inventory required by legacy Objects To Remove cleanup. Route Health Reports do not require this setting.";
     if (k == "objectstoremove") return "Comma-separated shapes to remove during route cleanup. This requires listfiles and loadAllWFiles.";
     if (k == "routerebuildtdb") return "Allows route TDB rebuild operations. This requires unsafe mode and should be used only with backups.";
     if (k == "sorttileobjects") return "Sorts tile objects by detail level when saving world files.";
-    if (k == "fpslimit") return "Optional frame rate limit for advanced or network modes.";
+    if (k == "fpslimit") return "Caps the editor refresh rate to reduce unnecessary CPU and GPU load.";
     if (k == "playermode") return "Advanced mode intended for player-style operation rather than route editing.";
     if (k == "proceduraltracks") return "Enables procedural track support where TSRE uses that path.";
-    if (k == "serverauth") return "Enables authentication for network/server editing modes.";
+    if (k == "serverauth") return "Authentication mode for network/server editing. Leave blank for none or enter file for file-based authentication.";
     if (k == "serverlogin") return "Login string used by network/server editing modes.";
     if (k == "usenetworkeng") return "Enables the network editor engine. Leave this off for normal local route editing.";
     if (k == "cewindowlayout") return "Controls Consist Editor panel layout. C is Consists, 1 is Main List, and 2 is Second List.";
@@ -535,9 +527,8 @@ void SettingsDialog::setupUi() {
     createScrollTab(l, tabs, "General");
     addRow(l, "consoleOutput", "bool", "Console Output", "Displays log output in realtime in command window");
     addRow(l, "debugOutput", "bool", "Debug Output", "enables extended logging detail");
-    addRow(l, "fullscreen", "bool", "Fullscreen", "Prevents screen from being maximized");
+    addRow(l, "fullscreen", "bool", "Fullscreen", "Starts the editor maximized");
     addRow(l, "soundEnabled", "bool", "Sound Enabled", "");
-    addRow(l, "startapp", "string", "Start App", "r=Route Edit, c=Consist Edit, s=Shapeviewer");
     addRow(l, "systemTheme", "bool", "System Theme", "true uses Windows palette");
     addRow(l, "unsafemode", "bool", "Unsafe Mode", "Only for risky features");
     addRow(l, "useImperial", "bool", "Use Imperial", "");
@@ -552,7 +543,6 @@ void SettingsDialog::setupUi() {
     createScrollTab(l, tabs, "Startup");
     addRow(l, "gameRoot", "dir", "Game Root", "your ORTS Content drive/folder");
     addRow(l, "routeName", "string", "Route Name", "add route name to skip route selection menu");
-    addRow(l, "createNewIfNotExist", "bool", "Create New Route", "Create routeName if not present");
     addRow(l, "startTileX", "number", "Start Tile X", "");
     addRow(l, "startTileY", "number", "Start Tile Y", "");
     addRow(l, "geoPath", "dir", "Geo Path", "Folder housing HGT files");
@@ -564,7 +554,6 @@ void SettingsDialog::setupUi() {
     addRow(l, "routeMergeTerrtex", "bool", "Route Merge Terrtex", "");
 
     createScrollTab(l, tabs, "UI");
-    addRow(l, "mainWindowLayout", "string", "Window Layout", "P = Properties, T = Tools, W = World, C = Control Panel");
     addRow(l, "toolsHidden", "bool", "Tools Hidden", "");
     addRow(l, "uiScale", "number", "UI Scale", "1.00 to 1.25 recommended");
     addRow(l, "scoSoundEnabled", "bool", "UI Sounds", "Enables interface clicks, error buzzes, and success chirps");
@@ -596,8 +585,6 @@ void SettingsDialog::setupUi() {
     addRow(l, "useQuadTree", "bool", "Use QuadTree", "");
 
     createScrollTab(l, tabs, "Overlays");
-    addRow(l, "hudEnabled", "bool", "HUD Enabled", "");
-    addRow(l, "hudScale", "number", "HUD Scale", "");
     addRow(l, "markerHeight", "number", "Marker Height", "");
     addRow(l, "markerLines", "bool", "Marker Lines", "");
     addRow(l, "markerText", "number", "Marker Text Size", "");
@@ -611,7 +598,6 @@ void SettingsDialog::setupUi() {
     addRow(l, "selectedTerrColor", "color", "Selected Terrain Color", "");
     addRow(l, "selectedTerrWidth", "number", "Selected Terrain Width", "");
     addRow(l, "skyColor", "color", "Sky Color", "");
-    addRow(l, "useSuperelevation", "bool", "Use Superelevation", "");
     addRow(l, "viewCompass", "bool", "View Compass", "");
     addRow(l, "viewMarkers", "bool", "View Markers", "");
     addRow(l, "viewTRLabels", "bool", "View TR Labels", "");
@@ -626,7 +612,7 @@ void SettingsDialog::setupUi() {
     addRow(l, "numRecentItems", "number", "Recent Items List", "");
     addRow(l, "sigOffset", "number", "Signal Offset", "");
     addRow(l, "snapableRadius", "number", "Snapable Radius", "");
-    addRow(l, "snapableOnlyRot", "number", "Snapable Only Rot", "");
+    addRow(l, "snapableOnlyRot", "bool", "Snapable Only Rot", "");
     addRow(l, "trackElevationMaxPm", "number", "Max Grade Permille", "");
     addRow(l, "useOnlyPositiveQuaternions", "bool", "Positive Quaternions", "");
     addRow(l, "useTdbEmptyItems", "bool", "Use TDB Empty Items", "");
@@ -645,20 +631,13 @@ void SettingsDialog::setupUi() {
     addRow(l, "terrainConformRdbBias", "number", "RDB Terrain Height Bias", "metres");
     addRow(l, "preloadTextures", "textbox", "Preload Textures", "TERRTEX: ace, bmp, dds, png");
 
-    createScrollTab(l, tabs, "Map");
-    addRow(l, "mapImageResolution", "number", "Map Resolution", "");
-    addRow(l, "mapengine", "string", "Map Engine", "");
-    addRow(l, "imageMapsUrl", "string", "Image Maps URL", "");
-    addRow(l, "imageMapsZoomOffset", "number", "Image Maps Zoom Offset", "");
-    addRow(l, "MapAPIKey", "string", "General Map API Key", "");
-
     createScrollTab(l, tabs, "Cleanup");
     addRow(l, "autoFix", "bool", "Auto Fix", "repair TDB anomalies");
     addRow(l, "deepunderground", "number", "Deep Underground", "");
     addRow(l, "deleteTrWatermarks", "bool", "Delete Tr Watermarks", "");
     addRow(l, "deleteViewDbSpheres", "bool", "Delete VDB Spheres", "");
     addRow(l, "legacySupport", "bool", "Legacy Support", "retention of ViewDBSphere and VDBID");
-    addRow(l, "listfiles", "bool", "List Files", "create lists of files used/unused on exit");
+    addRow(l, "listfiles", "bool", "Cleanup Inventory", "required only by legacy Objects To Remove cleanup");
     addRow(l, "objectsToRemove", "textbox", "Objects To Remove", "comma separated list of shapes");
     addRow(l, "routeRebuildTDB", "bool", "Route Rebuild TDB", "");
     addRow(l, "sortTileObjects", "bool", "Sort Tile Objects", "Orders items by detail level on save");
@@ -667,7 +646,7 @@ void SettingsDialog::setupUi() {
     addRow(l, "fpsLimit", "number", "FPS Limit", "");
     addRow(l, "playerMode", "bool", "Player Mode", "");
     addRow(l, "proceduralTracks", "bool", "Procedural Tracks", "");
-    addRow(l, "serverAuth", "bool", "Server Auth", "");
+    addRow(l, "serverAuth", "string", "Server Auth Mode", "blank or file");
     addRow(l, "serverLogin", "string", "Server Login", "");
     addRow(l, "useNetworkEng", "bool", "Use Network Engine", "");
 
@@ -695,12 +674,10 @@ void SettingsDialog::setupUi() {
         save();
     });
     connect(resetDefaultsBtn, &QPushButton::clicked, this, [this]() {
-        const QMessageBox::StandardButton choice = QMessageBox::question(
-            this, "Reset Settings",
-            "Replace all saved settings with TSRE defaults?\n\n"
-            "A backup of the current settings.json will be kept.",
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-        if(choice != QMessageBox::Yes)
+        if(!GuiFunct::confirmDestructiveAction(
+                this, "Reset Settings",
+                "Replace all saved settings with TSRE defaults?\n\n"
+                "A backup of the current settings.json will be kept."))
             return;
         if(saveDefaults()){
             QMessageBox::information(
@@ -729,14 +706,13 @@ bool SettingsDialog::save(const QString& filename) {
 
     out << "// TSRE GenX " << Game::AppVersion << " settings\n";
     out << "// Both # and // can be used for comments.\n";
-    out << "// Recommended public uiScale range: 1.00 to 1.25. Scott's 32\" 2K setup uses 1.15.\n\n";
+    out << "// Recommended public uiScale range: 1.00 to 1.25.\n\n";
 
     out << "\n//// General / System\n\n";
     writeSetting(out, "consoleOutput", "false", "display log output in realtime in the command window");
     writeSetting(out, "debugOutput", "false", "enable extended logging detail");
     writeSetting(out, "fullscreen", "false", "start maximized/fullscreen");
     writeSetting(out, "soundEnabled", "false", "legacy TSRE sound support");
-    writeSetting(out, "startapp", "r", "r = Route Editor, c = Consist Editor, s = Shape Viewer");
     writeSetting(out, "systemTheme", "false", "true uses your Windows palette");
     writeSetting(out, "unsafemode", "false", "only enable for risky/advanced features");
     writeSetting(out, "useImperial", "on", "convert some display values from metric");
@@ -746,16 +722,15 @@ bool SettingsDialog::save(const QString& filename) {
 
     out << "\n\n//// Logging\n\n";
     writeSetting(out, "logfiledays", "20", "delete logs older than X days");
-    writeSetting(out, "logfilemax", "50000", "keep only X logs");
+    writeSetting(out, "logfilemax", "30", "keep only X logs");
 
     out << "\n\n//// Startup / Route Selection\n\n";
     writeOptionalSetting(out, "gameRoot", "", "your MSTS/ORTS \"Train Simulator\" folder", true);
     writeOptionalSetting(out, "routeName", "", "route name to skip route selection menu", true);
-    writeSetting(out, "createNewIfNotExist", "true", "create routeName if it does not already exist");
     writeOptionalSetting(out, "startTileX", "", "optional start location");
     writeOptionalSetting(out, "startTileY", "", "optional start location");
     out << "\n";
-    writeSetting(out, "geoPath", "e:/SRTM", "drive/folder containing HGT files");
+    writeSetting(out, "geoPath", "", "drive/folder containing HGT files");
     writeSetting(out, "loadActivities", "true", "check route activities for errors");
     writeSetting(out, "loadAllWFiles", "false", "true loads the entire route for error checking; slower on large routes");
     out << "\n";
@@ -765,15 +740,14 @@ bool SettingsDialog::save(const QString& filename) {
     writeOptionalSetting(out, "routeMergeTerrtex", "false", "set true to overwrite overlapping terrain textures");
 
     out << "\n\n//// UI / Windows / Scaling\n\n";
-    writeSetting(out, "mainWindowLayout", "PWTC", "window order: P = Properties, T = Tools, W = World, C = Control Panel", true);
     writeSetting(out, "toolsHidden", "false", "only show the viewport");
-    writeSetting(out, "uiScale", "1.15", "global editor UI font/panel scale; 1.00 to 1.25 recommended");
+    writeSetting(out, "uiScale", "1.00", "global editor UI font/panel scale; 1.00 to 1.25 recommended");
     writeSetting(out, "scoSoundEnabled", "true", "interface clicks, error buzzes, and success chirps");
 
     out << "\n\n//// Camera / Viewport\n\n";
     writeSetting(out, "cameraFov", "35");
-    writeSetting(out, "cameraSpeedMax", "40", "camera movement with SHIFT");
-    writeSetting(out, "cameraSpeedMin", "1", "camera movement with CTRL");
+    writeSetting(out, "cameraSpeedMax", "35", "camera movement with SHIFT");
+    writeSetting(out, "cameraSpeedMin", "0.25", "camera movement with CTRL");
     writeSetting(out, "cameraSpeedStd", "3", "camera movement normal");
     writeSetting(out, "cameraStickToTerrain", "true", "stop camera from going underground, toggled with \"/\" key");
     writeSetting(out, "lockCamera", "false", "same as pressing \".\" while moving the camera");
@@ -787,7 +761,7 @@ bool SettingsDialog::save(const QString& filename) {
     writeSetting(out, "maxObjLag", "10");
     writeSetting(out, "MSTSshadows", "false", "simplified shadows when true");
     writeSetting(out, "newSymbols", "true", "true uses newer TSRE symbols; false uses older pyramids");
-    writeSetting(out, "objectLod", "3000", "2000 is plenty for most routes");
+    writeSetting(out, "objectLod", "2000", "2000 is plenty for most routes");
     writeSetting(out, "railProfile", "0.7175, 0.7895", "rail edges for dynamic track display");
     writeSetting(out, "shadowLowMapSize", "1024");
     writeSetting(out, "shadowMapSize", "2048");
@@ -799,11 +773,9 @@ bool SettingsDialog::save(const QString& filename) {
     out << "\n\n//// View Overlays / Markers\n\n";
     writeSetting(out, "fogColor", "");
     writeSetting(out, "fogDensity", "");
-    writeSetting(out, "hudEnabled", "false");
-    writeSetting(out, "hudScale", "1", "HUD text scale");
-    writeSetting(out, "markerHeight", "10", "height of marker sticks");
+    writeSetting(out, "markerHeight", "20", "height of marker sticks");
     writeSetting(out, "markerLines", "true", "show marker lines when route loads");
-    writeSetting(out, "markerText", "2.5", "marker text size");
+    writeSetting(out, "markerText", "5", "marker text size");
     writeSetting(out, "oglDefaultLineWidth", "1", "width of standard lines");
     writeSetting(out, "renderTrItems", "false", "show black TrItem markers");
     writeSetting(out, "sectionLineHeight", "5.0", "grey section line height");
@@ -812,8 +784,7 @@ bool SettingsDialog::save(const QString& filename) {
     writeSetting(out, "selectedTerrColor", "#FFB612", "terrain selection line color");
     writeSetting(out, "selectedTerrWidth", "4", "terrain selection line width");
     writeSetting(out, "skyColor", "#E0FFFF");
-    writeSetting(out, "useSuperelevation", "false", "apply superelevation when rendering curves");
-    writeSetting(out, "viewCompass", "false", "show compass at top center");
+    writeSetting(out, "viewCompass", "true", "show compass at top center");
     writeSetting(out, "viewMarkers", "true", "view markers selected in Control Panel");
     writeSetting(out, "viewTRLabels", "false", "show track item labels");
     writeSetting(out, "wireLineHeight", "6.8", "yellow TDB/RDB line height");
@@ -846,48 +817,47 @@ bool SettingsDialog::save(const QString& filename) {
     writeSetting(out, "terrainConformRdbBias", "0.00", "height added when conforming terrain to RDB");
 
     out << "\n\n//// Terrain Texture / Seasonal Paint\n\n";
-    writeSetting(out, "preloadTextures", "rock.ace", "supports ace, bmp, dds, png files in TERRTEX folder", true);
+    writeSetting(out, "preloadTextures", "", "supports ace, bmp, dds, png files in TERRTEX folder", true);
 
     out << "\n\n//// Map / F3 Imagery\n\n";
-    writeSetting(out, "mapImageResolution", "4096", "downloaded map imagery resolution");
-    writeOptionalSetting(out, "mapengine", "", "optional map imagery provider selector");
+    writeSetting(out, "mapImageResolution", "4096", "configured in F3");
+    writeSetting(out, "mapengine", "None", "configured in F3");
     out << "\n";
-    writeOptionalSetting(out, "imageMapsUrl", "", "custom imagery URL, use {lat}, {lon}, {zoom}, {res}", false);
-    writeOptionalSetting(out, "imageMapsZoomOffset", "-1", "required for MapBox");
-    writeOptionalSetting(out, "MapAPIKey", "", "your API key");
+    writeSetting(out, "googleImageMapsUrl", "https://maps.googleapis.com/maps/api/staticmap?center={lat},{lon}&zoom={zoom}&size={res}x{res}&maptype=satellite&key=", "Google static imagery URL");
+    writeSetting(out, "googleMapAPIKey", "", "Google Maps API key");
+    writeSetting(out, "googleImageMapsZoomOffset", "0");
     out << "\n";
-    out << "// MapBox example:\n";
-    out << "// imageMapsUrl = https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/{lon},{lat},{zoom}/{res}x{res}?access_token=\n";
-    out << "// imageMapsZoomOffset = -1       // required for MapBox\n";
-    out << "// MapAPIKey = {your API key}\n";
+    writeSetting(out, "mapboxImageMapsUrl", "https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/{lon},{lat},{zoom}/{res}x{res}?access_token=", "Mapbox static imagery URL");
+    writeSetting(out, "mapboxMapAPIKey", "", "Mapbox access token");
+    writeSetting(out, "mapboxImageMapsZoomOffset", "-1");
     out << "\n";
-    out << "// Google Maps example:\n";
-    out << "// imageMapsUrl = http://maps.googleapis.com/maps/api/staticmap?center={lat},{lon}&zoom={zoom}&size={res}x{res}&maptype=satellite&key=\n";
-    out << "// MapAPIKey = {your API key}\n";
+    writeSetting(out, "imageMapsUrl", "", "custom imagery URL");
+    writeSetting(out, "MapAPIKey", "", "optional custom provider key");
+    writeSetting(out, "imageMapsZoomOffset", "0");
 
     out << "\n\n//// Route File Cleanup / Maintenance\n\n";
     writeSetting(out, "autoFix", "false", "repair TDB anomalies");
     writeSetting(out, "deepunderground", "-100", "flag pieces that are not on terrain");
-    writeSetting(out, "deleteTrWatermarks", "true", "remove detail not used by ORTS");
-    writeSetting(out, "deleteViewDbSpheres", "true", "remove detail not used by ORTS");
+    writeSetting(out, "deleteTrWatermarks", "false", "remove detail not used by ORTS");
+    writeSetting(out, "deleteViewDbSpheres", "false", "remove detail not used by ORTS");
     writeSetting(out, "legacySupport", "false", "retain ViewDBSphere and VDBID when true");
-    writeSetting(out, "listfiles", "true", "create lists of files used/unused on exit");
+    writeSetting(out, "listfiles", "false", "build the inventory required by Objects To Remove cleanup");
     writeSetting(out, "objectsToRemove", "", "requires listfiles and loadAllWFiles; comma-separated shapes", true);
-    writeSetting(out, "routeRebuildTDB", "true", "requires unsafemode");
-    writeSetting(out, "sortTileObjects", "true", "order items by detail level on save");
+    writeSetting(out, "routeRebuildTDB", "false", "requires unsafemode");
+    writeSetting(out, "sortTileObjects", "false", "order items by detail level on save");
 
     out << "\n\n//// Advanced / Network / Multi-User\n\n";
-    writeOptionalSetting(out, "fpsLimit", "59");
+    writeSetting(out, "fpsLimit", "59");
     writeOptionalSetting(out, "playerMode", "");
     writeOptionalSetting(out, "proceduralTracks", "true");
-    writeOptionalSetting(out, "serverAuth", "yes");
-    writeOptionalSetting(out, "serverLogin", "yes@yes.com");
+    writeOptionalSetting(out, "serverAuth", "");
+    writeOptionalSetting(out, "serverLogin", "");
     writeOptionalSetting(out, "useNetworkEng", "false");
 
     out << "\n\n//// Consist Editor\n\n";
     writeSetting(out, "ceWindowLayout", "cu1", "C = Consists, 1 = Main List, 2 = Second List", true);
-    writeSetting(out, "colorConView", "#a2a2a2", "", true);
-    writeSetting(out, "colorShapeView", "#a2a2a2", "", true);
+    writeSetting(out, "colorConView", "#000000", "", true);
+    writeSetting(out, "colorShapeView", "#000000", "", true);
     writeSetting(out, "includeFolder", "openrails", "optional override for OpenRailsCZSK Project", true);
     writeSetting(out, "loadConsists", "true", "set false to skip loading consists");
     writeSetting(out, "ortsEngEnable", "true", "give precedence to settings in /OpenRails folders");
@@ -978,14 +948,18 @@ QString SettingsDialog::currentValue(const QString& key, const QString& fallback
     return fallback;
 }
 
-QString SettingsDialog::quotedValue(const QString& key, const QString& fallback) const {
-    QString val = currentValue(key, fallback);
-    val.remove("\"");
-    return "\"" + val + "\"";
-}
-
 void SettingsDialog::writeSetting(QTextStream& out, const QString& key, const QString& fallback, const QString& comment, bool quote) const {
-    QString val = quote ? quotedValue(key, fallback) : currentValue(key, fallback);
+    QString rawValue = currentValue(key, fallback);
+    const QString lowKey = key.toLower();
+    if((lowKey == "selectedcolor" || lowKey == "selectedterrcolor")
+            && !QColor(rawValue).isValid())
+        rawValue = fallback;
+
+    QString val = rawValue;
+    if(quote){
+        val.remove("\"");
+        val = "\"" + val + "\"";
+    }
     out << QString("%1 = %2").arg(key, -30).arg(val);
     if (!comment.isEmpty())
         out << " // " << comment;
@@ -1015,10 +989,12 @@ bool SettingsDialog::backupSettingsFile(const QString& filename) {
     if (!info.exists())
         return true;
 
-    QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
+    QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss-zzz");
     QString backupPath = info.absolutePath() + "/" + info.completeBaseName() + stamp + "." + info.suffix();
-    if (QFile::copy(filename, backupPath))
+    if (QFile::copy(filename, backupPath)){
+        Game::cleanupAppData();
         return true;
+    }
 
     QMessageBox::warning(this, "Settings Backup Failed",
         QString("Could not create backup:\n%1\n\nSettings were not saved.").arg(backupPath));
@@ -1056,6 +1032,18 @@ void SettingsDialog::loadSettings() {
                     val = it.value().toString();
                 else
                     continue;
+
+                if(key == "selectedcolor" && !QColor(val).isValid())
+                    val = "#B612FF";
+                else if(key == "selectedterrcolor" && !QColor(val).isValid())
+                    val = "#FFB612";
+                else if(key == "serverauth"){
+                    const QString normalized = val.trimmed().toLower();
+                    if(normalized == "false" || normalized == "0" || normalized == "off")
+                        val.clear();
+                    else if(normalized == "true" || normalized == "1" || normalized == "on")
+                        val = "file";
+                }
 
                 fileValueMap[key] = val;
                 fileActiveMap[key] = true;
@@ -1098,13 +1086,11 @@ QString SettingsDialog::getGameValue(const QString& key) {
     // Key is always passed in lowercase here
     if (key == "servermode") return Game::ServerMode ? "true" : "false";
     if (key == "serverlogin") return Game::serverLogin;
-    if (key == "serverauth") return !Game::serverAuth.isEmpty() ? "true" : "false";
+    if (key == "serverauth") return Game::serverAuth;
     if (key == "localtsectiononly") return Game::LocalTSectionOnly ? "true" : "false";
     if (key == "useworkingdir") return Game::UseWorkingDir ? "true" : "false";
-    if (key == "startapp") return Game::startapp;
     if (key == "loadactivities") return Game::loadActivities ? "true" : "false";
     if (key == "loadconsists") return Game::loadConsists ? "true" : "false";
-    if (key == "mainwindowlayout") return Game::mainWindowLayout;
     if (key == "cewindowlayout") return Game::ceWindowLayout;
     if (key == "playermode") return Game::playerMode ? "true" : "false";
     if (key == "usenetworkeng") return Game::useNetworkEng ? "true" : "false";
@@ -1119,7 +1105,6 @@ QString SettingsDialog::getGameValue(const QString& key) {
     if (key == "ignoremissingglobalshapes") return Game::ignoreMissingGlobalShapes ? "true" : "false";
     if (key == "deletetrwatermarks") return Game::deleteTrWatermarks ? "true" : "false";
     if (key == "deleteviewdbspheres") return Game::deleteViewDbSpheres ? "true" : "false";
-    if (key == "createnewroutes") return Game::createNewRoutes ? "true" : "false";
     if (key == "writeenabled") return Game::writeEnabled ? "true" : "false";
     if (key == "writetdb") return Game::writeTDB ? "true" : "false";
     if (key == "systemtheme") return Game::systemTheme ? "true" : "false";
@@ -1152,14 +1137,11 @@ QString SettingsDialog::getGameValue(const QString& key) {
     if (key == "trackelevationmaxpm") return QString::number(Game::trackElevationMaxPm);
     if (key == "proceduraltracks") return Game::proceduralTracks ? "true" : "false";
     if (key == "fullscreen") return Game::fullscreen ? "true" : "false";
-    if (key == "hudenabled") return Game::hudEnabled ? "true" : "false";
-    if (key == "hudscale") return QString::number(Game::hudScale);
     if (key == "markerlines") return Game::markerLines ? "true" : "false";
     if (key == "loadallwfiles") return Game::loadAllWFiles ? "true" : "false";
     if (key == "autofix") return Game::autoFix ? "true" : "false";
     if (key == "listfiles") return Game::listFiles ? "true" : "false";
     if (key == "mapimageresolution") return QString::number(Game::mapImageResolution);
-    if (key == "usesuperelevation") return Game::useSuperelevation ? "true" : "false";
     if (key == "soundenabled") return Game::soundEnabled ? "true" : "false";
     if (key == "scosoundenabled") return Game::scoSoundEnabled ? "true" : "false";
     if (key == "aasamples") return QString::number(Game::AASamples);

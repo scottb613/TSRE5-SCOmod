@@ -30,6 +30,26 @@
 #include <QSignalBlocker>
 #include <QSortFilterProxyModel>
 
+class SelectAllOnEntryLineEdit : public QLineEdit {
+public:
+    explicit SelectAllOnEntryLineEdit(QWidget *parent = NULL)
+        : QLineEdit(parent) {
+    }
+
+protected:
+    void focusInEvent(QFocusEvent *event) override {
+        QLineEdit::focusInEvent(event);
+        selectAll();
+    }
+
+    void mousePressEvent(QMouseEvent *event) override {
+        const bool enteringField = !hasFocus();
+        QLineEdit::mousePressEvent(event);
+        if(enteringField)
+            selectAll();
+    }
+};
+
 static int scaledUiSize(int base){
     return qRound(base * qMax(1.0f, Game::uiScale));
 }
@@ -101,111 +121,15 @@ protected:
     }
 };
 
-static QPoint terrainUtilitiesSnapPosition(QWidget *window){
-    const int snapDistance = 10;
-    QRect moving = window->frameGeometry();
-    QPoint snappedFramePos = moving.topLeft();
-    int bestX = snapDistance + 1;
-    int bestY = snapDistance + 1;
-
-    QScreen *screen = QGuiApplication::screenAt(moving.center());
-    if(screen != NULL){
-        const QRect available = screen->availableGeometry();
-        const int xCandidates[3] = {
-            available.left() - moving.left(),
-            available.right() - moving.right(),
-            available.center().x() - moving.center().x()
-        };
-        const int yCandidates[3] = {
-            available.top() - moving.top(),
-            available.bottom() - moving.bottom(),
-            available.center().y() - moving.center().y()
-        };
-        for(int i = 0; i < 3; ++i){
-            if(qAbs(xCandidates[i]) <= snapDistance && qAbs(xCandidates[i]) < bestX){
-                bestX = qAbs(xCandidates[i]);
-                snappedFramePos.setX(moving.left() + xCandidates[i]);
-            }
-            if(qAbs(yCandidates[i]) <= snapDistance && qAbs(yCandidates[i]) < bestY){
-                bestY = qAbs(yCandidates[i]);
-                snappedFramePos.setY(moving.top() + yCandidates[i]);
-            }
-        }
-    }
-
-    for(QWidget *targetWidget : QApplication::topLevelWidgets()){
-        if(targetWidget == window || !targetWidget->isVisible())
-            continue;
-        const QRect target = targetWidget->frameGeometry();
-        const bool verticalNear = moving.bottom() >= target.top() - snapDistance
-                               && moving.top() <= target.bottom() + snapDistance;
-        const bool horizontalNear = moving.right() >= target.left() - snapDistance
-                                 && moving.left() <= target.right() + snapDistance;
-        const int xCandidates[5] = {
-            target.left() - moving.left(), target.right() - moving.right(),
-            target.right() + 1 - moving.left(), target.left() - 1 - moving.right(),
-            target.center().x() - moving.center().x()
-        };
-        const int yCandidates[5] = {
-            target.top() - moving.top(), target.bottom() - moving.bottom(),
-            target.bottom() + 1 - moving.top(), target.top() - 1 - moving.bottom(),
-            target.center().y() - moving.center().y()
-        };
-        for(int i = 0; i < 5; ++i){
-            int distance = qAbs(xCandidates[i]);
-            if(verticalNear && distance <= snapDistance && distance < bestX){
-                bestX = distance;
-                snappedFramePos.setX(moving.left() + xCandidates[i]);
-            }
-            distance = qAbs(yCandidates[i]);
-            if(horizontalNear && distance <= snapDistance && distance < bestY){
-                bestY = distance;
-                snappedFramePos.setY(moving.top() + yCandidates[i]);
-            }
-        }
-    }
-    return window->pos() + (snappedFramePos - moving.topLeft());
-}
-
-class TerrainUtilitiesWindow : public QWidget {
+class TerrainUtilitiesWindow : public EditorPopupWindow {
 public:
-    TerrainUtilitiesWindow(TerrainTools *owner, QPushButton *toggleButton,
-                           QPushButton *resetTerrtexButton)
-        : QWidget(owner, Qt::Tool), owner(owner), toggleButton(toggleButton) {
-        setWindowTitle(QString());
-        setFixedWidth(scaledUiSize(310));
-        setStyleSheet(GuiFunct::scoEditorPanelStyle());
-
-        QVBoxLayout *rootLayout = new QVBoxLayout(this);
-        rootLayout->setSpacing(4);
-        rootLayout->setContentsMargins(4,4,4,4);
-
-        QLabel *heading = new QLabel("TERRAIN UTILITIES");
-        GuiFunct::styleEditorTitle(heading);
-        QHBoxLayout *headingRow = new QHBoxLayout;
-        headingRow->setContentsMargins(0,0,0,0);
-        headingRow->addWidget(heading);
-        headingRow->addStretch();
-
-        GuiFunct::setupWindowPinButton(&pinButton);
-        pinButton.setCheckable(true);
-        pinButton.setFocusPolicy(Qt::NoFocus);
-        QFont pinFont = pinButton.font();
-        pinFont.setBold(false);
-        if(pinFont.pointSizeF() > 0)
-            pinFont.setPointSizeF(qMax(7.0, pinFont.pointSizeF() * 0.85));
-        pinButton.setFont(pinFont);
-        pinButton.setFixedSize(scaledUiSize(30), scaledUiSize(17));
-        positionPinned = Game::pinnedWindowPosition("terrainUtilities", NULL);
-        pinButton.setChecked(positionPinned);
-        updatePinAppearance();
-        headingRow->addWidget(&pinButton);
-        rootLayout->addLayout(headingRow);
-
-        QLabel *conformHeading = new QLabel(QString(QChar(0x2022)) + " Terrain Conform");
-        GuiFunct::styleEditorSubtitle(conformHeading);
-        rootLayout->addWidget(conformHeading);
-
+    TerrainUtilitiesWindow(TerrainTools *owner, QPushButton *toggleButton)
+        : EditorPopupWindow(owner, "TRACK BIAS", "terrainUtilities"),
+          owner(owner), toggleButton(toggleButton) {
+        QVBoxLayout *rootLayout = popupLayout();
+        setPopupPinToolTips(
+            "Save the current Track Bias position between sessions.",
+            "The Track Bias position is saved between sessions.");
         QGridLayout *conformLayout = new QGridLayout;
         conformLayout->setSpacing(3);
         conformLayout->setContentsMargins(3,0,3,0);
@@ -227,12 +151,6 @@ public:
         conformLayout->addWidget(&rdbHeightBias, 1, 1);
         conformLayout->addWidget(new QLabel("m"), 1, 2);
         rootLayout->addLayout(conformLayout);
-
-        rootLayout->addSpacing(scaledUiSize(5));
-        QLabel *terrtexHeading = new QLabel(QString(QChar(0x2022)) + " TERRTEX Maintenance");
-        GuiFunct::styleEditorSubtitle(terrtexHeading);
-        rootLayout->addWidget(terrtexHeading);
-        rootLayout->addWidget(resetTerrtexButton);
 
         QList<QWidget*> controls = findChildren<QWidget*>();
         for(QWidget *control : controls){
@@ -256,48 +174,13 @@ public:
             rdbHeightBias.setText(QString::number(Game::terrainConformRdbBias, 'f', 2));
         });
 
-        snapTimer.setSingleShot(true);
-        pinSaveTimer.setSingleShot(true);
-        QObject::connect(&snapTimer, &QTimer::timeout, this, [this](){
-            if(snapping)
-                return;
-            const QPoint snapped = terrainUtilitiesSnapPosition(this);
-            if(snapped != pos()){
-                snapping = true;
-                move(snapped);
-                snapping = false;
-            }
-        });
-        QObject::connect(&pinSaveTimer, &QTimer::timeout, this, [this](){
-            if(positionPinned)
-                Game::savePinnedWindowPosition("terrainUtilities", pos());
-        });
-        QObject::connect(&pinButton, &QToolButton::toggled, this, [this](bool pinned){
-            positionPinned = pinned;
-            updatePinAppearance();
-            if(pinned){
-                Game::clearPinnedWindowPosition("terrainUtilitiesUseDefault");
-                Game::savePinnedWindowPosition("terrainUtilities", pos());
-            } else {
-                pinSaveTimer.stop();
-                Game::clearPinnedWindowPosition("terrainUtilities");
-                Game::savePinnedWindowPosition("terrainUtilitiesUseDefault", QPoint(0, 0));
-                moveToDefaultPosition();
-            }
-        });
-
-        QPoint pinnedPosition;
-        if(Game::pinnedWindowPosition("terrainUtilities", &pinnedPosition))
-            move(Game::visibleWindowPosition(pinnedPosition, size()));
-
-        rootLayout->activate();
-        setFixedHeight(rootLayout->sizeHint().height());
+        finalizePopup();
     }
 
     void showForOwner(){
         tdbHeightBias.setText(QString::number(Game::terrainConformTdbBias, 'f', 2));
         rdbHeightBias.setText(QString::number(Game::terrainConformRdbBias, 'f', 2));
-        if(!everShown && !positionPinned){
+        if(!everShown && !isPopupPositionPinned()){
             moveToDefaultPosition();
             everShown = true;
         }
@@ -307,15 +190,6 @@ public:
     }
 
 protected:
-    void moveEvent(QMoveEvent *event) override {
-        QWidget::moveEvent(event);
-        if(!snapping){
-            snapTimer.start(120);
-            if(positionPinned)
-                pinSaveTimer.start(240);
-        }
-    }
-
     void closeEvent(QCloseEvent *event) override {
         QWidget::closeEvent(event);
         if(toggleButton != NULL){
@@ -326,40 +200,27 @@ protected:
     }
 
 private:
+    void popupPinChanged(bool pinned) override {
+        if(pinned)
+            Game::clearPinnedWindowPosition("terrainUtilitiesUseDefault");
+        EditorPopupWindow::popupPinChanged(pinned);
+        if(!pinned){
+            Game::savePinnedWindowPosition(
+                "terrainUtilitiesUseDefault", QPoint(0, 0));
+            moveToDefaultPosition();
+        }
+    }
+
     void moveToDefaultPosition(){
         const QPoint ownerTopLeft = owner->mapToGlobal(QPoint(0, 0));
         const QPoint desired(ownerTopLeft.x() - width() - 1, ownerTopLeft.y());
         move(Game::visibleWindowPosition(desired, size()));
     }
 
-    void updatePinAppearance(){
-        pinButton.setToolTip(positionPinned
-            ? "The Terrain Utilities position is saved between sessions."
-            : "Save the current Terrain Utilities position between sessions.");
-        if(positionPinned){
-            pinButton.setStyleSheet(QString(
-                "QToolButton { color: #232323; background-color: %1;"
-                " border: 1px solid %1; padding: 0px 3px; font-weight: normal; }"
-                "QToolButton:hover { border-color: #e4c5a3; }"
-                "QToolButton:pressed { background-color: #a98a69; }").arg(Game::StyleMainLabel));
-        } else {
-            pinButton.setStyleSheet(
-                "QToolButton { color: #e7eaec; background-color: #26292c;"
-                " border: 1px solid #383d41; padding: 0px 3px; font-weight: normal; }"
-                "QToolButton:hover { background-color: #303438; border-color: #f08200; }"
-                "QToolButton:pressed { background-color: #191b1d; }");
-        }
-    }
-
     TerrainTools *owner;
     QPushButton *toggleButton;
     QLineEdit tdbHeightBias;
     QLineEdit rdbHeightBias;
-    QToolButton pinButton;
-    QTimer snapTimer;
-    QTimer pinSaveTimer;
-    bool snapping = false;
-    bool positionPinned = false;
     bool everShown = false;
 };
 
@@ -623,7 +484,7 @@ TerrainTools::TerrainTools(QString name)
     vbox->addWidget(label2);
     
 
-    int labelWidth = 70;
+    const int labelWidth = scaledUiSize(92);
     
     // brush
     sSize = new QSlider(Qt::Horizontal);
@@ -641,16 +502,17 @@ TerrainTools::TerrainTools(QString name)
 
     hType = new QComboBox;
     hType->setStyleSheet("combobox-popup: 0;");
-    hType->addItem("Add - simple");
-    hType->addItem("Add - if inside 'Size' radius");
-    hType->addItem("Fixed Height");
+    hType->addItem("Add (Simple)");
+    hType->addItem("Add (Radius)");
+    hType->addItem("Height");
     hType->addItem("Flatten");
-    hType->addItem("Conform DB");
+    hType->addItem("Conform TDB/RDB");
+    hType->addItem("Waterbed Offset");
     hType->setCurrentIndex(paintBrush->hType);
-    fheight = new QLineEdit();
-    QDoubleValidator* doubleValidator = new QDoubleValidator(-5000, 5000, 2, this); 
-    doubleValidator->setNotation(QDoubleValidator::StandardNotation);
-    fheight->setValidator(doubleValidator);
+    fheight = new SelectAllOnEntryLineEdit();
+    heightValidator = new QDoubleValidator(-5000, 5000, 2, this);
+    heightValidator->setNotation(QDoubleValidator::StandardNotation);
+    fheight->setValidator(heightValidator);
     
     QGridLayout *vlist = new QGridLayout;
     vlist->setSpacing(2);
@@ -674,9 +536,9 @@ TerrainTools::TerrainTools(QString name)
     vlist->addWidget(GuiFunct::newQLabel("Rotation:", labelWidth),row,0);
     vlist->addWidget(leTextureRotation,row,1);
     vlist->addWidget(sTextureRotation,row++,2);
-    vlist->addWidget(GuiFunct::newQLabel("Fixed Height:", labelWidth),row,0);
+    vlist->addWidget(GuiFunct::newQLabel("Height:", labelWidth),row,0);
     vlist->addWidget(fheight,row++,1,1,2);
-    vlist->addWidget(GuiFunct::newQLabel("Height type:", labelWidth),row,0);
+    vlist->addWidget(GuiFunct::newQLabel("Tool:", labelWidth),row,0);
     vlist->addWidget(hType,row++,1,1,2);
     
 
@@ -711,11 +573,10 @@ TerrainTools::TerrainTools(QString name)
     sun2 = GuiFunct::newQLineEdit(25,3);       
     sun3 = GuiFunct::newQLineEdit(25,3);    
     resetDefaults = new QPushButton("Reset Defaults", this);
-    resetRouteTerrtex = new QPushButton("Reset Route Terrtex Paint", this);
-    terrainUtilitiesButton = new QPushButton("Terrain Utilities...", this);
+    terrainUtilitiesButton = new QPushButton("Track Bias...", this);
     terrainUtilitiesButton->setCheckable(true);
     terrainUtilitiesWindow = new TerrainUtilitiesWindow(
-        this, terrainUtilitiesButton, resetRouteTerrtex);
+        this, terrainUtilitiesButton);
     setPinPoint = new QPushButton("Set Pinpoint", this);    
     
     addRule();
@@ -822,13 +683,11 @@ TerrainTools::TerrainTools(QString name)
     QObject::connect(resetDefaults, SIGNAL(released()),
                       this, SLOT(resetDefaultValues()));
 
-    QObject::connect(resetRouteTerrtex, SIGNAL(released()),
-                      this, SLOT(resetRouteTerrtexPaint()));
-
     QObject::connect(terrainUtilitiesButton, &QPushButton::toggled,
                       this, [this](bool visible){
         if(terrainUtilitiesWindow == NULL)
             return;
+        GuiFunct::setEditorPopupButtonActive(terrainUtilitiesButton, visible);
         if(visible)
             terrainUtilitiesWindow->showForOwner();
         else
@@ -905,6 +764,21 @@ TerrainTools::TerrainTools(QString name)
     
     QObject::connect(fheight, SIGNAL(textEdited(QString)),
                       this, SLOT(setFheight(QString)));
+
+    QObject::connect(fheight, &QLineEdit::editingFinished, this, [this](){
+        const int toolType = this->paintBrush->hType;
+        if(toolType != 2 && toolType != 5)
+            return;
+
+        bool valid = false;
+        float value = this->fheight->text().toFloat(&valid);
+        if(!valid || (toolType == 5 && value >= 0))
+            value = toolType == 5 ? -1.0f : 0.0f;
+
+        this->fheight->setText(QString::number(value, 'f', 2));
+        this->paintBrush->hFixed = value;
+        emit setPaintBrush(this->paintBrush);
+    });
     
     QObject::connect(hType, SIGNAL(currentIndexChanged(int)),
                       this, SLOT(setHtype(int)));
@@ -918,7 +792,9 @@ TerrainTools::TerrainTools(QString name)
     this->setEemb(this->sEemb->value());
     this->setEcut(this->sEcut->value());
     this->setEradius(this->sEradius->value());
-    this->fheight->setText("0");
+    this->paintBrush->hFixed = 0.0f;
+    this->fheight->setText("0.00");
+    this->setHtype(this->hType->currentIndex());
     
     // EFO pre-populate terrainTools values from Settings
 
@@ -1302,16 +1178,51 @@ void TerrainTools::setTextureRotation(int val){
 }
 
 void TerrainTools::setFheight(QString val){
-    emit setPaintBrush(this->paintBrush);
-    //qDebug() << "a";
-    float ival = val.toFloat(0);
+    if(this->paintBrush->hType != 2 && this->paintBrush->hType != 5)
+        return;
+
+    bool valid = false;
+    float ival = val.toFloat(&valid);
+    if(!valid || (this->paintBrush->hType == 5 && ival >= 0))
+        return;
     this->paintBrush->hFixed = ival;
+    emit setPaintBrush(this->paintBrush);
 }
 
 void TerrainTools::setHtype(int val){
-    emit setPaintBrush(this->paintBrush);
     if(val < 0) return;
     this->paintBrush->hType = val;
+    const bool usesHeight = val == 2 || val == 5;
+    fheight->setEnabled(usesHeight);
+
+    if(val == 5){
+        heightValidator->setRange(-5000, -0.01, 2);
+        fheight->setToolTip(
+            "Negative depth below the sloping water surface. "
+            "Only water-enabled terrain patches are changed.");
+        bool valid = false;
+        const float currentOffset = fheight->text().toFloat(&valid);
+        if(!valid || currentOffset >= 0){
+            fheight->setText("-1.00");
+            this->paintBrush->hFixed = -1.0f;
+        }
+    } else {
+        heightValidator->setRange(-5000, 5000, 2);
+        if(val == 2){
+            fheight->setToolTip("Target terrain height.");
+            bool valid = false;
+            const float currentHeight = fheight->text().toFloat(&valid);
+            if(!valid){
+                fheight->setText("0.00");
+                this->paintBrush->hFixed = 0.0f;
+            }
+        } else {
+            fheight->setText("0.00");
+            fheight->setToolTip("Not used by the selected Tool.");
+            this->paintBrush->hFixed = 0.0f;
+        }
+    }
+    emit setPaintBrush(this->paintBrush);
 }
 
 void TerrainTools::setSeasonType(int val){
@@ -1669,9 +1580,9 @@ void TerrainTools::savePaintPreset()
     }
 
     if (replacing) {
-        if (QMessageBox::question(this, "Save Paint Preset",
-                "Replace the existing preset named \"" + name + "\"?",
-                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        if (!GuiFunct::confirmDestructiveAction(
+                this, "Replace Paint Preset",
+                "Replace the existing preset named \"" + name + "\"?"))
             return;
     }
 
@@ -1701,9 +1612,9 @@ void TerrainTools::removePaintPreset()
     if (selected.isEmpty())
         return;
 
-    if (QMessageBox::question(this, "Remove Paint Preset",
-            "Remove preset \"" + selected + "\"?",
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+    if (!GuiFunct::confirmDestructiveAction(
+            this, "Remove Paint Preset",
+            "Remove preset \"" + selected + "\"?"))
         return;
 
     QJsonArray presets = readPaintPresets();
@@ -2077,32 +1988,32 @@ void TerrainTools::resetRouteTerrtexPaint()
     QString warning = "This will reset every terrain tile patch in the current route to terrain.ace "
             "and delete per-tile ACE/DDS files from terrtex whose names start with a tile name.\n\n"
             "This cannot be undone from TSRE. Continue?";
-    if (QMessageBox::question(this, "Reset Route Terrtex Paint", warning,
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+    if (!GuiFunct::confirmDestructiveAction(
+            this, "Reset Route TERRTEX Paint", warning))
         return;
 
     QSet<QString> tileNames;
     int tilesReset = 0;
-    int tilesFailed = 0;
+    int tilesInvalid = 0;
+    int tilesSaveFailed = 0;
 
-    QProgressDialog progress("Resetting route terrain paint...", "Cancel", 0, tileFiles.size(), this);
+    QProgressDialog progress("Resetting route terrain paint...", QString(), 0, tileFiles.size(), this);
     progress.setWindowModality(Qt::ApplicationModal);
+    progress.setCancelButton(NULL);
     progress.setMinimumDuration(0);
 
     for (int i = 0; i < tileFiles.size(); i++) {
-        if (progress.wasCanceled())
-            break;
-
         QFileInfo tileInfo = tileFiles[i];
         QString tileName = tileInfo.completeBaseName();
-        tileNames.insert(tileName.toLower());
         progress.setValue(i);
         progress.setLabelText("Resetting " + tileName + ".t");
         qApp->processEvents();
 
         TFile tfile;
-        if (!tfile.readT(tileInfo.absoluteFilePath())) {
-            tilesFailed++;
+        if (!tfile.readT(tileInfo.absoluteFilePath())
+        || tfile.tdata == NULL
+        || tfile.patchsetNpatches <= 0) {
+            tilesInvalid++;
             continue;
         }
 
@@ -2121,7 +2032,11 @@ void TerrainTools::resetRouteTerrtexPaint()
             tfile.tdata[patch * 13 + 12] = 0.062375f;
         }
 
-        tfile.save(tileInfo.absoluteFilePath());
+        if (!tfile.saveAtomic(tileInfo.absoluteFilePath())) {
+            tilesSaveFailed++;
+            continue;
+        }
+        tileNames.insert(tileName.toLower());
         tilesReset++;
     }
     progress.setValue(tileFiles.size());
@@ -2154,10 +2069,126 @@ void TerrainTools::resetRouteTerrtexPaint()
         tilesReloaded = Game::terrainLib->reloadLoaded();
 
     QMessageBox::information(this, "Reset Route Terrtex Paint",
-            QString("Reset %1 tile(s).\nFailed tile saves: %2\nDeleted %3 per-tile texture file(s).\nFailed deletes: %4\nReloaded %5 loaded tile(s).")
+            QString("Reset %1 tile(s).\nUnreadable/invalid tiles: %2\nFailed tile saves: %3\nDeleted %4 per-tile texture file(s).\nFailed deletes: %5\nReloaded %6 loaded tile(s).")
             .arg(tilesReset)
-            .arg(tilesFailed)
+            .arg(tilesInvalid)
+            .arg(tilesSaveFailed)
             .arg(filesDeleted)
             .arg(filesFailed)
+            .arg(tilesReloaded));
+}
+
+void TerrainTools::disableRouteWaterTiles()
+{
+    QVector<QString> unsavedItems;
+    if(Game::currentRoute != NULL)
+        Game::currentRoute->getUnsavedInfo(unsavedItems);
+    else if(Game::terrainLib != NULL)
+        Game::terrainLib->getUnsavedInfo(unsavedItems);
+
+    if(!unsavedItems.isEmpty()){
+        QMessageBox::warning(
+            this, "Water Tiles Off",
+            QString("There are %1 pending route change(s).\n\n"
+                    "Save your changes, then retry Water Tiles Off.")
+                .arg(unsavedItems.size()));
+        return;
+    }
+
+    const QString tilePath =
+        Game::root + "/routes/" + Game::route + "/tiles";
+    QDir tileDir(tilePath);
+    if(!tileDir.exists()){
+        QMessageBox::warning(
+            this, "Water Tiles Off", "Route tiles folder was not found.");
+        return;
+    }
+
+    const QFileInfoList tileFiles = tileDir.entryInfoList(
+        QStringList() << "*.t", QDir::Files, QDir::Name);
+    if(tileFiles.isEmpty()){
+        QMessageBox::warning(
+            this, "Water Tiles Off", "No terrain tile files were found.");
+        return;
+    }
+
+    const QString warning =
+        "This will turn OFF every water patch in every terrain tile across "
+        "the current route.\n\n"
+        "Terrain heights, textures, gaps, and non-water patch flags will not "
+        "be changed.\n\n"
+        "This cannot be undone from TSRE. Continue?";
+    if(!GuiFunct::confirmDestructiveAction(
+            this, "Water Tiles Off", warning))
+        return;
+
+    int tilesScanned = 0;
+    int tilesChanged = 0;
+    int patchesChanged = 0;
+    int tilesInvalid = 0;
+    int tilesSaveFailed = 0;
+    const int waterMask = 0x10000c0;
+
+    QProgressDialog progress(
+        "Turning off route water patches...", QString(),
+        0, tileFiles.size(), this);
+    progress.setWindowModality(Qt::ApplicationModal);
+    progress.setCancelButton(NULL);
+    progress.setMinimumDuration(0);
+
+    for(int i = 0; i < tileFiles.size(); ++i){
+        const QFileInfo &tileInfo = tileFiles[i];
+        progress.setValue(i);
+        progress.setLabelText(
+            "Checking " + tileInfo.completeBaseName() + ".t");
+        qApp->processEvents();
+
+        TFile tfile;
+        if(!tfile.readT(tileInfo.absoluteFilePath())
+        || tfile.flags == NULL
+        || tfile.patchsetNpatches <= 0){
+            ++tilesInvalid;
+            continue;
+        }
+
+        ++tilesScanned;
+        int tilePatchesChanged = 0;
+        const int patchCount =
+            tfile.patchsetNpatches * tfile.patchsetNpatches;
+        for(int patch = 0; patch < patchCount; ++patch){
+            if((tfile.flags[patch] & waterMask) == 0)
+                continue;
+            tfile.flags[patch] &= ~waterMask;
+            ++tilePatchesChanged;
+        }
+
+        if(tilePatchesChanged == 0)
+            continue;
+
+        if(!tfile.saveAtomic(tileInfo.absoluteFilePath())){
+            ++tilesSaveFailed;
+            continue;
+        }
+        ++tilesChanged;
+        patchesChanged += tilePatchesChanged;
+    }
+    progress.setValue(tileFiles.size());
+
+    int tilesReloaded = 0;
+    if(Game::terrainLib != NULL)
+        tilesReloaded = Game::terrainLib->reloadLoaded();
+
+    QMessageBox::information(
+        this, "Water Tiles Off",
+        QString("Scanned %1 terrain tile(s).\n"
+                "Changed %2 tile(s) and turned off %3 water patch(es).\n"
+                "Unreadable/invalid tiles: %4\n"
+                "Failed tile saves: %5\n"
+                "Reloaded %6 currently loaded tile(s).")
+            .arg(tilesScanned)
+            .arg(tilesChanged)
+            .arg(patchesChanged)
+            .arg(tilesInvalid)
+            .arg(tilesSaveFailed)
             .arg(tilesReloaded));
 }

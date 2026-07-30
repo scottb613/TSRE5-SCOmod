@@ -13,23 +13,36 @@
 #define	TERRAINWATERWINDOW2_H
 
 #include <QtWidgets>
+#include "GuiFunct.h"
 
 class Terrain;
 
-class TerrainWaterWindow2 : public QWidget {
+class TerrainWaterWindow2 : public EditorPopupWindow {
     Q_OBJECT
 public:
     TerrainWaterWindow2(QWidget* parent);
-    virtual ~TerrainWaterWindow2();
+    ~TerrainWaterWindow2() override;
     void setTerrain(Terrain *t);
+    void deactivateRuler();
+
+signals:
+    void helperClosed();
+    void userButtonPressed();
+    void placeRulerRequested();
+    void scanRequested(float heightAboveBed, int tileRadius);
+    void undoScanRequested();
+    void removeRulerRequested();
     
 public slots:
     void eAvgTextEdited(QString val);   
     void eWaterEdited(QString val);    
     void bAdjustEdited();
+
+protected:
+    void closeEvent(QCloseEvent *event) override;
     
 private:
-    Terrain *terrain;
+    Terrain *terrain = NULL;
     QLineEdit e[12];
     float we[12];
     QLineEdit eAvg;
@@ -37,6 +50,10 @@ private:
     QLineEdit eSE;
     QLineEdit eNE;
     QLineEdit eNW;
+    QLineEdit tileIdentifier;
+    QDoubleSpinBox waterHeight;
+    QSpinBox searchDistance;
+    QPushButton *placeRulerButton = NULL;
 };
 
 #endif	/* TERRAINWATERWINDOW2_H */

@@ -16,6 +16,7 @@
 class TDB;
 class WorldObj;
 class GameObj;
+class Terrain;
 
 struct UndoState {
     ~UndoState();
@@ -31,10 +32,18 @@ struct UndoState {
         int x;
         int z;
     };
+    struct TerrainWaterData {
+        int x;
+        int z;
+        QVector<int> flags;
+        float levels[4];
+        bool hasWaterLevel;
+    };
     unsigned long long id;
     bool modified = false;
     QMap<int, TerrainData*> terrainData;
     QMap<int, unsigned char*> texData;
+    QMap<int, TerrainWaterData*> waterData;
     QMap<long long int, WorldObjInfo*> objData;
     TDB* trackDB = NULL;
     TDB* roadDB = NULL;
@@ -51,6 +60,7 @@ public:
     static void StateEnd();
     static void StateEndIfLongTime();
     static void PushTerrainHeightMap(int x, int z, float **data, int samples);
+    static void PushTerrainWater(Terrain *terrain);
     static void PushTextureData(int id, unsigned char *data, unsigned int size);
     static void PushGameObjData(GameObj* obj);
     static void PushWorldObjData(WorldObj* obj);

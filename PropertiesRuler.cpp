@@ -89,9 +89,6 @@ PropertiesRuler::PropertiesRuler() {
     //%
     elevPropLabel.setText("%");
     vlist->addRow(&elevPropLabel,&elevProp);
-    hideElevBoxes();
-    elevType.setCurrentIndex(Game::DefaultElevationBox);
-    showElevBox(elevType.currentText());
     vbox->addItem(vlist);
     
     
@@ -158,6 +155,13 @@ PropertiesRuler::PropertiesRuler() {
     
     vbox->addStretch(1);
     this->setLayout(vbox);
+
+    // Visibility must be applied only after the form belongs to this panel.
+    // Calling show() while these member widgets were still parentless created
+    // a transient standalone QLineEdit and QLabel during editor construction.
+    hideElevBoxes();
+    elevType.setCurrentIndex(Game::DefaultElevationBox);
+    showElevBox(elevType.currentText());
 }
 
 PropertiesRuler::~PropertiesRuler() {

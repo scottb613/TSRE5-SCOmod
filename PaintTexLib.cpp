@@ -23,6 +23,7 @@
 void PaintTexLib::run() {
     
     int size = 4;
+    int fontSize = 24;
     int resM = 1;
     QString fontname = "Arial";
     bool isOutline = false;
@@ -43,6 +44,9 @@ void PaintTexLib::run() {
         }
         if(data[i].split(":").first() == "size"){
             size = data[i].split(":").last().toInt();
+        }
+        if(data[i].split(":").first() == "fontsize"){
+            fontSize = data[i].split(":").last().toInt();
         }
         if(data[i].split(":").first() == "resm"){
             resM = data[i].split(":").last().toInt();
@@ -73,7 +77,7 @@ void PaintTexLib::run() {
     QPainter p;
     p.begin(&img);
     p.setRenderHint(QPainter::RenderHint::Antialiasing, false);
-    QFont font(fontname, 24*resM);
+    QFont font(fontname, fontSize*resM);
     p.setFont(font);
     QPen spen(color);
     QPen apen(colorOutline);

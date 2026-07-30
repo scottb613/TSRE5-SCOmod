@@ -76,8 +76,7 @@ public:
     };
 
     MapDataUrlImage(double zoom = 17);
-    MapDataUrlImage(const MapDataUrlImage& orig);
-    virtual ~MapDataUrlImage();
+    ~MapDataUrlImage() override = default;
     bool draw(QImage* myImage);
     void load();
 

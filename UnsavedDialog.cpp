@@ -10,18 +10,21 @@
 
 #include "UnsavedDialog.h"
 #include "GuiFunct.h"
+#include "Game.h"
 
-UnsavedDialog::UnsavedDialog() : UnsavedDialog("SQC") {
+UnsavedDialog::UnsavedDialog(QWidget *parent)
+    : UnsavedDialog("SQC", parent) {
 
 }
 
-UnsavedDialog::UnsavedDialog(QString buttonLayout) : QDialog(){
-    GuiFunct::applyEditorPanelStyle(this);
-    //this->setFixedWidth(300);
-    items.setFixedWidth(300);
-    //this->setFixedSize(300,300);
+UnsavedDialog::UnsavedDialog(QString buttonLayout, QWidget *parent)
+    : QDialog(parent) {
+    GuiFunct::styleEditorDialog(this);
+    setProperty("scoCenterOnScreen", true);
+    const qreal scale = qMax(1.0f, Game::uiScale);
+    setMinimumWidth(qRound(520.0f * scale));
+    items.setMinimumHeight(qRound(220.0f * scale));
     qDebug() << buttonLayout;
-    //QLabel *label = new QLabel("Save changes in consists?");
     if(buttonLayout == "SQC"){
         bok = new QPushButton("Save All and Quit");
         bexit = new QPushButton("Discard and Quit");
@@ -50,45 +53,88 @@ UnsavedDialog::UnsavedDialog(QString buttonLayout) : QDialog(){
         connect(bcancel, SIGNAL (released()), this, SLOT (cancel()));
     if(buttonLayout.contains("Q"))
         connect(bexit, SIGNAL (released()), this, SLOT (exit()));
-    
-    QGridLayout *vlist = new QGridLayout;
-    vlist->setSpacing(2);
-    vlist->addWidget(&infoLabel, 0, 0, 1, 3, Qt::AlignCenter);
-    //vlist->addWidget(new QLabel("New FileName:"), 1, 0, Qt::AlignLeft);
-    //vlist->addWidget(&name, 1, 1, 1, 1, Qt::AlignLeft);
-    //QHBoxLayout *vlist1 = new QHBoxLayout;
-    vlist->addWidget(&items, 1, 0, 1, 3, Qt::AlignCenter);
+
+    bok->setProperty("dialogRole", "positive");
+    if(bexit != NULL)
+        bexit->setProperty("dialogRole", "danger");
+    if(bcancel != NULL){
+        bcancel->setDefault(true);
+        bcancel->setFocus();
+    }
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    mainLayout->setSpacing(6);
+    mainLayout->setContentsMargins(4,4,4,4);
+
+    QHBoxLayout *warningRow = new QHBoxLayout;
+    warningRow->setSpacing(8);
+    QLabel *title = new QLabel("UNSAVED CHANGES");
+    title->setStyleSheet(QString(
+        "QLabel { color: %1; font-weight: bold;"
+        " background-color: #292929; border: none;"
+        " border-left: 3px solid %1; padding: 6px 8px; }")
+        .arg(Game::StyleYellowButton));
+    title->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    warningIcon.setPixmap(
+        style()->standardIcon(QStyle::SP_MessageBoxWarning)
+            .pixmap(qRound(28.0f * scale), qRound(28.0f * scale)));
+    warningIcon.setAlignment(Qt::AlignCenter);
+    warningRow->addWidget(&warningIcon);
+    warningRow->addWidget(title, 1);
+    mainLayout->addLayout(warningRow);
+
+    GuiFunct::styleEditorSubtitle(&subtitleLabel);
+    subtitleLabel.hide();
+    mainLayout->addWidget(&subtitleLabel);
+    infoLabel.setWordWrap(true);
+    infoLabel.setContentsMargins(6,4,6,2);
+    mainLayout->addWidget(&infoLabel);
+    mainLayout->addWidget(&items, 1);
+
+    QHBoxLayout *buttons = new QHBoxLayout;
+    buttons->setSpacing(4);
     if(buttonLayout == "SQC"){
-        vlist->addWidget(bok, 2, 0);
-        vlist->addWidget(bexit, 2, 1);
-        vlist->addWidget(bcancel, 2, 2);
+        buttons->addWidget(bok);
+        buttons->addWidget(bexit);
+        buttons->addWidget(bcancel);
     } else if(buttonLayout == "STWQC"){
-        vlist->addWidget(bok, 2, 0);
-        vlist->addWidget(bokt, 2, 1);  //// EFO  need to flesh this out for saving terrain and world separately
-        vlist->addWidget(bokw, 2, 2);  //// EFO  need to flesh this out for saving terrain and world separately
-        vlist->addWidget(bexit, 2, 3);
-        vlist->addWidget(bcancel, 2, 4);
+        buttons->addWidget(bok);
+        buttons->addWidget(bokt);
+        buttons->addWidget(bokw);
+        buttons->addWidget(bexit);
+        buttons->addWidget(bcancel);
     }
     else if(buttonLayout == "SC"){
-        vlist->addWidget(bok, 2, 0, 1, 2);
-        vlist->addWidget(bcancel, 2, 2);
+        buttons->addWidget(bok, 2);
+        buttons->addWidget(bcancel);
     }
-    
-//    mainLayout->setAlignment(browse, Qt::AlignBottom);
-    vlist->setContentsMargins(1,1,1,1);
-    this->setLayout(vlist);
-    this->layout()->setSizeConstraint( QLayout::SetFixedSize );
-    //this->setFixedSize(this->width(),this->height());
+    mainLayout->addLayout(buttons);
 }
 
 void UnsavedDialog::setMsg(QString msg){
     infoLabel.setText(msg);
 }
 
+void UnsavedDialog::setSubtitle(QString subtitle){
+    QString text = subtitle.trimmed();
+    if(text.isEmpty()){
+        subtitleLabel.clear();
+        subtitleLabel.hide();
+        return;
+    }
+    if(!text.startsWith(QChar(0x2022)))
+        text.prepend(QString(QChar(0x2022)) + " ");
+    subtitleLabel.setText(text.toUpper());
+    subtitleLabel.show();
+}
+
 void UnsavedDialog::hideButtons(){
-    bok->hide();
-    bcancel->hide();
-    bexit->hide();
+    if(bok != NULL)
+        bok->hide();
+    if(bcancel != NULL)
+        bcancel->hide();
+    if(bexit != NULL)
+        bexit->hide();
 }
 
 void UnsavedDialog::cancel(){

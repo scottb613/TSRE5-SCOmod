@@ -15,6 +15,7 @@
 
 class Terrain;
 class TerrainWaterWindow2;
+class TerrainHeightHelperWindow;
 
 class PropertiesTerrain : public PropertiesAbstract{
     Q_OBJECT
@@ -24,11 +25,13 @@ public:
     bool support(GameObj* obj);
     void showObj(GameObj* obj);
     void updateObj(GameObj* obj);
+    QPushButton *hacksButton();
     
 public slots:
-    void bShaderEditorEnabled();
     void bWaterEditorEnabled();
     void bHeightMapResetEnabled();
+    void waterHelperClosed();
+    void heightHelperClosed();
     void bRotateEnabled();
     void bCopyEnabled();
     void bPasteEnabled();
@@ -46,6 +49,12 @@ public slots:
     void bShowAdjacentEnabled();
     void eBiasEnabled(QString val);
     void eAvgWaterEnabled(QString val);
+signals:
+    void hacksToggled(GameObj *selection, QPushButton *button, bool checked);
+    void placeWaterRulerRequested();
+    void scanWaterRulerRequested(float heightAboveBed, int tileRadius);
+    void undoWaterScanRequested();
+    void removeWaterRulerRequested();
 
 private:
     Terrain* terrainObj = NULL;
@@ -59,7 +68,11 @@ private:
     QDoubleSpinBox eScalex;
     QDoubleSpinBox eScaley;
     QLineEdit eRotation;
-    TerrainWaterWindow2* waterWindow;
+    TerrainWaterWindow2* waterWindow = NULL;
+    TerrainHeightHelperWindow* heightWindow = NULL;
+    QPushButton waterHelperButton;
+    QPushButton heightHelperButton;
+    QPushButton hacks;
 };
 
 #endif	/* PROPERTIESTERRAIN_H */

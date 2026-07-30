@@ -32,7 +32,7 @@ class ConEditorWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    ConEditorWindow();
+    explicit ConEditorWindow();
     virtual ~ConEditorWindow();
     
 public slots:
@@ -147,7 +147,6 @@ private:
     QAction *sRefreshEngList;
     QAction *sForceReloadEngList;
     QAction *aboutAction;
-    
     QWidget *conInfo;
     QWidget *engInfo;
     QWidget *engSetsWidget;

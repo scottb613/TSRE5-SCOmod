@@ -24,7 +24,6 @@
 #include "GuiFunct.h"
 #include "ConUnitsWidget.h"
 #include "AboutWindow.h"
-#include "OverwriteDialog.h"
 #include "UnsavedDialog.h"
 #include "ChooseFileDialog.h"
 #include "RandomConsist.h"
@@ -32,8 +31,39 @@
 #include "Activity.h"
 #include "GLMatrix.h"
 #include <QVector>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSaveFile>
 
-ConEditorWindow::ConEditorWindow() : QMainWindow() {
+static bool saveConsistEditorColors(){
+    QFile existingFile(Game::settingsFilePath());
+    QJsonObject settings;
+    if(existingFile.exists()){
+        if(!existingFile.open(QIODevice::ReadOnly))
+            return false;
+        QJsonParseError parseError;
+        const QJsonDocument existingDocument =
+                QJsonDocument::fromJson(existingFile.readAll(), &parseError);
+        existingFile.close();
+        if(parseError.error != QJsonParseError::NoError || !existingDocument.isObject())
+            return false;
+        settings = existingDocument.object();
+    }
+
+    if(Game::colorConView != NULL)
+        settings.insert("colorConView", Game::colorConView->name(QColor::HexRgb));
+    if(Game::colorShapeView != NULL)
+        settings.insert("colorShapeView", Game::colorShapeView->name(QColor::HexRgb));
+
+    QSaveFile outputFile(Game::settingsFilePath());
+    if(!outputFile.open(QIODevice::WriteOnly))
+        return false;
+    outputFile.write(QJsonDocument(settings).toJson(QJsonDocument::Indented));
+    return outputFile.commit();
+}
+
+ConEditorWindow::ConEditorWindow()
+    : QMainWindow() {
     Game::shadowsEnabled = 0;
     Game::fogDensity = 0;
     Vec3::set((float*)Game::sunLightDirection,-1.0,0.0,0.0);
@@ -96,6 +126,10 @@ ConEditorWindow::ConEditorWindow() : QMainWindow() {
     QVBoxLayout *mbox = new QVBoxLayout;
     mbox->setSpacing(2);
     mbox->setContentsMargins(1,1,1,1);
+    QLabel *editorTitle = new QLabel("CONSIST EDITOR");
+    GuiFunct::styleEditorTitle(editorTitle);
+    mbox->addWidget(editorTitle);
+
     QGridLayout *vbox = new QGridLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
@@ -208,7 +242,29 @@ ConEditorWindow::ConEditorWindow() : QMainWindow() {
     main->setLayout(mbox);
     this->setCentralWidget(main);
     
-    setWindowTitle(Game::AppName+" "+Game::AppVersion+" Consist Editor"+"   [ "+Game::root+" ]");
+    setWindowTitle(Game::AppName+" "+Game::AppVersion+" Consist Editor");
+    QStatusBar *rootStatusBar = statusBar();
+    rootStatusBar->setSizeGripEnabled(false);
+    rootStatusBar->setMinimumHeight(
+        qRound(29.0f * qMax(1.0f, Game::uiScale)));
+    rootStatusBar->setStyleSheet(
+        "QStatusBar { background-color: #292929;"
+        " border-top: 1px solid #454545; }");
+
+    QLabel *rootCaptionLabel = new QLabel(
+        QString(QChar(0x2022)) + " MSTS/ORTS ROOT", this);
+    GuiFunct::styleEditorSubtitle(rootCaptionLabel);
+    rootStatusBar->addWidget(rootCaptionLabel);
+
+    QLabel *rootPathLabel = new QLabel(
+        QDir::toNativeSeparators(Game::root), this);
+    rootPathLabel->setStyleSheet(
+        "QLabel { color: #f0f0f0; font-size: 11pt; font-weight: normal;"
+        " padding: 2px 8px; }");
+    rootPathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    rootPathLabel->setToolTip(QDir::toNativeSeparators(Game::root));
+    rootStatusBar->addWidget(rootPathLabel, 1);
+
     fileMenu = menuBar()->addMenu(tr("&File"));
     fNew = new QAction(tr("&New"), this); 
     fileMenu->addAction(fNew);
@@ -363,7 +419,10 @@ ConEditorWindow::ConEditorWindow() : QMainWindow() {
                       this, SLOT(conUnitSelected(int))); 
     
     QObject::connect(glConWidget, SIGNAL(refreshItem()),
-                      this, SLOT(refreshCurrentCon())); 
+                      this, SLOT(refreshCurrentCon()));
+    QObject::connect(
+        glConWidget, SIGNAL(replaceSelectedUnitRequested()),
+        this, SLOT(replaceOneEnabled()));
     
     QObject::connect(units, SIGNAL(refreshItem()),
                       this, SLOT(refreshCurrentCon())); 
@@ -407,13 +466,45 @@ ConEditorWindow::~ConEditorWindow() {
 }
 
 void ConEditorWindow::vSetColorConViewSelected(){
-    QColor color = QColorDialog::getColor(Qt::black, this, "Shape View Color",  QColorDialog::DontUseNativeDialog);
+    const QColor initial = Game::colorConView != NULL ? *Game::colorConView : QColor(Qt::black);
+    QColorDialog colorDialog(initial, this);
+    colorDialog.setOption(QColorDialog::DontUseNativeDialog, true);
+    GuiFunct::styleEditorDialog(&colorDialog);
+    GuiFunct::addEditorDialogHeader(
+        &colorDialog, "Consist View Color", QString());
+    if(colorDialog.exec() != QDialog::Accepted)
+        return;
+    const QColor color = colorDialog.selectedColor();
+    if(!color.isValid())
+        return;
     glConWidget->setBackgroundGlColor((float)color.redF(), (float)color.greenF(), (float)color.blueF());
+    if(Game::colorConView == NULL)
+        Game::colorConView = new QColor(color);
+    else
+        *Game::colorConView = color;
+    if(!saveConsistEditorColors())
+        qWarning() << "Could not save Consist Editor view colors";
 }
 
 void ConEditorWindow::vSetColorShapeViewSelected(){
-    QColor color = QColorDialog::getColor(Qt::black, this, "Shape View Color",  QColorDialog::DontUseNativeDialog);
+    const QColor initial = Game::colorShapeView != NULL ? *Game::colorShapeView : QColor(Qt::black);
+    QColorDialog colorDialog(initial, this);
+    colorDialog.setOption(QColorDialog::DontUseNativeDialog, true);
+    GuiFunct::styleEditorDialog(&colorDialog);
+    GuiFunct::addEditorDialogHeader(
+        &colorDialog, "Shape View Color", QString());
+    if(colorDialog.exec() != QDialog::Accepted)
+        return;
+    const QColor color = colorDialog.selectedColor();
+    if(!color.isValid())
+        return;
     glShapeWidget->setBackgroundGlColor((float)color.redF(), (float)color.greenF(), (float)color.blueF());
+    if(Game::colorShapeView == NULL)
+        Game::colorShapeView = new QColor(color);
+    else
+        *Game::colorShapeView = color;
+    if(!saveConsistEditorColors())
+        qWarning() << "Could not save Consist Editor view colors";
 }
 
 void ConEditorWindow::eFindConsistsByEng(){
@@ -451,12 +542,13 @@ void ConEditorWindow::eOpenInExternalEditor(){
         if(fileInfo.exists())
             QDesktopServices::openUrl(QUrl::fromLocalFile(currentEng->filePaths[0]));
     } else {
-        ChooseFileDialog chooseFileDialog;
+        ChooseFileDialog chooseFileDialog(this);
         chooseFileDialog.setMsg("This ENG contains more than one file:");
-        chooseFileDialog.setWindowTitle("Choose file:");
         for(int i = 0; i < currentEng->filePaths.size(); i++){
             chooseFileDialog.items.addItem(""+currentEng->filePaths[i]);
         }
+        if(chooseFileDialog.items.count() > 0)
+            chooseFileDialog.items.setCurrentRow(0);
         chooseFileDialog.exec();
         if(chooseFileDialog.changed == 1){
             QFileInfo fileInfo(currentEng->filePaths[chooseFileDialog.items.currentRow()]);
@@ -474,7 +566,20 @@ void ConEditorWindow::copyImgShapeView(){
 void ConEditorWindow::saveImgShapeView(){
     if(glShapeWidget->screenShot != NULL){
         QImage img = glShapeWidget->screenShot->mirrored(false, true);
-        QString path = QFileDialog::getSaveFileName(this, "Save File", "./", "Images (*.png *.jpg)");
+        QFileDialog fileDialog(this);
+        fileDialog.setOption(QFileDialog::DontUseNativeDialog, true);
+        fileDialog.setAcceptMode(QFileDialog::AcceptSave);
+        fileDialog.setFileMode(QFileDialog::AnyFile);
+        fileDialog.setDirectory("./");
+        fileDialog.setNameFilter("Images (*.png *.jpg)");
+        fileDialog.setDefaultSuffix("png");
+        GuiFunct::styleEditorDialog(&fileDialog);
+        GuiFunct::addEditorDialogHeader(
+            &fileDialog, "Save Preview Image", QString());
+        if(fileDialog.exec() != QDialog::Accepted
+        || fileDialog.selectedFiles().isEmpty())
+            return;
+        QString path = fileDialog.selectedFiles().first();
         if(Game::debugOutput) qDebug() << __FILE__ << __LINE__ << path;
         if(path.length() < 1) return;
         QFile file(path);
@@ -535,26 +640,15 @@ void ConEditorWindow::saveCurrentActivity(){
 void ConEditorWindow::saveCurrentConsist(){
     if(currentCon == NULL) return;
     if(currentCon->isNewConsist()){
-        OverwriteDialog owerwriteDialog;
-        owerwriteDialog.setWindowTitle("Overwrite \""+currentCon->conName+"\" ?");
-        //owerwriteDialog.name.setText(currentCon->conName);
-        QString spath;
-        do {
-            spath = currentCon->path + "/" + currentCon->name;
-            spath.replace("//", "/");
-            qDebug() << __FILE__ << __LINE__ << spath;
-            QFile file(spath);
-            if(!file.exists())
-                break;
-            owerwriteDialog.exec();
-            if(owerwriteDialog.changed == 0)
-                return;
-            if(owerwriteDialog.changed == 1)
-                break;
-            //currentCon->conName = owerwriteDialog.name.text();
-            //currentCon->name = currentCon->conName + ".con";
-            //cFileName.setText(currentCon->conName);
-        } while(owerwriteDialog.changed == 2);
+        QString spath = currentCon->path + "/" + currentCon->name;
+        spath.replace("//", "/");
+        qDebug() << __FILE__ << __LINE__ << spath;
+        QFile file(spath);
+        if(file.exists() && !GuiFunct::confirmDestructiveAction(
+                this, "Overwrite Consist",
+                "A consist named \"" + currentCon->conName
+                    + "\" already exists.\n\nOverwrite it?"))
+            return;
     }
     Game::currentEngLib = englib;
     currentCon->save();
@@ -616,8 +710,16 @@ void ConEditorWindow::cReverseSelected(){
 
 void ConEditorWindow::conUnitSelected(int uid){
     if(currentCon == NULL) return;
+    if(uid < 0 || uid >= currentCon->engItems.size()) return;
     currentCon->select(uid);
-    setCurrentEng(currentCon->engItems[uid].eng);
+    const int engId = currentCon->engItems[uid].eng;
+    const auto engIt = englib->eng.find(engId);
+    // Selecting a missing placeholder must not discard the valid replacement
+    // stock already chosen in either rolling-stock list.
+    if(engIt != englib->eng.end()
+            && engIt->second != NULL
+            && engIt->second->loaded == 1)
+        setCurrentEng(engId);
 }
 
 void ConEditorWindow::viewConList(bool show){
@@ -757,6 +859,7 @@ void ConEditorWindow::engSetShowSelected(){
 }
 
 void ConEditorWindow::engSetShowSet(QString n){
+    Q_UNUSED(n);
     this->fillCurrentEng(engSetsList.currentIndex());
 }
 
@@ -764,9 +867,9 @@ void ConEditorWindow::cSaveAsEngSetSelected(){
     qDebug() << __FILE__ << __LINE__<< "new eng set";
     if(currentCon == NULL) return;
     if(!currentCon->isNewConsist()){
-        QMessageBox msgBox;
-        msgBox.setText("Consist must be new.");
-        msgBox.exec();
+        GuiFunct::showEditorNotice(
+            this, "New Consist Required",
+            "Create a new consist before saving it as an engine set.");
         return;
     }
     QString fileName = currentCon->name.split("#").last().split(".con").first();
@@ -782,19 +885,16 @@ void ConEditorWindow::cSaveAsEngSetSelected(){
     cFileName.setText(currentCon->conName);
     currentCon->name = fileName+".con";
     
-    OverwriteDialog owerwriteDialog;
-    owerwriteDialog.setWindowTitle("Overwrite \""+currentCon->conName+"\" ?");
-    
     QString spath;
     spath = currentCon->path + "/" + currentCon->name;
     spath.replace("//", "/");
     qDebug() << __FILE__ << __LINE__ << spath;
     QFile file(spath);
-    if(file.exists()){
-        owerwriteDialog.exec();
-        if(owerwriteDialog.changed == 0)
-            return;
-    }
+    if(file.exists() && !GuiFunct::confirmDestructiveAction(
+            this, "Overwrite Consist",
+            "A consist named \"" + currentCon->conName
+                + "\" already exists.\n\nOverwrite it?"))
+        return;
     currentCon->save();
     con1->updateCurrentCon();
 }
@@ -900,12 +1000,18 @@ void ConEditorWindow::addToRandomConsist(int id){
 }
 
 void ConEditorWindow::replaceOneEnabled(){
+    if(currentEng == NULL || currentEng->loaded != 1){
+        statusBar()->showMessage(
+            tr("Select valid replacement stock first."), 4000);
+        return;
+    }
     int eid = englib->getEngByPointer(currentEng);
     if(eid < 0)
         return;
     if(currentCon == NULL)
         return;
     currentCon->replaceEngItemSelected(eid);
+    refreshCurrentCon();
 }
 
 void ConEditorWindow::replaceAllEnabled(){
@@ -944,9 +1050,8 @@ void ConEditorWindow::closeEvent( QCloseEvent *event )
         return;
     }
     
-    UnsavedDialog unsavedDialog;
+    UnsavedDialog unsavedDialog(this);
     unsavedDialog.setMsg("Save changes in consists?");
-    unsavedDialog.setWindowTitle("Save changes?");
     for(int i = 0; i < unsavedConIds.size(); i++){
         if(ConLib::con[unsavedConIds[i]] == NULL) continue;
         unsavedDialog.items.addItem("[C] "+ConLib::con[unsavedConIds[i]]->showName);

@@ -27,12 +27,12 @@ public:
     void updateObj(GameObj* obj);
     void activateGradeAssistPlacement();
     int gradeUnitsIndex() const;
+    QPushButton *hacksButton();
     
 public slots:
     void enableCustomDetailLevelEnabled(int val);
     void customDetailLevelEdited(QString val);
     void fixJNodePosnEnabled();
-    void hacksButtonEnabled();
     void elevPromEnabled(QString val);
     void elevProgEnabled(QString val);
     void elevPropEnabled(QString val);
@@ -45,6 +45,11 @@ public slots:
     void haxElevTDBVectorEnabled();
     void haxRemoveTDBTreeEnabled();
     void removeAllInteractivesEnabled();
+    void deleteSelectedInstancesEnabled();
+    void toggleHacksForSelection(
+        GameObj *obj, QPushButton *button, bool checked);
+    void adoptHacksButton(QPushButton *button);
+    void setHacksSelection(GameObj *obj);
     void eTemplateEdited(QString val);
     void openGradeHelper();
     void gradeHelperWindowClosed();
@@ -54,9 +59,13 @@ public slots:
 signals:
     void setMoveStep(float val);
     void requestMainFocus();
+    void resetRouteTerrtexRequested();
+    void disableRouteWaterRequested();
     
 private:
+    friend class HacksWindow;
     TrackObj* trackObj = NULL;
+    WorldObj* hacksSelection = NULL;
     QComboBox elevType;
     QLineEdit elevStep;
     QLineEdit elevProm;
@@ -69,6 +78,7 @@ private:
     QPushButton gradeHelper;
     GradeHelperWindow *gradeHelperWindow = NULL;
     HacksWindow *hacksWindow = NULL;
+    QPushButton *activeHacksButton = NULL;
     QTimer gradeHelperUiTimer;
     QComboBox cCollisionType;
     QLineEdit eCollisionFlags;
@@ -81,6 +91,8 @@ private:
     float currentGradePercent() const;
     void refreshGradeLockUi();
     void refreshGradeHelperUi();
+    bool hasSelectedTrackForHacks() const;
+    bool hasSelectedStaticForHacks() const;
 };
 
 #endif	/* PROPERTIESTRACKOBJ_H */

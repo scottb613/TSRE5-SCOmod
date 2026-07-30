@@ -10,25 +10,35 @@
 
 #include "NewRouteWindow.h"
 #include "GuiFunct.h"
+#include "Game.h"
 
 NewRouteWindow::NewRouteWindow() : QDialog(){
     GuiFunct::applyEditorPanelStyle(this);
-    this->setFixedSize(200, 100);
+    GuiFunct::setEditorToolWindowTitle(this);
+    setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+    setFixedWidth(qRound(320.0f * qMax(1.0f, Game::uiScale)));
 
-    QPushButton* ok = new QPushButton("OK");
-    QPushButton* cancel = new QPushButton("Cancel");
-    connect(ok, SIGNAL (released()), this, SLOT (ok()));
-    connect(cancel, SIGNAL (released()), this, SLOT (cancel()));
+    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    mainLayout->setSpacing(4);
+    mainLayout->setContentsMargins(4,4,4,4);
+
+    QLabel *title = new QLabel("NEW ROUTE");
+    GuiFunct::styleEditorTitle(title);
+    mainLayout->addWidget(title);
 
     QFormLayout *vlist = new QFormLayout;
-    vlist->setSpacing(2);
-    vlist->setContentsMargins(3,0,3,0);
+    vlist->setSpacing(4);
+    vlist->setContentsMargins(0,0,0,0);
     vlist->addRow("Name ID:",&this->name);
     vlist->addRow("Lat:",&this->lat);
     vlist->addRow("Lon:",&this->lon);
-    vlist->addRow(ok,cancel);
-    vlist->setContentsMargins(1,1,1,1);
-    this->setLayout(vlist);
+    mainLayout->addLayout(vlist);
+
+    QDialogButtonBox *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttons, &QDialogButtonBox::accepted, this, &NewRouteWindow::ok);
+    connect(buttons, &QDialogButtonBox::rejected, this, &NewRouteWindow::cancel);
+    mainLayout->addWidget(buttons);
 }
 
 void NewRouteWindow::cancel(){

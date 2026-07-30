@@ -16,6 +16,7 @@
 class PreciseTileCoordinate;
 class IghCoordinate;
 class LatitudeLongitudeCoordinate;
+class QProcess;
 
 class LoadWindow : public QWidget {
     Q_OBJECT
@@ -28,6 +29,7 @@ public slots:
     void handleBrowseButton(QString directory = "");
 
     void routeLoad();
+    void consistEditorLoad();
     void restoreLastSession();
     void setNewRoute();
     void setLoadRoute();
@@ -37,6 +39,7 @@ signals:
     void showMainWindow();
 protected:
     void showEvent(QShowEvent *event);
+    void closeEvent(QCloseEvent *event);
 private:
     void listRoutes();
     void updateStartupButtons(bool validRoot);
@@ -47,8 +50,10 @@ private:
     QPushButton *browse;
     QPushButton *load;
     QPushButton *neww;
+    QPushButton *consistEditor;
     QPushButton *restoreLast;
     QPushButton *exit;
+    QProcess *consistEditorProcess = NULL;
 
     
     

@@ -40,6 +40,8 @@ public:
     void moveBackward(float fps);
     void moveLeft(float fps);
     void moveRight(float fps);
+    using Camera::moveUp;
+    using Camera::moveDown;
     void moveUp(float fps);
     void moveDown(float fps);
     void patrzX(float f);

@@ -50,6 +50,8 @@ RulerObj::RulerObj(const RulerObj& o) : WorldObj(o){
     }
     selectionValue = o.selectionValue;
     length = o.length;
+    geoLength = o.geoLength;
+    waterRuler = o.waterRuler;
     internalLodControl = o.internalLodControl;
 }
 
@@ -112,6 +114,10 @@ void RulerObj::set(QString sh, FileBuffer* data) {
     if (sh == ("shapetemplate")) {
         shapeEnabled = true;
         templateName = ParserX::GetStringInside(data);
+        return;
+    }
+    if (sh == ("waterruler")) {
+        waterRuler = ParserX::GetNumber(data) != 0;
         return;
     }
     
@@ -187,6 +193,38 @@ float RulerObj::getLength(){
     
 }float RulerObj::getGeoLength(){
     return geoLength;
+}
+
+int RulerObj::getPointCount() const {
+    return points.size();
+}
+
+void RulerObj::getPointWorldPosition(int index, float *pos) const {
+    if(pos == NULL || index < 0 || index >= points.size())
+        return;
+    pos[0] = x * 2048.0f + points[index].position[0];
+    pos[1] = points[index].position[1];
+    pos[2] = y * 2048.0f + points[index].position[2];
+}
+
+bool RulerObj::isWaterRuler() const {
+    return waterRuler;
+}
+
+void RulerObj::setWaterRuler(bool enabled) {
+    waterRuler = enabled;
+    setModified();
+    if(point3d != NULL)
+        point3d->deleteVBO();
+    if(point3dSelected != NULL)
+        point3dSelected->deleteVBO();
+    if(line3d != NULL)
+        line3d->deleteVBO();
+}
+
+void RulerObj::appendWaterPoint(int px, int pz, float *p) {
+    selectionValue = 0;
+    setPosition(px, pz, p);
 }
 
 void RulerObj::createRoadPaths(){
@@ -282,7 +320,10 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
     
     if(point3d == NULL){
         point3d = new OglObj();
-        point3d->setMaterial(1,1,1);
+        if(waterRuler)
+            point3d->setMaterial(0.10f,0.45f,1.0f);
+        else
+            point3d->setMaterial(1,1,1);
         point3d->setLineWidth(8);
         float *punkty = new float[6];
         int ptr = 0;
@@ -296,7 +337,10 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
         
         point3dSelected = new OglObj();
         point3dSelected->setLineWidth(8);
-        point3dSelected->setMaterial(0.5,0.5,0.5);
+        if(waterRuler)
+            point3dSelected->setMaterial(0.35f,0.80f,1.0f);
+        else
+            point3dSelected->setMaterial(0.5,0.5,0.5);
         ptr = 0;
         punkty[ptr++] = 0;
         punkty[ptr++] = 0;
@@ -310,7 +354,10 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
     if(line3d == NULL){
         line3d = new OglObj();
         line3d->setLineWidth(2);
-        line3d->setMaterial(1,1,1);
+        if(waterRuler)
+            line3d->setMaterial(0.10f,0.45f,1.0f);
+        else
+            line3d->setMaterial(1,1,1);
     }
     if(!line3d->loaded){
         float *punkty = new float[points.size()*6*2]; 
@@ -413,6 +460,9 @@ for(int i = 0; i < points.size(); i++)
 *(out) << "		)\n";
 if(shapeEnabled){
 *(out) << "		ShapeTemplate ( "<<ParserX::AddComIfReq(templateName)<<" )\n";
+}
+if(waterRuler){
+*(out) << "		WaterRuler ( 1 )\n";
 }
 *(out) << "	)\n";
 }

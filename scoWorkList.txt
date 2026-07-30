@@ -16,11 +16,12 @@ HIGHLIGHTS
 
 - Updated [code] to build with current MSYS2/MinGW tooling.
 - Reworked [F] terrain conforming for stronger, more practical track cuts and embankments, including improved low-end track-width behavior.
-- Added [Ctrl+F] selected-object tile conforming, [Shift+F] non-destructive smoothing, and the [F2] Conform DB brush for grade-following spot cleanup.
+- Added [Ctrl+F] selected-object tile conforming, [Shift+F] non-destructive smoothing, the [F2] Conform TDB/RDB brush for grade-following spot cleanup, and a water-patch-only Waterbed Offset brush for maintaining a fixed negative depth beneath sloping river surfaces.
 - Added [Alt+A] selection of all 256 terrain texture patches on the selected tile.
 - Added [autopaint] tile-level track and road painting for faster route-wide texture work.
 - Added [Water Edge] detection and painting that compares terrain elevation against the tile water plane, follows the actual shoreline with a feathered texture transition, and handles shallow-water terrain breaks instead of painting coarse 16x16 patches.
-- Added [F2] confirmed route-wide and current-tile TERRTEX reset tools for returning painted terrain to [terrain.ace].
+- Expanded [Water Helper] with a persistent terrain-snapped watercourse ruler, bounded ruler-following shoreline scans, fitted and seam-matched water elevations, water-patch enabling, an Undo Last action, a latched Water Ruler workflow, saved-ruler recovery, progress guidance, and memory-safety limits.
+- Added confirmed TERRTEX reset tools for returning painted terrain to [terrain.ace]: route-wide reset in F2 Terrain Utilities and current-tile reset from the terrain right-click menu.
 - Added [F2] route-local terrain paint presets covering texture, brush, intensity, shape, and rotation.
 - Added [F2] full 0-360 degree terrain texture rotation for directional ground textures.
 - Rebuilt [F2 seasonal textures] around a visible Summer, Spring, Autumn, Winter, and Night selector instead of hidden settings-file switches.
@@ -32,13 +33,19 @@ HIGHLIGHTS
 - Added [Restore Last Session] for reopening the last route and camera context, plus compact [Pin] controls that remember the main window, Control Panel, and Grade Helper placement between sessions.
 - Added [Windows] the GenX executable icon, desktop-shortcut helper, and Route > Open Route Folder command.
 - Consolidated [Control Panel] Status and Navi functions into a scalable F7 panel with editing-state controls, navigation, movement locks, and delayed edge snapping.
-- Improved [Object Panel] with category-aware search and reset, cleaner Scale Rail grouping, and 30 Recent Items in a bounded scrollable history with Clear Recent.
+- Revised [Category Search] with ALL defaults, mutually exclusive Tracks/Roads/Other filters, search-within-category behavior, cleaner Scale Rail family grouping, Reset, and a bounded Recent Items history.
 - Reworked [F1-F4 panels] property panels, Object Panel, Control Panel, Settings Editor, and startup screens into a consistent scalable interface.
-- Substantially reorganized [F2 textures] around a larger selected-texture preview, a compact two-column Recent Texture bank, clearer paint/preset/brush groups, and texture-name tooltips.
+- Rebuilt the [F2 Terrain Editor] around paired MAIN TERRTEX and SNOW TERRTEX previews, a six-item Recent Texture bank plus a dedicated Brush swatch, and clearly separated texture, preset, brush, embankment, and advanced groups.
+- Added [F2 texture loading and safety] with multi-file ACE/DDS/common-image Load support, generated-tile-texture filtering, decode validation, failed-file reporting, source-filename tooltips, and a complete Clear Recent reset.
+- Hardened [Terrtex: Mirror Season] so painting requires a valid same-name Main/Snow source pair, clearly marks the active output side, and automatically disables mirroring instead of leaving an invalid brush state active.
+- Moved [F2 terrain maintenance] into a pinnable Terrain Utilities helper containing independent TrackDB/RoadDB conform height biases and the confirmed route TERRTEX reset.
 - Added [global UI] scaling, consistent manual-action sound feedback, cleaner square F12 boolean selectors, and coordinated state colors without false responses during passive refreshes.
 - Added [Place Guard] validation with automatic undo and distinct feedback for dangerous or invalid scenery, track, and interactive-object placements.
 - Reorganized [F12 Settings] into practical categories with direct settings saves, timestamped backups, full-sentence tooltips, and an integrated key-assignment reference.
 - Repaired [F3 maps] OSM Vector Map HTTPS support, hardened failed-response handling, and increased generated map imagery to 4096 resolution.
+- Adapted Eric-from-Trainsim's [F3 imagery provider] work so keyless OSM Vector remains always available while Google, Mapbox, and Custom satellite imagery use an explicit provider selector with independently preserved settings.
+- Adapted Eric-from-Trainsim's 8.006m [ORTS rolling-stock compatibility] work with safe normalized `.inc` path resolution that preserves legitimate parent-folder paths without heuristic path rewriting or duplicate inclusion.
+- Adapted Eric-from-Trainsim's [route reporting] idea into Route > Create Route Health Report, which scans every route world file, atomically saves one consolidated report in the route folder, and opens it immediately in a read-only Copy All window.
 - Preserved [Dynamic Track] Classic Flex while adding a Classic/NextGen selector and adapting GokuMK's work as the foundation for compound and full S-curve NextGen connections.
 - Improved [Dynamic Track] editing with database rebuilding after Flex, synchronized elevation data, clearer section/length information, fallback textures, and consistent naming.
 - Added [splash screens] runtime-discovered artwork with a persistent shuffled cycle shared by the Route Loader, Consist Loader, and About window during each session.
@@ -59,14 +66,20 @@ HIGHLIGHTS
 - Standardized [F1-F4 and utility panels] with the charcoal/orange visual system, square selectors, consistent controls, active-tool highlighting, focus restoration, and pinnable helper windows.
 - Added the pinnable [Auto Place] workflow and further Grade Helper, Control Panel, Object Selection, and Terrain Editor cleanup.
 - Replaced the legacy [settings.txt] workflow with per-user [settings.json], atomic saves, timestamped backups, reset-to-default support, and automatic preservation/recovery of damaged JSON.
+- Added [crash-safe route saves] for the key TDB/TIT/TSECTION, RDB/RIT, and TRK files with coordinated atomic replacement, rolling per-route AppData backups, rollback, and interrupted-save recovery.
 - Added [terrain conform settings] for independent TrackDB and RoadDB height bias without re-invoking the full Game load path.
 - Hardened [Dynamic Track textures] so procedural and fallback materials follow one dependable loading path without requiring an Open Rails track profile.
 - Reworked [Dynamic Track display] with a track-following selection outline, normal percent-grade presentation, equal Select/Place controls, and a continuous world-space yellow TrackDB overlay.
 - Rebuilt [NextGen Auto-Flex] around direction-neutral, transactional connection solving that rejects U-turns, backtracking paths, one-ended joins, and bad internal or external seams.
 - Corrected [Dynamic Track geometry] so the object mesh and TrackDB share the same endpoint plane, tangent, grade frame, and curve-to-straight transitions; verified with smooth Open Rails train tests in both grade directions.
-- Finished [F4 path sessions] with explicit New/Edit/Clone states, metadata editing, cancellation rollback, stable saved filenames, player-path flags, and stronger PAT save validation.
-- Improved [F4 path presentation] with named endpoints, reverse-point markers, service-point identification, selected-path emphasis, and a focused path-controls dock shown only while editing.
+- Added [Advanced Shunting WP] support for ORTS Extended AI operations: timed horn, uncouple from either end, join/split, and permission to pass the next red signal.
+- Expanded [F4 path editing] with explicit New/Edit/Clone sessions, selectable and deletable controls, undo/redo, live switch recalculation, reverse points, wait points, passing sidings, and natural-end path routing.
+- Finished [F4 path metadata and saving] with cancellation rollback, stable saved filenames, player-path flags, required endpoint information, stronger PAT validation, and atomic output.
+- Improved [F4 path presentation] with named endpoints, reverse and wait-point markers, service-point identification, selected-path emphasis, overlap and passing-route visualization, and focused controls shown only while editing.
 - Standardized [utility window controls] with compact icon Pin buttons, clearer movement-state colors, and reliable application shutdown even when hide-on-close helper windows remain open.
+- Standardized [destructive warnings] with one centered, fixed-width GenX warning dialog using a red title strip, yellow warning triangle, safe default, and consistent confirmation wording; removed the obsolete OverwriteDialog implementation.
+- Refined [Object Properties] grouping and labels while preserving established editor functions, and removed the unused selected-terrain Shader launcher without hiding Shader ID information.
+- Adapted Eric-from-Trainsim's [Main Load] idea with adjacent Load/Restore actions, a more prominent Consist Editor action, retained root selection, return-to-loader behavior, and isolated CE process state; standalone CE remains unchanged and CE background colors persist independently.
 
 ======================================================================================================
 
@@ -126,7 +139,7 @@ The workflow is:
 
 This keeps the command understandable and avoids accidentally conforming terrain to the wrong nearby track or road. The current tile remains the break point so longer track or road runs can be handled a tile at a time.
 
-I also added a new [F2] Height type called Conform DB for spot cleanup along track or road grades after the broader [F] key terrain conforming pass. Instead of flattening the whole brush to one height, each terrain sample under the brush checks the nearest track or road database line and moves toward that database elevation at that exact X/Z point. The brush is range-limited, while the existing brush size and intensity control the affected area and feathering.
+I also added a new [F2] Tool named Conform TDB/RDB for spot cleanup along track or road grades after the broader [F] key terrain conforming pass. Instead of flattening the whole brush to one height, each terrain sample under the brush checks the nearest track or road database line and moves toward that database elevation at that exact X/Z point. The brush is range-limited, while the existing brush size and intensity control the affected area and feathering.
 
 
    --- Tile Terrain Selection and Autopaint ---
@@ -147,6 +160,15 @@ These use the current brush texture, size, and intensity. Track and road tile pa
 The water tool started as a simple water-patch painter, but that painted the 16x16 terrain swatches rather than the actual shoreline. It was then changed to detect the real water/terrain contour by comparing terrain heights against the tile water plane. This produces a shoreline-style feather around actual water edges, including shallow-water cases where terrain pokes above the water surface.
 
 The water edge tool uses the pointer tile, so the tile being pointed at is the one processed.
+
+
+   --- Automatic Water Helper ---
+
+Water Helper now supports a route-scale workflow built around one persistent blue ruler. Each ruler point snaps to the terrain bed, and the scan follows every segment of the traced river or lake instead of loading one oversized rectangular region. The user controls water height above the bed and the number of neighboring terrain tiles searched.
+
+The scan loads only the required detailed terrain corridor, samples each candidate patch at nine inset points, and flood-fills connected low terrain until it reaches raised shoreline or the configured boundary. Hard limits reject invalid coordinates, oversized corridors, unsuitable patch sizes, and runaway searches before they can exhaust memory. Status guidance reports the meaningful loading, scan, completion, and error stages without flooding the interface with repeated numeric updates.
+
+Each affected tile receives four fitted corner elevations calculated in shared world coordinates so adjacent seams match exactly. Existing water edges are inherited only when they closely match the new surface, preventing unrelated water from pulling a new strip to the wrong elevation. Water flags and corner elevations are stored together for Undo Last. Water Ruler is a latched placement toggle: processing turns placement off but leaves the completed ruler visible, the next activation replaces that ruler with a fresh one, and toggling it off or closing Water Helper removes it. Saved-ruler recovery remains bounded to the ruler's owning world tile.
 
 
    --- Route and Tile TERRTEX Reset Tools ---
@@ -206,6 +228,25 @@ I added a full 0-360 degree texture rotation control under the [F2] terrain pain
 The existing 0/90/180/270 rotation choices still work, but the slider allows finer control. A rotation of 0 remains the normal default texture orientation.
 
 
+   --- F2 Terrain Editor Panel and Texture Workflow ---
+
+The F2 Terrain Editor was restructured so the everyday terrain workflow is easier to read without losing the specialized controls. The panel is now organized into Texture Set, Edit Terrain Layers, Texture Preview, Presets, Brush Settings, Embankment Settings, and Advanced groups using the same compact charcoal/orange hierarchy and scale-aware control sizing as the other GenX editor panels.
+
+Texture Preview now shows two adjacent 108x108 previews titled `MAIN TERRTEX` and `SNOW TERRTEX`. The active-side border follows the selected terrain set, while both sides are marked when Mirror Season is genuinely active. Each preview shows the exact selected source texture for its side and exposes the source filename in its tooltip. Missing, unreadable, wrong-format, or incomplete image data is reported as unavailable rather than allowing the seasonal resolver to display a misleading substitute.
+
+Below the previews, `RECENT` is a six-texture bank arranged as two rows of three. A separate `BRUSH` swatch shows the texture actually assigned to the paint brush, so history and current paint state are no longer confused. The swatches use the same filename tooltips and readiness checks as the large previews.
+
+The texture controls now include `Load...` alongside Pick and Put. Load accepts multiple files in one operation and validates ACE, DDS, JPG/JPEG, PNG, BMP, and TGA images before adding them to Recent history or assigning the brush. Successful loads select the texture and activate terrain-texture painting; failed files are named in the result instead of silently producing a broken swatch. `Hide generated tile textures` can filter generated TERRTEX tile swatches out of the selection list when the user wants to work only with source textures.
+
+`Clear Recent` performs a complete, safe reset of this workflow. It clears the six-item history, active Brush swatch, both large previews, preview tooltips, and Mirror Season state. If the Texture tool or Mirror Season was active, their controls and brush state are turned off together so no invisible stale texture remains selected.
+
+Route-local Presets remain directly above Brush Settings and retain texture path, brush size, intensity, shape, and rotation. Brush Settings contain size, intensity, shape, the 0-360 degree rotation controls, Height, and Tool including Add (Simple), Add (Radius), and Conform TDB/RDB. Height displays 0.00 and is unavailable for Tools that do not use it; entering an applicable Height value selects the full existing number so replacement typing is immediate. Embankment Settings keep Size, Embankment, Cutting, Radius, and Set Pinpoint together.
+
+The Waterbed Offset Tool uses the terrain tile's four corner water elevations to calculate the rendered water-surface height independently at every brushed terrain sample. A strictly negative Height value is added to that local surface height, producing a consistent river depth even where the water plane slopes across a tile. Only samples belonging to water-enabled terrain patches are changed; non-water patches and the water surface itself remain untouched. Brush size and intensity retain their normal feathering behavior, and terrain Undo covers the modified tiles. Tile pointers, water metadata, water values, and local sample bounds are validated before use so malformed, partially loaded, or edge-of-tile samples are safely skipped.
+
+Less frequently used maintenance controls were moved out of the crowded main panel. The Advanced group opens a pinnable `Terrain Utilities...` helper that remembers its pinned position. Its Terrain Conform section provides independent TrackDB and RoadDB height biases from -5.00 to +5.00 metres without changing database geometry, while its TERRTEX Maintenance section contains the confirmed `Reset Route Terrtex Paint` operation. `Reset Defaults` remains available on the main F2 panel.
+
+
    --- Seasonal Terrain and Texture Workflow ---
 
 The old hidden settings-file seasonal editing workflow was replaced for terrain painting. The [F2] terrain paint panel now exposes the texture set directly, using Summer, Spring, Autumn, Winter, and Night choices. Changing the texture set reloads the currently loaded terrain, object shape textures, transfer textures, dynamic track textures, and generated forest/polyforest texture bindings so the editor display matches the selected season as closely as the route's available files allow.
@@ -218,7 +259,7 @@ To significantly speed up seasonal route building, I restored the [F2] Mirror Se
 
 Seasonal texture loading now follows an ORTS-style fallback model for route object, transfer, dynamic track, forest, and polyforest textures. When Spring, Autumn/Fall, Winter/Snow, or Night is selected, TSRE searches the matching seasonal subfolder first for each individual texture file, then falls back to the root texture folder if that file is missing. Object textures now try the active editor season first even when the old SD alternative-texture flags are missing or incomplete. The resolver also checks ACE/DDS alternatives, so a seasonal DDS can satisfy a material that originally referenced an ACE file.
 
-For TERRTEX painting, Mirror Season mirrors only between default and snow. Painting while using a non-winter/default TERRTEX set mirrors toward `TERRTEX/SNOW`; painting while using Winter/Snow mirrors back toward the default `TERRTEX` folder. The same brush/autopaint trace is applied to the paired side, but the paired side must have a matching source texture with the same filename. Default painting uses the default source texture, snow painting uses the snow source texture. No matching paired source texture means no mirror paint for that stroke.
+For TERRTEX painting, Mirror Season mirrors only between default and snow. Painting while using a non-winter/default TERRTEX set mirrors toward `TERRTEX/SNOW`; painting while using Winter/Snow mirrors back toward the default `TERRTEX` folder. The same brush/autopaint trace is applied to the paired side, but the paired side must have a matching, decodable source texture with the same filename. Default painting uses the default source texture, snow painting uses the snow source texture. If either source is missing or invalid, Mirror Season automatically turns off, briefly reports `No Mirror`, clears the brush mirror state, and does not perform a one-sided operation under a misleading active control.
 
 When Mirror Season is off, terrain painting still protects the opposite TERRTEX side from missing tile swatches. If painting creates a new per-tile TERRTEX patch in the active side, TSRE creates a matching placeholder patch in the paired default/snow folder only when that opposite patch does not already exist. The placeholder is copied from the route's paired-side `terrain.ace` when available, or from the bundled GenX content `terrain.ace` fallback. This prevents blank tiles if only one TERRTEX side has been painted, but it does not fake a mirrored texture paint.
 
@@ -300,7 +341,7 @@ I brought the normal Track property panel, Dynamic Track property panel, shared 
 
 The normal Track panel now identifies the selection as `Object: Track`. Its Shape Template, Position & Rotation, Detail Level, Flags, Elevation, MSTS Collision, and Advanced headings all use the same title treatment. The Dynamic Track panel identifies the selection as `Object: Dynamic Track` and uses the same styling for Flex Mode, Sections, and Elevation.
 
-The F2 terrain texture area was reorganized around a larger primary texture preview and a compact two-column thumbnail bank. Mirror Season moved into the paint controls, and the preset, brush, and embankment groups now follow the same spacing and heading system as the other tool panels. F1 Objects, F3 Geo, and F4 Activity use the shared treatment as well.
+The F2 terrain texture area was reorganized around paired MAIN TERRTEX and SNOW TERRTEX previews, a six-item Recent bank arranged in two rows of three, and a separate Brush swatch. Mirror Season moved into the paint controls, uncommon maintenance moved to the pinnable Terrain Utilities helper, and the preset, brush, embankment, and advanced groups now follow the same spacing and heading system as the other tool panels. F1 Objects, F3 Geo, and F4 Activity use the shared treatment as well.
 
 The right-side selector now follows that same style for Objects and Recent Items, with matching checkbox treatment and clear separation between the object list, placement controls, and recent history. Dynamic-track reference groups, object-list entries, and recent items now use the consistent name `Dynamic Track` instead of internal or legacy labels.
 
@@ -354,9 +395,20 @@ The JSON migration retains the complete settings set, including the route-buildi
 The visible comment clutter was removed from the rows and replaced with full-sentence tooltips on the labels and controls. I also added a Key Assignments tab with a two-column, striped table so shortcuts are easier to scan inside the editor. The Settings Editor now uses the same dark visual treatment as the rest of the GenX interface.
 
 
+   --- Crash-Safe Route Key Files ---
+
+Route saves now serialize the TrackDB group ([route].tdb, [route].tit, and route-local tsection.dat), RoadDB group ([route].rdb and [route].rit), and modified TRK file before replacing any of those live files. Each replacement uses a same-directory atomic commit with direct-write fallback disabled, preventing a failed write from truncating the prior route file.
+
+Before commit, TSRE creates a complete per-route backup generation beneath the single application-data [atomicSaves] folder. Each route receives a name-and-root-hash subfolder so routes with the same name in different installations remain separate. A manifest records the participating files and their hashes. If any replacement fails, the transaction restores the complete prior generation. If TSRE or Windows stops while files are being committed, the next route load detects the unfinished manifest and rolls the group back before reading the route. The five newest successful generations are retained; failed and recovered generations remain available for diagnosis.
+
+Save completion is now reported only after the coordinated key-file commit succeeds. A failure leaves the TRK dirty state intact, plays the established error buzz, displays a route-save error, and reports SAVE FAILED instead of the previous unconditional Saved status. This first phase covers the route-root database and definition files; world and terrain tile families remain candidates for a later phase.
+
+
    --- [F3] Map Loading ---
 
 I fixed an [F3] OSM Vector Map loading failure that was showing up as a no-connection message followed by a crash to desktop. The log showed TLS initialization failures before TSRE ever received valid OSM data. The test package now includes the current OpenSSL 3 runtime DLLs required by the MSYS2/Qt network stack.
+
+Eric-from-Trainsim's 8.006m update supplied the starting point for explicit Google and Mapbox provider selection. I adapted that contribution to the GenX F3 workflow rather than importing the broader branch. OSM Vector remains available without an account or API key. Google, Mapbox, and Custom imagery can be selected and configured alongside the other F3 map tools, and each provider keeps its own URL, API key, and zoom-offset values so changing providers does not destroy the previous configuration. Map resolution moved into the same F3 configuration window, leaving no duplicate or empty Map tab in F12. The map loader labels the active imagery source, applies changes without an application restart, and only exposes satellite imagery when the selected provider has the required configuration.
 
 The OSM loader was also hardened so failed HTTPS/HTTP/empty/non-XML replies are treated as no-data responses instead of being parsed as valid map data. That should return control to the editor instead of crashing.
 
@@ -470,6 +522,8 @@ F12 now provides `Save, Restart and Restore`. It saves the displayed settings, c
 
 Static and track-object properties now explain Detail Level, MSTS StaticFlags, and MSTS Collision fields in-place, including the difference between shape defaults and world-file overrides. The F12 key reference explicitly documents `Alt+A` as selecting every terrain texture patch on the selected tile. The Control Panel's elapsed-time-since-save readout remains warning-colored when stale but no longer presents hover or pressed feedback because it is display-only.
 
+The Object Properties panels were also checked for continuity after their visual reorganization. Existing editing operations remain available while related fields use clearer grouping, consistent labels, and common control behavior. The selected-terrain panel no longer exposes the unused Shader launcher, but it retains Shader ID information for diagnostics.
+
 
    --- [F4] Activity Builder and TrackDB Viewer ---
 
@@ -503,6 +557,12 @@ The graph search accounts for crossovers and later valid reconnection points rat
 Reverse points can be added to the active route, including after changing the initial direction. The outgoing path is recalculated in the reversed direction while the already-traversed portion remains intact. A reverse point can be selected and deleted safely; the dedicated removal action remains available where the extra path-state checks are useful.
 
 Wait points support either a duration in minutes and seconds or a wait-until clock time in hours and minutes. The chosen operation is attached to a selected location on the path and written with the path data. Square selectors replace small round radio indicators so the active wait mode is legible in the dark interface.
+
+The Advanced section adds ORTS Extended AI shunting operations using the same path wait-point records. `Blow Horn` stores a selectable one-to-ten-second horn duration. `Uncouple Cars` records whether the front or rear of the train is retained, how many cars including locomotives remain, and the pause after uncoupling. `Join / Split` joins the nearby train and continues the shunting move, while `Request Pass Red` requests permission for the AI train to pass the next red signal. These operations require the Open Rails Extended AI shunting support identified directly in the panel.
+
+Advanced points remain visible and understandable after placement and after reopening a PAT file. Their markers use `H` for Horn, `U` for Uncouple, `J` for Join/Split, and `R` for Pass-Red; ordinary duration waits use `W`, and clock-time waits use `T`. Selecting any marker displays its decoded operation in plain language rather than exposing only the packed PAT value.
+
+Wait and advanced points are associated with a specific path leg and TrackDB vector. Before saving, TSRE reconstructs each leg, orders multiple points along their vector, verifies that none was left behind by a switch or reverse edit, and rejects the save if a point is no longer on the active route. The encoded operation is preserved in the normal MSTS/ORTS PAT control flags so saved points can be imported for later editing.
 
 Track traversed a second time is shown in cyan without breaking the magenta main path. Passing sidings are designated as orange alternates between two valid main-path junctions, may coexist on one path, and recalculate when a controlling switch is thrown. The editor validates that an alternate can return to the main path; an invalid throw is rejected, the original alignment is restored, and the existing valid siding remains unchanged. Undo and redo cover the path-building operations so experimentation does not require starting over.
 
@@ -542,6 +602,8 @@ The vertical profile between the two known endpoints is intentionally one physic
 
 Flex is transactional: the existing object and database record remain intact until a candidate has passed the complete validation set. Candidates are discarded when they backtrack, form an unintended U-turn, fail to make two solid endpoint joins, miss either endpoint or tangent tolerance, or create an invalid internal seam. Deleted TrackDB records are ignored during snapping, while fixed overlapping endpoints are preferred over ambiguous vector samples.
 
+Classic and NextGen use this same Auto-Flex connection, grade-plane, validation, and TrackDB pipeline. Classic limits the shared solver to one curve in an S-C-S pattern; NextGen may accept two curves in S-C-S-C-S. The unreachable older two-click staged Flex function, its global staging variables, dead Route wrapper, and commented keyboard caller were removed so there is no hidden alternate path that bypasses the current safeguards.
+
 The final test route was rebuilt and run in Open Rails across level-to-level, level-to-grade, and grade-direction-reversed connections. The physical joints and internal transitions were reported silky smooth in both travel directions. The yellow TrackDB guide is now rendered as a continuous world-space overlay with raised vertical markers. This corrects the misleading broken/pitched visual without modifying the verified physical track geometry.
 
 
@@ -556,9 +618,13 @@ The selected-object visualization follows the actual Dynamic Track path instead 
 
 New Path, Edit, and Clone now operate as explicit editing sessions. While a session is active, its button and path selection state remain stable and the focused path-controls dock is visible. Cancelling restores the selected path's original metadata and geometry; cancelling a new or cloned unsaved session also removes its temporary route entry and clone file safely.
 
+The path selector is locked during an editing session so the active object cannot silently change underneath the controls. New, Edit, and Clone buttons clearly retain the active state, while the right-side Path Controls dock appears only for the open session. Save completes the session and restores normal selection; Cancel clears the draft, restores the captured metadata, and removes a temporary new or cloned route entry without disturbing previously saved paths.
+
 The Meta Data dialog requires a valid PAT filename/ID, display name, start label, and end label before Save Path can proceed. A saved filename remains read-only during later edits so activities do not silently lose their path reference. The dialog also preserves the MSTS/ORTS player-path flag. New paths remain out of the normal path list until their metadata is confirmed or a PAT file exists.
 
-Save Path now rejects missing metadata, missing or coincident endpoint controls, and discontinuous routing before writing. PAT output retains the path flags and uses atomic file replacement. The map distinguishes the selected route, start and end markers, reverse points, and service interactives; endpoint labels use the path metadata at both editing and saved-path display time.
+Save Path now rejects missing metadata, missing or coincident endpoint controls, discontinuous routing, unresolved reverse legs, misplaced wait/advanced points, and passing paths that do not reconnect correctly. PAT output retains the path flags and uses atomic file replacement. Editing an existing PAT reconstructs its main linked list, switch choices, reverse legs, wait/advanced operations, and passing routes before allowing further changes.
+
+The map distinguishes the selected route, start and end markers, reverse points, all wait/advanced point types, and service interactives. Endpoint labels use the path metadata during both editing and saved-path display. The selected route receives a strong yellow emphasis, repeated track stays cyan, passing routes remain orange, and point/switch controls are drawn last with practical screen-space targets so they remain selectable over dense TrackDB geometry.
 
 
    --- Utility Controls and Clean Shutdown ---
@@ -566,6 +632,26 @@ Save Path now rejects missing metadata, missing or coincident endpoint controls,
 The Control Panel, Grade Helper, Auto Place, and Terrain Editor now use the same compact scale-aware Pin icon instead of a text button that changed width between windows. Fast and Slow movement states use a distinct cyan active color, and the main Select and Place New buttons keep equal width.
 
 Application close handling was consolidated so the saved session is recorded once, sound is shut down once, and every remaining top-level helper is hidden before Qt exits. This prevents a hide-on-close tool window from keeping the process alive after the main editor has closed.
+
+
+   --- Standard Warning Dialogs and Launcher Isolation ---
+
+Destructive and overwrite confirmations now use one shared GenX warning dialog. It is centered on the active screen, uses a consistent UI-scale-aware width, retains the normal Windows title bar with dim caption text, and presents the normal uppercase GenX title-strip format in red with a matching vertical accent and yellow warning triangle. The safe response is the default. This presentation covers interactive removal, route and tile TERRTEX reset, standalone-path deletion, terrain-bias continuation, tile creation/overwrite, track-item removal, activity-path regeneration, settings reset, paint-preset replacement/removal, and consist overwrite/deletion.
+
+The superseded OverwriteDialog source, header, generated dependencies, and project references were removed. This leaves one confirmation path instead of parallel warning implementations with different sizing, wording, and behavior.
+
+Adapted from Eric-from-Trainsim's launcher idea, Main Load now keeps Load and Restore together, gives the more frequently used Consist Editor action greater prominence than New Route, uses restrained charcoal buttons with role-colored accents, labels the route column clearly, and filters Windows shortcuts from the route list. Closing Route Editor returns to Main Load with the selected root retained.
+
+When Consist Editor is launched from Main Load, it runs in an isolated TSRE child process using that selected root. Closing CE returns to Main Load, while the standalone Consist Editor launcher remains standalone. Process isolation gives CE its own OpenGL state, texture caches, and legacy globals so it cannot alter Route Editor lighting or terrain rendering. CE consist and shape background colors are saved independently in per-user settings.
+
+
+   --- Eric 8.006m Compatibility and Route Health Reporting ---
+
+Eric-from-Trainsim's 8.006m rolling-stock work identified ORTS `.inc` files that use mixed slash styles and legitimate parent-directory segments. GenX now normalizes each complete include candidate with the platform path rules, checks the ORTS and MSTS locations once in a defined order, and records the path actually loaded. This replaces repeated include attempts and avoids Eric's experimental string substitutions that could change the meaning of valid newer paths.
+
+Eric's route-listing idea was also adapted into a single explicit workflow under `Route > Create Route Health Report`. The command loads every route world file into editor memory with automatic repair temporarily disabled, then summarizes missing textures, missing shapes, used scenery/object files, used track shapes, and encountered StaticFlags/object types. It records the total world files found and explicitly lists any world file that could not be loaded, writes `TSRE-Route-Health-Report.txt` atomically inside the active route folder, and immediately opens the same text in a resizable read-only window with Copy All and Open Route Folder controls.
+
+The older automatic loose report files in the TSRE working directory were removed so there is one predictable report location and one user-facing command. Creating a report is diagnostic only and does not modify route content. Activity-file scanning was deliberately left unchanged because the Activity Editor is undergoing a separate full rebuild.
 
 
 ======================================================================================================

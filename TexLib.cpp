@@ -126,6 +126,10 @@ int TexLib::addTex(QString pathid, bool reload) {
                 if (((Texture*) it->second)->hashid[i] == pathid) {
                     if(!reload){
                         ((Texture*) it->second)->ref++;
+                        if(((Texture*) it->second)->missing
+                                && !Route::missingTextureList.contains(
+                                    pathid, Qt::CaseInsensitive))
+                            Route::missingTextureList.append(pathid.toLower());
                         return (int)it->first;
                     } else {
                         newFile = ((Texture*) it->second);
@@ -137,11 +141,6 @@ int TexLib::addTex(QString pathid, bool reload) {
     
     QString tType = pathid.toLower().split(".").last();
     
-    QFile file(pathid);
-        if (!file.exists() && (tType == "ace" || tType == "dds"))
-        {
-            qWarning() << "Missing texture: " << pathid.toLower();
-        }
     /// EFO there's no good reason to swap DDS and ACE files... 
     /// This allows it to be done, default is NOT to
     if(Game::imageSubstitution)
@@ -179,16 +178,22 @@ int TexLib::addTex(QString pathid, bool reload) {
         }    
     }        
     
+    if(tType == "ace" || tType == "dds"){
+        if(!QFile::exists(pathid)){
+            qWarning() << "Missing texture:" << pathid.toLower();
+            if(!Route::missingTextureList.contains(pathid, Qt::CaseInsensitive))
+                Route::missingTextureList.append(pathid.toLower());
+        }
+    }
+
     if(Game::listFiles)
     {
         if(Route::texturesList.contains(pathid) == false)
         {
             if((pathid.endsWith(".ace")) | (pathid.endsWith(".dds")))
             Route::texturesList.append(pathid);
-        }    
-    }        
-        
-        
+        }
+    }
     
     int texId = 0;
     if(newFile == NULL){

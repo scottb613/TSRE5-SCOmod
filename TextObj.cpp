@@ -57,6 +57,11 @@ void TextObj::setFontName(QString val){
     fontName = val;
 }
 
+void TextObj::setFontSize(int val){
+    if(!isInit && val > 0)
+        fontSize = val;
+}
+
 void TextObj::setRotOffset(float val){
     rotOffset = val;
 }
@@ -120,6 +125,7 @@ void TextObj::init(){
         args += ".resm:"+QString::number((int)resMult);
     if(fontName.length() > 0)
         args += ".font:"+fontName;
+    args += ".fontsize:"+QString::number(fontSize);
     if(isOutline)
         args += ".ocolor:"+ocolor.name();
     args += ".size:"+QString::number((int)size);
@@ -145,6 +151,8 @@ void TextObj::pushRenderItem() {
 }
 
 void TextObj::pushRenderItem(int selectionColor, float lod) {
+    if(!isInit)
+        init();
     OglObj::pushRenderItem(selectionColor, lod);
 }
 
@@ -177,5 +185,7 @@ void TextObj::render(float rot) {
 }
 
 void TextObj::render(int selectionColor, float lod) {
+    if(!isInit)
+        init();
     OglObj::render(selectionColor, lod);
 }

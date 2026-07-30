@@ -42,6 +42,8 @@ class QOpenGLFunctions_3_3_Core;
 class QAction;
 class GuiGlCompass;
 class QFrame;
+class QLabel;
+class RulerObj;
 
 QT_FORWARD_DECLARE_CLASS(QOpenGLShaderProgram)
 
@@ -57,6 +59,7 @@ public:
     QSize sizeHint() const Q_DECL_OVERRIDE;
     
     bool initRoute();
+    void clearRouteSession();
     void cameraInit();
     QJsonObject getSessionCameraState() const;
     void playInit();
@@ -66,6 +69,7 @@ public:
 public slots:
     void cleanup();
     void enableTool(QString name);
+    void userPlacementSound();
     void userPanelToggleSound();
     void userModeChangeSound();
     void userErrorSound();
@@ -145,6 +149,10 @@ public slots:
     void tangentOrigin(); void tangentTarget(); void tangentMath(); void TangentApplyRot();
 
     void initRoute2(); 
+    void placeWaterRuler();
+    void scanWaterRuler(float heightAboveBed, int tileRadius);
+    void undoWaterScan();
+    void removeWaterRuler();
      
 signals:
     void showWindow();
@@ -172,6 +180,8 @@ signals:
     void updStatus(QString statName, QString statValue);
     void preloadTexturesSignal();
     void resetGradeHelperRequested();
+    void waterHelperProgress(int value, int maximum, QString text);
+    void waterHelperStatus(QString text);
 
     
 protected:
@@ -204,6 +214,9 @@ private:
     void showPlacementSuccess();
     void showPlacementGuardError();
     void rejectPlacement();
+    void runWaterRulerScan(float heightAboveBed, int tileRadius);
+    void showWaterMessage(const QString &text, int visibleMilliseconds = 4500);
+    void positionWaterMessage();
     QBasicTimer timer;
     unsigned long long int lastTime = 0;
     unsigned long long int timeNow = 0;
@@ -243,6 +256,11 @@ private:
     GameObj* lastSelectedObj = NULL;
     WorldObj* CamObj = NULL;
     WorldObj* copyPasteObj = NULL;
+    RulerObj* activeWaterRuler = NULL;
+    bool waterScanUndoAvailable = false;
+    bool waterScanPending = false;
+    QLabel* waterMessageLabel = NULL;
+    int waterMessageGeneration = 0;
     GroupObj* groupObj = NULL;
     GroupObj* copyPasteGroupObj = NULL;
     Pointer3d* pointer3d;

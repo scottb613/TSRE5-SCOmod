@@ -31,7 +31,6 @@
 //#include <QUrlQuery>
 //#include "RouteEditorWindow.h"ad
 //#include "LoadWindow.h"
-//#include "CELoadWindow.h"
 #include "SoundList.h"
 #include "ShapeLib.h"
 #include "EngLib.h"
@@ -64,9 +63,6 @@ bool Game::LocalTSectionOnly = false;
 bool Game::UseWorkingDir = false;
 QString Game::AppName = "TSRE GenX";
 
-/// EFO New Setting for default startup option
-QString Game::startapp = "r";
-
 bool Game::showSDL = false;
 
 QString Game::AppDataVersion = "0.697";
@@ -79,7 +75,6 @@ bool Game::loadActivities = true;
 bool Game::loadConsists = true;
 //QString Game::route = "traska";
 //QString Game::route = "cmk";
-QString Game::mainWindowLayout = "PWTC";
 QString Game::ceWindowLayout = "C1";
 QString Game::ActivityToPlay = "";
 Renderer *Game::currentRenderer = NULL;
@@ -92,7 +87,7 @@ int Game::maxObjLag = 10;
 bool Game::ignoreLoadLimits = false;
 int Game::startTileX = 0;
 int Game::startTileY = 0;
-float Game::objectLod = 3000;
+float Game::objectLod = 2000;
 float Game::distantLod = 100000;
 int Game::tileLod = 1;
 int Game::start = 0;
@@ -106,9 +101,9 @@ bool Game::systemTheme = false;
 bool Game::toolsHidden = false;
 bool Game::usenNumPad = false;
 float Game::cameraFov = 55.0f;
-float Game::cameraSpeedMin = 1.0;
+float Game::cameraSpeedMin = 0.25;
 float Game::cameraSpeedStd = 3.0;
-float Game::cameraSpeedMax = 40.0;
+float Game::cameraSpeedMax = 35.0;
 float Game::mouseSpeed = 0.1;
 bool Game::cameraStickToTerrain = false;
 bool Game::mstsShadows = false;
@@ -124,8 +119,8 @@ bool Game::viewTsectionLines = true;
 bool Game::viewPointer3d = true;
 bool Game::viewMarkers = false;
 bool Game::viewSnapable = false;
-bool Game::viewCompass = false;
-bool Game::warningBox = false;
+bool Game::viewCompass = true;
+bool Game::warningBox = true;
 bool Game::leaveTrackShapeAfterDelete = false;
 bool Game::renderTrItems = false;
 int Game::newRouteX = -5000;
@@ -135,14 +130,14 @@ bool Game::consoleOutput = false;
 bool Game::flexLogEnabled = false;
 bool Game::flexLogCandidates = false;
 QString Game::flexLogFile = "";
-int Game::fpsLimit = 0;
+int Game::fpsLimit = 59;
 bool Game::ortsEngEnable = true;
-bool Game::sortTileObjects = true;
+bool Game::sortTileObjects = false;
 int Game::oglDefaultLineWidth = 1;
 bool Game::showWorldObjPivotPoints = false;
 int Game::shadowMapSize = 2048;
 int Game::shadowLowMapSize = 1024;
-int Game::shadowsEnabled = 1;
+int Game::shadowsEnabled = 0;
 float Game::sunLightDirection[] = {-1.0,2.0,1.0};
 int Game::textureQuality = 1;
 float Game::snapableRadius = 20;
@@ -152,7 +147,7 @@ bool Game::proceduralTracks = false;
 bool Game::fullscreen = false;
 bool Game::hudEnabled = false;
 float Game::hudScale = 1.0;
-float Game::uiScale = 1.20f;
+float Game::uiScale = 1.00f;
 bool Game::markerLines = false;
 
 bool Game::loadAllWFiles = false;
@@ -161,7 +156,7 @@ bool Game::gui = true;
 bool Game::listFiles = false;
 bool Game::objSelected = false;
 
-QString Game::geoPath = "hgst";
+QString Game::geoPath = "";
 
 //RouteEditorWindow* Game::window = NULL;
 //LodWindow* Game::loadWindow = NULL;
@@ -173,9 +168,16 @@ QColor *Game::colorConView = NULL;
 QColor *Game::colorShapeView = NULL;
 
 QString Game::StyleMainLabel = "#770000";
-QString Game::StyleGreenButton = "#55FF55";
-QString Game::StyleRedButton = "#FF5555";
-QString Game::StyleYellowButton = "#b3b300";
+QString Game::StyleGreenButton = "#4b9b5d";
+QString Game::StyleGreenButtonHover = "#65b778";
+QString Game::StyleBlueButton = "#4788b5";
+QString Game::StyleBlueButtonHover = "#61a2cf";
+QString Game::StyleOrangeButton = "#b47a3b";
+QString Game::StyleOrangeButtonHover = "#ce9454";
+QString Game::StyleRedButton = "#a95050";
+QString Game::StyleRedButtonHover = "#c46868";
+QString Game::StyleYellowButton = "#b59b4c";
+QString Game::StyleYellowButtonHover = "#cfb765";
 QString Game::StyleGreenText = "#009900";
 QString Game::StyleRedText = "#990000";
 
@@ -234,8 +236,8 @@ float Game::terrainConformRdbBias = 0.0f;
 int   Game::selectedWidth = 2;
 int   Game::selectedTerrWidth = 2;
 bool  Game::lockCamera = false;
-QColor *Game::selectedColor = new QColor("#FF0000");       /// EFO default red
-QColor *Game::selectedTerrColor = new QColor("#FF0000");   /// EFO default red
+QColor *Game::selectedColor = new QColor("#B612FF");
+QColor *Game::selectedTerrColor = new QColor("#FFB612");
 QColor *Game::wireLineColor = new QColor("#FFFF00");       /// EFO default yellow
 QColor *Game::terrBrushColor = new QColor("#000000");   // Default black
 
@@ -282,12 +284,22 @@ float  Game::deepUnderground = -100;
 bool Game::viewTRLabels = false;
 float Game::trackGap = 0.19;   /// EFO this is the gap allowable for auto-joining tracks and vectors
 
-int   Game::markerHeight = 30;
-int   Game::markerText = 16;
+int   Game::markerHeight = 20;
+int   Game::markerText = 5;
 float Game::lastElev = 0.0;
 float Game::sigOffset = 0;
 QStringList Game::markerFiles;
 QString Game::MapAPIKey = "";
+QString Game::mapEngine = "";
+QString Game::googleImageMapsUrl = "https://maps.googleapis.com/maps/api/staticmap?center={lat},{lon}&zoom={zoom}&size={res}x{res}&maptype=satellite&key=";
+QString Game::googleMapAPIKey = "";
+int Game::googleImageMapsZoomOffset = 0;
+QString Game::mapboxImageMapsUrl = "https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/{lon},{lat},{zoom}/{res}x{res}?access_token=";
+QString Game::mapboxMapAPIKey = "";
+int Game::mapboxImageMapsZoomOffset = -1;
+QString Game::customImageMapsUrl = "";
+QString Game::customMapAPIKey = "";
+int Game::customImageMapsZoomOffset = 0;
 bool Game::imageSubstitution = true;
 bool Game::imageUpgrade = true;
 QString Game::includeFolder = "openrails";
@@ -309,8 +321,156 @@ QString Game::appDataDir(){
     return path;
 }
 
+void Game::cleanupAppData(){
+    QDir appDir(appDataDir());
+
+    const auto pruneDatedFiles = [&appDir](const QRegExp &namePattern, int keepCount){
+        const QStringList names = appDir.entryList(
+                    QDir::Files | QDir::Readable, QDir::Time);
+        int retained = 0;
+        for(const QString &name : names){
+            if(!namePattern.exactMatch(name))
+                continue;
+            if(retained++ < keepCount)
+                continue;
+            if(!QFile::remove(appDir.filePath(name)))
+                qWarning() << "Unable to remove old AppData file" << appDir.filePath(name);
+        }
+    };
+
+    // Settings backups are diagnostic rollback files, not permanent history.
+    pruneDatedFiles(
+        QRegExp("^settings\\d{8}-\\d{6}(?:-\\d{3})?\\.json$",
+                Qt::CaseInsensitive), 5);
+    pruneDatedFiles(
+        QRegExp("^settings\\.corrupt-\\d{8}-\\d{6}-\\d{3}\\.json$",
+                Qt::CaseInsensitive), 3);
+
+    // Route-specific folders are useful only when they contain persisted
+    // presets or other route state. Old code created them merely to derive the
+    // atomic-save key, leaving an empty directory for every opened route.
+    QDir routesDir(appDir.filePath("routes"));
+    if(routesDir.exists()){
+        const QStringList routeDirs = routesDir.entryList(
+                    QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        for(const QString &routeDirName : routeDirs){
+            QDir routeDir(routesDir.filePath(routeDirName));
+            if(routeDir.entryList(QDir::AllEntries | QDir::NoDotAndDotDot).isEmpty()
+                    && !routesDir.rmdir(routeDirName))
+                qWarning() << "Unable to remove empty route AppData folder"
+                           << routeDir.absolutePath();
+        }
+        if(routesDir.entryList(QDir::AllEntries | QDir::NoDotAndDotDot).isEmpty())
+            appDir.rmdir("routes");
+    }
+}
+
 QString Game::settingsFilePath(){
     return appDataDir()+"/settings.json";
+}
+
+void Game::configureMapProvider(){
+    QString selectedMapEngine = mapEngine.trimmed().toLower();
+    if(selectedMapEngine.isEmpty()){
+        // Migrate an existing single-provider configuration without making the
+        // user re-enter a URL or API key.
+        if(!customImageMapsUrl.trimmed().isEmpty()){
+            if(customImageMapsUrl.contains("google", Qt::CaseInsensitive)){
+                mapEngine = "Google";
+                googleImageMapsUrl = customImageMapsUrl;
+                googleMapAPIKey = customMapAPIKey;
+                googleImageMapsZoomOffset = customImageMapsZoomOffset;
+            } else if(customImageMapsUrl.contains("mapbox", Qt::CaseInsensitive)){
+                mapEngine = "Mapbox";
+                mapboxImageMapsUrl = customImageMapsUrl;
+                mapboxMapAPIKey = customMapAPIKey;
+                mapboxImageMapsZoomOffset = customImageMapsZoomOffset;
+            } else {
+                mapEngine = "Custom";
+            }
+            selectedMapEngine = mapEngine.toLower();
+        }
+    }
+
+    if(selectedMapEngine == "google"){
+        imageMapsUrl = googleImageMapsUrl;
+        MapAPIKey = googleMapAPIKey;
+        imageMapsZoomOffset = googleImageMapsZoomOffset;
+        mapEngine = "Google";
+    } else if(selectedMapEngine == "mapbox"){
+        imageMapsUrl = mapboxImageMapsUrl;
+        MapAPIKey = mapboxMapAPIKey;
+        imageMapsZoomOffset = mapboxImageMapsZoomOffset;
+        mapEngine = "Mapbox";
+    } else if(selectedMapEngine == "custom"){
+        imageMapsUrl = customImageMapsUrl;
+        MapAPIKey = customMapAPIKey;
+        imageMapsZoomOffset = customImageMapsZoomOffset;
+        mapEngine = "Custom";
+    } else {
+        imageMapsUrl.clear();
+        MapAPIKey.clear();
+        imageMapsZoomOffset = 0;
+        mapEngine = "None";
+    }
+}
+
+bool Game::saveMapProviderSettings(){
+    QFile existingFile(settingsFilePath());
+    QJsonObject settings;
+    if(existingFile.exists()){
+        if(!existingFile.open(QIODevice::ReadOnly))
+            return false;
+        QJsonParseError parseError;
+        const QJsonDocument existingDocument =
+                QJsonDocument::fromJson(existingFile.readAll(), &parseError);
+        existingFile.close();
+        if(parseError.error != QJsonParseError::NoError || !existingDocument.isObject())
+            return false;
+        settings = existingDocument.object();
+    }
+
+    settings.insert("mapengine", mapEngine);
+    settings.insert("mapImageResolution", mapImageResolution);
+    settings.insert("googleImageMapsUrl", googleImageMapsUrl);
+    settings.insert("googleMapAPIKey", googleMapAPIKey);
+    settings.insert("googleImageMapsZoomOffset", googleImageMapsZoomOffset);
+    settings.insert("mapboxImageMapsUrl", mapboxImageMapsUrl);
+    settings.insert("mapboxMapAPIKey", mapboxMapAPIKey);
+    settings.insert("mapboxImageMapsZoomOffset", mapboxImageMapsZoomOffset);
+    settings.insert("imageMapsUrl", customImageMapsUrl);
+    settings.insert("MapAPIKey", customMapAPIKey);
+    settings.insert("imageMapsZoomOffset", customImageMapsZoomOffset);
+
+    QSaveFile outputFile(settingsFilePath());
+    if(!outputFile.open(QIODevice::WriteOnly))
+        return false;
+    outputFile.write(QJsonDocument(settings).toJson(QJsonDocument::Indented));
+    return outputFile.commit();
+}
+
+bool Game::saveViewCompassState(){
+    QFile existingFile(settingsFilePath());
+    QJsonObject settings;
+    if(existingFile.exists()){
+        if(!existingFile.open(QIODevice::ReadOnly))
+            return false;
+        QJsonParseError parseError;
+        const QJsonDocument existingDocument =
+                QJsonDocument::fromJson(existingFile.readAll(), &parseError);
+        existingFile.close();
+        if(parseError.error != QJsonParseError::NoError || !existingDocument.isObject())
+            return false;
+        settings = existingDocument.object();
+    }
+
+    settings.insert("viewCompass", viewCompass);
+
+    QSaveFile outputFile(settingsFilePath());
+    if(!outputFile.open(QIODevice::WriteOnly))
+        return false;
+    outputFile.write(QJsonDocument(settings).toJson(QJsonDocument::Indented));
+    return outputFile.commit();
 }
 
 QString Game::sessionSplashImagePath(){
@@ -411,15 +571,21 @@ QString Game::sessionSplashImagePath(){
     return sessionSplashPath;
 }
 
-QString Game::routeAppDataDir(){
+QString Game::routeAppDataKey(){
     QString cleanRoute = route.trimmed();
     if(cleanRoute.isEmpty())
         cleanRoute = "unknown_route";
     cleanRoute.replace(QRegExp("[^A-Za-z0-9_\\-]+"), "_");
     cleanRoute = cleanRoute.left(80);
 
-    QString rootHash = QString(QCryptographicHash::hash(root.toUtf8(), QCryptographicHash::Md5).toHex().left(8));
-    QString path = appDataDir()+"/routes/"+cleanRoute+"_"+rootHash;
+    const QString rootHash = QString(
+                QCryptographicHash::hash(root.toUtf8(), QCryptographicHash::Md5)
+                .toHex().left(8));
+    return cleanRoute+"_"+rootHash;
+}
+
+QString Game::routeAppDataDir(){
+    const QString path = appDataDir()+"/routes/"+routeAppDataKey();
     QDir().mkpath(path);
     return path;
 }
@@ -616,6 +782,7 @@ void Game::load() {
     QString sh;
     QString path;
     
+    cleanupAppData();
     path = settingsFilePath();
     QFile file(path);
     
@@ -834,6 +1001,9 @@ void Game::load() {
                 AASamples = setval.toInt();
             }
 
+            if(setname =="mstsshadows"){
+                mstsShadows = (setval == "true") || (setval == "1") || (setval == "on");
+            }
             if(setname =="proceduraltracks"){
                 if((setval == "true") or (setval == "1") or (setval == "on"))
                     proceduralTracks = true;
@@ -889,7 +1059,16 @@ void Game::load() {
                 serverLogin = args[1].trimmed();
             }
             if(setname =="serverauth"){
-                serverAuth = args[1].trimmed();
+                const QString authMode = args[1].trimmed();
+                const QString normalizedAuthMode = authMode.toLower();
+                if(normalizedAuthMode == "false" || normalizedAuthMode == "0"
+                        || normalizedAuthMode == "off")
+                    serverAuth.clear();
+                else if(normalizedAuthMode == "true" || normalizedAuthMode == "1"
+                        || normalizedAuthMode == "on")
+                    serverAuth = "file";
+                else
+                    serverAuth = authMode;
             }
 
             // EFO Configure WindowPos
@@ -985,13 +1164,6 @@ void Game::load() {
             else
                 deleteViewDbSpheres = false;
         }
-        if(setname =="createnewifnotexist"){
-            if((setval == "true") or (setval == "1") or (setval == "on"))
-                createNewRoutes = true;
-            else
-                createNewRoutes = false;
-        }
-        
         if(setname =="systemtheme"){
             if((setval == "true") or (setval == "1") or (setval == "on"))
                 systemTheme = true;
@@ -1032,17 +1204,27 @@ void Game::load() {
 
         
         if(setname =="selectedcolor"){
-            if(selectedColor == NULL)
-                selectedColor = new QColor(setval);
-            else
-                *selectedColor = QColor(setval);
+            const QColor configuredColor(setval);
+            if(configuredColor.isValid()){
+                if(selectedColor == NULL)
+                    selectedColor = new QColor(configuredColor);
+                else
+                    *selectedColor = configuredColor;
+            } else {
+                qWarning() << "Ignoring invalid selectedColor setting:" << setval;
+            }
         }
         
         if(setname =="selectedterrcolor"){
-            if(selectedTerrColor == NULL)
-                selectedTerrColor = new QColor(setval);
-            else
-                *selectedTerrColor = QColor(setval);
+            const QColor configuredColor(setval);
+            if(configuredColor.isValid()){
+                if(selectedTerrColor == NULL)
+                    selectedTerrColor = new QColor(configuredColor);
+                else
+                    *selectedTerrColor = configuredColor;
+            } else {
+                qWarning() << "Ignoring invalid selectedTerrColor setting:" << setval;
+            }
         }
         
         // EFO Configure Terrain Tools
@@ -1155,11 +1337,39 @@ void Game::load() {
             textureQuality = setval.toInt();
         }
         if(setname =="imagemapsurl"){
-            imageMapsUrl = args[1].trimmed();
-        }        
-        
+            customImageMapsUrl = args[1].trimmed();
+        }
+
         if(setname =="imagemapszoomoffset"){
-            imageMapsZoomOffset = setval.toInt();
+            customImageMapsZoomOffset = setval.toInt();
+        }
+
+        if(setname =="mapengine"){
+            mapEngine = args[1].trimmed();
+        }
+
+        if(setname =="googleimagemapsurl"){
+            googleImageMapsUrl = args[1].trimmed();
+        }
+
+        if(setname =="googlemapapikey"){
+            googleMapAPIKey = args[1].trimmed();
+        }
+
+        if(setname =="googleimagemapszoomoffset"){
+            googleImageMapsZoomOffset = setval.toInt();
+        }
+
+        if(setname =="mapboximagemapsurl"){
+            mapboxImageMapsUrl = args[1].trimmed();
+        }
+
+        if(setname =="mapboxmapapikey"){
+            mapboxMapAPIKey = args[1].trimmed();
+        }
+
+        if(setname =="mapboximagemapszoomoffset"){
+            mapboxImageMapsZoomOffset = setval.toInt();
         }
         
         
@@ -1204,8 +1414,8 @@ void Game::load() {
         if(setname =="trackelevationmaxpm"){
             trackElevationMaxPm = setval.toFloat();
         }
-        if(setname =="mainwindowlayout"){
-            mainWindowLayout = setval;
+        if(setname =="snapableradius"){
+            snapableRadius = qMax(0.0f, setval.toFloat());
         }
         if(setname =="cewindowlayout"){
             ceWindowLayout = setval;
@@ -1253,15 +1463,6 @@ void Game::load() {
         if(setname =="defaultmovestep"){
             DefaultMoveStep = setval.toFloat();
         }
-        if(setname =="hudenabled"){
-            if((setval == "true") or (setval == "1") or (setval == "on"))
-                hudEnabled = true;
-            else
-                hudEnabled = false; 
-        }
-        if(setname =="hudscale"){
-            hudScale = setval.toFloat();
-        }
         if(setname =="uiscale"){
             uiScale = setval.toFloat();
             if(uiScale < 0.75f)
@@ -1275,9 +1476,6 @@ void Game::load() {
             // F2 terrain texture selector so old settings files cannot override it.
         }
         
-        if(setname =="startapp"){
-            startapp = setval;
-        }
 /*
         if(setname =="markerlines"){
             if((setval == "true") or (setval == "1") or (setval == "on"))
@@ -1373,14 +1571,12 @@ void Game::load() {
             else
                  viewCompass = false;
         }       
-/*
         if(setname == "viewmarkers"){
              if((setval == "true") or (setval == "1") or (setval == "on"))
                  viewMarkers = true;
             else
                  viewMarkers = false;
         }       
-*/
         if(setname == "listfiles"){
              if((setval == "true") or (setval == "1") or (setval == "on"))
                  listFiles = true;
@@ -1389,8 +1585,8 @@ void Game::load() {
         }       
 
         if(setname =="mapapikey"){
-                MapAPIKey = args[1].trimmed();
-                
+                customMapAPIKey = args[1].trimmed();
+
         }
 
         if(setname =="includefolder"){
@@ -1507,6 +1703,8 @@ void Game::load() {
         
     }
     
+    configureMapProvider();
+    qDebug() << "F3 imagery provider:" << mapEngine;
     qDebug() <<  Game::AppVersion ;
 
     if(maxObjLag < 2)
@@ -1545,20 +1743,6 @@ bool Game::loadRouteEditor(){
     }
 }
 
-bool Game::loadConEditor(){
-    //if(Game::warningBox){
-    //    QMessageBox msgBox;
-    //    msgBox.setText("This is experimental version.\nUsing it may seriously damage your consists."
-    //                   "\nMake backup first!\n\nTo disable this window, set warningBox to false in settings.json.");
-    //    msgBox.setIcon(QMessageBox::Warning);
-    //    msgBox.exec();
-    //}
-    CELoadWindow* ceLoadWindow = new CELoadWindow();
-    ceLoadWindow->show();
-    //ConEditorWindow* cwindow = new ConEditorWindow();
-    //cwindow->resize(1280, 720);
-    //cwindow->show();
-}
 */
 bool Game::checkRoot(QString dir){
     QString path;
@@ -1752,20 +1936,11 @@ void Game::DownloadAppData(QString path){
     TarFile tarFile(fileData);
     tarFile.extractTo("./tsre_appdata/");
     
-    // Create bat file for Consist Editor.
-    QString conBatFile = QFileInfo(QCoreApplication::applicationFilePath()).fileName()+" --conedit";
-    QFile file1("./ConsistEditor.bat");
-    file1.open(QIODevice::WriteOnly | QIODevice::Text);
-    QTextStream out;
-    out.setDevice(&file1);
-    out << conBatFile;
-    out.flush();
-    file1.close();
-    
     // Create bat file for Shape Viewer.
-    conBatFile = QFileInfo(QCoreApplication::applicationFilePath()).fileName()+" --shapeview";
+    QString conBatFile = QFileInfo(QCoreApplication::applicationFilePath()).fileName()+" --shapeview";
     QFile file2("./ShapeViewer.bat");
     file2.open(QIODevice::WriteOnly | QIODevice::Text);
+    QTextStream out;
     out.setDevice(&file2);
     out << conBatFile;
     out.flush();

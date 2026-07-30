@@ -74,24 +74,24 @@ void ActivityTrafficWindow::showTraffic(Route* r){
     lTraffic.clear();
     QList<QTreeWidgetItem *> items;
     QStringList list;
-    for(int i = 0; i < ActLib::jesttraffic; i++ ){
-        if(ActLib::Traffics[i] == NULL)
+    for(int id : route->trafficId){
+        if(ActLib::Traffics[id] == NULL)
             continue;
         //new QListWidgetItem ( route->service[i]->displayName, &serviceList, i );
         list.clear();
-        list.append(ActLib::Traffics[i]->nameId);
+        list.append(ActLib::Traffics[id]->nameId);
         list.append("");
         list.append("");
-        QTreeWidgetItem *item = new QTreeWidgetItem((QTreeWidget*)0, list, i );
+        QTreeWidgetItem *item = new QTreeWidgetItem((QTreeWidget*)0, list, id);
         //if(i == 0){
         //    item->setCheckState(1, Qt::Checked);
         //}else{
         item->setCheckState(1, Qt::Unchecked);
         if(activity != NULL){
-            if(activity->isTrafficInUse(ActLib::Traffics[i]->nameId))
+            if(activity->isTrafficInUse(ActLib::Traffics[id]->nameId))
                 item->setCheckState(1, Qt::Checked);
         }
-        if(ActLib::IsTrafficInUse(ActLib::Traffics[i]->nameId))
+        if(ActLib::IsTrafficInUse(ActLib::Traffics[id]->nameId))
             item->setCheckState(2, Qt::Checked);
         else
             item->setCheckState(2, Qt::Unchecked);
@@ -113,7 +113,11 @@ void ActivityTrafficWindow::bNewTrafficSelected(){
     EditFileNameDialog eWindow;
     eWindow.exec();
     if(eWindow.isOk && eWindow.name.text().length() > 0){
-        ActLib::AddTraffic(Game::root + "/routes/" + Game::route + "/traffic/", eWindow.name.text()+".trf", true);
+        int id = ActLib::AddTraffic(
+            Game::root + "/routes/" + Game::route + "/traffic/",
+            eWindow.name.text()+".trf", true);
+        if(id >= 0 && !route->trafficId.contains(id))
+            route->trafficId.push_back(id);
     }
     showTraffic(route);
     reloadTrafficsList();

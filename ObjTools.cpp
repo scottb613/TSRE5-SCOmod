@@ -26,148 +26,26 @@ static int scaledUiSize(int base){
     return qRound(base * qMax(1.0f, Game::uiScale));
 }
 
-static QPoint autoPlacementSnapPosition(QWidget *window){
-    const int snapDistance = 10;
-    QRect moving = window->frameGeometry();
-    QPoint snappedFramePos = moving.topLeft();
-    int bestX = snapDistance + 1;
-    int bestY = snapDistance + 1;
-
-    QScreen *screen = QGuiApplication::screenAt(moving.center());
-    if(screen != NULL){
-        const QRect available = screen->availableGeometry();
-        const int xCandidates[2] = {
-            available.left() - moving.left(),
-            available.right() - moving.right()
-        };
-        const int yCandidates[2] = {
-            available.top() - moving.top(),
-            available.bottom() - moving.bottom()
-        };
-        for(int i = 0; i < 2; ++i){
-            if(qAbs(xCandidates[i]) <= snapDistance && qAbs(xCandidates[i]) < bestX){
-                bestX = qAbs(xCandidates[i]);
-                snappedFramePos.setX(moving.left() + xCandidates[i]);
-            }
-            if(qAbs(yCandidates[i]) <= snapDistance && qAbs(yCandidates[i]) < bestY){
-                bestY = qAbs(yCandidates[i]);
-                snappedFramePos.setY(moving.top() + yCandidates[i]);
-            }
-        }
-    }
-
-    for(QWidget *targetWidget : QApplication::topLevelWidgets()){
-        if(targetWidget == window || !targetWidget->isVisible())
-            continue;
-        const QRect target = targetWidget->frameGeometry();
-        const bool verticalNear = moving.bottom() >= target.top() - snapDistance
-                               && moving.top() <= target.bottom() + snapDistance;
-        const bool horizontalNear = moving.right() >= target.left() - snapDistance
-                                 && moving.left() <= target.right() + snapDistance;
-        const int xCandidates[4] = {
-            target.left() - moving.left(), target.right() - moving.right(),
-            target.right() + 1 - moving.left(), target.left() - 1 - moving.right()
-        };
-        const int yCandidates[4] = {
-            target.top() - moving.top(), target.bottom() - moving.bottom(),
-            target.bottom() + 1 - moving.top(), target.top() - 1 - moving.bottom()
-        };
-        for(int i = 0; i < 4; ++i){
-            int distance = qAbs(xCandidates[i]);
-            if(verticalNear && distance <= snapDistance && distance < bestX){
-                bestX = distance;
-                snappedFramePos.setX(moving.left() + xCandidates[i]);
-            }
-            distance = qAbs(yCandidates[i]);
-            if(horizontalNear && distance <= snapDistance && distance < bestY){
-                bestY = distance;
-                snappedFramePos.setY(moving.top() + yCandidates[i]);
-            }
-        }
-    }
-    return window->pos() + (snappedFramePos - moving.topLeft());
-}
-
-class AutoPlacementWindow : public QWidget {
+class AutoPlacementWindow : public EditorPopupWindow {
 public:
     explicit AutoPlacementWindow(ObjTools *owner)
-        : QWidget(owner, Qt::Tool), owner(owner) {
-        setWindowTitle(QString());
-        setFixedWidth(scaledUiSize(380));
-        setStyleSheet(GuiFunct::scoEditorPanelStyle());
-
-        rootLayout = new QVBoxLayout(this);
-        rootLayout->setSpacing(4);
-        rootLayout->setContentsMargins(4,4,4,4);
-
-        QLabel *heading = new QLabel("AUTO PLACE");
-        GuiFunct::styleEditorTitle(heading);
-        QHBoxLayout *headingRow = new QHBoxLayout;
-        headingRow->setContentsMargins(0,0,0,0);
-        headingRow->addWidget(heading);
-        headingRow->addStretch();
-
-        GuiFunct::setupWindowPinButton(&pinButton);
-        pinButton.setCheckable(true);
-        pinButton.setFocusPolicy(Qt::NoFocus);
-        QFont pinFont = pinButton.font();
-        pinFont.setBold(false);
-        if(pinFont.pointSizeF() > 0)
-            pinFont.setPointSizeF(qMax(7.0, pinFont.pointSizeF() * 0.85));
-        pinButton.setFont(pinFont);
-        pinButton.setFixedSize(scaledUiSize(30), scaledUiSize(17));
-        positionPinned = Game::pinnedWindowPosition("autoPlacementHelper", NULL);
-        pinButton.setChecked(positionPinned);
-        updatePinAppearance();
-        headingRow->addWidget(&pinButton);
-        rootLayout->addLayout(headingRow);
-
-        snapTimer.setSingleShot(true);
-        pinSaveTimer.setSingleShot(true);
-        QObject::connect(&snapTimer, &QTimer::timeout, this, [this](){
-            if(snapping)
-                return;
-            const QPoint snapped = autoPlacementSnapPosition(this);
-            if(snapped != pos()){
-                snapping = true;
-                move(snapped);
-                snapping = false;
-            }
-        });
-        QObject::connect(&pinSaveTimer, &QTimer::timeout, this, [this](){
-            if(positionPinned)
-                Game::savePinnedWindowPosition("autoPlacementHelper", pos());
-        });
-        QObject::connect(&pinButton, &QToolButton::toggled, this, [this](bool pinned){
-            positionPinned = pinned;
-            updatePinAppearance();
-            if(pinned){
-                Game::clearPinnedWindowPosition("autoPlacementHelperUseDefault");
-                Game::savePinnedWindowPosition("autoPlacementHelper", pos());
-            } else {
-                pinSaveTimer.stop();
-                Game::clearPinnedWindowPosition("autoPlacementHelper");
-                Game::savePinnedWindowPosition("autoPlacementHelperUseDefault", QPoint(0, 0));
-                moveToDefaultPosition();
-            }
-        });
-
-        QPoint pinnedPosition;
-        if(Game::pinnedWindowPosition("autoPlacementHelper", &pinnedPosition))
-            move(Game::visibleWindowPosition(pinnedPosition, size()));
+        : EditorPopupWindow(owner, "AUTO PLACE", "autoPlacementHelper", 380),
+          owner(owner) {
+        setPopupPinToolTips(
+            "Save the current Auto Place position between sessions.",
+            "The Auto Place position is saved between sessions.");
     }
 
     QVBoxLayout *contentLayout(){
-        return rootLayout;
+        return popupLayout();
     }
 
     void finishLayout(){
-        rootLayout->activate();
-        setFixedHeight(rootLayout->sizeHint().height());
+        finalizePopup();
     }
 
     void showForOwner(){
-        if(!everShown && !positionPinned){
+        if(!everShown && !isPopupPositionPinned()){
             moveToDefaultPosition();
             everShown = true;
         }
@@ -177,53 +55,30 @@ public:
     }
 
 protected:
-    void moveEvent(QMoveEvent *event) override {
-        QWidget::moveEvent(event);
-        if(!snapping){
-            snapTimer.start(120);
-            if(positionPinned)
-                pinSaveTimer.start(240);
-        }
-    }
-
     void closeEvent(QCloseEvent *event) override {
         QWidget::closeEvent(event);
         owner->autoPlacementWindowClosed();
     }
 
 private:
+    void popupPinChanged(bool pinned) override {
+        if(pinned)
+            Game::clearPinnedWindowPosition("autoPlacementHelperUseDefault");
+        EditorPopupWindow::popupPinChanged(pinned);
+        if(!pinned){
+            Game::savePinnedWindowPosition(
+                "autoPlacementHelperUseDefault", QPoint(0, 0));
+            moveToDefaultPosition();
+        }
+    }
+
     void moveToDefaultPosition(){
         const QPoint ownerTopLeft = owner->mapToGlobal(QPoint(0, 0));
         const QPoint desired(ownerTopLeft.x() - width() - 1, ownerTopLeft.y());
         move(Game::visibleWindowPosition(desired, size()));
     }
 
-    void updatePinAppearance(){
-        pinButton.setToolTip(positionPinned
-            ? "The Auto Place position is saved between sessions."
-            : "Save the current Auto Place position between sessions.");
-        if(positionPinned){
-            pinButton.setStyleSheet(QString(
-                "QToolButton { color: #232323; background-color: %1;"
-                " border: 1px solid %1; padding: 0px 3px; font-weight: normal; }"
-                "QToolButton:hover { border-color: #e4c5a3; }"
-                "QToolButton:pressed { background-color: #a98a69; }").arg(Game::StyleMainLabel));
-        } else {
-            pinButton.setStyleSheet(
-                "QToolButton { color: #e7eaec; background-color: #26292c;"
-                " border: 1px solid #383d41; padding: 0px 3px; font-weight: normal; }"
-                "QToolButton:hover { background-color: #303438; border-color: #f08200; }"
-                "QToolButton:pressed { background-color: #191b1d; }");
-        }
-    }
-
     ObjTools *owner;
-    QVBoxLayout *rootLayout = NULL;
-    QToolButton pinButton;
-    QTimer snapTimer;
-    QTimer pinSaveTimer;
-    bool snapping = false;
-    bool positionPinned = false;
     bool everShown = false;
 };
 
@@ -555,16 +410,6 @@ ObjTools::~ObjTools() {
 void ObjTools::refreshObjLists(){
     if(route == NULL)
         return;
-    
-    refList.clear();
-    lastItems.clear();
-    refClass.clear();
-    refTrack.clear();
-    refRoad.clear();
-    refOther.clear();
-    lastItemsPtr.clear();
-    currentItemList.clear();
-    
     routeLoaded(route);
 }
 
@@ -575,7 +420,17 @@ void ObjTools::clearRecentItems(){
 }
 
 void ObjTools::routeLoaded(Route* a){
-    this->route = a;           
+    if(a == NULL)
+        return;
+    this->route = a;
+    refList.clear();
+    lastItems.clear();
+    refClass.clear();
+    refTrack.clear();
+    refRoad.clear();
+    refOther.clear();
+    lastItemsPtr.clear();
+    currentItemList.clear();
     autoPlacementTarget.setCurrentIndex(2);
     route->placementAutoTargetType = 2;
     route->snapableOnlyRotation = Game::snapableOnlyRot;
@@ -1013,6 +868,7 @@ void ObjTools::autoPlacementButtonEnabled(bool val){
 void ObjTools::autoPlacementHelperEnabled(bool val){
     if(autoPlacementWindow == NULL)
         return;
+    GuiFunct::setEditorPopupButtonActive(&autoPlacementHelperButton, val);
     if(val){
         autoPlacementWindow->showForOwner();
     } else {

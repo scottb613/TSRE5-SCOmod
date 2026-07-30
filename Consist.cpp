@@ -22,19 +22,17 @@
 #include <QFile>
 #include "GLMatrix.h"
 #include "TextObj.h"
+#include "OglObj.h"
+#include "TexLib.h"
+#include "ImageLib.h"
 #include "TDB.h"
 #include "TerrainLib.h"
 #include "SimpleHud.h"
 #include "ContentHierarchyInfo.h"
-
-std::unordered_map<int, TextObj*> Consist::txtNumbers;
-int Consist::lastTxtNumbersColor = 0;
-TextObj * Consist::txtEngineE = NULL;
-TextObj * Consist::txtEngineD = NULL;
-TextObj * Consist::txtEngineS = NULL;
-TextObj * Consist::txtEngineF = NULL;
-TextObj * Consist::txtEngineW = NULL;
-TextObj * Consist::txtEngineT = NULL;
+#include <QFont>
+#include <QFontMetrics>
+#include <QCoreApplication>
+#include <QFileInfo>
 
 Consist::Consist() {
     typeObj = this->consistobj;
@@ -97,6 +95,12 @@ Consist::Consist(Consist * con, bool fullCopy) {
 }
 
 Consist::~Consist() {
+    for(EngItem &item : engItems){
+        delete item.txt;
+        delete item.marker;
+        delete item.placeholder;
+        delete item.placeholderSelected;
+    }
 }
 
 Consist::Consist(QString p, QString n) {
@@ -121,12 +125,11 @@ Consist::Consist(QString src, QString p, QString n) {
 }
 
 void Consist::load(){
-    int i;
     QString sh;
     pathid.replace("//","/");
     // if(Game::debugOutput) qDebug() << pathid;
-    QFile *file = new QFile(pathid);
-    if (!file->open(QIODevice::ReadOnly)){
+    QFile file(pathid);
+    if (!file.open(QIODevice::ReadOnly)){
         if(Game::debugOutput) qDebug() << pathid << "not exist";
         return;
     }
@@ -167,9 +170,9 @@ void Consist::load(){
     
     
     
-    FileBuffer* data = ReadFile::read(file);
+    FileBuffer* data = ReadFile::read(&file);
     data->off = 0;
-    file->close();
+    file.close();
     ParserX::NextLine(data);
     
     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
@@ -200,8 +203,6 @@ bool Consist::load(FileBuffer* data){
             conName = ParserX::GetString(data).trimmed();
             showName = conName;
             //qDebug() << conName;
-            EngItem* eit;
-
             while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
                 //qDebug() << sh;
                 if (sh == ("name")) {
@@ -350,24 +351,42 @@ void Consist::initPos(){
         return;
     }
     //length += EngLib::eng[engItems[0].eng]->sizez / 2.0;
-    float size = 0;
     float tmaxspeed = 0;
     //float tengmass = 0;
     float maxForce = 0;
     for(int i = 0; i < engItems.size(); i++){
+        // The marker contains the displayed position number, so rebuild it
+        // whenever the consist order or spacing is recalculated.
+        if(engItems[i].marker != NULL){
+            delete engItems[i].marker;
+            engItems[i].marker = NULL;
+        }
         engItems[i].conLength = conLength;
-        if(engItems[i].eng < 0) continue;
-        size = Game::currentEngLib->eng[engItems[i].eng]->getFullWidth();
+        Eng *eng = NULL;
+        const auto engIt = Game::currentEngLib->eng.find(engItems[i].eng);
+        if(engIt != Game::currentEngLib->eng.end())
+            eng = engIt->second;
+
+        float size = eng == NULL ? 0.0f : eng->getFullWidth();
+        engItems[i].previewMissing =
+                eng == NULL || eng->loaded != 1 || size < 2.0f;
+        // Missing or malformed stock used to have zero preview length, which
+        // collapsed every following unit marker onto the same position.
+        if(engItems[i].previewMissing)
+            size = 10.0f;
+        engItems[i].previewWidth = size;
         length += size / 2.0;
         engItems[i].pos = length;
         length += size / 2.0;
         conLength += size;
-        mass += Game::currentEngLib->eng[engItems[i].eng]->mass;
-        if(Game::currentEngLib->eng[engItems[i].eng]->wagonTypeId >= 4){
-            if(Game::currentEngLib->eng[engItems[i].eng]->maxSpeed > tmaxspeed)
-                tmaxspeed = Game::currentEngLib->eng[engItems[i].eng]->maxSpeed;
-            emass += Game::currentEngLib->eng[engItems[i].eng]->mass;
-            maxForce += Game::currentEngLib->eng[engItems[i].eng]->maxForce;
+        if(engItems[i].previewMissing)
+            continue;
+        mass += eng->mass;
+        if(eng->wagonTypeId >= 4){
+            if(eng->maxSpeed > tmaxspeed)
+                tmaxspeed = eng->maxSpeed;
+            emass += eng->mass;
+            maxForce += eng->maxForce;
         }
     }
 
@@ -377,7 +396,8 @@ void Consist::initPos(){
         this->maxVelocity[0] = tmaxspeed / 3.6;
         //this->maxVelocity[1] = emass / mass;
         //qDebug() << maxForce*0.001 << " "<< mass;
-        this->maxVelocity[1] = 0.8*maxForce*0.001 / mass;
+        this->maxVelocity[1] =
+                mass > 0 ? 0.8*maxForce*0.001 / mass : 0.001;
         if(this->maxVelocity[1] > 1) this->maxVelocity[1] = 1;
         if(this->maxVelocity[1] < 0.001) this->maxVelocity[1] = 0.001;
     }
@@ -418,6 +438,14 @@ void Consist::deteleSelected(){
         return;
     if(selectedIdx >= engItems.size())
         return;
+    if(engItems[selectedIdx].txt != NULL)
+        delete engItems[selectedIdx].txt;
+    if(engItems[selectedIdx].marker != NULL)
+        delete engItems[selectedIdx].marker;
+    if(engItems[selectedIdx].placeholder != NULL)
+        delete engItems[selectedIdx].placeholder;
+    if(engItems[selectedIdx].placeholderSelected != NULL)
+        delete engItems[selectedIdx].placeholderSelected;
     engItems.erase(engItems.begin() + selectedIdx);
     initPos();
     modified = true;
@@ -502,7 +530,18 @@ void Consist::replaceEngItem(int id, int pos){
     newE->eng = id;
     newE->ename = eng->name.section(".", 0, -2);
     newE->epath = eng->path.split("/").last();
+    if(newE->txt != NULL)
+        delete newE->txt;
+    if(newE->marker != NULL)
+        delete newE->marker;
+    if(newE->placeholder != NULL)
+        delete newE->placeholder;
+    if(newE->placeholderSelected != NULL)
+        delete newE->placeholderSelected;
     newE->txt = NULL;
+    newE->marker = NULL;
+    newE->placeholder = NULL;
+    newE->placeholderSelected = NULL;
     modified = true;
     newE->eot = eng->engType.contains("eot");
 }
@@ -588,23 +627,10 @@ void Consist::setTextColor(float* bgColor) {
         for(int i = 0; i < engItems.size(); i++){
             if(engItems[i].txt != NULL) 
                 delete engItems[i].txt;
+            if(engItems[i].marker != NULL)
+                delete engItems[i].marker;
             engItems[i].txt = NULL;
-        }
-    }
-    
-    if(colorHash != lastTxtNumbersColor){
-        //qDebug() << "new global color";
-        if(txtEngineT != NULL) delete txtEngineT;
-        if(txtEngineF != NULL) delete txtEngineF;
-        if(txtEngineW != NULL) delete txtEngineW;
-        txtEngineT = NULL;
-        txtEngineF = NULL;
-        txtEngineW = NULL;
-        lastTxtNumbersColor = colorHash;
-        for(int i = 0; i < txtNumbers.size(); i++){
-            if(txtNumbers[i] != NULL) 
-                delete txtNumbers[i];
-            txtNumbers[i] = NULL;
+            engItems[i].marker = NULL;
         }
     }
 }
@@ -627,6 +653,11 @@ void Consist::render(int aktwx, int aktwz, int selectionColor, bool renderText) 
     GLUU *gluu = GLUU::get();
     int scolor = 0;
     for(int i = 0; i < engItems.size(); i++){
+        Eng *eng = NULL;
+        const auto engIt = Game::currentEngLib->eng.find(engItems[i].eng);
+        if(engIt != Game::currentEngLib->eng.end())
+            eng = engIt->second;
+
         gluu->mvPushMatrix();
         Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, 0, 0, engItems[i].pos);
         if(!engItems[i].flip)
@@ -634,9 +665,86 @@ void Consist::render(int aktwx, int aktwz, int selectionColor, bool renderText) 
         gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
         if(selectionColor != 0)
             scolor = selectionColor + i;
-        if(selectedIdx == i)
-            Game::currentEngLib->eng[engItems[i].eng]->drawBorder();
-        Game::currentEngLib->eng[engItems[i].eng]->render(aktwx, aktwz, scolor);
+        if(!engItems[i].previewMissing){
+            if(selectedIdx == i)
+                eng->drawBorder();
+            eng->render(aktwx, aktwz, scolor);
+        } else {
+            if(engItems[i].placeholder == NULL){
+                const float halfWidth =
+                        qMax(3.5f, engItems[i].previewWidth / 2.0f - 0.5f);
+                const QString contentCard =
+                    QCoreApplication::applicationDirPath()
+                    + "/content/missing-stock.png";
+                static bool missingCardWarningShown = false;
+                if(!QFileInfo::exists(contentCard)
+                        && !missingCardWarningShown){
+                    qWarning() << "Missing CE placeholder texture:"
+                               << contentCard;
+                    missingCardWarningShown = true;
+                }
+                // UI placeholders must be ready on their first frame. Unlike
+                // route textures, this single small shared asset gains nothing
+                // from asynchronous loading.
+                const bool imageThreadState = ImageLib::IsThread;
+                ImageLib::IsThread = false;
+                TexLib::addTex(contentCard);
+                ImageLib::IsThread = imageThreadState;
+                const float yBottom = 0.25f;
+                const float yTop = 4.25f;
+                const float alpha = -gluu->alphaTest;
+                float cardPoints[] = {
+                    // Front face.
+                    0, yTop, -halfWidth, 0, 0, alpha,
+                    0, yBottom, -halfWidth, 0, 1, alpha,
+                    0, yBottom, halfWidth, 1, 1, alpha,
+                    0, yTop, halfWidth, 1, 0, alpha,
+                    0, yTop, -halfWidth, 0, 0, alpha,
+                    0, yBottom, halfWidth, 1, 1, alpha,
+                    // Reverse winding keeps the card visible for flipped
+                    // units and either consist-camera orientation.
+                    0, yTop, -halfWidth, 0, 0, alpha,
+                    0, yBottom, halfWidth, 1, 1, alpha,
+                    0, yBottom, -halfWidth, 0, 1, alpha,
+                    0, yTop, halfWidth, 1, 0, alpha,
+                    0, yBottom, halfWidth, 1, 1, alpha,
+                    0, yTop, -halfWidth, 0, 0, alpha
+                };
+                engItems[i].placeholder = new OglObj();
+                engItems[i].placeholder->setMaterial(contentCard);
+                engItems[i].placeholder->init(
+                    cardPoints, 72, RenderItem::VT, GL_TRIANGLES);
+
+                const float borderHalfWidth = halfWidth + 0.12f;
+                float selectedPoints[] = {
+                    -0.04f, 0.12f, -borderHalfWidth,
+                    -0.04f, 4.38f, -borderHalfWidth,
+                    -0.04f, 4.38f, -borderHalfWidth,
+                    -0.04f, 4.38f, borderHalfWidth,
+                    -0.04f, 4.38f, borderHalfWidth,
+                    -0.04f, 0.12f, borderHalfWidth,
+                    -0.04f, 0.12f, borderHalfWidth,
+                    -0.04f, 0.12f, -borderHalfWidth
+                };
+                engItems[i].placeholderSelected = new OglObj();
+                engItems[i].placeholderSelected->setMaterial(
+                    1.0f, 0.78f, 0.08f);
+                engItems[i].placeholderSelected->setLineWidth(4);
+                engItems[i].placeholderSelected->init(
+                    selectedPoints, 24, RenderItem::V, GL_LINES);
+            }
+            // The placeholder is a UI-facing card, not vehicle artwork.
+            // Cancel the unit's display flip so its text never mirrors.
+            if(!engItems[i].flip)
+                Mat4::rotate(
+                    gluu->mvMatrix, gluu->mvMatrix, M_PI, 0, 1, 0);
+            gluu->currentShader->setUniformValue(
+                gluu->currentShader->mvMatrixUniform,
+                *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
+            engItems[i].placeholder->render(scolor, 0);
+            if(selectionColor == 0 && selectedIdx == i)
+                engItems[i].placeholderSelected->render();
+        }
         gluu->mvPopMatrix();
         
         if(selectionColor != 0 || !renderText)
@@ -649,7 +757,19 @@ void Consist::render(int aktwx, int aktwz, int selectionColor, bool renderText) 
         gluu->currentShader->setUniformValue(gluu->currentShader->msMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->objStrMatrix));
         gluu->currentMsMatrinxHash = gluu->getMatrixHash(gluu->objStrMatrix);
         if(engItems[i].txt == NULL){
-            engItems[i].txt = new TextObj(Game::currentEngLib->eng[engItems[i].eng]->displayName, 16, 1.0);
+            const int labelWidth = qBound(
+                3, static_cast<int>(engItems[i].previewWidth - 1.0f), 14);
+            const int availablePixels = qMax(48, labelWidth * 32 - 16);
+            QString labelText = engItems[i].previewMissing
+                    ? engItems[i].ename.simplified()
+                    : eng->displayName.simplified();
+            const int labelFontSize = 17;
+            const QFontMetrics finalMetrics(QFont("Arial", labelFontSize));
+            labelText = finalMetrics.elidedText(
+                labelText, Qt::ElideRight, availablePixels);
+
+            engItems[i].txt = new TextObj(labelText, labelWidth, 1.0);
+            engItems[i].txt->setFontSize(labelFontSize);
             //engItems[i].txt->setColor(255,255,0);
             //if(Game::systemTheme)
             //    engItems[i].txt->setColor(0,0,0);
@@ -660,65 +780,30 @@ void Consist::render(int aktwx, int aktwz, int selectionColor, bool renderText) 
         
         gluu->mvPushMatrix();
         Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, 0, 5, engItems[i].pos);
-        //Mat4::rotate(gluu->mvMatrix, gluu->mvMatrix, M_PI/2, 0, 1, 0);
         gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
-        if(txtNumbers[i] == NULL){
-            txtNumbers[i] = new TextObj(i+1);
-            txtNumbers[i]->setColor(textColor[0],textColor[1],textColor[2]);
+        if(engItems[i].marker == NULL){
+            QString typeMarker;
+            const int wagonType =
+                    engItems[i].previewMissing ? 0 : eng->wagonTypeId;
+            if(wagonType == 1) typeMarker = "C";
+            if(wagonType == 2) typeMarker = "F";
+            if(wagonType == 3) typeMarker = "T";
+            if(wagonType == 4) typeMarker = "E";
+            if(wagonType == 5) typeMarker = "D";
+            if(wagonType == 6) typeMarker = "S";
+            if(wagonType == 7) typeMarker = "O";
+            const QString markerText = typeMarker.isEmpty()
+                    ? QString::number(i + 1)
+                    : typeMarker + " " + QString::number(i + 1);
+            const int markerWidth = qBound(
+                2, markerText.length() + 1,
+                qMax(2, static_cast<int>(engItems[i].previewWidth - 1.0f)));
+            engItems[i].marker = new TextObj(markerText, markerWidth, 1.0);
+            engItems[i].marker->setFontSize(20);
+            engItems[i].marker->setColor(
+                textColor[0], textColor[1], textColor[2]);
         }
-        txtNumbers[i]->render(M_PI/2);
-        Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, 0, 0, -1);
-        gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
-        int wt = Game::currentEngLib->eng[engItems[i].eng]->wagonTypeId;
-        if(wt == 1){
-            if(txtEngineW == NULL){
-                txtEngineW = new TextObj("C");
-                txtEngineW->setColor(textColor[0],textColor[1],textColor[2]);
-            }
-            txtEngineW->render(M_PI/2);
-        }
-        if(wt == 2){
-            if(txtEngineF == NULL){
-                txtEngineF = new TextObj("F");
-                txtEngineF->setColor(textColor[0],textColor[1],textColor[2]);
-            }
-            txtEngineF->render(M_PI/2);
-        }
-        if(wt == 3){
-            if(txtEngineT == NULL){
-                txtEngineT = new TextObj("T");
-                txtEngineT->setColor(textColor[0],textColor[1],textColor[2]);
-            }
-            txtEngineT->render(M_PI/2);
-        }
-        if(wt == 4){
-            if(txtEngineE == NULL){
-                txtEngineE = new TextObj("E");
-                txtEngineE->setColor(255,0,0);
-            }
-            txtEngineE->render(M_PI/2);
-        }
-        if(wt == 5){
-            if(txtEngineD == NULL){
-                txtEngineD = new TextObj("D");
-                txtEngineD->setColor(255,0,0);
-            }
-            txtEngineD->render(M_PI/2);
-        }
-        if(wt == 6){
-            if(txtEngineS == NULL){
-                txtEngineS = new TextObj("S");
-                txtEngineS->setColor(255,0,0);
-            }
-            txtEngineS->render(M_PI/2);            
-        }
-        if(wt == 7){
-            if(txtEngineS == NULL){
-                txtEngineS = new TextObj("O");
-                txtEngineS->setColor(255,0,0);
-            }
-            txtEngineS->render(M_PI/2);           
-        }        
+        engItems[i].marker->render(M_PI/2);
         gluu->mvPopMatrix();
 
     }

@@ -88,7 +88,10 @@ int EngLib::loadAll(QString gameRoot, bool gui){
     QDir dir(path);
     QDir trainDir;
     trainDir.setFilter(QDir::Files);
-    trainDir.setNameFilters(QStringList()<<"*.eng"<<"*.wag"<<"*.eot"<<"*.inc");
+    // Include files are shared definition fragments, not selectable vehicles.
+    // Eng::load() still resolves and parses them when an ENG/WAG/EOT references
+    // one, but the Consist Editor should not list them as rolling stock.
+    trainDir.setNameFilters(QStringList()<<"*.eng"<<"*.wag"<<"*.eot");
     if(Game::debugOutput) qDebug() << path;
     if(!dir.exists())
         if(Game::debugOutput) qDebug() << "Path not exist" << path;

@@ -46,67 +46,11 @@ static QString statusReadoutStyle(const QString& background, const QString& text
     ).arg(textColor, background, border);
 }
 
-static QPoint snapWindowPosition(QWidget *window){
-    const int snapDistance = 10;
-    QRect moving = window->frameGeometry();
-    QPoint snappedFramePos = moving.topLeft();
-    int bestX = snapDistance + 1;
-    int bestY = snapDistance + 1;
-
-    QList<QWidget*> targets;
-    QWidget *parent = window->parentWidget();
-    if(parent != NULL)
-        targets.append(parent);
-    if(parent != NULL){
-        QList<QWidget*> siblings = parent->findChildren<QWidget*>();
-        for(int i = 0; i < siblings.size(); i++){
-            QWidget *candidate = siblings[i];
-            if(candidate == window || !candidate->isWindow() || !candidate->isVisible())
-                continue;
-            targets.append(candidate);
-        }
-    }
-
-    for(int i = 0; i < targets.size(); i++){
-        QRect target = targets[i]->frameGeometry();
-        bool verticalNear = moving.bottom() >= target.top() - snapDistance && moving.top() <= target.bottom() + snapDistance;
-        bool horizontalNear = moving.right() >= target.left() - snapDistance && moving.left() <= target.right() + snapDistance;
-        int xCandidates[4] = {
-            target.left() - moving.left(),
-            target.right() - moving.right(),
-            target.right() + 1 - moving.left(),
-            target.left() - 1 - moving.right()
-        };
-        int yCandidates[4] = {
-            target.top() - moving.top(),
-            target.bottom() - moving.bottom(),
-            target.bottom() + 1 - moving.top(),
-            target.top() - 1 - moving.bottom()
-        };
-
-        for(int j = 0; j < 4; j++){
-            int dist = qAbs(xCandidates[j]);
-            if(verticalNear && dist <= snapDistance && dist < bestX){
-                bestX = dist;
-                snappedFramePos.setX(moving.left() + xCandidates[j]);
-            }
-            dist = qAbs(yCandidates[j]);
-            if(horizontalNear && dist <= snapDistance && dist < bestY){
-                bestY = dist;
-                snappedFramePos.setY(moving.top() + yCandidates[j]);
-            }
-        }
-    }
-
-    return window->pos() + (snappedFramePos - moving.topLeft());
-}
-
 StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     this->setWindowFlags(Qt::WindowType::Tool);
-    //this->setWindowFlags(Qt::WindowStaysOnTopHint);
     this->setFixedWidth(scaledUiSize(300));
     this->setFixedHeight(scaledUiSize(463));
-    this->setWindowTitle(QString());
+    GuiFunct::setEditorToolWindowTitle(this);
     const bool defaultPositionRequested = Game::pinnedWindowPosition("controlPanelUseDefault", NULL);
     QStringList winPos = Game::statusPos.split(",");
     if(!defaultPositionRequested && winPos.count() > 1)
@@ -275,12 +219,17 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     positionLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
 
     statS = statusButtonStyle("#26292c", "#303438", "#e7eaec", "#383d41", "#191b1d");
-    statG = statusButtonStyle("#176c25", "#1e8430", "#f2fff4", "#319344", "#104b1a");
-    statY = statusButtonStyle("#b3b300", "#d0d020", "#232323", "#e0e03a", "#707000");
-    statC = statusButtonStyle("#176a73", "#1e838f", "#effdff", "#3193a0", "#104a51");
+    statG = statusButtonStyle(Game::StyleGreenButton, Game::StyleGreenButtonHover,
+                              "#232323", Game::StyleGreenButtonHover, "#356f43");
+    statY = statusButtonStyle(Game::StyleYellowButton, Game::StyleYellowButtonHover,
+                              "#232323", Game::StyleYellowButtonHover, "#75632f");
+    statC = statusButtonStyle(Game::StyleBlueButton, Game::StyleBlueButtonHover,
+                              "#232323", Game::StyleBlueButtonHover, "#315f80");
     statReadout = statusReadoutStyle("#26292c", "#e7eaec", "#383d41");
-    statReadoutY = statusReadoutStyle("#b3b300", "#232323", "#e0e03a");
-    statR = statusButtonStyle("#8d3030", "#a63b3b", "#fff0f0", "#bd5151", "#602020");
+    statReadoutY = statusReadoutStyle(
+        Game::StyleYellowButton, "#232323", Game::StyleYellowButtonHover);
+    statR = statusButtonStyle(Game::StyleRedButton, Game::StyleRedButtonHover,
+                              "#232323", Game::StyleRedButtonHover, "#743737");
 
     for(int i = 0; i < buttons.size(); i++)
         buttons[i]->setStyleSheet(statS);
@@ -313,7 +262,6 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     QObject::connect(&latBox, SIGNAL(textEdited(QString)), this, SLOT(latLonChanged(QString)));
     QObject::connect(&lonBox, SIGNAL(textEdited(QString)), this, SLOT(latLonChanged(QString)));
     tileInfo.setText(" ");
-
 }
 
 
@@ -339,7 +287,7 @@ void StatusWindow::applyWindowSnap(){
     if(snapping)
         return;
 
-    QPoint snapped = snapWindowPosition(this);
+    QPoint snapped = GuiFunct::snappedWindowPosition(this);
     if(snapped == pos())
         return;
 
@@ -590,8 +538,11 @@ void StatusWindow::reloadMkrLists(){
 
 void StatusWindow::mkrList(QMap<QString, Coords*> list){
     markerFiles.clear();
+    markerList.clear();
+    qDeleteAll(mkrPlaces);
+    mkrPlaces.clear();
     mkrFiles = list;
-    const QString routeId = Game::route.toLower() + ".mkr";
+    const QString routeId = Game::routeName.toLower() + ".mkr";
 
     for(auto it = list.begin(); it != list.end(); ++it){
         if(it.value() != NULL && it.value()->loaded)

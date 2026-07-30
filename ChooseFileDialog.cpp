@@ -10,34 +10,35 @@
 
 #include "ChooseFileDialog.h"
 #include "GuiFunct.h"
+#include "Game.h"
 
-ChooseFileDialog::ChooseFileDialog() : QDialog(){
-    GuiFunct::applyEditorPanelStyle(this);
-    //this->setFixedWidth(300);
-    items.setFixedWidth(600);
-    //this->setFixedSize(300,300);
+ChooseFileDialog::ChooseFileDialog(QWidget *parent) : QDialog(parent){
+    GuiFunct::styleEditorDialog(this);
+    const qreal scale = qMax(1.0f, Game::uiScale);
+    setMinimumWidth(qRound(560.0f * scale));
+    items.setMinimumHeight(qRound(220.0f * scale));
 
-    //QLabel *label = new QLabel("Save changes in consists?");
     QPushButton* ok = new QPushButton("Edit");
     QPushButton* cancel = new QPushButton("Close");
+    ok->setProperty("dialogRole", "primary");
     connect(ok, SIGNAL (released()), this, SLOT (ok()));
     connect(cancel, SIGNAL (released()), this, SLOT (cancel()));
-    
-    QGridLayout *vlist = new QGridLayout;
-    vlist->setSpacing(2);
-    vlist->addWidget(&infoLabel, 0, 0, 1, 2, Qt::AlignCenter);
-    //vlist->addWidget(new QLabel("New FileName:"), 1, 0, Qt::AlignLeft);
-    //vlist->addWidget(&name, 1, 1, 1, 1, Qt::AlignLeft);
-    //QHBoxLayout *vlist1 = new QHBoxLayout;
-    vlist->addWidget(&items, 1, 0, 1, 2, Qt::AlignCenter);
-    vlist->addWidget(ok, 2, 0);
-    vlist->addWidget(cancel, 2, 1);
-    
-//    mainLayout->setAlignment(browse, Qt::AlignBottom);
-    vlist->setContentsMargins(1,1,1,1);
-    this->setLayout(vlist);
-    this->layout()->setSizeConstraint( QLayout::SetFixedSize );
-    //this->setFixedSize(this->width(),this->height());
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    mainLayout->setSpacing(6);
+    mainLayout->setContentsMargins(4,4,4,4);
+    QLabel *title = new QLabel("CHOOSE SOURCE FILE");
+    GuiFunct::styleEditorTitle(title);
+    mainLayout->addWidget(title);
+    infoLabel.setWordWrap(true);
+    infoLabel.setContentsMargins(6,4,6,2);
+    mainLayout->addWidget(&infoLabel);
+    mainLayout->addWidget(&items, 1);
+    QHBoxLayout *buttons = new QHBoxLayout;
+    buttons->setSpacing(4);
+    buttons->addWidget(ok);
+    buttons->addWidget(cancel);
+    mainLayout->addLayout(buttons);
 }
 
 void ChooseFileDialog::setMsg(QString msg){

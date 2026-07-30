@@ -256,9 +256,29 @@ void Path::init3dShapes(bool initShapes){
         mapLines.clear();
     int fail = 0;
     TDB* tdb = Game::trackDB;
+    if(tdb == NULL){
+        qWarning() << "Unable to build path geometry without TrackDB:" << pathid;
+        return;
+    }
+    const auto trackNode = [tdb](int id) -> TRnode* {
+        const auto it = tdb->trackNodes.find(id);
+        return it == tdb->trackNodes.end() ? NULL : it->second;
+    };
+    const auto abortInvalidPath = [this, initShapes](const QString &reason) {
+        qWarning() << "Skipping invalid path geometry" << pathid << "-" << reason;
+        mapLines.clear();
+        for(OglObj *line : lines)
+            delete line;
+        lines.clear();
+        linesX.clear();
+        linesZ.clear();
+        isinit1 = true;
+        if(initShapes)
+            isinit2 = true;
+    };
     float posT[2];
     float posW[3];
-    float tpos1[3];
+    float tpos1[3] = {-1, 0, 0};
     int nodeId1, currentDistance;
     int currentNodeId;
     int lastNodeId = -1;
@@ -274,8 +294,17 @@ void Path::init3dShapes(bool initShapes){
             posT[0] = node[i].tilex;
             posT[1] = node[i].tilez;
             Vec3::copy(posW, node[i].pos);
-            tdb->findNearestPositionOnTDB(posT, posW, NULL, tpos1);
+            if(tdb->findNearestPositionOnTDB(posT, posW, NULL, tpos1) < 0){
+                abortInvalidPath(tr("path point %1 is not on the current TrackDB").arg(i));
+                return;
+            }
             nodeId1 = tpos1[0];
+            TRnode *currentPathNode = trackNode(nodeId1);
+            if(currentPathNode == NULL){
+                abortInvalidPath(tr("path point %1 references missing track node %2")
+                                 .arg(i).arg(nodeId1));
+                return;
+            }
             currentDistance = tpos1[1];
             currentNodeId = nodeId1;
 
@@ -285,8 +314,14 @@ void Path::init3dShapes(bool initShapes){
                 continue;
             }
             
-            if(tdb->trackNodes[lastNodeId]->typ != 1){
-                if(tdb->trackNodes[currentNodeId]->TrPinS[0] == lastNodeId){
+            TRnode *lastPathNode = trackNode(lastNodeId);
+            if(lastPathNode == NULL){
+                abortInvalidPath(tr("path point %1 follows missing track node %2")
+                                 .arg(i).arg(lastNodeId));
+                return;
+            }
+            if(lastPathNode->typ != 1){
+                if(currentPathNode->TrPinS[0] == lastNodeId){
                     distance1 = 0;
                 } else {
                     distance1 = tdb->getVectorSectionLength(currentNodeId);
@@ -297,8 +332,8 @@ void Path::init3dShapes(bool initShapes){
                 distance2 = currentDistance;
             }
             
-            if(tdb->trackNodes[lastNodeId]->typ == 2)
-                if(tdb->trackNodes[lastNodeId]->TrPinS[1] == currentNodeId)
+            if(lastPathNode->typ == 2)
+                if(lastPathNode->TrPinS[1] == currentNodeId)
                     junctionDirections[lastNodeId] = 0;
                 else
                     junctionDirections[lastNodeId] = 1;
@@ -312,12 +347,29 @@ void Path::init3dShapes(bool initShapes){
             //qDebug() << nodeId1;
             if(lastNodeId < 0){
                 if(Game::debugOutput) qDebug() << "fail";
-                fail++;
+                abortInvalidPath(tr("path starts with an unconnected junction at point %1")
+                                 .arg(i));
+                return;
             }
-            
-            if(tdb->trackNodes[lastNodeId]->typ != 1){
+
+            TRnode *lastPathNode = trackNode(lastNodeId);
+            TRnode *junctionNode = trackNode(nodeId1);
+            if(lastPathNode == NULL || junctionNode == NULL){
+                abortInvalidPath(tr("path point %1 references missing track node %2")
+                                 .arg(i).arg(lastPathNode == NULL ? lastNodeId : nodeId1));
+                return;
+            }
+
+            if(lastPathNode->typ != 1){
                 currentNodeId = tdb->findVectorNodeBetweenTwoNodes(lastNodeId, nodeId1);
-                if(tdb->trackNodes[currentNodeId]->TrPinS[0] == nodeId1){
+                TRnode *currentPathNode = trackNode(currentNodeId);
+                if(currentPathNode == NULL){
+                    abortInvalidPath(
+                        tr("track nodes %1 and %2 have no connecting vector at point %3")
+                            .arg(lastNodeId).arg(nodeId1).arg(i));
+                    return;
+                }
+                if(currentPathNode->TrPinS[0] == nodeId1){
                     distance2 = 0;
                     distance1 = tdb->getVectorSectionLength(currentNodeId);
                 } else {
@@ -326,7 +378,7 @@ void Path::init3dShapes(bool initShapes){
                 }
             } else {
                 currentNodeId = lastNodeId;
-                if(tdb->trackNodes[currentNodeId]->TrPinS[0] == nodeId1){
+                if(lastPathNode->TrPinS[0] == nodeId1){
                     /*&& tdb->trackNodes[currentNodeId]->TrPinK[0] == 1*/
                     distance2 = 0;
                 } else {
@@ -336,13 +388,13 @@ void Path::init3dShapes(bool initShapes){
             }
             
             if(i == 1)
-                if(tdb->trackNodes[currentNodeId]->TrPinS[0] == nodeId1)
+                if(trackNode(currentNodeId)->TrPinS[0] == nodeId1)
                     startDirection = 1;
                 else 
                     startDirection = 0;
             
-            if(tdb->trackNodes[lastNodeId]->typ == 2){
-                if(tdb->trackNodes[lastNodeId]->TrPinS[1] == currentNodeId)
+            if(lastPathNode->typ == 2){
+                if(lastPathNode->TrPinS[1] == currentNodeId)
                     junctionDirections[lastNodeId] = 0;
                 else
                     junctionDirections[lastNodeId] = 1;
@@ -358,20 +410,32 @@ void Path::init3dShapes(bool initShapes){
             return;
         
         if(Game::debugOutput) qDebug() << "currentNodeId" << currentNodeId << distance1 << distance2 ;
-        
-        for(int ti = 0; ti < tdb->trackNodes[currentNodeId]->iTri; ti++){
-            int trid1 = tdb->trackNodes[currentNodeId]->trItemRef[ti];
-            if(tdb->trackItems[trid1] != NULL){
-                if(tdb->trackItems[trid1]->type != "platformitem")
+
+        TRnode *currentPathNode = trackNode(currentNodeId);
+        if(currentPathNode == NULL){
+            abortInvalidPath(tr("path point %1 resolved to missing vector node %2")
+                             .arg(i).arg(currentNodeId));
+            return;
+        }
+        for(int ti = 0; ti < currentPathNode->iTri; ti++){
+            int trid1 = currentPathNode->trItemRef[ti];
+            const auto firstItemIt = tdb->trackItems.find(trid1);
+            TRitem *firstItem = firstItemIt == tdb->trackItems.end()
+                ? NULL : firstItemIt->second;
+            if(firstItem != NULL){
+                if(firstItem->type != "platformitem")
                     continue;
-                int trid2 = tdb->trackItems[trid1]->platformTrItemData[1];
-                if(tdb->trackItems[trid2] != NULL){
-                    float ddd1 = tdb->trackItems[trid1]->getTrackPosition();
+                int trid2 = firstItem->platformTrItemData[1];
+                const auto secondItemIt = tdb->trackItems.find(trid2);
+                TRitem *secondItem = secondItemIt == tdb->trackItems.end()
+                    ? NULL : secondItemIt->second;
+                if(secondItem != NULL){
+                    float ddd1 = firstItem->getTrackPosition();
                     if(distance1 > distance2)
                         ddd1 = 2*tdb->getVectorSectionLength(currentNodeId) - ddd1 - distance1;
                     else 
                         ddd1 = ddd1 - distance1;
-                    float ddd2 = tdb->trackItems[trid2]->getTrackPosition();
+                    float ddd2 = secondItem->getTrackPosition();
                     if(distance1 > distance2)
                         ddd2 = 2*tdb->getVectorSectionLength(currentNodeId) - ddd2 - distance1;
                     else 
@@ -388,10 +452,12 @@ void Path::init3dShapes(bool initShapes){
                     }
                     if(pathObjectsMap[distanceDownPath + dist] == NULL)
                         pathObjectsMap[distanceDownPath + dist] = new PathObject();
-                    pathObjectsMap[distanceDownPath + dist]->name = tdb->trackItems[trid]->stationName;
+                    TRitem *platformItem = trid == trid1 ? firstItem : secondItem;
+                    pathObjectsMap[distanceDownPath + dist]->name = platformItem->stationName;
                     pathObjectsMap[distanceDownPath + dist]->trItemId = trid;
                     pathObjectsMap[distanceDownPath + dist]->distanceDownPath = distanceDownPath + dist;
-                    if(Game::debugOutput) qDebug() << "="<<tdb->trackItems[trid]->stationName << distanceDownPath + dist;
+                    if(Game::debugOutput) qDebug() << "=" << platformItem->stationName
+                                                   << distanceDownPath + dist;
                 }
             }
         }

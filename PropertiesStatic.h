@@ -23,6 +23,7 @@ public:
     bool support(GameObj* obj);
     void showObj(GameObj* obj);
     void updateObj(GameObj* obj);
+    QPushButton *hacksButton();
     
 public slots:
     void enableCustomDetailLevelEnabled(int val);
@@ -38,13 +39,15 @@ public slots:
     
     
 signals:
-    
+    void hacksToggled(GameObj *selection, QPushButton *button, bool checked);
+
 private:
     QCheckBox checkboxAnim;
     QCheckBox checkboxTerrain;
     QComboBox cShadowType;
     QComboBox cCollisionType;
     QLineEdit eCollisionFlags;
+    QPushButton hacks;
 };
 
 #endif	/* PROPERTIESSTATIC_H */

@@ -16,7 +16,7 @@
 class ChooseFileDialog : public QDialog {
     Q_OBJECT
 public:
-    ChooseFileDialog();
+    explicit ChooseFileDialog(QWidget *parent = NULL);
     virtual ~ChooseFileDialog();
     QListWidget items;
     void setMsg(QString msg);

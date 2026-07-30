@@ -2,6 +2,9 @@
 /dist/
 /*.log
 /Makefile
+/*.mk
+/Makefile.OSX
+/MacOS/Makefile.OSX
 /object_script.*
 /_source_backups/
 /*.bak

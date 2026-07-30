@@ -6,6 +6,7 @@
 #include "ActivityTrackViewer.h"
 
 #include "Game.h"
+#include "GuiFunct.h"
 #include "Path.h"
 #include "Route.h"
 #include "TDB.h"
@@ -33,6 +34,7 @@
 #include <QSet>
 #include <QTextStream>
 #include <QTimer>
+#include <QVBoxLayout>
 #include <QWheelEvent>
 #include <QtMath>
 #include <algorithm>
@@ -396,8 +398,32 @@ void ActivityTrackViewer::beginPathEdit(Path *path){
     for(int leg = 0; leg <= draftReversePoints.size(); leg++)
         draftLegSwitchRoutes.push_back(savedRoutes);
     if(!computeDraftRoute()){
-        setSelectedPath(path);
-        emit pathDraftStatus(tr("<b>Path cannot be edited safely</b><br>The saved main route could not be reconstructed through its switches."));
+        draftRouteLines.clear();
+        draftRouteMedium.clear();
+        draftRouteOverview.clear();
+        draftRouteLineVectors.clear();
+        draftRouteLineSegments.clear();
+        draftRouteLineLegs.clear();
+        draftRouteVectors.clear();
+        draftOverlapLines.clear();
+        draftOverlapMedium.clear();
+        draftOverlapOverview.clear();
+        // Do not leave the normal read-only Path cache underneath the repair
+        // controls. It paints a second, unselectable start/endpoint that looks
+        // stuck after the editable draft control is moved or deleted.
+        selectedPathLine = QPainterPath();
+        pathPoints.clear();
+        savedReversePoints.clear();
+        selectedPathBounds = QRectF();
+        emit pathDraftStatus(
+            tr("<b>Open or broken path loaded for repair</b><br>"
+               "The saved route is not continuous on the current TrackDB. "
+               "Click the start or endpoint and press Delete, then place a "
+               "replacement control to rebuild the path."));
+        emit pathEditingStateChanged(true);
+        showTransientMessage(tr("BROKEN PATH - delete an endpoint to repair"), true);
+        updateStatus();
+        update();
         return;
     }
     // Associate imported wait nodes with the reconstructed reverse leg.
@@ -428,7 +454,7 @@ void ActivityTrackViewer::beginPathEdit(Path *path){
     // main-path switch. The TrackDB graph supplies the branch geometry; the
     // saved nextSiding link supplies the exact pair of boundary switches.
     int passingCount = 0;
-    bool passingImportFailed = false;
+    int unreadablePassingCount = 0;
     QHash<int, int> combinedRoutes;
     for(const QHash<int, int> &legRoutes : draftLegSwitchRoutes){
         for(auto it = legRoutes.constBegin(); it != legRoutes.constEnd(); ++it)
@@ -436,8 +462,12 @@ void ActivityTrackViewer::beginPathEdit(Path *path){
     }
     for(int mainNodeIndex : mainIndices){
         const unsigned int branchValue = path->trPathNode[mainNodeIndex][2];
-        if(branchValue >= static_cast<unsigned int>(path->trPathNode.size()))
+        if(branchValue == 0xffffffffu)
             continue;
+        if(branchValue >= static_cast<unsigned int>(path->trPathNode.size())){
+            unreadablePassingCount++;
+            continue;
+        }
         int branchIndex = static_cast<int>(branchValue);
         QSet<int> visitedBranch;
         QVector<int> savedInternalJunctions;
@@ -454,7 +484,7 @@ void ActivityTrackViewer::beginPathEdit(Path *path){
                 ? static_cast<int>(next) : -1;
         }
         if(branchIndex < 0 || !mainIndexSet.contains(branchIndex)){
-            passingImportFailed = true;
+            unreadablePassingCount++;
             continue;
         }
         const int startJunction = nearestJunctionId(controlPoint(mainNodeIndex));
@@ -605,23 +635,49 @@ void ActivityTrackViewer::beginPathEdit(Path *path){
             }
         }
         if(!imported)
-            passingImportFailed = true;
+            unreadablePassingCount++;
     }
-    if(passingImportFailed){
-        setSelectedPath(path);
-        emit pathDraftStatus(tr("<b>Path left read-only</b><br>A saved passing branch could not be reconstructed exactly, so no destructive edit was opened."));
-        showTransientMessage(tr("EDIT NOT OPENED - passing path could not be reconstructed"), true);
-        return;
+    if(unreadablePassingCount > 0){
+        const bool discardUnreadable = GuiFunct::confirmDestructiveAction(
+            this, tr("Discard unreadable passing path?"),
+            tr("The main path is intact, but %1 saved passing branch(es) cannot "
+               "be reconstructed on the current TrackDB.\n\n"
+               "Yes opens the intact main path for repair and removes only "
+               "those unreadable branches from the draft. The PAT file is not "
+               "changed until you choose Save Path.\n\n"
+               "No leaves the path unchanged and read-only.")
+                .arg(unreadablePassingCount));
+        if(!discardUnreadable){
+            setSelectedPath(path);
+            emit pathDraftStatus(
+                tr("<b>Path left read-only</b><br>%1 unreadable passing "
+                   "branch(es) were preserved in the unchanged PAT file.")
+                    .arg(unreadablePassingCount));
+            showTransientMessage(
+                tr("EDIT NOT OPENED - unreadable passing path preserved"), true);
+            return;
+        }
     }
 
     rebuildOverlapLines();
     selectedPathLine = QPainterPath();
     pathPoints.clear();
+    const QString repairNote = unreadablePassingCount > 0
+        ? tr(" %1 unreadable passing branch(es) were removed from the draft; "
+             "choose Save Path to apply that repair.")
+              .arg(unreadablePassingCount)
+        : QString();
     emit pathDraftStatus(tr("<b>Editing standalone path: %1</b><br>"
-                            "%2 reverse point(s), %3 wait point(s), %4 passing siding(s). Click a point to select it; press Delete to remove it.")
+                            "%2 reverse point(s), %3 wait point(s), %4 passing "
+                            "siding(s).%5 Click a point to select it; press "
+                            "Delete to remove it.")
                          .arg(path->displayName.toHtmlEscaped())
-                         .arg(draftReversePoints.size()).arg(draftWaitPoints.size()).arg(passingCount));
+                         .arg(draftReversePoints.size()).arg(draftWaitPoints.size())
+                         .arg(passingCount).arg(repairNote));
     emit pathEditingStateChanged(true);
+    if(unreadablePassingCount > 0)
+        showTransientMessage(
+            tr("UNREADABLE PASSING PATH REMOVED FROM DRAFT - save to apply"), true);
     updateStatus();
     update();
 }
@@ -793,13 +849,18 @@ void ActivityTrackViewer::editPathMetadata(){
 
     const bool fileAlreadySaved = QFileInfo::exists(selectedPath->pathid);
     QDialog dialog(this);
-    dialog.setWindowTitle(tr("Path Meta Data"));
-    QFormLayout *form = new QFormLayout(&dialog);
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    GuiFunct::styleEditorDialog(&dialog);
+    GuiFunct::addEditorDialogHeader(&dialog, tr("Path Meta Data"));
+    dialog.setMinimumWidth(qRound(440 * qMax(1.0f, Game::uiScale)));
+
     QLabel *explanation = new QLabel(
         tr("These values are written into the PAT file and used by Open Rails. "
            "Start and end are the labels shown for the two endpoint markers."), &dialog);
     explanation->setWordWrap(true);
-    form->addRow(explanation);
+    layout->addWidget(explanation);
+
+    QFormLayout *form = new QFormLayout;
 
     QLineEdit *fileName = new QLineEdit(selectedPath->nameId, &dialog);
     if(fileName->text().trimmed().isEmpty())
@@ -819,10 +880,11 @@ void ActivityTrackViewer::editPathMetadata(){
     form->addRow(tr("Start label:"), pathStart);
     form->addRow(tr("End label:"), pathEnd);
     form->addRow(QString(), playerPath);
+    layout->addLayout(form);
 
     QDialogButtonBox *buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, &dialog);
-    form->addRow(buttons);
+    layout->addWidget(buttons);
     QObject::connect(buttons, SIGNAL(accepted()), &dialog, SLOT(accept()));
     QObject::connect(buttons, SIGNAL(rejected()), &dialog, SLOT(reject()));
 
@@ -2989,8 +3051,12 @@ bool ActivityTrackViewer::toggleDraftSwitch(const QPointF &screenPoint){
         // a different turnout on magenta. Always rediscover both boundaries
         // from the TrackDB after a throw; preserving the old endpoints would
         // reject exactly the valid short/long alternatives the user selected.
-        const bool recalculatedOk = calculatePassingSiding(
+        bool recalculatedOk = calculatePassingSiding(
             draftPassingSidings[passingIndex].seedVector, proposedRoutes, recalculated);
+        if(recalculatedOk &&
+           recalculated.switchRoutes.value(junction.nodeId, -1) !=
+               proposedRoutes.value(junction.nodeId))
+            recalculatedOk = false;
         if(recalculatedOk){
             undoStates.push_back(before);
             if(undoStates.size() > 100)
@@ -3001,11 +3067,13 @@ bool ActivityTrackViewer::toggleDraftSwitch(const QPointF &screenPoint){
             showTransientMessage(tr("PASSING PATH RECALCULATED - switch %1 now uses exit %2")
                                  .arg(junction.nodeId).arg(proposedRoutes.value(junction.nodeId)), false);
             emit pathDraftStatus(tr("<b>Passing path recalculated</b><br>The orange route remains connected at both ends."));
+            emit switchThrowAccepted();
             update();
             return true;
         }
         showTransientMessage(tr("PASSING PATH CANNOT RECONNECT - switch restored"), true);
         emit pathDraftStatus(tr("<b>Switch throw rejected</b><br>No valid passing route reconnects at both ends. The prior alignment was restored."));
+        emit switchThrowRejected();
         update();
         return false;
     }
@@ -3017,10 +3085,17 @@ bool ActivityTrackViewer::toggleDraftSwitch(const QPointF &screenPoint){
     const int current = currentLegRoutes.contains(junction.nodeId)
         ? currentLegRoutes.value(junction.nodeId)
         : qBound(1, junction.mainRoute + 1, 2);
-    currentLegRoutes.insert(junction.nodeId, current == 1 ? 2 : 1);
+    const int proposedExit = current == 1 ? 2 : 1;
+    currentLegRoutes.insert(junction.nodeId, proposedExit);
     selectedJunction = index;
     draftEndSelected = false;
     bool valid = computeDraftRoute();
+    // A trailing-point traversal self-aligns to the incoming exit. In that
+    // case computeDraftRoute() remains continuous but overwrites the user's
+    // opposite throw. Treat the unchanged state as a rejected throw, not a
+    // successful recalculation.
+    if(valid && currentLegRoutes.value(junction.nodeId, -1) != proposedExit)
+        valid = false;
     QVector<DraftPassingSiding> recalculatedSidings;
     if(valid){
         for(const DraftPassingSiding &oldSiding : before.passingSidings){
@@ -3044,14 +3119,16 @@ bool ActivityTrackViewer::toggleDraftSwitch(const QPointF &screenPoint){
         emit pathDraftStatus(tr("<b>Switch %1 thrown to exit %2</b><br>"
                                 "The endpoint was removed and all passing paths were recalculated.")
                              .arg(junction.nodeId).arg(currentLegRoutes.value(junction.nodeId)));
+        emit switchThrowAccepted();
     } else {
         restoreDraftState(before);
         selectedJunction = index;
         showTransientMessage(tr("NO VALID RECONNECTION - switch %1 restored").arg(junction.nodeId), true);
         emit pathDraftStatus(tr("<b>Switch throw rejected</b><br>The main or passing path could not reconnect, so the prior alignment was restored."));
+        emit switchThrowRejected();
     }
     update();
-    return true;
+    return valid;
 }
 
 bool ActivityTrackViewer::addPassingSiding(const QPointF &screenPoint){

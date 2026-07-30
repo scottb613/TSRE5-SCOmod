@@ -207,14 +207,9 @@ void Eng::load(){
         }               
         if (sh == ("include")) {
             QString incPath = ParserX::GetStringInside(data).toLower();
-            QString incPathb = ParserX::GetStringInside(data).toLower();
-            incPathb = incPathb.replace("../","/"); //// EFO trying to fix older files - will it break newer?
             ParserX::SkipToken(data);
             if(data->insertFile(incpath + "/" + incPath, mstsincpath + "/" + incPath, &loadedPath))   /// legacy path
                 addToFileList(loadedPath);
-            if(data->insertFile(incpath + "/" + incPathb, mstsincpath + "/" + incPathb, &loadedPath))  //// alternate path
-                addToFileList(loadedPath);
-              //qDebug() << "eng 186 parsing: " << loadedPath;
             continue;
         }
         if (sh == ("wagon")) {   //// Wagon files
@@ -226,14 +221,9 @@ void Eng::load(){
                 //qDebug() << sh;
                 if (sh == ("include")) {
                     QString incPath = ParserX::GetStringInside(data).toLower();
-                    QString incPathb = ParserX::GetStringInside(data).toLower();
-                    incPathb = incPathb.replace("../","/"); //// EFO trying to fix older files - will it break newer?
                     ParserX::SkipToken(data);
                     if(data->insertFile(incpath + "/" + incPath, mstsincpath + "/" + incPath, &loadedPath))
                         addToFileList(loadedPath);
-                    if(data->insertFile(incpath + "/" + incPathb, mstsincpath + "/" + incPath, &loadedPath))
-                        addToFileList(loadedPath);
-                    if(Game::debugOutput) qDebug() << "No handler to read this file just yet: " << loadedPath;
                       
                     //// Need to add a file read/parse routine here similar to the loadOR functionality     
                     ////    look for:    //// Load OR exception handling needed.  It's faux JSON
@@ -1344,4 +1334,3 @@ void Eng::fillContentHierarchyInfo(QVector<ContentHierarchyInfo*>& list, int par
 }
 
 
-    

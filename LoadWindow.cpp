@@ -16,6 +16,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QFile>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include "Game.h"
 #include <QDebug>
 #include "NewRouteWindow.h"
@@ -42,23 +44,28 @@ static void playLoadWindowSound(const QString &fileName, bool alwaysPlay = false
 #endif
 }
 
-static QString loadButtonStyle(const QString& background, const QString& hoverBackground,
-                               const QString& textColor, const QString& border,
-                               const QString& pressedBackground){
+static QString launcherButtonStyle(const QString& accent, const QString& hoverAccent){
     return QString(
-        "QPushButton { color: %1;"
-        " background-color: %2;"
-        " border: 1px solid %4; border-radius: 1px; padding: 1px 4px; }"
-        "QPushButton:hover { background-color: %3; border-color: #f08200; }"
+        "QPushButton { color: #eeeeee;"
+        " background-color: #34373a;"
+        " border: 1px solid #50555a; border-left: 3px solid %1;"
+        " border-radius: 2px; padding: 1px 5px; }"
+        "QPushButton:hover { background-color: #404448;"
+        " border-color: #6c7278; border-left-color: %2; }"
         "QPushButton:pressed {"
-        " background-color: %5; border-color: %4;"
+        " background-color: #292c2f; border-color: #454a4f;"
+        " border-left-color: %1;"
         " padding-top: 2px; padding-bottom: 0px; }"
-        "QPushButton:disabled { color: #858585; background-color: #3b3b3b; border-color: #4b4b4b; }"
-    ).arg(textColor, background, hoverBackground, border, pressedBackground);
+        "QPushButton:disabled { color: #858585; background-color: #303235;"
+        " border-color: #45484b; border-left-color: #55585b; }"
+    ).arg(accent, hoverAccent);
 }
 
 LoadWindow::LoadWindow() {
     //this->setWindowFlags( Qt::CustomizeWindowHint );
+    // The persistent launcher explicitly owns application shutdown. Editor
+    // windows may close while this screen is hidden without ending the app.
+    QApplication::setQuitOnLastWindowClosed(false);
     setWindowTitle(Game::AppName+" "+Game::AppVersion+" Route Editor");
     this->setFixedSize(600, 700);
     QImage* myImage = new QImage();
@@ -81,24 +88,35 @@ LoadWindow::LoadWindow() {
     connect(browse, SIGNAL (released()), this, SLOT (handleBrowseButton()));
     load = new QPushButton("Load");
     load->setMinimumHeight(24);
-    const QString greenButton = loadButtonStyle("#176c25", "#1e8430", "#f2fff4", "#319344", "#104b1a");
-    const QString orangeButton = loadButtonStyle("#a85a16", "#c96d1c", "#fff4e8", "#dc802c", "#6f3a0d");
-    const QString redButton = loadButtonStyle("#8d3030", "#a63b3b", "#fff0f0", "#bd5151", "#602020");
+    const QString greenButton = launcherButtonStyle(
+        Game::StyleGreenButton, Game::StyleGreenButtonHover);
+    const QString blueButton = launcherButtonStyle(
+        Game::StyleBlueButton, Game::StyleBlueButtonHover);
+    const QString orangeButton = launcherButtonStyle(
+        Game::StyleOrangeButton, Game::StyleOrangeButtonHover);
+    const QString redButton = launcherButtonStyle(
+        Game::StyleRedButton, Game::StyleRedButtonHover);
     load->setStyleSheet(greenButton);
     connect(load, SIGNAL (released()), this, SLOT (routeLoad()));
-    neww = new QPushButton("New");
+    neww = new QPushButton("New Route");
     neww->setMinimumHeight(24);
     neww->setStyleSheet(orangeButton);
     connect(neww, SIGNAL (released()), this, SLOT (setNewRoute()));
-    restoreLast = new QPushButton("Restore Last Session");
+    restoreLast = new QPushButton("Restore");
     restoreLast->setMinimumHeight(24);
     restoreLast->setStyleSheet(greenButton);
     connect(restoreLast, SIGNAL (released()), this, SLOT (restoreLastSession()));
+    // Adapted from Eric-from-Trainsim's idea of launching the Consist Editor
+    // directly from the selected Train Simulator root.
+    consistEditor = new QPushButton("Consist Editor");
+    consistEditor->setMinimumHeight(24);
+    consistEditor->setStyleSheet(blueButton);
+    connect(consistEditor, SIGNAL (released()), this, SLOT (consistEditorLoad()));
     exit = new QPushButton("Exit");
     exit->setMinimumHeight(24);
     exit->setStyleSheet(redButton);
 
-    const QList<QPushButton*> startupButtons = { browse, load, neww, restoreLast, exit };
+    const QList<QPushButton*> startupButtons = { browse, load, restoreLast, consistEditor, neww, exit };
     for(QPushButton *button : startupButtons){
         connect(button, &QPushButton::pressed, this, [](){
             playLoadWindowSound("SCOpress.wav", true);
@@ -140,7 +158,7 @@ LoadWindow::LoadWindow() {
     rootStatusLabel.hide();
     mainLayout->addWidget(&rootStatusLabel);
     routeList.setColumnCount(2);
-    routeList.setHorizontalHeaderLabels(QStringList() << "Directory Name" << "Last Modified");
+    routeList.setHorizontalHeaderLabels(QStringList() << "Route" << "Last Modified");
     routeList.horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     routeList.verticalHeader()->setVisible(false);
     mainLayout->addWidget(&routeList);
@@ -154,13 +172,23 @@ LoadWindow::LoadWindow() {
     mainLayout->addWidget(nowa);*/
     
     QWidget* box = new QWidget();
-    QHBoxLayout *vbox = new QHBoxLayout;
-    vbox->addWidget(load);
-    vbox->addWidget(neww);
-    vbox->addWidget(restoreLast);
-    vbox->addWidget(exit);
-    vbox->setContentsMargins(0,0,0,0);
-    box->setLayout(vbox);
+    QVBoxLayout *buttonRows = new QVBoxLayout;
+    QHBoxLayout *primaryButtons = new QHBoxLayout;
+    primaryButtons->addWidget(load, 2);
+    primaryButtons->addWidget(restoreLast, 2);
+    primaryButtons->addWidget(exit, 1);
+    primaryButtons->setSpacing(4);
+    primaryButtons->setContentsMargins(0,0,0,0);
+    QHBoxLayout *secondaryButtons = new QHBoxLayout;
+    secondaryButtons->addWidget(consistEditor, 3);
+    secondaryButtons->addWidget(neww, 1);
+    secondaryButtons->setSpacing(4);
+    secondaryButtons->setContentsMargins(0,0,0,0);
+    buttonRows->addLayout(primaryButtons);
+    buttonRows->addLayout(secondaryButtons);
+    buttonRows->setSpacing(4);
+    buttonRows->setContentsMargins(0,0,0,0);
+    box->setLayout(buttonRows);
     mainLayout->addWidget(box);
     
     mainLayout->setAlignment(myLabel, Qt::AlignTop);
@@ -209,6 +237,16 @@ LoadWindow::LoadWindow() {
 
 void LoadWindow::showEvent(QShowEvent *event){
     QWidget::showEvent(event);
+    const bool validRoot = Game::checkRoot(Game::root);
+    updateStartupButtons(validRoot);
+    if(validRoot){
+        newRoute = false;
+        load->setText("Load");
+        cRecent.setCurrentText(Game::root);
+        cRecent.setToolTip(Game::root);
+        listRoutes();
+    }
+
     QScreen *screen = QApplication::primaryScreen();
     if(screen == NULL)
         return;
@@ -239,12 +277,12 @@ void LoadWindow::handleBrowseButton(QString directory){
     routeList.setRowCount(0);
     if(Game::checkRoot(directory)){
         qDebug()<<"ok";
+        Game::root = directory;
         updateStartupButtons(true);
         cRecent.setStyleSheet(
             "QComboBox { combobox-popup: 0; color: white; font-weight: normal; }"
             "QComboBox QLineEdit { color: white; font-weight: normal; }");
         rootStatusLabel.hide();
-        Game::root = directory;
         this->listRoutes();
 
         int existing = -1;
@@ -282,6 +320,11 @@ void LoadWindow::handleBrowseButton(QString directory){
     }
 }
 
+void LoadWindow::closeEvent(QCloseEvent *event){
+    event->accept();
+    QCoreApplication::quit();
+}
+
 void LoadWindow::updateStartupButtons(bool validRoot){
     restoreLast->setEnabled(QFile::exists(Game::lastSessionFilePath()));
     restoreLast->show();
@@ -289,13 +332,25 @@ void LoadWindow::updateStartupButtons(bool validRoot){
     if(validRoot){
         load->show();
         neww->show();
-        load->setFixedWidth(100);
-        neww->setFixedWidth(100);
-        restoreLast->setFixedWidth(180);
-        exit->setFixedWidth(100);
+        consistEditor->show();
+        consistEditor->setEnabled(Game::checkCERoot(Game::root));
+        consistEditor->setToolTip(consistEditor->isEnabled()
+                                  ? "Open the Consist Editor using this Train Simulator folder"
+                                  : "This folder does not contain TRAINS, TRAINSET, and CONSISTS");
+        load->setMinimumWidth(0);
+        neww->setMinimumWidth(0);
+        restoreLast->setMinimumWidth(0);
+        consistEditor->setMinimumWidth(0);
+        exit->setMinimumWidth(0);
+        load->setMaximumWidth(QWIDGETSIZE_MAX);
+        neww->setMaximumWidth(QWIDGETSIZE_MAX);
+        restoreLast->setMaximumWidth(QWIDGETSIZE_MAX);
+        consistEditor->setMaximumWidth(QWIDGETSIZE_MAX);
+        exit->setMaximumWidth(QWIDGETSIZE_MAX);
     } else {
         load->hide();
         neww->hide();
+        consistEditor->hide();
         restoreLast->setFixedWidth(300);
         exit->setFixedWidth(300);
     }
@@ -372,7 +427,7 @@ void LoadWindow::restoreLastSession(){
         return;
     }
 
-    this->hide();
+    hide();
     emit showMainWindow();
 }
 
@@ -392,8 +447,53 @@ void LoadWindow::routeLoad(){
         Game::checkRoute(Game::route);
     }
     qDebug() << Game::route;
-    this->hide();
+    hide();
     emit showMainWindow();
+}
+
+void LoadWindow::consistEditorLoad(){
+    if(!Game::checkCERoot(Game::root))
+        return;
+
+    if(consistEditorProcess != NULL)
+        return;
+
+    consistEditorProcess = new QProcess(this);
+    consistEditor->setEnabled(false);
+
+    connect(consistEditorProcess, &QProcess::started, this, [this](){
+        hide();
+    });
+    connect(consistEditorProcess,
+            static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
+            this, [this](int, QProcess::ExitStatus){
+        consistEditorProcess->deleteLater();
+        consistEditorProcess = NULL;
+        consistEditor->setEnabled(Game::checkCERoot(Game::root));
+        show();
+        raise();
+        activateWindow();
+    });
+    connect(consistEditorProcess, &QProcess::errorOccurred,
+            this, [this](QProcess::ProcessError error){
+        if(error != QProcess::FailedToStart)
+            return;
+        QMessageBox::critical(this, "Consist Editor",
+                              "TSRE could not start the Consist Editor process.");
+        consistEditorProcess->deleteLater();
+        consistEditorProcess = NULL;
+        consistEditor->setEnabled(Game::checkCERoot(Game::root));
+        show();
+        raise();
+        activateWindow();
+    });
+
+    consistEditorProcess->setProgram(QCoreApplication::applicationFilePath());
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    environment.insert("TSRE_MAIN_LOAD_CONSIST_ROOT", Game::root);
+    consistEditorProcess->setProcessEnvironment(environment);
+    consistEditorProcess->setArguments(QStringList());
+    consistEditorProcess->start();
 }
 
 void LoadWindow::listRoutes(){
@@ -413,7 +513,7 @@ void LoadWindow::listRoutes(){
     routeList.horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     routeList.verticalHeader()->setVisible(false);
     
-    QStringList headers = {"Directory Name", "Last Modified"};
+    QStringList headers = {"Route", "Last Modified"};
     routeList.setHorizontalHeaderLabels(headers);
 
     // Get directory entries
@@ -421,6 +521,11 @@ void LoadWindow::listRoutes(){
 
     // Populate table with directory information
     for (const QFileInfo& entry : entries) {
+        // Windows shell shortcuts to folders may be returned by QDir as
+        // directories. They are navigation aids, not MSTS/ORTS routes.
+        if(entry.fileName().endsWith(".lnk", Qt::CaseInsensitive))
+            continue;
+
         int row = routeList.rowCount();
         routeList.insertRow(row);
 
@@ -475,9 +580,8 @@ void LoadWindow::setNewRoute(){
     if (!appFile.exists()){
         downloadTemplateRoute(path);
     }
-    
+
     NewRouteWindow newWindow;
-    newWindow.setWindowTitle("New route");
     newWindow.name.setText("");
     newWindow.lat.setText("50.0");
     newWindow.lon.setText("20.0");

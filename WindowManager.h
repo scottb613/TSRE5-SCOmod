@@ -19,7 +19,6 @@ class WindowManager : public QWidget {
 public: 
         
 public slots:
-    void LoadConEditor();
     void LoadShapeViewer(QString arg);
     void LoadRouteEditor();
 

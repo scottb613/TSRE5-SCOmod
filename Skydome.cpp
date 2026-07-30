@@ -12,10 +12,17 @@
 #include "GLUU.h"
 #include "SFile.h"
 #include "ShapeLib.h"
+#include <QFileInfo>
 
 Skydome::Skydome() {
-    QString resPath = Game::root + "/routes/" + Game::route + "/shapes";  
-    int shape = Game::currentShapeLib->addShape(resPath +"/skydome.s");
+    const QString shapePath =
+            Game::root + "/routes/" + Game::route + "/shapes/skydome.s";
+    // Open Rails renders its own sky.  skydome.s is only an optional TSRE
+    // editor asset and must not be reported as missing route content.
+    if(!QFileInfo::exists(shapePath))
+        return;
+
+    int shape = Game::currentShapeLib->addShape(shapePath);
     this->shapePointer = Game::currentShapeLib->shape[shape];
     if(this->shapePointer == NULL)
         return;

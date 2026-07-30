@@ -91,6 +91,8 @@ public:
     float getWaterLevelNE();
     float getWaterLevelSW();
     float getWaterLevelSE();
+    bool paintWaterbedOffset(int x, int z, float posx, float posz,
+                             float offset, float strength);
     void setWaterLevelNW(float val);
     void setWaterLevelNE(float val);
     void setWaterLevelSW(float val);
@@ -98,6 +100,9 @@ public:
     void setAvgWaterLevel(float val);
     void getAdjacentWaterLevels(float *w);
     void setAdjacentWaterLevels(float *w);
+    void captureWaterState(QVector<int> &flags, float *levels, bool &hasWaterLevel) const;
+    void restoreWaterState(const QVector<int> &flags, const float *levels, bool hasWaterLevel);
+    bool hasAnyWater() const;
     void toggleDraw(int x, int z, float posx, float posz);
     void setWaterDraw();
     void setDraw();
@@ -204,7 +209,7 @@ protected:
     //QOpenGLVertexArrayObject wVAO[256];
     //bool jestW[256];
     int wTexid = -1;
-    TFile* tfile;
+    TFile* tfile = NULL;
     //int selectedPathId = -1;
     
     void saveRAW(QString name);

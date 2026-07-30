@@ -18,6 +18,7 @@
 
 class Eng;
 class TextObj;
+class OglObj;
 class FileBuffer;
 class QTextStream;
 class GLUU;
@@ -27,14 +28,6 @@ class ContentHierarchyInfo;
 
 class Consist : public GameObj {
 public:
-    static std::unordered_map<int, TextObj*> txtNumbers;
-    static int lastTxtNumbersColor;
-    static TextObj * txtEngineE;
-    static TextObj * txtEngineD;
-    static TextObj * txtEngineS;
-    static TextObj * txtEngineF;
-    static TextObj * txtEngineW;
-    static TextObj * txtEngineT;
     struct EngItem{
         bool flip = false;
         int uid = 0;
@@ -42,8 +35,13 @@ public:
         Eng *engPointer = NULL;
         float pos = 0;
         float conLength = 0;
+        float previewWidth = 0;
+        bool previewMissing = false;
         int type = 0;
         TextObj * txt = NULL;
+        TextObj * marker = NULL;
+        OglObj * placeholder = NULL;
+        OglObj * placeholderSelected = NULL;
         QString epath;
         QString ename;
         bool eot = false;

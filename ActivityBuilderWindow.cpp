@@ -55,6 +55,10 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
                      tools, SLOT(finishPathSave(Path*)));
     QObject::connect(tools, SIGNAL(pathEditCancelRequested()),
                      viewer, SLOT(cancelPathEdit()));
+    QObject::connect(viewer, SIGNAL(switchThrowAccepted()),
+                     this, SIGNAL(userPlacementSoundRequested()));
+    QObject::connect(viewer, SIGNAL(switchThrowRejected()),
+                     this, SIGNAL(userErrorSoundRequested()));
 
     QDockWidget *activityDock = new QDockWidget(tr("Activity"), this);
     activityDock->setObjectName("activityBuilderActivityDock");

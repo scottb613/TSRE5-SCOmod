@@ -19,6 +19,7 @@
 #include "Game.h"
 #include "Route.h"
 #include "GroupObj.h"
+#include "Terrain.h"
 
 bool Undo::UndoEnabled = true;
 UndoState* Undo::currentState = NULL;
@@ -40,6 +41,11 @@ UndoState::~UndoState(){
         if(tdata != NULL)
            delete[] tdata;
     }
+    QMapIterator<int, UndoState::TerrainWaterData*> iw(waterData);
+    while (iw.hasNext()) {
+        iw.next();
+        delete iw.value();
+    }
     QMapIterator<long long int, UndoState::WorldObjInfo*> i2(objData);
     while (i2.hasNext()) {
         i2.next();
@@ -57,6 +63,7 @@ UndoState::~UndoState(){
 
     terrainData.clear();
     texData.clear();
+    waterData.clear();
     objData.clear();
 }
 
@@ -99,6 +106,16 @@ void Undo::UndoLast(){
             //qDebug() <<TexLib::mtex[i.key()]->editable;
             TexLib::mtex[i1.key()]->fillData(tdata);
         }
+    }
+    QMapIterator<int, UndoState::TerrainWaterData*> iw(state->waterData);
+    while (iw.hasNext()) {
+        iw.next();
+        UndoState::TerrainWaterData *water = iw.value();
+        if(water == NULL)
+            continue;
+        Terrain *terrain = Game::terrainLib->getTerrainByXY(water->x, water->z, true);
+        if(terrain != NULL && terrain->loaded)
+            terrain->restoreWaterState(water->flags, water->levels, water->hasWaterLevel);
     }
     QMapIterator<long long int, UndoState::WorldObjInfo*> i2(state->objData);
     while (i2.hasNext()) {
@@ -328,4 +345,20 @@ void Undo::PushTrackDB(TDB* tdb, bool road){
         currentState->trackDB = new TDB(*tdb);
         currentState->modified = true;
     }
+}
+
+void Undo::PushTerrainWater(Terrain *terrain){
+    if(currentState == NULL || terrain == NULL)
+        return;
+    int x = (int)terrain->mojex;
+    int z = (int)terrain->mojez;
+    int key = x * 10000 + z;
+    if(currentState->waterData[key] != NULL)
+        return;
+    UndoState::TerrainWaterData *data = new UndoState::TerrainWaterData();
+    data->x = x;
+    data->z = z;
+    terrain->captureWaterState(data->flags, data->levels, data->hasWaterLevel);
+    currentState->waterData[key] = data;
+    currentState->modified = true;
 }

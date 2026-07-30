@@ -12,14 +12,104 @@
 #include "Terrain.h"
 #include "Game.h"
 #include "TerrainWaterWindow2.h"
+#include "GuiFunct.h"
+
+class TerrainHeightHelperWindow : public EditorPopupWindow {
+public:
+    explicit TerrainHeightHelperWindow(PropertiesTerrain *owner)
+        : EditorPopupWindow(owner, "HEIGHT HELPER", "heightHelper"),
+          owner(owner) {
+        QVBoxLayout *layout = popupLayout();
+        addPopupSubtitle(QString::fromUtf8("• Flatten Entire Tile"));
+
+        tileIdentifier.setReadOnly(true);
+        tileIdentifier.setAlignment(Qt::AlignCenter);
+        tileIdentifier.setFocusPolicy(Qt::NoFocus);
+        QFormLayout *tileForm = new QFormLayout;
+        tileForm->setContentsMargins(3,0,3,0);
+        tileForm->addRow("Tile:", &tileIdentifier);
+        layout->addLayout(tileForm);
+
+        QLabel *warning = new QLabel(
+            "Flattening replaces every terrain elevation in this tile. "
+            "Adjoining tile edges may no longer meet; Undo is available.");
+        warning->setWordWrap(true);
+        warning->setStyleSheet("QLabel { color: #c7c7c7; padding: 1px 3px 2px 3px; }");
+        layout->addWidget(warning);
+
+        elevation.setDecimals(2);
+        elevation.setRange(-10000.0, 10000.0);
+        elevation.setSuffix(" m");
+        elevation.setAlignment(Qt::AlignRight);
+        elevation.setToolTip("The elevation that will replace every height sample in the selected tile.");
+        QFormLayout *form = new QFormLayout;
+        form->setContentsMargins(3,0,3,0);
+        form->addRow("Elevation:", &elevation);
+        layout->addLayout(form);
+
+        QPushButton *apply = new QPushButton("Flatten Entire Tile");
+        apply->setFocusPolicy(Qt::NoFocus);
+        apply->setToolTip("Replaces the complete selected tile heightmap with this elevation.");
+        layout->addWidget(apply);
+        QObject::connect(apply, &QPushButton::clicked, this, [this](){
+            this->owner->userButtonPressed();
+            if(terrain == NULL)
+                return;
+            Undo::PushTerrainHeightMap(
+                terrain->mojex, terrain->mojez,
+                terrain->terrainData, terrain->getSampleCount());
+            terrain->setFixedHeight(static_cast<float>(elevation.value()));
+        });
+
+        finalizePopup();
+    }
+
+    void showForTerrain(Terrain *selectedTerrain){
+        setTerrain(selectedTerrain);
+        if(terrain == NULL)
+            return;
+        show();
+        raise();
+        activateWindow();
+        elevation.setFocus();
+        elevation.selectAll();
+    }
+
+    void setTerrain(Terrain *selectedTerrain){
+        if(selectedTerrain == NULL || selectedTerrain == terrain)
+            return;
+        terrain = selectedTerrain;
+        tileIdentifier.setText(QString("%1, %2")
+                               .arg(terrain->mojex)
+                               .arg(-terrain->mojez));
+        const int samples = terrain->getSampleCount();
+        double total = 0.0;
+        for(int x = 0; x < samples; ++x)
+            for(int z = 0; z < samples; ++z)
+                total += terrain->terrainData[x][z];
+        if(samples > 0)
+            elevation.setValue(total / static_cast<double>(samples * samples));
+    }
+
+protected:
+    void closeEvent(QCloseEvent *event) override {
+        QWidget::closeEvent(event);
+        owner->heightHelperClosed();
+    }
+
+private:
+    PropertiesTerrain *owner = NULL;
+    Terrain *terrain = NULL;
+    QLineEdit tileIdentifier;
+    QDoubleSpinBox elevation;
+};
 
 PropertiesTerrain::PropertiesTerrain() {
-   QVBoxLayout *vbox = new QVBoxLayout;
+    GuiFunct::applyEditorPanelStyle(this);
+    QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     
-    waterWindow = new TerrainWaterWindow2(this);
-    waterWindow->hide();
     infoLabel = new QLabel("Terrain:");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
@@ -35,11 +125,6 @@ PropertiesTerrain::PropertiesTerrain() {
     this->tY.setDisabled(true);
     vlist->addRow("Name:",&this->fileName);
     vbox->addItem(vlist);
-    QPushButton *bShaderEditor = new QPushButton("Shader Editor...", this);
-    QObject::connect(bShaderEditor, SIGNAL(released()),
-                      this, SLOT(bShaderEditorEnabled()));
-    vbox->addWidget(bShaderEditor);
-    
     QLabel* label = new QLabel("Water Level:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
@@ -50,20 +135,24 @@ PropertiesTerrain::PropertiesTerrain() {
     vlist->addRow("Average:",&this->eAvgWater);
     QObject::connect(&eAvgWater, SIGNAL(textEdited(QString)),
                       this, SLOT(eAvgWaterEnabled(QString)));
-    QPushButton *bWaterEditor = new QPushButton("Advanced ...", this);
-    QObject::connect(bWaterEditor, SIGNAL(released()),
+    waterHelperButton.setText("Water Helper...");
+    waterHelperButton.setCheckable(true);
+    waterHelperButton.setFocusPolicy(Qt::NoFocus);
+    QObject::connect(&waterHelperButton, SIGNAL(toggled(bool)),
                       this, SLOT(bWaterEditorEnabled()));
     vbox->addItem(vlist);
-    vbox->addWidget(bWaterEditor);
+    vbox->addWidget(&waterHelperButton);
     
     label = new QLabel("Height Map:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
-    QPushButton *bHeightMapReset = new QPushButton("Reset Height ...", this);
-    QObject::connect(bHeightMapReset, SIGNAL(released()),
+    heightHelperButton.setText("Height Helper...");
+    heightHelperButton.setCheckable(true);
+    heightHelperButton.setFocusPolicy(Qt::NoFocus);
+    QObject::connect(&heightHelperButton, SIGNAL(toggled(bool)),
                       this, SLOT(bHeightMapResetEnabled()));
-    vbox->addWidget(bHeightMapReset);
+    vbox->addWidget(&heightHelperButton);
     
     label = new QLabel("Selected Terrain Patch(s):");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
@@ -171,12 +260,33 @@ PropertiesTerrain::PropertiesTerrain() {
     QObject::connect(&eBias, SIGNAL(textEdited(QString)),
                       this, SLOT(eBiasEnabled(QString)));
     vbox->addItem(vlist);
-    
+
+    QLabel *advancedLabel =
+        new QLabel(QString(QChar(0x2022)) + " Advanced");
+    GuiFunct::styleEditorSubtitle(advancedLabel);
+    vbox->addWidget(advancedLabel);
+    hacks.setText("Hacks...");
+    hacks.setCheckable(true);
+    hacks.setFocusPolicy(Qt::NoFocus);
+    hacks.setToolTip("Open specialized repair and full-route cleanup tools.");
+    QObject::connect(&hacks, &QPushButton::clicked, this, [this](){
+        emit userButtonPressed();
+    });
+    QObject::connect(&hacks, &QPushButton::toggled, this, [this](bool checked){
+        GuiFunct::setEditorPopupButtonActive(&hacks, checked);
+        emit hacksToggled(terrainObj, &hacks, checked);
+    });
+    vbox->addWidget(&hacks);
+
     vbox->addStretch(1);
     this->setLayout(vbox);
 }
 
 PropertiesTerrain::~PropertiesTerrain() {
+}
+
+QPushButton *PropertiesTerrain::hacksButton(){
+    return &hacks;
 }
 
 void PropertiesTerrain::showObj(GameObj* obj){
@@ -202,7 +312,10 @@ void PropertiesTerrain::showObj(GameObj* obj){
     this->eScaley.setValue(terrainObj->getPatchScaleTexY());
     this->eRotation.setText(terrainObj->getPatchRotationName());
     
-    waterWindow->setTerrain(terrainObj);
+    if(waterWindow != NULL)
+        waterWindow->setTerrain(terrainObj);
+    if(heightWindow != NULL && heightWindow->isVisible())
+        heightWindow->setTerrain(terrainObj);
 }
 
 void PropertiesTerrain::updateObj(GameObj* obj){
@@ -226,7 +339,10 @@ void PropertiesTerrain::updateObj(GameObj* obj){
     
     this->eRotation.setText(terrainObj->getPatchRotationName());
     
-    waterWindow->setTerrain(terrainObj);
+    if(waterWindow != NULL)
+        waterWindow->setTerrain(terrainObj);
+    if(heightWindow != NULL && heightWindow->isVisible())
+        heightWindow->setTerrain(terrainObj);
 }
 
 bool PropertiesTerrain::support(GameObj* obj){
@@ -237,29 +353,65 @@ bool PropertiesTerrain::support(GameObj* obj){
     return false;
 }
 
-void PropertiesTerrain::bShaderEditorEnabled(){
-    if(terrainObj == NULL){
-        return;
-    }
-}
-
 void PropertiesTerrain::bWaterEditorEnabled(){
     if(terrainObj == NULL){
+        waterHelperButton.setChecked(false);
         return;
     }
-    waterWindow->show();
+    GuiFunct::setEditorPopupButtonActive(
+        &waterHelperButton, waterHelperButton.isChecked());
+    if(waterWindow == NULL){
+        waterWindow = new TerrainWaterWindow2(window());
+        QObject::connect(waterWindow, SIGNAL(helperClosed()),
+                         this, SLOT(waterHelperClosed()));
+        QObject::connect(waterWindow, &TerrainWaterWindow2::userButtonPressed,
+                         this, [this](){ emit userButtonPressed(); });
+        QObject::connect(waterWindow, &TerrainWaterWindow2::placeRulerRequested,
+                         this, &PropertiesTerrain::placeWaterRulerRequested);
+        QObject::connect(waterWindow, &TerrainWaterWindow2::scanRequested,
+                         this, &PropertiesTerrain::scanWaterRulerRequested);
+        QObject::connect(waterWindow, &TerrainWaterWindow2::undoScanRequested,
+                         this, &PropertiesTerrain::undoWaterScanRequested);
+        QObject::connect(waterWindow, &TerrainWaterWindow2::removeRulerRequested,
+                         this, &PropertiesTerrain::removeWaterRulerRequested);
+    }
+    if(waterHelperButton.isChecked()){
+        waterWindow->setTerrain(terrainObj);
+        waterWindow->show();
+        waterWindow->raise();
+        waterWindow->activateWindow();
+    } else {
+        waterWindow->deactivateRuler();
+        waterWindow->hide();
+    }
 }
 
 void PropertiesTerrain::bHeightMapResetEnabled(){
     if(terrainObj == NULL){
+        heightHelperButton.setChecked(false);
         return;
     }
-    Undo::PushTerrainHeightMap(terrainObj->mojex, terrainObj->mojez, terrainObj->terrainData, terrainObj->getSampleCount());
-    bool ok;
-    float val = QInputDialog::getDouble(this, tr("Reset Tile Height Map."),
-                                       tr("Height:"), 0, -10000, 10000, 2, &ok);
-    if(ok)
-        terrainObj->setFixedHeight(val);
+    GuiFunct::setEditorPopupButtonActive(
+        &heightHelperButton, heightHelperButton.isChecked());
+    if(heightWindow == NULL)
+        heightWindow = new TerrainHeightHelperWindow(this);
+    if(heightHelperButton.isChecked()){
+        heightWindow->showForTerrain(terrainObj);
+    } else {
+        heightWindow->hide();
+    }
+}
+
+void PropertiesTerrain::waterHelperClosed(){
+    waterHelperButton.blockSignals(true);
+    waterHelperButton.setChecked(false);
+    waterHelperButton.blockSignals(false);
+}
+
+void PropertiesTerrain::heightHelperClosed(){
+    heightHelperButton.blockSignals(true);
+    heightHelperButton.setChecked(false);
+    heightHelperButton.blockSignals(false);
 }
 
 void PropertiesTerrain::bRotateEnabled(){

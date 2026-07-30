@@ -1385,6 +1385,59 @@ float Terrain::getWaterLevelSE(){
     return tfile->WSE;
 }
 
+bool Terrain::paintWaterbedOffset(int x, int z, float posx, float posz,
+                                  float offset, float strength){
+    if(tfile == NULL || tfile->nsamples == NULL || tfile->sampleSize == NULL
+            || tfile->flags == NULL || tfile->patchsetNpatches <= 0
+            || !std::isfinite(offset) || !std::isfinite(strength))
+        return false;
+
+    const int samples = *tfile->nsamples;
+    const float rawSampleSize = *tfile->sampleSize;
+    if(samples <= 0 || !std::isfinite(rawSampleSize) || rawSampleSize <= 0)
+        return false;
+
+    const int sampleSize = rawSampleSize;
+    const int tileSize = sampleSize * samples;
+    const int patches = tfile->patchsetNpatches;
+    const int patchSize = tileSize / patches;
+    if(tileSize <= 0 || patchSize <= 0)
+        return false;
+
+    getLocalCoords(x, z, posx, posz);
+    if(!std::isfinite(posx) || !std::isfinite(posz)
+            || posx < 0 || posz < 0 || posx > tileSize || posz > tileSize)
+        return false;
+
+    const int patchX = qBound(0, (int)(posx / patchSize), patches - 1);
+    const int patchZ = qBound(0, (int)(posz / patchSize), patches - 1);
+    const int patchIndex = patchZ * patches + patchX;
+    if((tfile->flags[patchIndex] & 0xc0) == 0)
+        return false;
+
+    if(!std::isfinite(tfile->WNW) || !std::isfinite(tfile->WNE)
+            || !std::isfinite(tfile->WSW) || !std::isfinite(tfile->WSE))
+        return false;
+
+    const float normalizedX = qBound(0.0f, posx / tileSize, 1.0f);
+    const float normalizedZ = qBound(0.0f, posz / tileSize, 1.0f);
+    const float waterSurface =
+            normalizedX * normalizedZ * tfile->WSE
+          + (1.0f - normalizedX) * normalizedZ * tfile->WSW
+          + (1.0f - normalizedX) * (1.0f - normalizedZ) * tfile->WNW
+          + normalizedX * (1.0f - normalizedZ) * tfile->WNE;
+
+    if(tfile->errorBias != NULL)
+        tfile->errorBias[patchIndex] = 0;
+
+    const int sampleX = (int)(posx / sampleSize);
+    const int sampleZ = (int)(posz / sampleSize);
+    const float targetHeight = waterSurface + offset;
+    terrainData[sampleZ][sampleX] +=
+            (targetHeight - terrainData[sampleZ][sampleX]) * strength;
+    return true;
+}
+
 void Terrain::setWaterLevelNW(float val){
     tfile->waterLevel = true;
     tfile->WNW = val;
@@ -1420,6 +1473,39 @@ void Terrain::getAdjacentWaterLevels(float* w){
 
 void Terrain::setAdjacentWaterLevels(float* w){
     Game::terrainLib->setWaterLevels(w, mojex, mojez);
+}
+
+void Terrain::captureWaterState(QVector<int> &flags, float *levels, bool &hasWaterLevel) const {
+    int count = tfile->patchsetNpatches * tfile->patchsetNpatches;
+    flags.resize(count);
+    for(int i = 0; i < count; i++)
+        flags[i] = tfile->flags[i];
+    levels[0] = tfile->WNW;
+    levels[1] = tfile->WNE;
+    levels[2] = tfile->WSW;
+    levels[3] = tfile->WSE;
+    hasWaterLevel = tfile->waterLevel;
+}
+
+void Terrain::restoreWaterState(const QVector<int> &flags, const float *levels, bool hasWaterLevel) {
+    int count = qMin(flags.size(), tfile->patchsetNpatches * tfile->patchsetNpatches);
+    for(int i = 0; i < count; i++)
+        tfile->flags[i] = flags[i];
+    tfile->WNW = levels[0];
+    tfile->WNE = levels[1];
+    tfile->WSW = levels[2];
+    tfile->WSE = levels[3];
+    tfile->waterLevel = hasWaterLevel;
+    setModified(true);
+    refreshWaterShapes();
+}
+
+bool Terrain::hasAnyWater() const {
+    int count = tfile->patchsetNpatches * tfile->patchsetNpatches;
+    for(int i = 0; i < count; i++)
+        if((tfile->flags[i] & 0xc0) != 0)
+            return true;
+    return false;
 }
 
 void Terrain::setWaterLevelGui(){

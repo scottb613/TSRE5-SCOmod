@@ -14,6 +14,7 @@
 #include "ParserX.h"
 #include "EditFileNameDialog.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 PropertiesStatic::PropertiesStatic(){
     const QString detailLevelHelp = "Controls this placed object's StaticDetailLevel. Default uses the ESD_Detail_Level from the shape's .sd file; enable Custom to write an override into the world file. The value is limited by the route's TsreMaxStaticDetailLevel.";
@@ -232,12 +233,34 @@ PropertiesStatic::PropertiesStatic(){
     QObject::connect(reload, SIGNAL(released()),
                       this, SLOT(reloadEnabled()));
     vbox->addWidget(reload);
+
+    addRule();
+    QLabel *advancedLabel =
+        new QLabel(QString(QChar(0x2022)) + " Advanced");
+    GuiFunct::styleEditorSubtitle(advancedLabel);
+    vbox->addWidget(advancedLabel);
+    hacks.setText("Hacks...");
+    hacks.setCheckable(true);
+    hacks.setFocusPolicy(Qt::NoFocus);
+    hacks.setToolTip("Open specialized repair and full-route cleanup tools.");
+    QObject::connect(&hacks, &QPushButton::clicked, this, [this](){
+        emit userButtonPressed();
+    });
+    QObject::connect(&hacks, &QPushButton::toggled, this, [this](bool checked){
+        GuiFunct::setEditorPopupButtonActive(&hacks, checked);
+        emit hacksToggled(worldObj, &hacks, checked);
+    });
+    vbox->addWidget(&hacks);
     vbox->addStretch(1);
     this->setLayout(vbox);
     
 }
 
 PropertiesStatic::~PropertiesStatic() {
+}
+
+QPushButton *PropertiesStatic::hacksButton(){
+    return &hacks;
 }
 
 void PropertiesStatic::showObj(GameObj* obj){

@@ -35,6 +35,7 @@ class Environment;
 class GroupObj;
 class Skydome;
 class FileBuffer;
+class RulerObj;
 
 class Route : public QObject {
     Q_OBJECT
@@ -42,8 +43,8 @@ class Route : public QObject {
 public:
     QHash<int, Tile*> tile;
     QVector<int> activityId;
-    //QVector<Service*> service;
-    //QVector<Traffic*> traffic;
+    QVector<int> serviceId;
+    QVector<int> trafficId;
     QVector<Path*> path;
     bool loaded = false;
     TSectionDAT *tsection = NULL; 
@@ -83,12 +84,14 @@ public:
     virtual Tile * requestTile(int x, int z, bool allowNew = true);
     void activitySelected(Activity* selected);
     virtual void save();
+    bool lastSaveSucceeded() const;
     //void saveTrk();
     void createNewPaths();
     void createNew();
     bool checkTrackSectionDatabase();
     void checkRouteDatabase();
     void loadMkrList();
+    void clearMkrList();
     void createMkrPlaces();
     void loadActivities();
     void loadServices();
@@ -101,6 +104,7 @@ public:
     void reloadLoadedWorldObjects();
     void deleteObj(WorldObj* obj);
     int removeAllInteractives(bool gui = true);
+    int deleteAllInstances(WorldObj *selected, bool gui = true);
     void undoPlaceObj(int x, int y, int UiD);
     void removeTrackFromTDB(WorldObj* obj);
     void fillWorldObjectsByTrackItemId(QVector<WorldObj*> &objects, int tdbId, int id);
@@ -138,6 +142,8 @@ public:
     WorldObj* placeObject(int x, int z, float* p);
     WorldObj* placeObject(int x, int z, float* p, float* q, float elev = 0);
     WorldObj* placeObject(int x, int z, float* p, float* q, float elev, Ref::RefItem* r);
+    RulerObj* placeWaterRuler(int x, int z, float *p);
+    RulerObj* findWaterRuler(bool loadWorldTiles);
     WorldObj* autoPlaceObject(int x, int z, float* p, int mode);
     void replaceWorldObjPointer(WorldObj* o, WorldObj* n);
     void autoPlacementDeleteLast();
@@ -174,7 +180,15 @@ public:
     static QStringList shapesList;    
     static QStringList texturesList;    
     static QStringList staticFlagList;    
-    void ListFiles();
+    static QStringList missingTextureList;
+    bool prepareHealthReportData(int &worldFileCount,
+                                 QStringList &unloadedWorldFiles,
+                                 QString &error);
+    void collectHealthReportData(QStringList &usedObjects,
+                                 QStringList &usedTrack,
+                                 QStringList &staticFlags,
+                                 QStringList &uidIssues,
+                                 QStringList &trackSectionIssues) const;
     void RebuildTDB();
 
     
@@ -184,6 +198,8 @@ signals:
     void sendMsg(QString val);
     
 protected:
+    bool saveKeyRouteFiles(QString &error);
+    bool lastSaveResult = false;
     QString trkName;
     QString routeDir;
     QString routeName;
@@ -195,6 +211,7 @@ protected:
     QMap<QString, Coords*> mkrList;
     Coords * mkr = NULL;
     QVector<WorldObj*> autoPlacementLastPlaced;
+    RulerObj *waterRulerObj = NULL;
     Activity* currentActivity = NULL;
     int loadingProgress = 0;
 };

@@ -35,14 +35,15 @@
 QVector<CarSpawnerObj::CarSpawnerList> CarSpawnerObj::carSpawnerList;
 
 void CarSpawnerObj::LoadCarSpawnerList(){
+    carSpawnerList.clear();
     QString path = Game::root + "/routes/" + Game::route + "/carspawn.dat";
     path.replace("//", "/");
     
-    QFile *file = new QFile(path);
-    if (!file->open(QIODevice::ReadOnly))
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
         return;
-    FileBuffer* data = ReadFile::read(file);
-    file->close();
+    FileBuffer* data = ReadFile::read(&file);
+    file.close();
     data->toUtf16();
     ParserX::NextLine(data);
     QString sh = "";
@@ -52,11 +53,11 @@ void CarSpawnerObj::LoadCarSpawnerList(){
     path = Game::root + "/routes/" + Game::route + "/openrails/carspawn.dat";
     path.replace("//", "/");
     
-    file = new QFile(path);
-    if (!file->open(QIODevice::ReadOnly))
+    file.setFileName(path);
+    if (!file.open(QIODevice::ReadOnly))
         return;
-    data = ReadFile::read(file);
-    file->close();
+    data = ReadFile::read(&file);
+    file.close();
     data->toUtf16();
     ParserX::NextLine(data);
     

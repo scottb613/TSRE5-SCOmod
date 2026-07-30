@@ -34,6 +34,8 @@ public slots:
 signals:
     void visibilityChanged(bool visible);
     void userToggleSoundRequested();
+    void userPlacementSoundRequested();
+    void userErrorSoundRequested();
 
 protected:
     void closeEvent(QCloseEvent *event);

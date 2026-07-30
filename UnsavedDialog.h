@@ -16,12 +16,12 @@
 class UnsavedDialog : public QDialog {
     Q_OBJECT
 public:
-    UnsavedDialog();
-    UnsavedDialog(QString buttonLayout);
+    explicit UnsavedDialog(QWidget *parent = NULL);
+    UnsavedDialog(QString buttonLayout, QWidget *parent = NULL);
     virtual ~UnsavedDialog();
     QListWidget items;
     void setMsg(QString msg);
-    void hideExitButton();
+    void setSubtitle(QString subtitle);
     void hideButtons();
     int changed = 0;
     
@@ -33,12 +33,14 @@ public slots:
     void exit();
     
 private:
+    QLabel warningIcon;
+    QLabel subtitleLabel;
     QLabel infoLabel;
-    QPushButton* bok;
-    QPushButton* bokt;
-    QPushButton* bokw;
-    QPushButton* bexit;
-    QPushButton* bcancel;
+    QPushButton* bok = NULL;
+    QPushButton* bokt = NULL;
+    QPushButton* bokw = NULL;
+    QPushButton* bexit = NULL;
+    QPushButton* bcancel = NULL;
 };
 
 #endif	/* UNSAVEDDIALOG_H */

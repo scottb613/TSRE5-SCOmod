@@ -73,25 +73,25 @@ void ActivityServiceWindow::showServices(Route* r){
     serviceList.clear();
     QList<QTreeWidgetItem *> items;
     QStringList list;
-    for(int i = 0; i < ActLib::jestservice; i++ ){
-        if(ActLib::Services[i] == NULL)
+    for(int id : route->serviceId){
+        if(ActLib::Services[id] == NULL)
             continue;
         //new QListWidgetItem ( route->service[i]->displayName, &serviceList, i );
         list.clear();
-        list.append(ActLib::Services[i]->displayName);
+        list.append(ActLib::Services[id]->displayName);
         list.append("");
         list.append("");
-        QTreeWidgetItem *item = new QTreeWidgetItem((QTreeWidget*)0, list, i );
+        QTreeWidgetItem *item = new QTreeWidgetItem((QTreeWidget*)0, list, id);
         item->setCheckState(0, Qt::Unchecked);
         item->setCheckState(1, Qt::Unchecked);
         if(activity != NULL){
-            if(activity->isPlayerServiceInUse(ActLib::Services[i]->nameId))
+            if(activity->isPlayerServiceInUse(ActLib::Services[id]->nameId))
                 item->setCheckState(0, Qt::Checked);
-            if(activity->isServiceInUse(ActLib::Services[i]->nameId))
+            if(activity->isServiceInUse(ActLib::Services[id]->nameId))
                 item->setCheckState(1, Qt::Checked);
         }
         
-        if(ActLib::IsServiceInUse(ActLib::Services[i]->nameId))
+        if(ActLib::IsServiceInUse(ActLib::Services[id]->nameId))
             item->setCheckState(2, Qt::Checked);
         else
             item->setCheckState(2, Qt::Unchecked);
@@ -117,7 +117,11 @@ void ActivityServiceWindow::bNewServiceSelected(){
     EditFileNameDialog eWindow;
     eWindow.exec();
     if(eWindow.isOk && eWindow.name.text().length() > 0){
-        ActLib::AddService(Game::root + "/routes/" + Game::route + "/services/", eWindow.name.text()+".srv", true);
+        int id = ActLib::AddService(
+            Game::root + "/routes/" + Game::route + "/services/",
+            eWindow.name.text()+".srv", true);
+        if(id >= 0 && !route->serviceId.contains(id))
+            route->serviceId.push_back(id);
     }
     showServices(route);
     reloadServicesList();

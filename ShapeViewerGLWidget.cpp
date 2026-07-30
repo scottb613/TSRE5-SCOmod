@@ -343,6 +343,8 @@ void ShapeViewerGLWidget::keyReleaseEvent(QKeyEvent * event) {
 void ShapeViewerGLWidget::mousePressEvent(QMouseEvent *event) {
     m_lastPos = event->pos();
     m_lastPos *= Game::PixelRatio;
+    mousex = event->x()*Game::PixelRatio;
+    mousey = event->y()*Game::PixelRatio;
     mousePressed = true;
     selection = true;
     if(event->button() == Qt::RightButton)
@@ -351,6 +353,7 @@ void ShapeViewerGLWidget::mousePressEvent(QMouseEvent *event) {
         mouseLPressed = true;
     camera->MouseDown(event);
     setFocus();
+    update();
 }
 
 void ShapeViewerGLWidget::mouseReleaseEvent(QMouseEvent* event) {
@@ -360,6 +363,10 @@ void ShapeViewerGLWidget::mouseReleaseEvent(QMouseEvent* event) {
     mouseLPressed = false;
     
     if ((event->button()) == Qt::RightButton) {
+        // Complete the color-pick before building the menu so a quick
+        // right-click always targets the card beneath the pointer.
+        if(selection)
+            repaint();
         showContextMenu(event->pos());
     }
 }
@@ -396,6 +403,11 @@ void ShapeViewerGLWidget::showContextMenu(const QPoint & point) {
         QObject::connect(defaultMenuActions["rightSelected"], SIGNAL(triggered()), this, SLOT(rightConSelected()));
         defaultMenuActions["deleteSelected"] = new QAction(tr("&Delete"), this); 
         QObject::connect(defaultMenuActions["deleteSelected"], SIGNAL(triggered()), this, SLOT(deleteConSelected()));
+        defaultMenuActions["replaceSelected"] =
+                new QAction(tr("&Swap Missing with Selected Stock"), this);
+        QObject::connect(
+            defaultMenuActions["replaceSelected"], SIGNAL(triggered()),
+            this, SIGNAL(replaceSelectedUnitRequested()));
         defaultMenuActions["copyUnit"] = new QAction(tr("&Copy"), this); 
         QObject::connect(defaultMenuActions["copyUnit"], SIGNAL(triggered()), this, SLOT(copyUnitConSelected()));
         defaultMenuActions["pasteUnit"] = new QAction(tr("&Paste Right"), this); 
@@ -411,6 +423,12 @@ void ShapeViewerGLWidget::showContextMenu(const QPoint & point) {
             }";
         menu.setStyleSheet(menuStyle);
         menu.addSection("Selected Unit");
+        defaultMenuActions["replaceSelected"]->setEnabled(
+            con->selectedIdx >= 0
+            && con->selectedIdx < con->engItems.size()
+            && con->engItems[con->selectedIdx].previewMissing);
+        menu.addAction(defaultMenuActions["replaceSelected"]);
+        menu.addSeparator();
         menu.addAction(defaultMenuActions["flipSelected"]);
         menu.addAction(defaultMenuActions["leftSelected"]);
         menu.addAction(defaultMenuActions["rightSelected"]);

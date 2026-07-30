@@ -11,9 +11,12 @@
 #include "FileBuffer.h"
 #include "ReadFile.h"
 #include <QFile>
+#include <QDir>
 #include <QDebug>
+#include <QStringList>
 #include <string> 
 #include <algorithm>
+#include <memory>
 #include "Game.h"
 
 FileBuffer::FileBuffer() {
@@ -130,31 +133,43 @@ void FileBuffer::toUtf16(){
 }
 
 bool FileBuffer::insertFile(QString incPath, QString alternativePath, QString* loaded){
-    int i;
-    QString sh;
-    incPath.replace("\\","/");
-    incPath.replace("//","/");
-    alternativePath.replace("\\","/");
-    alternativePath.replace("//","/");
-    QFile file(incPath);
-    if (!file.open(QIODevice::ReadOnly)){
-        if(alternativePath.length() > 0){
-            incPath = alternativePath;
-            file.setFileName(incPath);
-            if (!file.open(QIODevice::ReadOnly)){
-                 if(Game::debugOutput) qDebug() << __FILE__ << __LINE__ << incPath << "not exist";
-                return false;
-            }
-        } else {
-             if(Game::debugOutput) qDebug() << __FILE__ << __LINE__ << incPath << "not exist";
-            return false;
+    // Eric-from-Trainsim's 8.006m work highlighted ORTS stock whose
+    // Include paths mix slash styles or contain legitimate ".." segments.
+    // Normalize each complete candidate path instead of rewriting fragments.
+    QStringList candidates;
+    const auto addCandidate = [&candidates](QString candidate){
+        candidate.replace("\\", "/");
+        candidate = QDir::cleanPath(candidate);
+        if(!candidate.isEmpty() && candidate != "."
+                && !candidates.contains(candidate, Qt::CaseInsensitive))
+            candidates.push_back(candidate);
+    };
+    addCandidate(incPath);
+    addCandidate(alternativePath);
+
+    QFile file;
+    QString openedPath;
+    for(const QString& candidate : candidates){
+        file.setFileName(candidate);
+        if(file.open(QIODevice::ReadOnly)){
+            openedPath = candidate;
+            break;
         }
     }
-    if(Game::debugOutput) qDebug() << __FILE__ << __LINE__ << "Include file is found at this location: \t" << incPath;
+    if(openedPath.isEmpty()){
+        if(Game::debugOutput)
+            qDebug() << __FILE__ << __LINE__
+                     << "Include file not found. Tried:" << candidates;
+        return false;
+    }
+    incPath = openedPath;
+    if(Game::debugOutput)
+        qDebug() << __FILE__ << __LINE__
+                 << "Include file is found at this location: \t" << incPath;
     if(loaded != NULL){
         *loaded = incPath;
     }
-    FileBuffer* incData = ReadFile::readRAW(&file);
+    std::unique_ptr<FileBuffer> incData(ReadFile::readRAW(&file));
     incData->toUtf16();
     int remaining = length-off;
     unsigned char * newData = new unsigned char[incData->length + remaining ];

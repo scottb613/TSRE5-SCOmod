@@ -118,7 +118,7 @@ int ActLib::AddTraffic(QString path, QString name, bool nowe) {
         i.next();
         if(i.value() == NULL) continue;
         if (i.value()->pathid.length() == pathid.length())
-            if (i.value()->pathid == pathid) {
+            if (i.value()->pathid.compare(pathid, Qt::CaseInsensitive) == 0) {
                 i.value()->ref++;
                 if(Game::debugOutput) qDebug() <<"trafficid "<< pathid;
                 return (int)i.key();

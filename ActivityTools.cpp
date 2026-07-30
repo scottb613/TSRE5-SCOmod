@@ -455,6 +455,7 @@ void ActivityTools::routeLoaded(Route* r){
     route = r;
 
     consists.clear();
+    conFilesShow.clear();
     ConLib::loadSimpleList(Game::root);
     foreach(QString name, ConLib::conFileList){
         conFilesShow.addItem(name.section('/', -1), QVariant(name));
@@ -486,7 +487,12 @@ void ActivityTools::actPathsRefreshListSelected(){
 void ActivityTools::reloadActivityList(){
     actShow.clear();
     foreach(int id, route->activityId){
-        actShow.addItem(ActLib::Act[id]->header->name, QVariant(id));
+        Activity *activity = ActLib::Act.value(id, NULL);
+        if(activity == NULL || activity->header == NULL){
+            qWarning() << "Skipping invalid activity ID" << id;
+            continue;
+        }
+        actShow.addItem(activity->header->name, QVariant(id));
     }
     actShow.setCurrentIndex(-1);
 }
@@ -495,10 +501,10 @@ void ActivityTools::reloadServicesList(){
     int idx = cService.currentIndex();
     cService.clear();
     cService.addItem("UNDEFINED", QVariant(-1));
-    for(int i = 0; i < ActLib::jestservice; i++ ){
-        if(ActLib::Services[i] == NULL)
+    for(int id : route->serviceId){
+        if(ActLib::Services[id] == NULL)
             continue;
-        cService.addItem(ActLib::Services[i]->displayName, QVariant(i));
+        cService.addItem(ActLib::Services[id]->displayName, QVariant(id));
     }
     
     if(idx >= 0)
@@ -509,10 +515,10 @@ void ActivityTools::reloadTrafficsList(){
     int idx = cTraffic.currentIndex();
     cTraffic.clear();
     cTraffic.addItem("UNDEFINED", QVariant(-1));
-    for(int i = 0; i < ActLib::jesttraffic; i++ ){
-        if(ActLib::Traffics[i] == NULL)
+    for(int id : route->trafficId){
+        if(ActLib::Traffics[id] == NULL)
             continue;
-        cTraffic.addItem(ActLib::Traffics[i]->nameId, QVariant(i));
+        cTraffic.addItem(ActLib::Traffics[id]->nameId, QVariant(id));
     }
     
     if(idx >= 0)
@@ -976,18 +982,23 @@ void ActivityTools::actPathsDeleteEnabled(){
        route->path[pathIndex] == NULL)
         return;
     Path *path = route->path[pathIndex];
-    const QMessageBox::StandardButton answer = QMessageBox::warning(
-        this, tr("Delete standalone path"),
-        tr("Delete \"%1\" and its .pat file?\n\nActivities that refer to this path may need repair.")
-            .arg(path->displayName),
-        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-    if(answer != QMessageBox::Yes)
+    if(!GuiFunct::confirmDestructiveAction(
+            this, tr("Delete Standalone Path"),
+            tr("Delete \"%1\" and its .pat file?\n\n"
+               "Activities that refer to this path may need repair.")
+                .arg(path->displayName)))
         return;
     if(QFileInfo::exists(path->pathid) && !QFile::remove(path->pathid)){
         QMessageBox::warning(this, tr("Delete failed"),
                              tr("The path file could not be removed."));
         return;
     }
+
+    // Deleting the path currently being edited also ends that edit session.
+    // Leaving activePathSession set would keep Edit checked and the path
+    // selector disabled after the Path object has been removed.
+    if(activePathSession == path)
+        resetPathSessionButtons();
 
     // This Path can be selected simultaneously by the 2D path viewer and the
     // main route editor. Clear both live pointers before removing it from the

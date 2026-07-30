@@ -30,12 +30,13 @@
 #include "Game.h"
 #include "RouteEditorWindow.h"
 #include "LoadWindow.h"
-#include "CELoadWindow.h"
+#include "ConEditorWindow.h"
 #include "ShapeViewerWindow.h"
 #include "MapWindow.h"
 #include "RouteEditorServer.h"
 #include "RouteEditorClient.h"
 #include "Undo.h"
+#include "GuiFunct.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -48,7 +49,6 @@ public:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override {
-        Q_UNUSED(event);
         if(QAbstractButton *button = qobject_cast<QAbstractButton*>(watched)){
             if((qobject_cast<QCheckBox*>(button) || qobject_cast<QRadioButton*>(button))
                     && !button->property("scoUiSoundConnected").toBool()){
@@ -99,8 +99,15 @@ QHash<QString, QString> consoleArgs;
 
     
 void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg){
-    const char symbols[] = { 'I', 'E', '!', 'X' };
-    QString output = QString("[%1] %2").arg( symbols[type] ).arg( msg );
+    char symbol = '?';
+    switch(type){
+        case QtDebugMsg:    symbol = 'D'; break;
+        case QtInfoMsg:     symbol = 'I'; break;
+        case QtWarningMsg:  symbol = 'W'; break;
+        case QtCriticalMsg: symbol = '!'; break;
+        case QtFatalMsg:    symbol = 'X'; break;
+    }
+    QString output = QString("[%1] %2").arg(symbol).arg(msg);
     if(Game::consoleOutput)
         std::cout << output.toStdString() << std::endl;
     logFileOut << output << "\n";
@@ -110,35 +117,18 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
     if( type == QtFatalMsg ) abort(); 
 }
 
-void LoadConEditor(){
-    CELoadWindow* ceLoadWindow = new CELoadWindow();
-    
-            //// EFO Try to keep window on main window:
-        const QScreen* primaryScreen = QApplication::primaryScreen();
-        const QSize windowSize = ceLoadWindow->size();
-   
-        // Calculate the centered position based on both monitors
-        const QRect primaryGeometry = primaryScreen->geometry();
-        const QPoint centeredPos((primaryGeometry.width() - windowSize.width()) / 2,
-                                 (primaryGeometry.height() - windowSize.height()) / 2);
-        
-        if(Game::debugOutput) qDebug() << "Primary: " << primaryGeometry.width() << "/" << primaryGeometry.height();
-        if(Game::debugOutput) qDebug() << "Window: " << windowSize.width() << "/" << windowSize.height();
-        
-        if(Game::debugOutput) qDebug() << "Window   Orig: " << ceLoadWindow->pos() ;
-        
-        // Ensure the window stays within the primary monitor bounds
-        ceLoadWindow->move(centeredPos.x() >= 0 ? centeredPos.x() : 0,
-                    centeredPos.y() >= 0 ? centeredPos.y() : 0);
- 
-        if(Game::debugOutput) qDebug() << "Window Center: " << ceLoadWindow->pos() ;        
-            
-        QStringList winPos = Game::mainPos.split(","); 
-        if(winPos.count() > 1) ceLoadWindow->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
-        
-        if(Game::debugOutput) qDebug() << "Window  Final: " << ceLoadWindow->pos() ;        
+void LoadConsistEditorFromMainLoad(const QString &root){
+    Game::root = QDir::cleanPath(root);
+    if(!Game::checkCERoot(Game::root)){
+        QMessageBox::critical(NULL, "Consist Editor",
+                              "The selected Train Simulator folder does not contain "
+                              "TRAINS, TRAINSET, and CONSISTS.");
+        QCoreApplication::quit();
+        return;
+    }
 
-    ceLoadWindow->show();
+    ConEditorWindow *window = new ConEditorWindow();
+    window->showMaximized();
 }
 
 void LoadShapeViewer(QString arg){
@@ -172,79 +162,84 @@ void LoadShapeViewer(QString arg){
     shapeWindow->show();
 }
 
-void LoadRouteEditor(){
-    
-    if(Game::serverLogin.length() > 0)
-        Game::ServerMode = true;
-    
-    if(Game::ServerMode){
-        Game::useQuadTree = true;
-        Undo::UndoEnabled = false;
-        // Create Server Client
-        Game::serverClient = new RouteEditorClient();
-    }
-
+static RouteEditorWindow *createRouteEditorWindow(){
     RouteEditorWindow *window = new RouteEditorWindow();
     if(Game::fullscreen){
         window->setWindowFlags(Qt::CustomizeWindowHint);
         window->setWindowState(Qt::WindowMaximized);
-    } else {
-
-        window->resize(1280, 800);
-        
-        //// EFO Try to keep window on main window:
-        const QScreen* primaryScreen = QApplication::primaryScreen();
-        const QSize windowSize = window->size();
-
-        // Calculate the centered position based on both monitors
-        const QRect primaryGeometry = primaryScreen->geometry();
-        const QPoint centeredPos((primaryGeometry.width() - windowSize.width()) / 2,
-                                 (primaryGeometry.height() - windowSize.height()) / 2);
-        
-        if(Game::debugOutput) qDebug() << "Primary: " << primaryGeometry.width() << "/" << primaryGeometry.height();
-        if(Game::debugOutput) qDebug() << "Window: " << windowSize.width() << "/" << windowSize.height();
-        
-        if(Game::debugOutput) qDebug() << "Window   Orig: " << window->pos() ;
-        
-        // Ensure the window stays within the primary monitor bounds
-        window->move(centeredPos.x() >= 0 ? centeredPos.x() : 0,
-                    centeredPos.y() >= 0 ? centeredPos.y() : 0);
- 
-        if(Game::debugOutput) qDebug() << "Window Center: " << window->pos() ;        
-        
-    
-                
-        QStringList winPos = Game::mainPos.split(",");
-        const bool mainDefaultRequested = Game::pinnedWindowPosition("mainWindowUseDefault", NULL);
-        if(!mainDefaultRequested && winPos.count() > 1)
-            window->move(winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
-        window->applyPinnedMainWindowPosition();
-        
-        if(Game::debugOutput) qDebug() << "Window  Final: " << window->pos() ;        
-        
-        
-
+        return window;
     }
-        
-    if(!Game::ServerMode){
-        LoadWindow *loadWindow = new LoadWindow();
-        QObject::connect(window, SIGNAL(exitNow()), loadWindow, SLOT(exitNow()));
-        QObject::connect(loadWindow, SIGNAL(showMainWindow()), window, SLOT(showRoute()));
 
-        if(consoleArgs["RESTORE"] == "TRUE"){
-            loadWindow->restoreLastSession();
-        } else if(Game::checkRoot(Game::root) && (Game::checkRoute(Game::route) || Game::createNewRoutes)){
-            window->showRoute();
-        } else {
-            loadWindow->show(); /// EFO moved inside bracket to fix double-window-load 8.002
+    window->resize(1280, 800);
+    const QScreen *primaryScreen = QApplication::primaryScreen();
+    if(primaryScreen != NULL){
+        const QSize windowSize = window->size();
+        const QRect primaryGeometry = primaryScreen->geometry();
+        const QPoint centeredPos(
+            primaryGeometry.left() + (primaryGeometry.width() - windowSize.width()) / 2,
+            primaryGeometry.top() + (primaryGeometry.height() - windowSize.height()) / 2);
+        window->move(centeredPos);
+
+        if(Game::debugOutput){
+            qDebug() << "Primary:" << primaryGeometry.width()
+                     << "/" << primaryGeometry.height();
+            qDebug() << "Window:" << windowSize.width() << "/" << windowSize.height();
+            qDebug() << "Window Center:" << window->pos();
         }
-            
-            
+    }
 
-        
-    } else {
+    QStringList winPos = Game::mainPos.split(",");
+    const bool mainDefaultRequested =
+            Game::pinnedWindowPosition("mainWindowUseDefault", NULL);
+    if(!mainDefaultRequested && winPos.count() > 1)
+        window->move(winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
+    window->applyPinnedMainWindowPosition();
+
+    if(Game::debugOutput)
+        qDebug() << "Window Final:" << window->pos();
+    return window;
+}
+
+void LoadRouteEditor(){
+    if(Game::serverLogin.length() > 0)
+        Game::ServerMode = true;
+
+    if(Game::ServerMode){
+        Game::useQuadTree = true;
+        Undo::UndoEnabled = false;
+        Game::serverClient = new RouteEditorClient();
+        RouteEditorWindow *window = createRouteEditorWindow();
         QObject::connect(Game::serverClient, SIGNAL(loadRoute()), window, SLOT(showRoute()));
         Game::serverClient->connectNow();
+        return;
+    }
+
+    // Build the startup screen first. Constructing the full Route Editor here
+    // used to create native OpenGL/tool windows before Load was visible, which
+    // caused a brief small-window flash at application startup.
+    LoadWindow *loadWindow = new LoadWindow();
+    QSharedPointer<QPointer<RouteEditorWindow> > windowHolder(
+        new QPointer<RouteEditorWindow>());
+    const auto showRouteEditor = [loadWindow, windowHolder](){
+        RouteEditorWindow *window = windowHolder->data();
+        if(window == NULL){
+            window = createRouteEditorWindow();
+            *windowHolder = window;
+            QObject::connect(window, SIGNAL(returnToLoadWindow()),
+                             loadWindow, SLOT(show()));
+        }
+        window->showRoute();
+    };
+    QObject::connect(loadWindow, &LoadWindow::showMainWindow,
+                     loadWindow, showRouteEditor);
+
+    if(consoleArgs["RESTORE"] == "TRUE"){
+        loadWindow->restoreLastSession();
+    } else if(Game::checkRoot(Game::root)
+              && (Game::checkRoute(Game::route) || Game::createNewRoutes)){
+        showRouteEditor();
+    } else {
+        loadWindow->show();
     }
 }
 
@@ -283,8 +278,9 @@ CommandLineParseResult parseCommandLineArgs(QCommandLineParser &parser){
     parser.addOption(RouteEditOption);
     const QCommandLineOption RestoreLastSessionOption("restore-last-session", "Restore the saved route editor session after startup.");
     parser.addOption(RestoreLastSessionOption);
-    const QCommandLineOption ConEditOption("conedit", "Run Consist Editor.");
-    parser.addOption(ConEditOption);
+    const QCommandLineOption RootOption(
+                "root", "Train Simulator root folder.", "folder");
+    parser.addOption(RootOption);
     const QCommandLineOption PlayOption("play", "Play Activity.");
     parser.addOption(PlayOption);
     const QCommandLineOption ServerOption("server", "Run Editor Server.");
@@ -324,8 +320,8 @@ CommandLineParseResult parseCommandLineArgs(QCommandLineParser &parser){
     if (parser.isSet(AceConvOption)) {
         consoleArgs["ACE"] = "TRUE";
     }
-    if (parser.isSet(ConEditOption)) {
-        consoleArgs["CON"] = "TRUE";
+    if (parser.isSet(RootOption)) {
+        consoleArgs["ROOT"] = parser.value(RootOption);
     }
     
     /// EFO New Option
@@ -401,8 +397,19 @@ int main(int argc, char *argv[]){
     QApplication::setApplicationVersion(Game::AppVersion);
     //QApplication::pr
     QApplication app(argc, argv);
+    GuiFunct::installImportantDialogCentering();
 
-    QSharedMemory singleInstance("TSRE5-single-instance");
+    // Main Load starts CE with a process-local environment value rather than
+    // a public command-line mode. This keeps CE isolated without providing a
+    // standalone launcher path.
+    const QString mainLoadConsistRoot =
+            qEnvironmentVariable("TSRE_MAIN_LOAD_CONSIST_ROOT");
+    const bool mainLoadConsistEditor = !mainLoadConsistRoot.isEmpty();
+    const QString instanceKey = mainLoadConsistEditor
+            ? QString("TSRE5-consist-editor-%1")
+                  .arg(QCoreApplication::applicationPid())
+            : QString("TSRE5-single-instance");
+    QSharedMemory singleInstance(instanceKey);
     if(!singleInstance.create(1)){
         QMessageBox::warning(NULL, "TSRE5 already running", "TSRE5 is already running.");
         return 0;
@@ -465,11 +472,18 @@ int main(int argc, char *argv[]){
         app.setStyleSheet(
             "QToolTip { color: #ffffff; background-color: #252525;"
             " border: 1px solid #777777; padding: 3px; }"
-            "QPushButton:checked { background-color: #666666; }");
+            "QPushButton:checked { color: #232323; background-color: #b47a3b; }");
         Game::StyleMainLabel = "#c4a480";
-        Game::StyleGreenButton = "#008800";
-        Game::StyleRedButton = "#880000";
-        Game::StyleYellowButton = "#b3b300";
+        Game::StyleGreenButton = "#4b9b5d";
+        Game::StyleGreenButtonHover = "#65b778";
+        Game::StyleBlueButton = "#4788b5";
+        Game::StyleBlueButtonHover = "#61a2cf";
+        Game::StyleOrangeButton = "#b47a3b";
+        Game::StyleOrangeButtonHover = "#ce9454";
+        Game::StyleRedButton = "#a95050";
+        Game::StyleRedButtonHover = "#c46868";
+        Game::StyleYellowButton = "#b59b4c";
+        Game::StyleYellowButtonHover = "#cfb765";
         Game::StyleGreenText = "#55FF55";
         Game::StyleRedText = "#FF5555";
     } else {
@@ -523,6 +537,9 @@ int main(int argc, char *argv[]){
     if(consoleArgs["ROUTE"].length() > 0){
         Game::route = consoleArgs["ROUTE"];
     }
+    if(consoleArgs["ROOT"].length() > 0){
+        Game::root = consoleArgs["ROOT"];
+    }
     if(consoleArgs["IP"].length() > 0){
         RouteEditorServer::IP = consoleArgs["IP"];
     }
@@ -544,10 +561,9 @@ int main(int argc, char *argv[]){
         return finishApplication(app, singleInstance);
     }
     
-    if(consoleArgs["CON"] == "TRUE"){
-        // Run ace converter
-        qDebug() << "Run con editor";
-        LoadConEditor();
+    if(mainLoadConsistEditor){
+        qDebug() << "Run Main Load consist editor";
+        LoadConsistEditorFromMainLoad(mainLoadConsistRoot);
         return finishApplication(app, singleInstance);
     }
 
@@ -572,16 +588,7 @@ int main(int argc, char *argv[]){
         return finishApplication(app, singleInstance);
     }
         
-    /// EFO New Setting 
-    if(Game::startapp.contains("c")) 
-        LoadConEditor();
-    else if(Game::startapp.contains("s")) 
-        LoadShapeViewer("");
-    else if(Game::startapp.contains("r")) 
-        LoadRouteEditor();   
-    else LoadRouteEditor();
-    
-    // LoadConEditor();
+    LoadRouteEditor();
 
     //MapWindow aaa;
     //aaa.show();

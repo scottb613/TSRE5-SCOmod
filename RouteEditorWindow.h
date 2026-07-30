@@ -50,6 +50,7 @@ public:
 public slots:
     void save();
     void openRouteFolder();
+    void createRouteHealthReport();
     void showRoute();
     void show();
     void createPaths();
@@ -108,6 +109,7 @@ public slots:
     
 signals:
     void exitNow();
+    void returnToLoadWindow();
     void sendMsg(QString text);
     void reloadRefFile();
     void reloadMkrFile();    
@@ -125,7 +127,7 @@ protected:
     void hideAllTools();
 
 private:
-    void completeApplicationClose(QCloseEvent *event);
+    void completeEditorClose(QCloseEvent *event);
     void saveLastSession();
     void applyRestoredSessionGeometry();
     QWidget* box;
@@ -151,6 +153,7 @@ private:
     
     QAction *saveAction;
     QAction *openRouteFolderAction;
+    QAction *routeHealthReportAction;
     QAction *createPathsAction;
     QAction *reloadRefAction;
     QAction *reloadMkrAction;    

@@ -42,6 +42,8 @@ OrtsWeatherChange::~OrtsWeatherChange() {
 }
 
 void OrtsWeatherChange::LoadList(){
+    qDeleteAll(OrtsWeatherChanges);
+    OrtsWeatherChanges.clear();
     QString path = Game::root + "/routes/" + Game::route + "/weathertransitions.dat";
     path.replace("//", "/");
     if(Game::debugOutput) qDebug() << path;
@@ -76,6 +78,7 @@ void OrtsWeatherChange::LoadList(){
         if(Game::debugOutput) qDebug() << "#WeatherTransitions.dat  - undefined token: " << sh;
         ParserX::SkipToken(data);
     }
+    delete data;
 }
 
 void OrtsWeatherChange::load(FileBuffer* data) {

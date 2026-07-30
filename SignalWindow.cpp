@@ -113,7 +113,9 @@ void SignalWindow::bLinkEnabled(int i) {
     this->sobj->subObjSelected = i;
     setLinkButton->setDisabled(false);
     setLinkButton->setText(QString("Set [Head ")+QString::number(i+1)+"]");
-    setLinkButton->setStyleSheet("border-style: outset;border-color:#b3b300;border-width: 2px;");
+    setLinkButton->setStyleSheet(
+        QString("border-style: outset; border-color: %1; border-width: 2px;")
+        .arg(Game::StyleYellowButton));
     int ids[3];
     int linkId = sobj->getLinkedJunctionValue(i);
     if(linkId < 1){

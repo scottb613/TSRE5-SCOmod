@@ -1190,7 +1190,7 @@ int TDB::newTrack(int x, int z, float* p, float* qe, int* ends, int r, int sect,
     //if(qe[1] > M_PI)
     //    aa->rotateX(-qe[0], 0);
     //else
-    
+
     aa.rotateZ(qe[2], 0);
     aa.rotateX(qe[0], 0);  
     aa.rotateY(M_PI + qe[1], 0);
@@ -4285,11 +4285,7 @@ void TDB::updateTrackShape(int){
 void TDB::save() {
     if(!Game::writeEnabled) return;
     if(!Game::writeTDB) return;
-    qDebug() << "Deleting Nulls Start";
-     while(deleteNulls());  /// EFO this is where it's crapping out
-    qDebug() << "Sorting TR Items";
-    sortItemRefs();
-    this->isInitLines = false;
+    prepareSave();
     // qDebug() << "TDB 3509";
     QString sh;
     QString path;
@@ -4313,9 +4309,17 @@ void TDB::save() {
     qDebug() << "RDB Complete";
     else qDebug() << "TDB Complete";
     saveTit();
-    if(!this->road) 
+    if(!this->road)
         this->tsection->saveRoute();
     qDebug() << "Route Saved";
+}
+
+void TDB::prepareSave() {
+    qDebug() << "Deleting Nulls Start";
+     while(deleteNulls());  /// EFO this is where it's crapping out
+    qDebug() << "Sorting TR Items";
+    sortItemRefs();
+    this->isInitLines = false;
 }
 
 int TDB::updateTrNodeData(FileBuffer *data){
@@ -4537,7 +4541,17 @@ void TDB::saveTit() {
     out.setCodec("UTF-16");
     out.setGenerateByteOrderMark(true);
     out << "SIMISA@@@@@@@@@@JINX0T0t______\n\n";
-    //qDebug() << "TDB 3754";
+    saveTitToStream(out);
+
+    file.close();
+    //qDebug() << "TDB 3767";
+    if(this->road)
+    qDebug() << "RIT Saved";
+    else
+    qDebug() << "TIT Saved";
+}
+
+void TDB::saveTitToStream(QTextStream &out) {
     bool tit = true;
     if(this->iTRitems > 0){
         out << "TrItemTable ( " << (this->iTRitems) << "\n";
@@ -4547,14 +4561,6 @@ void TDB::saveTit() {
         }
         out << ")";
     }
-    
-
-    file.close();
-    //qDebug() << "TDB 3767";
-    if(this->road)
-    qDebug() << "RIT Saved";
-    else
-    qDebug() << "TIT Saved";
 }
 
 void TDB::checkSignals(){

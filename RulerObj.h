@@ -42,6 +42,11 @@ public:
     float getLength();
     float getGeoLength();
     float getElevation();
+    int getPointCount() const;
+    void getPointWorldPosition(int index, float *pos) const;
+    bool isWaterRuler() const;
+    void setWaterRuler(bool enabled);
+    void appendWaterPoint(int x, int z, float *p);
     void createRoadPaths();
     void removeRoadPaths();
     void enableShape();
@@ -64,6 +69,7 @@ private:
     int selectionValue = 0;
     float length = 0;
     float geoLength = 0;
+    bool waterRuler = false;
     
     void refreshLength();
     bool shapeEnabled = false;

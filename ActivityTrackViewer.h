@@ -75,6 +75,8 @@ signals:
     void pathEditingStateChanged(bool active);
     void pathMetadataChanged(Path *path);
     void pathSaved(Path *path);
+    void switchThrowAccepted();
+    void switchThrowRejected();
 
 protected:
     void paintEvent(QPaintEvent *event);

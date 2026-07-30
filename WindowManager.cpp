@@ -17,7 +17,6 @@
 #include "Game.h"
 #include "RouteEditorWindow.h"
 #include "LoadWindow.h"
-#include "CELoadWindow.h"
 #include "ShapeViewerWindow.h"
 #include "MapWindow.h"
 #include "RouteEditorServer.h"
@@ -25,37 +24,6 @@
 #include "Undo.h"
 
 WindowManager::WindowManager(){};
-
-void WindowManager::LoadConEditor(){
-    CELoadWindow* ceLoadWindow = new CELoadWindow();
-    
-            //// EFO Try to keep window on main window:
-        const QScreen* primaryScreen = QApplication::primaryScreen();
-        const QSize windowSize = ceLoadWindow->size();
-   
-        // Calculate the centered position based on both monitors
-        const QRect primaryGeometry = primaryScreen->geometry();
-        const QPoint centeredPos((primaryGeometry.width() - windowSize.width()) / 2,
-                                 (primaryGeometry.height() - windowSize.height()) / 2);
-        
-        if(Game::debugOutput) qDebug() << "Primary: " << primaryGeometry.width() << "/" << primaryGeometry.height();
-        if(Game::debugOutput) qDebug() << "Window: " << windowSize.width() << "/" << windowSize.height();
-        
-        if(Game::debugOutput) qDebug() << "Window   Orig: " << ceLoadWindow->pos() ;
-        
-        // Ensure the window stays within the primary monitor bounds
-        ceLoadWindow->move(centeredPos.x() >= 0 ? centeredPos.x() : 0,
-                    centeredPos.y() >= 0 ? centeredPos.y() : 0);
- 
-        if(Game::debugOutput) qDebug() << "Window Center: " << ceLoadWindow->pos() ;        
-            
-        QStringList winPos = Game::mainPos.split(","); 
-        if(winPos.count() > 1) ceLoadWindow->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
-        
-        if(Game::debugOutput) qDebug() << "Window  Final: " << ceLoadWindow->pos() ;        
-
-    ceLoadWindow->show();
-}
 
 void WindowManager::LoadShapeViewer(QString arg){
     ShapeViewerWindow* shapeWindow = new ShapeViewerWindow();

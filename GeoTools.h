@@ -38,6 +38,8 @@ public slots:
     void generateTilesEnabled();
     void generateLoTilesEnabled();
     void generateLoTilesFromTDBEnabled();
+    void mapProviderChanged(int index);
+    void configureMapProviderEnabled();
     
 signals:
     void enableTool(QString name);
@@ -48,7 +50,9 @@ private:
     QMap<QString, QPushButton*> buttonTools;
     QMap<QString, Coords*> mkrFiles;
     QComboBox markerFiles;
+    QComboBox mapProvider;
     QSpinBox eRadius;
+    void syncMapProviderUi();
 };
 
 #endif	/* GEOTOOLS_H */

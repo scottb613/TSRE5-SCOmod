@@ -12,7 +12,57 @@
 #include <QtWidgets>
 #include "Game.h"
 
+#ifdef Q_OS_WIN
+#include <cstring>
+#include <windows.h>
+#endif
+
 namespace {
+class ImportantDialogCenteringFilter : public QObject {
+public:
+    explicit ImportantDialogCenteringFilter(QObject *parent)
+        : QObject(parent) {
+    }
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override {
+        QWidget *dialog = qobject_cast<QWidget*>(watched);
+        if(dialog == NULL || event->type() != QEvent::Show)
+            return QObject::eventFilter(watched, event);
+
+        const bool importantMessage =
+            qobject_cast<QMessageBox*>(dialog) != NULL
+            || dialog->property("scoCenterOnScreen").toBool();
+        if(!importantMessage)
+            return QObject::eventFilter(watched, event);
+
+        QPointer<QWidget> guardedDialog(dialog);
+        QTimer::singleShot(0, dialog, [guardedDialog](){
+            if(guardedDialog.isNull())
+                return;
+
+            QWidget *window = guardedDialog.data();
+            QPoint screenPoint = QCursor::pos();
+            QWidget *parent = window->parentWidget();
+            if(parent != NULL)
+                screenPoint = parent->window()->frameGeometry().center();
+
+            QScreen *screen = QGuiApplication::screenAt(screenPoint);
+            if(screen == NULL)
+                screen = QGuiApplication::primaryScreen();
+            if(screen == NULL)
+                return;
+
+            const QRect available = screen->availableGeometry();
+            const QSize frameSize = window->frameGeometry().size();
+            window->move(
+                available.left() + (available.width() - frameSize.width()) / 2,
+                available.top() + (available.height() - frameSize.height()) / 2);
+        });
+        return QObject::eventFilter(watched, event);
+    }
+};
+
 class WindowPinIconEngine : public QIconEngine {
 public:
     QIconEngine *clone() const override {
@@ -51,6 +101,46 @@ public:
         painter->restore();
     }
 };
+
+#ifdef Q_OS_WIN
+void applyDimWindowsCaptionText(QWidget *window){
+    if(window == NULL)
+        return;
+
+    typedef HRESULT (WINAPI *DwmSetWindowAttributeFunction)(
+        HWND, DWORD, LPCVOID, DWORD);
+    HMODULE dwmLibrary = LoadLibraryW(L"dwmapi.dll");
+    if(dwmLibrary == NULL)
+        return;
+    DwmSetWindowAttributeFunction setAttribute = NULL;
+    FARPROC resolvedFunction =
+        GetProcAddress(dwmLibrary, "DwmSetWindowAttribute");
+    static_assert(sizeof(setAttribute) == sizeof(resolvedFunction),
+                  "Windows function pointer sizes must match");
+    std::memcpy(&setAttribute, &resolvedFunction, sizeof(setAttribute));
+    if(setAttribute != NULL){
+        const HWND handle = reinterpret_cast<HWND>(window->winId());
+        const COLORREF dimText = RGB(145, 145, 145);
+        const DWORD textColor = 36;
+        setAttribute(handle, textColor, &dimText, sizeof(dimText));
+    }
+    FreeLibrary(dwmLibrary);
+}
+#else
+void applyDimWindowsCaptionText(QWidget *){
+}
+#endif
+}
+
+void GuiFunct::installImportantDialogCentering(){
+    if(qApp == NULL
+    || qApp->property("scoImportantDialogCenteringInstalled").toBool())
+        return;
+
+    ImportantDialogCenteringFilter *filter =
+        new ImportantDialogCenteringFilter(qApp);
+    qApp->installEventFilter(filter);
+    qApp->setProperty("scoImportantDialogCenteringInstalled", true);
 }
 
 QLabel* GuiFunct::newQLabel(QString text, int width){
@@ -99,11 +189,17 @@ QString GuiFunct::scoPanelStyle(){
         " padding-top: 3px; padding-bottom: 1px;"
         "}"
         "QPushButton:checked {"
-        " color: #171717;"
-        " background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #f7a32d, stop:1 #d46f00);"
-        " border-color: #ffad3b; border-bottom-color: #713900;"
+        " color: #232323;"
+        " background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %8, stop:1 %7);"
+        " border-color: %8; border-bottom-color: #704a26;"
         "}"
         "QPushButton:disabled { color: #858585; background: #3b3b3b; border-color: #4b4b4b; }"
+        "QPushButton[dialogRole=\"primary\"] { border-left: 3px solid %1; }"
+        "QPushButton[dialogRole=\"primary\"]:hover { border-left-color: %2; }"
+        "QPushButton[dialogRole=\"positive\"] { border-left: 3px solid %3; }"
+        "QPushButton[dialogRole=\"positive\"]:hover { border-left-color: %4; }"
+        "QPushButton[dialogRole=\"danger\"] { border-left: 3px solid %5; }"
+        "QPushButton[dialogRole=\"danger\"]:hover { border-left-color: %6; }"
         "QLineEdit, QSpinBox, QDoubleSpinBox, QTimeEdit, QPlainTextEdit, QComboBox {"
         " background-color: #202020; color: white; border: 1px solid #555555;"
         " border-top-color: #151515; border-radius: 1px; padding: 1px 3px; selection-background-color: #f08200; selection-color: black;"
@@ -133,7 +229,10 @@ QString GuiFunct::scoPanelStyle(){
         "QSlider::handle:horizontal { width: 10px; margin: -4px 0; background: #747474; border: 1px solid #989898; border-radius: 2px; }"
         "QSlider::handle:horizontal:hover { background: #8a8a8a; border-color: #f08200; }"
         "QToolTip { color: white; background-color: #252525; border: 1px solid #777777; padding: 3px; }"
-    );
+    ).arg(Game::StyleOrangeButton, Game::StyleOrangeButtonHover,
+          Game::StyleGreenButton, Game::StyleGreenButtonHover,
+          Game::StyleRedButton, Game::StyleRedButtonHover,
+          Game::StyleOrangeButton, Game::StyleOrangeButtonHover);
 }
 
 QString GuiFunct::scoEditorPanelStyle(){
@@ -260,6 +359,165 @@ void GuiFunct::applyEditorPanelStyle(QWidget *panel){
     });
 }
 
+void GuiFunct::setEditorToolWindowTitle(QWidget *window){
+    if(window == NULL)
+        return;
+    window->setWindowTitle(Game::AppName);
+    window->setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+    applyDimWindowsCaptionText(window);
+}
+
+void GuiFunct::styleEditorDialog(QDialog *dialog){
+    if(dialog == NULL)
+        return;
+
+    applyEditorPanelStyle(dialog);
+    setEditorToolWindowTitle(dialog);
+    QTimer::singleShot(0, dialog, [dialog](){
+        foreach(QDialogButtonBox *box,
+                dialog->findChildren<QDialogButtonBox*>()){
+            foreach(QAbstractButton *button, box->buttons()){
+                const QDialogButtonBox::ButtonRole role =
+                    box->buttonRole(button);
+                if(role == QDialogButtonBox::AcceptRole
+                || role == QDialogButtonBox::ApplyRole)
+                    button->setProperty("dialogRole", "primary");
+                else if(role == QDialogButtonBox::YesRole)
+                    button->setProperty("dialogRole", "positive");
+                else if(role == QDialogButtonBox::NoRole
+                     || role == QDialogButtonBox::DestructiveRole)
+                    button->setProperty("dialogRole", "danger");
+                button->style()->unpolish(button);
+                button->style()->polish(button);
+            }
+        }
+    });
+}
+
+void GuiFunct::addEditorDialogHeader(QDialog *dialog, const QString &title,
+                                      const QString &subtitle){
+    if(dialog == NULL || dialog->layout() == NULL)
+        return;
+
+    QLabel *titleLabel = new QLabel(title.toUpper(), dialog);
+    styleEditorTitle(titleLabel);
+    titleLabel->setSizePolicy(QSizePolicy::Expanding,
+                              QSizePolicy::Preferred);
+
+    QLabel *subtitleLabel = NULL;
+    if(!subtitle.trimmed().isEmpty()){
+        QString subtitleText = subtitle.trimmed();
+        if(!subtitleText.startsWith(QChar(0x2022)))
+            subtitleText.prepend(QString(QChar(0x2022)) + " ");
+        subtitleLabel = new QLabel(subtitleText.toUpper(), dialog);
+        styleEditorSubtitle(subtitleLabel);
+        subtitleLabel->setSizePolicy(QSizePolicy::Expanding,
+                                     QSizePolicy::Preferred);
+    }
+
+    if(QBoxLayout *box = qobject_cast<QBoxLayout*>(dialog->layout())){
+        box->insertWidget(0, titleLabel);
+        if(subtitleLabel != NULL)
+            box->insertWidget(1, subtitleLabel);
+        return;
+    }
+
+    QGridLayout *grid = qobject_cast<QGridLayout*>(dialog->layout());
+    if(grid == NULL){
+        titleLabel->deleteLater();
+        if(subtitleLabel != NULL)
+            subtitleLabel->deleteLater();
+        return;
+    }
+
+    struct GridEntry {
+        QLayoutItem *item;
+        int row;
+        int column;
+        int rowSpan;
+        int columnSpan;
+        Qt::Alignment alignment;
+    };
+    QVector<GridEntry> entries;
+    while(grid->count() > 0){
+        int row = 0;
+        int column = 0;
+        int rowSpan = 1;
+        int columnSpan = 1;
+        grid->getItemPosition(0, &row, &column, &rowSpan, &columnSpan);
+        QLayoutItem *item = grid->takeAt(0);
+        entries.append({item, row, column, rowSpan, columnSpan,
+                        item == NULL ? Qt::Alignment() : item->alignment()});
+    }
+
+    const int headerRows = subtitleLabel == NULL ? 1 : 2;
+    const int columns = qMax(1, grid->columnCount());
+    grid->addWidget(titleLabel, 0, 0, 1, columns);
+    if(subtitleLabel != NULL)
+        grid->addWidget(subtitleLabel, 1, 0, 1, columns);
+    for(const GridEntry &entry : entries){
+        if(entry.item != NULL)
+            grid->addItem(entry.item, entry.row + headerRows,
+                          entry.column, entry.rowSpan, entry.columnSpan,
+                          entry.alignment);
+    }
+}
+
+void GuiFunct::showEditorNotice(QWidget *parent, const QString &heading,
+                                 const QString &message){
+    QMessageBox notice(parent);
+    const int standardWidth =
+        qRound(420.0f * qMax(1.0f, Game::uiScale));
+    notice.setIcon(QMessageBox::Information);
+    notice.setWindowTitle(Game::AppName);
+    notice.setText(heading.toUpper());
+    notice.setInformativeText(message);
+    notice.setStandardButtons(QMessageBox::Ok);
+    notice.setStyleSheet(
+        QString("QLabel#qt_msgbox_label {"
+                " color: %1; font-weight: bold;"
+                " background-color: #292929; border: none;"
+                " border-left: 3px solid %1;"
+                " padding: 6px 8px;"
+                "}").arg(Game::StyleMainLabel));
+    applyDimWindowsCaptionText(&notice);
+
+    QTimer::singleShot(0, &notice, [&notice, parent, standardWidth](){
+        const int textWidth = qMax(
+            qRound(260.0f * qMax(1.0f, Game::uiScale)),
+            standardWidth - qRound(100.0f * qMax(1.0f, Game::uiScale)));
+        const char *labelNames[2] = {
+            "qt_msgbox_label", "qt_msgbox_informativelabel"
+        };
+        for(int i = 0; i < 2; ++i){
+            QLabel *label = notice.findChild<QLabel*>(labelNames[i]);
+            if(label == NULL)
+                continue;
+            label->setMinimumWidth(textWidth);
+            label->setMaximumWidth(textWidth);
+            label->setWordWrap(true);
+        }
+        notice.setMinimumWidth(standardWidth);
+        notice.setMaximumWidth(standardWidth);
+        notice.adjustSize();
+        notice.resize(standardWidth, notice.height());
+        QPoint point = parent == NULL
+            ? QCursor::pos() : parent->window()->frameGeometry().center();
+        QScreen *screen = QGuiApplication::screenAt(point);
+        if(screen == NULL)
+            screen = QGuiApplication::primaryScreen();
+        if(screen == NULL)
+            return;
+        const QRect available = screen->availableGeometry();
+        notice.move(available.left()
+                        + (available.width() - notice.frameGeometry().width()) / 2,
+                    available.top()
+                        + (available.height() - notice.frameGeometry().height()) / 2);
+    });
+
+    notice.exec();
+}
+
 void GuiFunct::setupWindowPinButton(QToolButton *button){
     if(button == NULL)
         return;
@@ -267,4 +525,301 @@ void GuiFunct::setupWindowPinButton(QToolButton *button){
     button->setIcon(QIcon(new WindowPinIconEngine));
     const int iconSide = qRound(15.0f * qMax(1.0f, Game::uiScale));
     button->setIconSize(QSize(iconSide, iconSide));
+}
+
+QPoint GuiFunct::snappedWindowPosition(QWidget *window, int snapDistance){
+    if(window == NULL)
+        return QPoint();
+
+    QRect moving = window->frameGeometry();
+    QPoint snappedFramePos = moving.topLeft();
+    int bestX = snapDistance + 1;
+    int bestY = snapDistance + 1;
+
+    QScreen *screen = QGuiApplication::screenAt(moving.center());
+    if(screen != NULL){
+        const QRect available = screen->availableGeometry();
+        const int xCandidates[2] = {
+            available.left() - moving.left(),
+            available.right() - moving.right()
+        };
+        const int yCandidates[2] = {
+            available.top() - moving.top(),
+            available.bottom() - moving.bottom()
+        };
+        for(int i = 0; i < 2; ++i){
+            if(qAbs(xCandidates[i]) <= snapDistance &&
+                    qAbs(xCandidates[i]) < bestX){
+                bestX = qAbs(xCandidates[i]);
+                snappedFramePos.setX(moving.left() + xCandidates[i]);
+            }
+            if(qAbs(yCandidates[i]) <= snapDistance &&
+                    qAbs(yCandidates[i]) < bestY){
+                bestY = qAbs(yCandidates[i]);
+                snappedFramePos.setY(moving.top() + yCandidates[i]);
+            }
+        }
+    }
+
+    for(QWidget *targetWidget : QApplication::topLevelWidgets()){
+        if(targetWidget == window || !targetWidget->isVisible())
+            continue;
+        const QRect target = targetWidget->frameGeometry();
+        const bool verticalNear =
+            moving.bottom() >= target.top() - snapDistance &&
+            moving.top() <= target.bottom() + snapDistance;
+        const bool horizontalNear =
+            moving.right() >= target.left() - snapDistance &&
+            moving.left() <= target.right() + snapDistance;
+        const int xCandidates[4] = {
+            target.left() - moving.left(),
+            target.right() - moving.right(),
+            target.right() + 1 - moving.left(),
+            target.left() - 1 - moving.right()
+        };
+        const int yCandidates[4] = {
+            target.top() - moving.top(),
+            target.bottom() - moving.bottom(),
+            target.bottom() + 1 - moving.top(),
+            target.top() - 1 - moving.bottom()
+        };
+        for(int i = 0; i < 4; ++i){
+            int distance = qAbs(xCandidates[i]);
+            if(verticalNear && distance <= snapDistance && distance < bestX){
+                bestX = distance;
+                snappedFramePos.setX(moving.left() + xCandidates[i]);
+            }
+            distance = qAbs(yCandidates[i]);
+            if(horizontalNear && distance <= snapDistance && distance < bestY){
+                bestY = distance;
+                snappedFramePos.setY(moving.top() + yCandidates[i]);
+            }
+        }
+    }
+
+    return window->pos() + (snappedFramePos - moving.topLeft());
+}
+
+void GuiFunct::setEditorPopupButtonActive(QAbstractButton *button, bool active){
+    static QPointer<QAbstractButton> activePopupButton;
+    if(button == NULL)
+        return;
+
+    if(!active){
+        if(activePopupButton == button)
+            activePopupButton.clear();
+        return;
+    }
+
+    if(!activePopupButton.isNull()
+    && activePopupButton != button
+    && activePopupButton->isChecked()){
+        // Reuse the established toggle-off handler. setChecked() does not emit
+        // clicked(), so the automatic close remains silent.
+        activePopupButton->setChecked(false);
+    }
+    activePopupButton = button;
+}
+
+bool GuiFunct::confirmDestructiveAction(QWidget *parent, const QString &heading,
+                                        const QString &message){
+    QMessageBox warning(parent);
+    const int standardWidth =
+        qRound(420.0f * qMax(1.0f, Game::uiScale));
+    warning.setIcon(QMessageBox::Warning);
+    warning.setWindowTitle(Game::AppName);
+    warning.setText(heading.toUpper());
+    warning.setInformativeText(message);
+    warning.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    warning.setDefaultButton(QMessageBox::No);
+    warning.setEscapeButton(QMessageBox::No);
+    styleEditorDialog(&warning);
+    warning.setStyleSheet(warning.styleSheet() + QString(
+        "QLabel#qt_msgbox_label {"
+        " color: %1; font-weight: bold;"
+        " background-color: #292929; border: none;"
+        " border-left: 3px solid %1;"
+        " padding: 6px 8px;"
+        "}").arg(Game::StyleYellowButton));
+    QLabel *warningTitle = warning.findChild<QLabel*>("qt_msgbox_label");
+    if(warningTitle != NULL)
+        warningTitle->setSizePolicy(
+            QSizePolicy::Expanding, QSizePolicy::Preferred);
+
+    QTimer::singleShot(0, &warning, [&warning, parent, standardWidth](){
+        const int textWidth = qMax(
+            qRound(260.0f * qMax(1.0f, Game::uiScale)),
+            standardWidth - qRound(100.0f * qMax(1.0f, Game::uiScale)));
+        QLabel *titleLabel =
+            warning.findChild<QLabel*>("qt_msgbox_label");
+        QLabel *messageLabel =
+            warning.findChild<QLabel*>("qt_msgbox_informativelabel");
+        if(titleLabel != NULL){
+            titleLabel->setMinimumWidth(textWidth);
+            titleLabel->setMaximumWidth(textWidth);
+            titleLabel->setWordWrap(true);
+        }
+        if(messageLabel != NULL){
+            messageLabel->setMinimumWidth(textWidth);
+            messageLabel->setMaximumWidth(textWidth);
+            messageLabel->setWordWrap(true);
+        }
+        warning.setMinimumWidth(standardWidth);
+        warning.setMaximumWidth(standardWidth);
+        if(warning.layout() != NULL){
+            warning.layout()->invalidate();
+            warning.layout()->activate();
+        }
+        warning.adjustSize();
+        warning.resize(standardWidth, warning.height());
+        QPoint screenPoint = QCursor::pos();
+        if(parent != NULL)
+            screenPoint = parent->window()->frameGeometry().center();
+        QScreen *screen = QGuiApplication::screenAt(screenPoint);
+        if(screen == NULL)
+            screen = QGuiApplication::primaryScreen();
+        if(screen == NULL)
+            return;
+        const QRect available = screen->availableGeometry();
+        const QPoint centered(
+            available.left() + (available.width() - warning.frameGeometry().width()) / 2,
+            available.top() + (available.height() - warning.frameGeometry().height()) / 2);
+        warning.move(centered);
+    });
+
+    return warning.exec() == QMessageBox::Yes;
+}
+
+EditorPopupWindow::EditorPopupWindow(QWidget *owner, const QString &title,
+                                     const QString &pinnedPositionKey, int baseWidth)
+    : QWidget(owner == NULL ? NULL : owner->window(), Qt::Tool),
+      positionKey(pinnedPositionKey) {
+    GuiFunct::applyEditorPanelStyle(this);
+    GuiFunct::setEditorToolWindowTitle(this);
+    setFixedWidth(qRound(baseWidth * qMax(1.0f, Game::uiScale)));
+
+    rootLayout = new QVBoxLayout(this);
+    rootLayout->setSpacing(4);
+    rootLayout->setContentsMargins(4,4,4,4);
+
+    QLabel *titleLabel = new QLabel(title);
+    GuiFunct::styleEditorTitle(titleLabel);
+    titleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    QHBoxLayout *titleRow = new QHBoxLayout;
+    titleRow->setContentsMargins(0,0,0,0);
+    titleRow->addWidget(titleLabel);
+    titleRow->addStretch();
+
+    pinButton = new QToolButton;
+    GuiFunct::setupWindowPinButton(pinButton);
+    pinButton->setCheckable(true);
+    pinButton->setFocusPolicy(Qt::NoFocus);
+    pinButton->setFixedSize(
+        qRound(30.0f * qMax(1.0f, Game::uiScale)),
+        qRound(17.0f * qMax(1.0f, Game::uiScale)));
+    positionPinned = Game::pinnedWindowPosition(this->positionKey, NULL);
+    pinButton->setChecked(positionPinned);
+    updatePinAppearance();
+    titleRow->addWidget(pinButton);
+    rootLayout->addLayout(titleRow);
+
+    snapTimer.setSingleShot(true);
+    QObject::connect(&snapTimer, &QTimer::timeout, this, [this](){
+        if(snapping)
+            return;
+        QPoint snappedPosition = GuiFunct::snappedWindowPosition(this);
+        if(snappedPosition == pos())
+            return;
+        snapping = true;
+        move(snappedPosition);
+        snapping = false;
+    });
+
+    pinSaveTimer.setSingleShot(true);
+    QObject::connect(&pinSaveTimer, &QTimer::timeout, this, [this](){
+        if(positionPinned)
+            Game::savePinnedWindowPosition(this->positionKey, pos());
+    });
+
+    QObject::connect(pinButton, &QToolButton::toggled, this, [this](bool pinned){
+        positionPinned = pinned;
+        updatePinAppearance();
+        if(!pinned)
+            pinSaveTimer.stop();
+        popupPinChanged(pinned);
+    });
+    QObject::connect(pinButton, &QToolButton::clicked, this, [this](){
+        popupPinClicked();
+    });
+}
+
+QVBoxLayout *EditorPopupWindow::popupLayout() const {
+    return rootLayout;
+}
+
+QLabel *EditorPopupWindow::addPopupSubtitle(const QString &subtitle){
+    QLabel *label = new QLabel(subtitle);
+    GuiFunct::styleEditorSubtitle(label);
+    rootLayout->addWidget(label);
+    return label;
+}
+
+void EditorPopupWindow::finalizePopup(){
+    rootLayout->activate();
+    setFixedHeight(rootLayout->sizeHint().height());
+    if(positionRestored)
+        return;
+    positionRestored = true;
+    QPoint pinnedPosition;
+    if(Game::pinnedWindowPosition(positionKey, &pinnedPosition))
+        move(Game::visibleWindowPosition(pinnedPosition, size()));
+}
+
+bool EditorPopupWindow::isPopupPositionPinned() const {
+    return positionPinned;
+}
+
+void EditorPopupWindow::setPopupPinToolTips(const QString &unpinnedToolTip,
+                                            const QString &pinnedToolTip){
+    unpinnedPinToolTip = unpinnedToolTip;
+    pinnedPinToolTip = pinnedToolTip;
+    updatePinAppearance();
+}
+
+void EditorPopupWindow::moveEvent(QMoveEvent *event){
+    QWidget::moveEvent(event);
+    if(snapping)
+        return;
+    snapTimer.start(120);
+    if(positionPinned)
+        pinSaveTimer.start(240);
+}
+
+void EditorPopupWindow::popupPinChanged(bool pinned){
+    if(pinned)
+        Game::savePinnedWindowPosition(positionKey, pos());
+    else
+        Game::clearPinnedWindowPosition(positionKey);
+}
+
+void EditorPopupWindow::popupPinClicked(){
+}
+
+void EditorPopupWindow::updatePinAppearance(){
+    GuiFunct::setupWindowPinButton(pinButton);
+    pinButton->setToolTip(positionPinned ? pinnedPinToolTip : unpinnedPinToolTip);
+    if(positionPinned){
+        pinButton->setStyleSheet(QString(
+            "QToolButton { color: #232323; background-color: %1;"
+            " border: 1px solid %1; padding: 0px 3px; font-weight: normal; }"
+            "QToolButton:hover { border-color: #e4c5a3; }"
+            "QToolButton:pressed { background-color: #a98a69; }")
+            .arg(Game::StyleMainLabel));
+    } else {
+        pinButton->setStyleSheet(
+            "QToolButton { color: #e7eaec; background-color: #26292c;"
+            " border: 1px solid #383d41; padding: 0px 3px; font-weight: normal; }"
+            "QToolButton:hover { background-color: #303438; border-color: #f08200; }"
+            "QToolButton:pressed { background-color: #191b1d; }");
+    }
 }

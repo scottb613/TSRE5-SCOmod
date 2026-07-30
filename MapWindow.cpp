@@ -30,39 +30,30 @@ MapWindow::MapWindow() : QDialog() {
     GuiFunct::applyEditorPanelStyle(this);
 
       
-    mapServicesCombo.setMaximumWidth(230);
+    mapServicesCombo.setMaximumWidth(280);
     mapServicesCombo.setStyleSheet("combobox-popup: 0;");
-    mapServicesCombo.addItem("OSM Vector", 0);
+    mapServicesCombo.addItem("OSM Vector (no key required)", 0);
     mapServices.push_back(new MapDataOSM());
 
-    // EFO 
-    QString provider = "";    
-    if(Game::imageMapsUrl.toLower().contains("google")) 
-        provider = "Google "; 
-    if(Game::imageMapsUrl.toLower().contains("mapbox"))
-        provider = "MapBox "; 
-    
-    // EFO hide if no provider
-    if(provider.length() > 1)
-    {
+    const QString provider = Game::mapEngine.trimmed();
+    const QString providerLower = provider.toLower();
+    bool imageryReady = !Game::imageMapsUrl.trimmed().isEmpty();
+    if(providerLower == "google" || providerLower == "mapbox")
+        imageryReady = imageryReady && !Game::MapAPIKey.trimmed().isEmpty();
 
-    mapServicesCombo.addItem(provider + " Images Z17", 1);
-    mapServices.push_back(new MapDataUrlImage(17));
-    mapServicesCombo.addItem(provider + " Images Z18", 2);
-    mapServices.push_back(new MapDataUrlImage(18));
-    
-    if(Game::imageMapsZoomOffset) 
-    {
-        mapServicesCombo.addItem("Warning -- Zoom Offset Detected ", 3);
-        mapServices.push_back(new MapDataUrlImage(-1));       
-    }
-    
-    // qDebug() << "Map Provider: " << provider << " " << Game::imageMapsUrl;
-    }
-    else
-    {
-    mapServicesCombo.addItem("Missing URL in F12 Settings", 1);    
-    mapServices.push_back(new MapDataUrlImage(18));
+    if(providerLower != "none" && imageryReady) {
+        mapServicesCombo.addItem(provider + " Satellite Z17", 1);
+        mapServices.push_back(new MapDataUrlImage(17));
+        mapServicesCombo.addItem(provider + " Satellite Z18", 2);
+        mapServices.push_back(new MapDataUrlImage(18));
+        mapServicesCombo.setToolTip(QString("%1 imagery is configured. Zoom offset: %2")
+            .arg(provider)
+            .arg(Game::imageMapsZoomOffset));
+    } else if(providerLower != "none") {
+        mapServicesCombo.setToolTip(QString("%1 imagery is selected but is missing a URL or API key. OSM Vector remains available.")
+            .arg(provider));
+    } else {
+        mapServicesCombo.setToolTip("OSM Vector is available without an account or API key. Configure optional satellite imagery in F3.");
     }
     
     loadButton = new QPushButton("Load", this);
@@ -275,4 +266,7 @@ bool MapWindow::LoadMapFromDisk(int x, int z){
 }
 
 MapWindow::~MapWindow() {
+    for(int i = 0; i < mapServices.size(); i++)
+        delete mapServices[i];
+    mapServices.clear();
 }

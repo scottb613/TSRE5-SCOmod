@@ -76,6 +76,7 @@ public slots:
 
     void resetDefaultValues();
     void resetRouteTerrtexPaint();
+    void disableRouteWaterTiles();
     void setPinPointBrush();
     
     void msg(QString text, QString val);
@@ -129,7 +130,6 @@ private:
     bool snowTexturePreviewReady = false;
     QCheckBox* hideGeneratedTerrtex;
     QPushButton* resetDefaults;
-    QPushButton* resetRouteTerrtex;
     QPushButton* terrainUtilitiesButton;
     TerrainUtilitiesWindow* terrainUtilitiesWindow;
     QPushButton* setPinPoint;    
@@ -143,6 +143,7 @@ private:
     QLineEdit *leIntensity;
     QLineEdit *leTextureRotation;
     QLineEdit *fheight;
+    QDoubleValidator *heightValidator;
     QComboBox* hType;
     QComboBox* seasonType;
     

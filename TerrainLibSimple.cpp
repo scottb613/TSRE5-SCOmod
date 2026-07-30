@@ -14,6 +14,7 @@
 #include <QOpenGLShaderProgram>
 #include <algorithm>
 #include <set>
+#include <limits>
 #include <math.h>
 #include "Game.h"
 #include "Brush.h"
@@ -630,13 +631,70 @@ QSet<Terrain*> TerrainLibSimple::paintHeightMap(Brush* brush, int x, int z, floa
     float posz = round(p[2]/8.0)*8.0;
     
     Game::check_coords(x, z, posx, posz);
-    qDebug() << x << " " << z << " " << posx << " " << posz;
+    if(Game::debugOutput) qDebug() << x << " " << z << " " << posx << " " << posz;
     
     Terrain *terr;
     terr = terrain[(x * 10000 + z)];
     if (terr == NULL) return uterr;
     if (terr->loaded == false) return uterr;
     //terr->paintTexture(x, z, posx, posz);
+
+    if(brush->hType == 5){
+        if(brush->hFixed >= 0 || brush->size <= 0)
+            return uterr;
+
+        const int radius = brush->size;
+        const int radiusSquared = radius * radius;
+        const float inverseRadius = 1.0f / radius;
+        QSet<Terrain*> undoTerrains;
+        Terrain *cachedTerrain = NULL;
+        int cachedX = std::numeric_limits<int>::min();
+        int cachedZ = std::numeric_limits<int>::min();
+
+        for(int i = -radius; i < radius; i++){
+            const int iSquared = i * i;
+            for(int j = -radius; j < radius; j++){
+                const int distanceSquared = iSquared + j * j;
+                if(distanceSquared > radiusSquared)
+                    continue;
+
+                int tx = x;
+                int tz = z;
+                int samplePosX = (int)posx + i * 8;
+                int samplePosZ = (int)posz + j * 8;
+                Game::check_coords(tx, tz, samplePosX, samplePosZ);
+
+                if(tx != cachedX || tz != cachedZ){
+                    cachedX = tx;
+                    cachedZ = tz;
+                    cachedTerrain = terrain[(tx * 10000 + tz)];
+                }
+                if(cachedTerrain == NULL || !cachedTerrain->loaded)
+                    continue;
+
+                if(!undoTerrains.contains(cachedTerrain)){
+                    Undo::PushTerrainHeightMap(
+                        cachedTerrain->mojex, cachedTerrain->mojez,
+                        cachedTerrain->terrainData, cachedTerrain->getSampleCount());
+                    undoTerrains.insert(cachedTerrain);
+                }
+
+                const float distance = std::sqrt((float)distanceSquared);
+                const float strength = std::max(0.0f, std::min(1.0f,
+                    (radius - distance) * inverseRadius * brush->alpha));
+                if(cachedTerrain->paintWaterbedOffset(
+                        tx, tz, samplePosX, samplePosZ,
+                        brush->hFixed, strength))
+                    uterr.insert(cachedTerrain);
+            }
+        }
+
+        foreach(Terrain *value, uterr){
+            value->setModified(true);
+            value->refresh();
+        }
+        return uterr;
+    }
     
     //int px = (posx + 1024)/8;
     //int pz = (posz + 1024)/8;
@@ -650,23 +708,23 @@ QSet<Terrain*> TerrainLibSimple::paintHeightMap(Brush* brush, int x, int z, floa
     int tpx, tpz;
     int count = 0;
     
-    // add tiles that can be modified to undo;
-    Undo::PushTerrainHeightMap(terr->mojex, terr->mojez, terr->terrainData, terr->getSampleCount());
-    for(int i = -size; i < size; i++)
-        for(int j = -size; j < size; j++){
-            tpx = px+i*8;
-            tpz = pz+j*8;
-            tx = x;
-            tz = z;
-            Game::check_coords(tx, tz, tpx, tpz);
-            if(terr != terrain[(tx * 10000 + tz)]){
-                terr = terrain[(tx * 10000 + tz)];
-                if (terr == NULL) continue;
-                if (!terr->loaded) continue;
-                Undo::PushTerrainHeightMap(terr->mojex, terr->mojez, terr->terrainData, terr->getSampleCount());
-            }
+    // The brush is bounded to less than one terrain tile. Determine the small
+    // set of touched tiles directly instead of scanning every brush sample once
+    // for Undo and then scanning all samples again for painting.
+    const int minTileX = x + (px - (int)size * 8 < -1024 ? -1 : 0);
+    const int maxTileX = x + (px + ((int)size - 1) * 8 >= 1024 ? 1 : 0);
+    const int minTileZ = z + (pz - (int)size * 8 < -1024 ? -1 : 0);
+    const int maxTileZ = z + (pz + ((int)size - 1) * 8 >= 1024 ? 1 : 0);
+    for(int undoX = minTileX; undoX <= maxTileX; undoX++){
+        for(int undoZ = minTileZ; undoZ <= maxTileZ; undoZ++){
+            Terrain *undoTerrain = terrain[(undoX * 10000 + undoZ)];
+            if(undoTerrain == NULL || !undoTerrain->loaded)
+                continue;
+            Undo::PushTerrainHeightMap(
+                undoTerrain->mojex, undoTerrain->mojez,
+                undoTerrain->terrainData, undoTerrain->getSampleCount());
         }
-    //
+    }
     terr = terrain[(x * 10000 + z)];
     h = brush->alpha*brush->direction*10.0;
     if(brush->hType == 1){
@@ -715,8 +773,9 @@ QSet<Terrain*> TerrainLibSimple::paintHeightMap(Brush* brush, int x, int z, floa
             if (!terr->loaded) continue;
             uterr.insert(terr);
             
-            if(sqrt(i*i + j*j) > size) continue;
-            h = (float)(size - (sqrt(i*i + j*j)))/size;
+            const float distance = std::sqrt((float)(i*i + j*j));
+            if(distance > size) continue;
+            h = (size - distance)/size;
             h = h*brush->alpha*brush->direction*10.0;
             
             terr->setErrorBias(tx, tz, tpx, tpz, 0);
@@ -751,7 +810,8 @@ QSet<Terrain*> TerrainLibSimple::paintHeightMap(Brush* brush, int x, int z, floa
                 float targetHeight = 0;
                 float maxDbDistance = std::min(24.0f, std::max(8.0f, size * 8.0f));
                 if(Game::currentRoute->findNearestDbHeight(tx, tz, samplePos, maxDbDistance, targetHeight)){
-                    float strength = std::max(0.0f, std::min(1.0f, ((float)(size - sqrt(i*i + j*j)) / size) * brush->alpha));
+                    float strength = std::max(0.0f, std::min(1.0f,
+                            ((size - distance) / size) * brush->alpha));
                     terr->terrainData[tpz][tpx] += (targetHeight - terr->terrainData[tpz][tpx]) * strength;
                 }
             }

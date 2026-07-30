@@ -13,8 +13,13 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QFile>
+#include <QSaveFile>
+#include <QSet>
 #include <QDateTime>
+#include <QClipboard>
 #include <QDesktopServices>
+#include <QFileInfo>
+#include <QTextCursor>
 #include <QUrl>
 #include "RouteEditorGLWidget.h"
 #include "RouteEditorWindow.h"
@@ -71,12 +76,9 @@
 #include "ActivityTimetableProperties.h"
 #include "RouteEditorClient.h"
 #include "Route.h"
-#include "LoadWindow.h"
-#include "CELoadWindow.h"
 #include "TexLib.h"
 #include "PropertiesPolyForest.h"
 #include "PropertiesHazard.h"
-#include "SettingsDialog.h"
 
 static int scaledUiSize(int base){
     return qRound(base * qMax(1.0f, Game::uiScale));
@@ -249,6 +251,39 @@ RouteEditorWindow::RouteEditorWindow() {
         //console.log(obj.type);
         mainLayout3->addWidget(it);
     }
+
+    PropertiesTerrain *terrainProperties =
+        qobject_cast<PropertiesTerrain*>(objProperties["Terrain"]);
+    PropertiesTrackObj *trackProperties =
+        qobject_cast<PropertiesTrackObj*>(objProperties["TrackObj"]);
+    if(terrainProperties != NULL){
+        QObject::connect(terrainProperties, &PropertiesTerrain::placeWaterRulerRequested,
+                         glWidget, &RouteEditorGLWidget::placeWaterRuler);
+        QObject::connect(terrainProperties, &PropertiesTerrain::scanWaterRulerRequested,
+                         glWidget, &RouteEditorGLWidget::scanWaterRuler);
+        QObject::connect(terrainProperties, &PropertiesTerrain::undoWaterScanRequested,
+                         glWidget, &RouteEditorGLWidget::undoWaterScan);
+        QObject::connect(terrainProperties, &PropertiesTerrain::removeWaterRulerRequested,
+                         glWidget, &RouteEditorGLWidget::removeWaterRuler);
+        if(trackProperties != NULL){
+            QObject::connect(terrainProperties, &PropertiesTerrain::hacksToggled,
+                             trackProperties, &PropertiesTrackObj::toggleHacksForSelection);
+        }
+    }
+    PropertiesStatic *staticProperties =
+        qobject_cast<PropertiesStatic*>(objProperties["Static"]);
+    if(staticProperties != NULL && trackProperties != NULL){
+        QObject::connect(staticProperties, &PropertiesStatic::hacksToggled,
+                         trackProperties, &PropertiesTrackObj::toggleHacksForSelection);
+    }
+    if(trackProperties != NULL){
+        QObject::connect(trackProperties,
+                         &PropertiesTrackObj::resetRouteTerrtexRequested,
+                         terrainTools, &TerrainTools::resetRouteTerrtexPaint);
+        QObject::connect(trackProperties,
+                         &PropertiesTrackObj::disableRouteWaterRequested,
+                         terrainTools, &TerrainTools::disableRouteWaterTiles);
+    }
     
     //mainLayout3->addWidget(terrainTools);
     //mainLayout3->setAlignment(naviBox, Qt::AlignBottom);
@@ -261,26 +296,9 @@ RouteEditorWindow::RouteEditorWindow() {
     mainLayout->setMargin(3);
     mainLayout->setSpacing(3);
     
-    QString mainWindowLayout = Game::mainWindowLayout;
-    if(!mainWindowLayout.toUpper().contains('W')){
-        mainWindowLayout += 'W';
-    }
-    for(int i = 0; i < mainWindowLayout.length(); i++){
-        if(mainWindowLayout[i].toUpper() == 'P')
-            mainLayout->addWidget(box2);
-        if(mainWindowLayout[i].toUpper() == 'T')
-            mainLayout->addWidget(box);
-        if(mainWindowLayout[i].toUpper() == 'W')
-            mainLayout->addWidget(glWidget);
-    }
-    if(!mainWindowLayout.toUpper().contains('T')){
-        box->move(this->pos());
-        box->setWindowFlags(Qt::WindowType::Tool);
-    }
-    if(!mainWindowLayout.toUpper().contains('P')){
-        box2->move(this->pos());
-        box2->setWindowFlags(Qt::WindowType::Tool);
-    }
+    mainLayout->addWidget(box2);
+    mainLayout->addWidget(glWidget);
+    mainLayout->addWidget(box);
     
     remain->setLayout(mainLayout);
     mainLayout->setContentsMargins(0,0,0,0);
@@ -309,6 +327,12 @@ RouteEditorWindow::RouteEditorWindow() {
     openRouteFolderAction = new QAction(tr("&Open Route Folder"), this);
     QObject::connect(openRouteFolderAction, SIGNAL(triggered()), this, SLOT(openRouteFolder()));
 
+    routeHealthReportAction = new QAction(tr("Create Route &Health Report"), this);
+    routeHealthReportAction->setToolTip(
+            tr("Save and immediately display missing-content and route-usage information."));
+    QObject::connect(routeHealthReportAction, SIGNAL(triggered()),
+                     this, SLOT(createRouteHealthReport()));
+
     createPathsAction = new QAction(tr("&Create Debug Paths"), this);
     QObject::connect(createPathsAction, SIGNAL(triggered()), this, SLOT(createPaths()));
     
@@ -336,6 +360,7 @@ RouteEditorWindow::RouteEditorWindow() {
         routeMenu = menuBar()->addMenu(tr("&Route"));
         routeMenu->addAction(saveAction);
         routeMenu->addAction(openRouteFolderAction);
+        routeMenu->addAction(routeHealthReportAction);
         routeMenu->addSeparator();
         routeMenu->addAction(reloadRefAction);
         routeMenu->addAction(reloadMkrAction);   
@@ -443,6 +468,9 @@ RouteEditorWindow::RouteEditorWindow() {
     settingsAction->setShortcut(QKeySequence("F12"));
     toolsMenu->addAction(settingsAction);
     QObject::connect(settingsAction, SIGNAL(triggered(bool)), this, SLOT(hideShowSettingsDialog(bool)));
+    QObject::connect(settingsDialog, &QDialog::finished, this, [this](int){
+        settingsAction->setChecked(false);
+    });
     
     
     
@@ -480,6 +508,10 @@ RouteEditorWindow::RouteEditorWindow() {
                      activityAction, SLOT(setChecked(bool)));
     QObject::connect(activityBuilderWindow, SIGNAL(userToggleSoundRequested()),
                      glWidget, SLOT(userPanelToggleSound()));
+    QObject::connect(activityBuilderWindow, SIGNAL(userPlacementSoundRequested()),
+                     glWidget, SLOT(userPlacementSound()));
+    QObject::connect(activityBuilderWindow, SIGNAL(userErrorSoundRequested()),
+                     glWidget, SLOT(userErrorSound()));
     // Settings
     terrainCameraAction = GuiFunct::newMenuCheckAction(tr("&Stick Camera To Terrain"), this); 
     terrainCameraAction->setChecked(Game::cameraStickToTerrain);
@@ -803,63 +835,35 @@ void RouteEditorWindow::keyPressEvent(QKeyEvent *e) {
 }
 
 void RouteEditorWindow::exitToLoadWindow(){
-        LoadWindow *loadWindow = new LoadWindow();
-
-        QStringList winPos = Game::mainPos.split(","); 
-        if(winPos.count() > 1) loadWindow->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());        
-        loadWindow->show();        
+    hide();
+    emit returnToLoadWindow();
 }
 
-void RouteEditorWindow::completeApplicationClose(QCloseEvent *event){
+void RouteEditorWindow::completeEditorClose(QCloseEvent *event){
     saveLastSession();
+    glWidget->clearRouteSession();
     emit exitNow();
+    emit returnToLoadWindow();
     event->accept();
     SoundManager::CloseAl();
 
-    // Several editor helpers are independent Qt tool windows. Closing Main
-    // must end the application even if one of those windows ignores close in
-    // order to implement its normal hide-on-close behavior.
-    QTimer::singleShot(0, qApp, [](){
-        const QWidgetList windows = QApplication::topLevelWidgets();
-        for(QWidget *window : windows){
-            if(window != NULL)
-                window->hide();
-        }
-        QCoreApplication::quit();
-    });
+    // Editor helpers may be independent Qt tool windows. Hide this editor's
+    // helpers while leaving the persistent load screen visible.
+    const QWidgetList windows = QApplication::topLevelWidgets();
+    for(QWidget *window : windows){
+        if(window != NULL && window != this
+                && (window->parentWidget() == this || isAncestorOf(window)))
+            window->hide();
+    }
 }
 
 void RouteEditorWindow::closeEvent(QCloseEvent * event ){
     QVector<QString> unsavedItems;
     glWidget->getUnsavedInfo(unsavedItems);
     
-    /// EFO List missing shapes
-    QFile file("./" + Game::route + "_missingShapes.txt");    
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file);
-        QStringList sortedFileList = Route::missingList;
-        sortedFileList.sort();
-        for (const QString& fileName : sortedFileList) {
-            out << fileName << " \n";
-        }
-        file.close();        
-    }      
-/*
-    QFile file2("./" + Game::route + "_texturesUsed.txt");    
-    if (file2.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file2);
-        QStringList sortedFileList = Route::texturesList;
-        sortedFileList.sort();
-        for (const QString& fileName : sortedFileList) {
-            out << fileName << " \n";
-        }
-        file.close();        
-    }
- * */          
-        
     if(unsavedItems.size() == 0){
         if(Game::debugOutput) qDebug() << "Nothing to Save";
-        completeApplicationClose(event);
+        completeEditorClose(event);
         return;
     }
    
@@ -875,7 +879,7 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
         return;
     }
     if(unsavedDialog.changed == 2){
-        completeApplicationClose(event);
+        completeEditorClose(event);
         return;
     }
 
@@ -883,7 +887,7 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
     save();
 
 
-    completeApplicationClose(event);
+    completeEditorClose(event);
     
 }
 
@@ -1002,7 +1006,7 @@ void RouteEditorWindow::applyRestoredSessionGeometry(){
         if(pinnedMainMaximized)
             setWindowState(windowState() | Qt::WindowMaximized);
     } else {
-        showMaximized();
+        setWindowState(windowState() | Qt::WindowMaximized);
     }
     Game::restoreLastSessionWindowGeometry = false;
 
@@ -1016,7 +1020,6 @@ void RouteEditorWindow::applyRestoredSessionGeometry(){
 
 void RouteEditorWindow::save(){
     emit sendMsg(QString("save"));
-    emit updStatus(QString("stat0"),QString("Saved"));    
 }
 
 void RouteEditorWindow::openRouteFolder(){
@@ -1029,6 +1032,176 @@ void RouteEditorWindow::openRouteFolder(){
     }
 
     QDesktopServices::openUrl(QUrl::fromLocalFile(routeFolder.absolutePath()));
+}
+
+void RouteEditorWindow::createRouteHealthReport(){
+    QDir routeFolder(Game::root + "/routes/" + Game::route);
+    if(!routeFolder.exists()){
+        QMessageBox::warning(this, tr("Route Health Report"),
+                             tr("The active route folder could not be found:\n%1")
+                             .arg(QDir::toNativeSeparators(routeFolder.absolutePath())));
+        return;
+    }
+
+    if(Game::currentRoute == NULL){
+        QMessageBox::warning(this, tr("Route Health Report"),
+                             tr("No active route is available to inspect."));
+        return;
+    }
+
+    int worldFileCount = 0;
+    QStringList unloadedWorldFilesRaw;
+    QString preparationError;
+    if(!Game::currentRoute->prepareHealthReportData(
+                worldFileCount, unloadedWorldFilesRaw, preparationError)){
+        QMessageBox::warning(this, tr("Route Health Report"), preparationError);
+        return;
+    }
+
+    const auto sortedUnique = [](const QStringList& source){
+        QStringList result;
+        QSet<QString> seen;
+        for(QString value : source){
+            value = value.trimmed();
+            const QString key = value.toCaseFolded();
+            if(!value.isEmpty() && !seen.contains(key)){
+                seen.insert(key);
+                result.push_back(value);
+            }
+        }
+        result.sort(Qt::CaseInsensitive);
+        return result;
+    };
+
+    QStringList usedObjectsRaw;
+    QStringList usedTrackRaw;
+    QStringList staticFlagsRaw;
+    QStringList uidIssuesRaw;
+    QStringList trackSectionIssuesRaw;
+    Game::currentRoute->collectHealthReportData(
+                usedObjectsRaw, usedTrackRaw, staticFlagsRaw,
+                uidIssuesRaw, trackSectionIssuesRaw);
+
+    const QStringList unloadedWorldFiles = sortedUnique(unloadedWorldFilesRaw);
+    const QStringList missingTextures = sortedUnique(Route::missingTextureList);
+    const QStringList missingShapes = sortedUnique(Route::missingList);
+    const QStringList usedObjects = sortedUnique(usedObjectsRaw);
+    const QStringList usedTrack = sortedUnique(usedTrackRaw);
+    const QStringList staticFlags = sortedUnique(staticFlagsRaw);
+    const QStringList uidIssues = sortedUnique(uidIssuesRaw);
+    const QStringList trackSectionIssues =
+            sortedUnique(trackSectionIssuesRaw);
+
+    QString report;
+    QTextStream out(&report);
+    out << "TSRE GenX Route Health Report\n";
+    out << "=============================\n\n";
+    out << "Route: " << Game::route << "\n";
+    out << "Generated: " << QDateTime::currentDateTime().toString(Qt::ISODate) << "\n";
+    out << "World-file scope: complete route scan\n";
+    out << "World files found: " << worldFileCount << "\n";
+    out << "World files loaded: "
+        << qMax(0, worldFileCount - unloadedWorldFiles.size()) << "\n\n";
+    out << "This report is diagnostic only. Creating it does not modify the route.\n";
+    out << "Missing entries are those observed while the current route session loaded.\n\n";
+
+    const auto writeSection = [&out](const QString& title, const QStringList& values){
+        out << title << " (" << values.size() << ")\n";
+        out << QString(title.size() + QString::number(values.size()).size() + 3, '-') << "\n";
+        if(values.isEmpty()){
+            out << "(none recorded)\n\n";
+            return;
+        }
+        for(const QString& value : values)
+            out << value << "\n";
+        out << "\n";
+    };
+
+    const auto writeTrackDefinitionSection =
+            [&out](const QStringList& values){
+        const QString title = "Track definition problems";
+        out << title << " (" << values.size() << ")\n";
+        out << QString(title.size() + QString::number(values.size()).size() + 3, '-')
+            << "\n";
+        if(values.isEmpty()){
+            out << "(none recorded)\n\n";
+            return;
+        }
+        out << QString("%1 | %2 | %3 | %4 | %5")
+               .arg("World file", -17)
+               .arg("Failure", -48)
+               .arg("UID", 8)
+               .arg("SectionIdx", 10)
+               .arg("Shape")
+            << "\n";
+        out << QString(17, '-') << "-+-"
+            << QString(48, '-') << "-+-"
+            << QString(8, '-') << "-+-"
+            << QString(10, '-') << "-+-"
+            << QString(20, '-') << "\n";
+        for(const QString& value : values)
+            out << value << "\n";
+        out << "\n";
+    };
+
+    writeSection("World files not loaded", unloadedWorldFiles);
+    writeSection("Missing textures", missingTextures);
+    writeSection("Missing shapes", missingShapes);
+    writeSection("Duplicate world/sound UIDs", uidIssues);
+    writeTrackDefinitionSection(trackSectionIssues);
+    writeSection("Used scenery/object files", usedObjects);
+    writeSection("Used track shape files", usedTrack);
+    writeSection("StaticFlags and object types", staticFlags);
+    out.flush();
+
+    const QString reportPath = routeFolder.filePath("TSRE-Route-Health-Report.txt");
+    QSaveFile reportFile(reportPath);
+    bool reportSaved = false;
+    if(reportFile.open(QIODevice::WriteOnly | QIODevice::Text)){
+        reportFile.write(report.toUtf8());
+        reportSaved = reportFile.commit();
+    }
+
+    QDialog dialog(this);
+    GuiFunct::applyEditorPanelStyle(&dialog);
+    GuiFunct::setEditorToolWindowTitle(&dialog);
+    dialog.resize(scaledUiSize(900), scaledUiSize(700));
+
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    QLabel *title = new QLabel(tr("ROUTE HEALTH REPORT"));
+    GuiFunct::styleEditorTitle(title);
+    layout->addWidget(title);
+
+    QLabel *savedLocation = new QLabel(
+            reportSaved
+            ? tr("Saved to: %1").arg(QDir::toNativeSeparators(reportPath))
+            : tr("The report is shown below, but it could not be saved to the route folder."));
+    savedLocation->setWordWrap(true);
+    layout->addWidget(savedLocation);
+
+    QPlainTextEdit *reportView = new QPlainTextEdit;
+    reportView->setReadOnly(true);
+    reportView->setLineWrapMode(QPlainTextEdit::NoWrap);
+    reportView->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    reportView->setPlainText(report);
+    reportView->moveCursor(QTextCursor::Start);
+    layout->addWidget(reportView, 1);
+
+    QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    QPushButton *copyButton = buttons->addButton(
+            tr("Copy All"), QDialogButtonBox::ActionRole);
+    QPushButton *openFolderButton = buttons->addButton(
+            tr("Open Route Folder"), QDialogButtonBox::ActionRole);
+    QObject::connect(copyButton, &QPushButton::released, &dialog, [report](){
+        QApplication::clipboard()->setText(report);
+    });
+    QObject::connect(openFolderButton, &QPushButton::released, &dialog, [reportPath](){
+        QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(reportPath).absolutePath()));
+    });
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    dialog.exec();
 }
 
 void RouteEditorWindow::reloadRef(){
@@ -1071,19 +1244,12 @@ void RouteEditorWindow::refreshErrors(){
 }
 
 void RouteEditorWindow::createPaths(){
-    QMessageBox msgBox;
-    msgBox.setText("This action will delete all your existing activity paths and create new simple paths! Continue?");
-    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    msgBox.setDefaultButton(QMessageBox::No);
-    switch (msgBox.exec()) {
-      case QMessageBox::Yes:
-          emit sendMsg(QString("createPaths"));
-          break;
-      case QMessageBox::No:
-          break;
-      default:
-          break;
-    }
+    if(!GuiFunct::confirmDestructiveAction(
+            this, "Recreate Activity Paths",
+            "This will delete all existing activity paths and create new "
+            "simple paths.\n\nContinue?"))
+        return;
+    emit sendMsg(QString("createPaths"));
 }
 
 void RouteEditorWindow::terrainCamera(bool val){
@@ -1221,6 +1387,25 @@ void RouteEditorWindow::showProperties(GameObj* obj){
         if(it == NULL) continue;
         it->hide();
     }
+    PropertiesTrackObj *trackProperties =
+        qobject_cast<PropertiesTrackObj*>(objProperties["TrackObj"]);
+    if(trackProperties != NULL){
+        trackProperties->setHacksSelection(obj);
+        QPushButton *visibleHacksButton = NULL;
+        if(obj != NULL && trackProperties->support(obj)){
+            visibleHacksButton = trackProperties->hacksButton();
+        } else if(obj != NULL){
+            PropertiesStatic *staticProperties =
+                qobject_cast<PropertiesStatic*>(objProperties["Static"]);
+            PropertiesTerrain *terrainProperties =
+                qobject_cast<PropertiesTerrain*>(objProperties["Terrain"]);
+            if(staticProperties != NULL && staticProperties->support(obj))
+                visibleHacksButton = staticProperties->hacksButton();
+            else if(terrainProperties != NULL && terrainProperties->support(obj))
+                visibleHacksButton = terrainProperties->hacksButton();
+        }
+        trackProperties->adoptHacksButton(visibleHacksButton);
+    }
     if(obj == NULL){
         propertiesPanelTitle->hide();
         return;
@@ -1280,8 +1465,14 @@ void RouteEditorWindow::hideShowStatWidget(bool show){
 }
 
 void RouteEditorWindow::hideShowSettingsDialog(bool show){
-    if(show) { settingsDialog->show();  }
-    else { settingsDialog->hide();  }
+    if(show) {
+        settingsDialog->loadSettings();
+        settingsDialog->show();
+        settingsDialog->raise();
+        settingsDialog->activateWindow();
+    } else {
+        settingsDialog->hide();
+    }
 }
 
 
@@ -1341,6 +1532,8 @@ void RouteEditorWindow::viewSnapable(bool show){
 
 void RouteEditorWindow::viewCompass(bool show){
     Game::viewCompass = show;
+    if(!Game::saveViewCompassState())
+        qWarning() << "Unable to save Compass visibility to" << Game::settingsFilePath();
 }
 
 void RouteEditorWindow::showRoute(){
@@ -1360,30 +1553,41 @@ void RouteEditorWindow::showRoute(){
 
 // EFO Move windows
 void RouteEditorWindow::show(){
-    if(!Game::playerMode){
-        /// Control Panel is enabled by C; S remains accepted for older settings.
-        if(Game::mainWindowLayout.toLower().contains("c") || Game::mainWindowLayout.toLower().contains("s"))
-         {
-             statusWindow->show();
-             statAction->setChecked(true);
-         }
-         QStringList winPos = Game::statusPos.split(",");
-         QPoint pinnedControlPosition;
-         const bool controlPositionPinned = Game::pinnedWindowPosition("controlPanel", &pinnedControlPosition);
-         const bool controlDefaultRequested = Game::pinnedWindowPosition("controlPanelUseDefault", NULL);
-        
-          if(!controlPositionPinned && (controlDefaultRequested || winPos.count() < 2))
-          {            
-            const int naviTemp1 = this->x() - 300;  // left of window 
-            const int naviTemp2 = this->y() + 200;  // 200 from the top corner
-            statusWindow->move(std::max(0,naviTemp1) , std::min(naviTemp2,QApplication::primaryScreen()->geometry().bottom()-200));
-          }            
-    }
+    const bool showControlPanel = !Game::playerMode;
     
     if(Game::lockCamera == true) emit updStatus(QString("camera"),QString("Camera Locked")); else emit updStatus(QString("camera"),QString("Camera Unlocked"));
     
     QMainWindow::show();
     applyRestoredSessionGeometry();
+
+    if(!Game::playerMode){
+        QStringList winPos = Game::statusPos.split(",");
+        QPoint pinnedControlPosition;
+        const bool controlPositionPinned =
+                Game::pinnedWindowPosition("controlPanel", &pinnedControlPosition);
+        const bool controlDefaultRequested =
+                Game::pinnedWindowPosition("controlPanelUseDefault", NULL);
+
+        if(!controlPositionPinned && (controlDefaultRequested || winPos.count() < 2)){
+            const int naviTemp1 = this->x() - statusWindow->width();
+            const int naviTemp2 = this->y() + 200;
+            statusWindow->move(
+                std::max(0, naviTemp1),
+                std::min(naviTemp2,
+                         QApplication::primaryScreen()->geometry().bottom()
+                         - statusWindow->height()));
+        }
+
+        if(showControlPanel){
+            // A Qt::Tool child shown before its parent can remain logically
+            // checked but invisible. Show it only after Main is live.
+            statusWindow->show();
+            statusWindow->raise();
+        } else {
+            statusWindow->hide();
+        }
+        statAction->setChecked(showControlPanel);
+    }
 }
 
 void RouteEditorWindow::statusWindowClosed(){

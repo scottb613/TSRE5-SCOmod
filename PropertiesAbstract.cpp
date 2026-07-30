@@ -244,6 +244,8 @@ void PropertiesAbstract::showEvent(QShowEvent *event){
     foreach(QLabel *label, labels){
         if(label == NULL || label == infoLabel)
             continue;
+        if(label->window() != this->window())
+            continue;
         const QString style = label->styleSheet();
         if(!style.contains(Game::StyleMainLabel, Qt::CaseInsensitive) ||
            !style.contains("font-weight", Qt::CaseInsensitive))

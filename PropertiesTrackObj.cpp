@@ -36,87 +36,15 @@ static QString gradeHelperStateStyle(const QString &background, const QString &b
     ).arg(background, border, text);
 }
 
-static QPoint gradeHelperSnapPosition(QWidget *window){
-    const int snapDistance = 10;
-    QRect moving = window->frameGeometry();
-    QPoint snappedFramePos = moving.topLeft();
-    int bestX = snapDistance + 1;
-    int bestY = snapDistance + 1;
-
-    QList<QWidget*> targets = QApplication::topLevelWidgets();
-    QScreen *screen = QGuiApplication::screenAt(moving.center());
-    if(screen != NULL){
-        QRect available = screen->availableGeometry();
-        int xCandidates[2] = { available.left() - moving.left(), available.right() - moving.right() };
-        int yCandidates[2] = { available.top() - moving.top(), available.bottom() - moving.bottom() };
-        for(int i = 0; i < 2; ++i){
-            if(qAbs(xCandidates[i]) <= snapDistance && qAbs(xCandidates[i]) < bestX){
-                bestX = qAbs(xCandidates[i]);
-                snappedFramePos.setX(moving.left() + xCandidates[i]);
-            }
-            if(qAbs(yCandidates[i]) <= snapDistance && qAbs(yCandidates[i]) < bestY){
-                bestY = qAbs(yCandidates[i]);
-                snappedFramePos.setY(moving.top() + yCandidates[i]);
-            }
-        }
-    }
-
-    for(QWidget *targetWidget : targets){
-        if(targetWidget == window || !targetWidget->isVisible())
-            continue;
-        QRect target = targetWidget->frameGeometry();
-        bool verticalNear = moving.bottom() >= target.top() - snapDistance && moving.top() <= target.bottom() + snapDistance;
-        bool horizontalNear = moving.right() >= target.left() - snapDistance && moving.left() <= target.right() + snapDistance;
-        int xCandidates[4] = { target.left() - moving.left(), target.right() - moving.right(),
-                               target.right() + 1 - moving.left(), target.left() - 1 - moving.right() };
-        int yCandidates[4] = { target.top() - moving.top(), target.bottom() - moving.bottom(),
-                               target.bottom() + 1 - moving.top(), target.top() - 1 - moving.bottom() };
-        for(int i = 0; i < 4; ++i){
-            int distance = qAbs(xCandidates[i]);
-            if(verticalNear && distance <= snapDistance && distance < bestX){
-                bestX = distance;
-                snappedFramePos.setX(moving.left() + xCandidates[i]);
-            }
-            distance = qAbs(yCandidates[i]);
-            if(horizontalNear && distance <= snapDistance && distance < bestY){
-                bestY = distance;
-                snappedFramePos.setY(moving.top() + yCandidates[i]);
-            }
-        }
-    }
-    return window->pos() + (snappedFramePos - moving.topLeft());
-}
-
-class GradeHelperWindow : public QWidget {
+class GradeHelperWindow : public EditorPopupWindow {
 public:
     explicit GradeHelperWindow(PropertiesTrackObj *owner)
-        : QWidget(owner->window(), Qt::Tool), owner(owner) {
-        setWindowTitle(QString());
-        setFixedWidth(gradeHelperScaledSize(300));
-
-        QVBoxLayout *layout = new QVBoxLayout(this);
-        layout->setSpacing(3);
-        layout->setContentsMargins(4,4,4,4);
-        QLabel *heading = new QLabel("GRADE HELPER");
-        GuiFunct::styleEditorTitle(heading);
-        QHBoxLayout *headingRow = new QHBoxLayout;
-        headingRow->setContentsMargins(0,0,0,0);
-        headingRow->addWidget(heading);
-        headingRow->addStretch();
-        GuiFunct::setupWindowPinButton(&pinButton);
-        pinButton.setCheckable(true);
-        pinButton.setFocusPolicy(Qt::NoFocus);
-        QFont pinFont = pinButton.font();
-        pinFont.setBold(false);
-        if(pinFont.pointSizeF() > 0)
-            pinFont.setPointSizeF(qMax(7.0, pinFont.pointSizeF() * 0.85));
-        pinButton.setFont(pinFont);
-        pinButton.setFixedSize(gradeHelperScaledSize(30), gradeHelperScaledSize(17));
-        positionPinned = Game::pinnedWindowPosition("gradeHelper", NULL);
-        pinButton.setChecked(positionPinned);
-        updatePinAppearance();
-        headingRow->addWidget(&pinButton);
-        layout->addLayout(headingRow);
+        : EditorPopupWindow(owner, "GRADE HELPER", "gradeHelper"),
+          owner(owner) {
+        QVBoxLayout *layout = popupLayout();
+        setPopupPinToolTips(
+            "Save the current Grade Helper position between sessions.",
+            "The Grade Helper position is saved between sessions. Click to return to default placement.");
         QFormLayout *form = new QFormLayout;
         form->setSpacing(3);
         form->setContentsMargins(0,0,0,0);
@@ -160,39 +88,6 @@ public:
         stateButton.setFocusPolicy(Qt::NoFocus);
         layout->addWidget(&stateButton);
 
-        snapTimer.setSingleShot(true);
-        QObject::connect(&snapTimer, &QTimer::timeout, this, [this](){
-            if(snapping)
-                return;
-            QPoint snapped = gradeHelperSnapPosition(this);
-            if(snapped != pos()){
-                snapping = true;
-                move(snapped);
-                snapping = false;
-            }
-        });
-        pinSaveTimer.setSingleShot(true);
-        QObject::connect(&pinSaveTimer, &QTimer::timeout, this, [this](){
-            if(positionPinned)
-                Game::savePinnedWindowPosition("gradeHelper", pos());
-        });
-        QObject::connect(&pinButton, &QToolButton::toggled, this, [this](bool pinned){
-            positionPinned = pinned;
-            updatePinAppearance();
-            if(pinned){
-                Game::clearPinnedWindowPosition("gradeHelperUseDefault");
-                Game::savePinnedWindowPosition("gradeHelper", pos());
-            } else {
-                pinSaveTimer.stop();
-                Game::clearPinnedWindowPosition("gradeHelper");
-                Game::savePinnedWindowPosition("gradeHelperUseDefault", QPoint(0, 0));
-                moveToDefaultPosition();
-            }
-        });
-        QObject::connect(&pinButton, &QToolButton::clicked, this, [this](){
-            this->owner->userButtonPressed();
-            this->owner->requestMainFocus();
-        });
         QObject::connect(&refreshTimer, &QTimer::timeout, this, [this](){ syncUi(); });
         refreshTimer.start(120);
 
@@ -237,11 +132,7 @@ public:
             this->owner->requestMainFocus();
         });
         syncUi();
-        layout->activate();
-        setFixedHeight(layout->sizeHint().height());
-        QPoint pinnedPosition;
-        if(Game::pinnedWindowPosition("gradeHelper", &pinnedPosition))
-            move(Game::visibleWindowPosition(pinnedPosition, size()));
+        finalizePopup();
     }
 
     void showForGrade(float grade){
@@ -255,7 +146,7 @@ public:
             }
         }
         syncUi();
-        if(!everShown && !positionPinned){
+        if(!everShown && !isPopupPositionPinned()){
             moveToDefaultPosition();
             everShown = true;
         }
@@ -267,15 +158,6 @@ public:
     }
 
 protected:
-    void moveEvent(QMoveEvent *event) override {
-        QWidget::moveEvent(event);
-        if(!snapping){
-            snapTimer.start(120);
-            if(positionPinned)
-                pinSaveTimer.start(240);
-        }
-    }
-
     void closeEvent(QCloseEvent *event) override {
         QWidget::closeEvent(event);
         owner->gradeHelperWindowClosed();
@@ -283,6 +165,22 @@ protected:
     }
 
 private:
+    void popupPinChanged(bool pinned) override {
+        if(pinned)
+            Game::clearPinnedWindowPosition("gradeHelperUseDefault");
+        EditorPopupWindow::popupPinChanged(pinned);
+        if(!pinned){
+            Game::savePinnedWindowPosition(
+                "gradeHelperUseDefault", QPoint(0, 0));
+            moveToDefaultPosition();
+        }
+    }
+
+    void popupPinClicked() override {
+        owner->userButtonPressed();
+        owner->requestMainFocus();
+    }
+
     void moveToDefaultPosition(){
         for(QWidget *candidate : QApplication::topLevelWidgets()){
             if(candidate != this && candidate->isVisible() && candidate->windowTitle() == "Control Panel"){
@@ -297,26 +195,6 @@ private:
             const QPoint fallback(mainWindow->x() + mainWindow->width() - width(),
                                   mainWindow->y() + 80);
             move(Game::visibleWindowPosition(fallback, size()));
-        }
-    }
-
-    void updatePinAppearance(){
-        GuiFunct::setupWindowPinButton(&pinButton);
-        pinButton.setToolTip(positionPinned
-            ? "The Grade Helper position is saved between sessions. Click to return to default placement."
-            : "Save the current Grade Helper position between sessions.");
-        if(positionPinned){
-            pinButton.setStyleSheet(QString(
-                "QToolButton { color: #232323; background-color: %1;"
-                " border: 1px solid %1; padding: 0px 3px; font-weight: normal; }"
-                "QToolButton:hover { border-color: #e4c5a3; }"
-                "QToolButton:pressed { background-color: #a98a69; }").arg(Game::StyleMainLabel));
-        } else {
-            pinButton.setStyleSheet(
-                "QToolButton { color: #e7eaec; background-color: #26292c;"
-                " border: 1px solid #383d41; padding: 0px 3px; font-weight: normal; }"
-                "QToolButton:hover { background-color: #303438; border-color: #f08200; }"
-                "QToolButton:pressed { background-color: #191b1d; }");
         }
     }
 
@@ -417,10 +295,14 @@ private:
         stepGrade.setEnabled(editingEnabled);
         if(Game::gradeAssistEnabled){
             stateButton.setText("Grade Assist Active - Click to Stop");
-            stateButton.setStyleSheet(gradeHelperStateStyle("#b3b300", "#e0e03a", "#232323"));
+            stateButton.setStyleSheet(
+                gradeHelperStateStyle(Game::StyleYellowButton,
+                                      Game::StyleYellowButtonHover, "#232323"));
         } else if(Game::gradeAssistTargetReached){
             stateButton.setText("Grade Achieved - Holding Target");
-            stateButton.setStyleSheet(gradeHelperStateStyle("#176c25", "#319344", "#f2fff4"));
+            stateButton.setStyleSheet(
+                gradeHelperStateStyle(Game::StyleGreenButton,
+                                      Game::StyleGreenButtonHover, "#232323"));
         } else {
             stateButton.setText("Start Grade Assist");
             stateButton.setStyleSheet(QString());
@@ -435,50 +317,20 @@ private:
     QDoubleSpinBox stepGrade;
     QLineEdit nextGrade;
     QPushButton stateButton;
-    QToolButton pinButton;
     QTimer refreshTimer;
-    QTimer snapTimer;
-    QTimer pinSaveTimer;
-    bool snapping = false;
-    bool positionPinned = false;
     bool everShown = false;
     int displayedUnits = -1;
 };
 
-class HacksWindow : public QWidget {
+class HacksWindow : public EditorPopupWindow {
 public:
     explicit HacksWindow(PropertiesTrackObj *owner)
-        : QWidget(owner->window(), Qt::Tool), owner(owner) {
-        setWindowTitle(QString());
-        setFixedWidth(gradeHelperScaledSize(300));
-        setStyleSheet(GuiFunct::scoEditorPanelStyle());
-
-        QVBoxLayout *layout = new QVBoxLayout(this);
-        layout->setSpacing(4);
-        layout->setContentsMargins(4,4,4,4);
-
-        QLabel *heading = new QLabel("HACKS");
-        GuiFunct::styleEditorTitle(heading);
-        heading->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        QHBoxLayout *headingRow = new QHBoxLayout;
-        headingRow->setContentsMargins(0,0,0,0);
-        headingRow->addWidget(heading);
-        headingRow->addStretch();
-
-        GuiFunct::setupWindowPinButton(&pinButton);
-        pinButton.setCheckable(true);
-        pinButton.setFocusPolicy(Qt::NoFocus);
-        QFont pinFont = pinButton.font();
-        pinFont.setBold(false);
-        if(pinFont.pointSizeF() > 0)
-            pinFont.setPointSizeF(qMax(7.0, pinFont.pointSizeF() * 0.85));
-        pinButton.setFont(pinFont);
-        pinButton.setFixedSize(gradeHelperScaledSize(30), gradeHelperScaledSize(17));
-        positionPinned = Game::pinnedWindowPosition("hacksHelper", NULL);
-        pinButton.setChecked(positionPinned);
-        updatePinAppearance();
-        headingRow->addWidget(&pinButton);
-        layout->addLayout(headingRow);
+        : EditorPopupWindow(owner, "HACKS", "hacksHelper"),
+          owner(owner) {
+        QVBoxLayout *layout = popupLayout();
+        setPopupPinToolTips(
+            "Save the current Hacks position between sessions.",
+            "The Hacks position is saved between sessions. Click to return to default placement.");
 
         QLabel *warning = new QLabel(
             "Specialized repair and route-cleanup tools. Make a full backup first.");
@@ -486,14 +338,12 @@ public:
         warning->setStyleSheet("QLabel { color: #c7c7c7; padding: 1px 3px; }");
         layout->addWidget(warning);
 
-        QLabel *trackHeading = new QLabel(QString::fromUtf8("• Selected Track"));
-        GuiFunct::styleEditorSubtitle(trackHeading);
-        layout->addWidget(trackHeading);
+        addPopupSubtitle(QString::fromUtf8("• Selected Track"));
 
-        QPushButton *fixJNodePosn = new QPushButton("Repair Junction");
-        QPushButton *removeTdbVector = new QPushButton("Remove Vector");
-        QPushButton *removeTdbTree = new QPushButton("Remove Branch");
-        QPushButton *fixElevation = new QPushButton("Repair Elevation");
+        fixJNodePosn = new QPushButton("Repair Junction");
+        removeTdbVector = new QPushButton("Remove Vector");
+        removeTdbTree = new QPushButton("Remove Branch");
+        fixElevation = new QPushButton("Repair Elevation");
         fixJNodePosn->setToolTip("Repairs the selected track object's JNodePosn data.");
         removeTdbVector->setToolTip(
             "Removes the selected TrackDB vector. Remove its interactive items first.");
@@ -513,12 +363,10 @@ public:
         layout->addLayout(trackActions);
 
         layout->addSpacing(gradeHelperScaledSize(5));
-        QLabel *routeHeading = new QLabel(QString::fromUtf8("• Route Cleanup"));
-        GuiFunct::styleEditorSubtitle(routeHeading);
-        layout->addWidget(routeHeading);
+        addPopupSubtitle(QString::fromUtf8("• Route Cleanup"));
 
         QLabel *routeHelp = new QLabel(
-            "Loads every world tile and removes database-linked interactive objects only.");
+            "Full-route cleanup tools load every world tile before making changes.");
         routeHelp->setWordWrap(true);
         routeHelp->setStyleSheet("QLabel { color: #c7c7c7; padding: 0px 3px 2px 3px; }");
         layout->addWidget(routeHelp);
@@ -528,6 +376,23 @@ public:
             "Loads every world tile, then removes all TrackDB/RoadDB-linked interactive "
             "world objects. Track and road geometry are not removed.");
         layout->addWidget(removeInteractives);
+
+        deleteInstances = new QPushButton("Delete Instances");
+        deleteInstances->setToolTip(
+            "Deletes every route instance of the selected static object. "
+            "The object type and filename must both match.");
+        layout->addWidget(deleteInstances);
+
+        QPushButton *resetTerrtex = new QPushButton("Reset All TERRTEX");
+        resetTerrtex->setToolTip(
+            "Resets every route terrain patch to terrain.ace and removes "
+            "matching per-tile TERRTEX paint files.");
+        layout->addWidget(resetTerrtex);
+
+        QPushButton *waterTilesOff = new QPushButton("Water Tiles Off");
+        waterTilesOff->setToolTip(
+            "Turns off every water patch in every terrain tile across the route.");
+        layout->addWidget(waterTilesOff);
 
         QObject::connect(fixJNodePosn, &QPushButton::clicked, owner, [this](){
             this->owner->userButtonPressed();
@@ -554,50 +419,29 @@ public:
             this->owner->removeAllInteractivesEnabled();
             this->owner->requestMainFocus();
         });
-
-        snapTimer.setSingleShot(true);
-        pinSaveTimer.setSingleShot(true);
-        QObject::connect(&snapTimer, &QTimer::timeout, this, [this](){
-            if(snapping)
-                return;
-            const QPoint snapped = gradeHelperSnapPosition(this);
-            if(snapped != pos()){
-                snapping = true;
-                move(snapped);
-                snapping = false;
-            }
-        });
-        QObject::connect(&pinSaveTimer, &QTimer::timeout, this, [this](){
-            if(positionPinned)
-                Game::savePinnedWindowPosition("hacksHelper", pos());
-        });
-        QObject::connect(&pinButton, &QToolButton::toggled, this, [this](bool pinned){
-            positionPinned = pinned;
-            updatePinAppearance();
-            if(pinned){
-                Game::clearPinnedWindowPosition("hacksHelperUseDefault");
-                Game::savePinnedWindowPosition("hacksHelper", pos());
-            } else {
-                pinSaveTimer.stop();
-                Game::clearPinnedWindowPosition("hacksHelper");
-                Game::savePinnedWindowPosition("hacksHelperUseDefault", QPoint(0, 0));
-                moveToDefaultPosition();
-            }
-        });
-        QObject::connect(&pinButton, &QToolButton::clicked, this, [this](){
+        QObject::connect(deleteInstances, &QPushButton::clicked, owner, [this](){
             this->owner->userButtonPressed();
+            this->owner->deleteSelectedInstancesEnabled();
+            this->owner->requestMainFocus();
+        });
+        QObject::connect(resetTerrtex, &QPushButton::clicked, owner, [this](){
+            this->owner->userButtonPressed();
+            emit this->owner->resetRouteTerrtexRequested();
+            this->owner->requestMainFocus();
+        });
+        QObject::connect(waterTilesOff, &QPushButton::clicked, owner, [this](){
+            this->owner->userButtonPressed();
+            emit this->owner->disableRouteWaterRequested();
             this->owner->requestMainFocus();
         });
 
-        layout->activate();
-        setFixedHeight(layout->sizeHint().height());
-        QPoint pinnedPosition;
-        if(Game::pinnedWindowPosition("hacksHelper", &pinnedPosition))
-            move(Game::visibleWindowPosition(pinnedPosition, size()));
+        syncSelection();
+        finalizePopup();
     }
 
     void showForOwner(){
-        if(!everShown && !positionPinned){
+        syncSelection();
+        if(!everShown && !isPopupPositionPinned()){
             moveToDefaultPosition();
             everShown = true;
         }
@@ -606,16 +450,11 @@ public:
         activateWindow();
     }
 
-protected:
-    void moveEvent(QMoveEvent *event) override {
-        QWidget::moveEvent(event);
-        if(!snapping){
-            snapTimer.start(120);
-            if(positionPinned)
-                pinSaveTimer.start(240);
-        }
+    void refreshSelection(){
+        syncSelection();
     }
 
+protected:
     void closeEvent(QCloseEvent *event) override {
         QWidget::closeEvent(event);
         owner->hacksWindowClosed();
@@ -623,6 +462,31 @@ protected:
     }
 
 private:
+    void syncSelection(){
+        const bool trackSelected = owner->hasSelectedTrackForHacks();
+        fixJNodePosn->setEnabled(trackSelected);
+        removeTdbVector->setEnabled(trackSelected);
+        removeTdbTree->setEnabled(trackSelected);
+        fixElevation->setEnabled(trackSelected);
+        deleteInstances->setEnabled(owner->hasSelectedStaticForHacks());
+    }
+
+    void popupPinChanged(bool pinned) override {
+        if(pinned)
+            Game::clearPinnedWindowPosition("hacksHelperUseDefault");
+        EditorPopupWindow::popupPinChanged(pinned);
+        if(!pinned){
+            Game::savePinnedWindowPosition(
+                "hacksHelperUseDefault", QPoint(0, 0));
+            moveToDefaultPosition();
+        }
+    }
+
+    void popupPinClicked() override {
+        owner->userButtonPressed();
+        owner->requestMainFocus();
+    }
+
     void moveToDefaultPosition(){
         for(QWidget *candidate : QApplication::topLevelWidgets()){
             if(candidate != this && candidate->isVisible()
@@ -641,31 +505,12 @@ private:
         }
     }
 
-    void updatePinAppearance(){
-        pinButton.setToolTip(positionPinned
-            ? "The Hacks position is saved between sessions. Click to return to default placement."
-            : "Save the current Hacks position between sessions.");
-        if(positionPinned){
-            pinButton.setStyleSheet(QString(
-                "QToolButton { color: #232323; background-color: %1;"
-                " border: 1px solid %1; padding: 0px 3px; font-weight: normal; }"
-                "QToolButton:hover { border-color: #e4c5a3; }"
-                "QToolButton:pressed { background-color: #a98a69; }").arg(Game::StyleMainLabel));
-        } else {
-            pinButton.setStyleSheet(
-                "QToolButton { color: #e7eaec; background-color: #26292c;"
-                " border: 1px solid #383d41; padding: 0px 3px; font-weight: normal; }"
-                "QToolButton:hover { background-color: #303438; border-color: #f08200; }"
-                "QToolButton:pressed { background-color: #191b1d; }");
-        }
-    }
-
     PropertiesTrackObj *owner;
-    QToolButton pinButton;
-    QTimer snapTimer;
-    QTimer pinSaveTimer;
-    bool snapping = false;
-    bool positionPinned = false;
+    QPushButton *fixJNodePosn = NULL;
+    QPushButton *removeTdbVector = NULL;
+    QPushButton *removeTdbTree = NULL;
+    QPushButton *fixElevation = NULL;
+    QPushButton *deleteInstances = NULL;
     bool everShown = false;
 };
 
@@ -936,6 +781,7 @@ PropertiesTrackObj::PropertiesTrackObj(){
         refreshGradeHelperUi();
     });
     QObject::connect(&gradeHelper, &QPushButton::toggled, this, [this](bool checked){
+        GuiFunct::setEditorPopupButtonActive(&gradeHelper, checked);
         if(checked){
             openGradeHelper();
         } else if(gradeHelperWindow != NULL && gradeHelperWindow->isVisible()){
@@ -975,21 +821,16 @@ PropertiesTrackObj::PropertiesTrackObj(){
     //                  this, SLOT(copyFEnabled()));
     //vbox->addWidget(resetFlags);
     addRule();
-    label = new QLabel("Advanced:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    label = new QLabel(QString(QChar(0x2022)) + " Advanced");
+    GuiFunct::styleEditorSubtitle(label);
     vbox->addWidget(label);
     
     hacks.setText("Hacks...");
     hacks.setCheckable(true);
     hacks.setFocusPolicy(Qt::NoFocus);
     QObject::connect(&hacks, &QPushButton::toggled, this, [this](bool checked){
-        if(checked){
-            hacksButtonEnabled();
-        } else if(hacksWindow != NULL && hacksWindow->isVisible()){
-            hacksWindow->hide();
-            requestMainFocus();
-        }
+        GuiFunct::setEditorPopupButtonActive(&hacks, checked);
+        toggleHacksForSelection(trackObj, &hacks, checked);
     });
     vbox->addWidget(&hacks);
     
@@ -1056,31 +897,97 @@ PropertiesTrackObj::~PropertiesTrackObj() {
     hacksWindow = NULL;
 }
 
+QPushButton *PropertiesTrackObj::hacksButton(){
+    return &hacks;
+}
+
 void PropertiesTrackObj::fixJNodePosnEnabled(){
-    if(trackObj == NULL){
+    if(!hasSelectedTrackForHacks()){
         return;
     }
-    Undo::SinglePushWorldObjData(worldObj);
-    trackObj->fillJNodePosn();
+    TrackObj *selectedTrack = static_cast<TrackObj*>(hacksSelection);
+    Undo::SinglePushWorldObjData(selectedTrack);
+    selectedTrack->fillJNodePosn();
     Undo::StateEnd();
 }
 
-void PropertiesTrackObj::hacksButtonEnabled(){
-    if(trackObj == NULL){
-        hacks.blockSignals(true);
-        hacks.setChecked(false);
-        hacks.blockSignals(false);
+void PropertiesTrackObj::toggleHacksForSelection(
+        GameObj *obj, QPushButton *button, bool checked){
+    if(!checked){
+        if(activeHacksButton == button){
+            activeHacksButton = NULL;
+            if(hacksWindow != NULL && hacksWindow->isVisible()){
+                hacksWindow->hide();
+                requestMainFocus();
+            }
+        }
         return;
     }
+
+    activeHacksButton = button;
+    setHacksSelection(obj);
     if(hacksWindow == NULL)
         hacksWindow = new HacksWindow(this);
     hacksWindow->showForOwner();
 }
 
+void PropertiesTrackObj::setHacksSelection(GameObj *obj){
+    hacksSelection =
+        obj != NULL && obj->typeObj == GameObj::worldobj
+            ? static_cast<WorldObj*>(obj)
+            : NULL;
+    if(hacksWindow != NULL)
+        hacksWindow->refreshSelection();
+}
+
+void PropertiesTrackObj::adoptHacksButton(QPushButton *button){
+    if(hacksWindow == NULL || !hacksWindow->isVisible())
+        return;
+    if(activeHacksButton == button)
+        return;
+
+    if(activeHacksButton != NULL){
+        GuiFunct::setEditorPopupButtonActive(activeHacksButton, false);
+        activeHacksButton->blockSignals(true);
+        activeHacksButton->setChecked(false);
+        activeHacksButton->blockSignals(false);
+    }
+    activeHacksButton = button;
+
+    if(activeHacksButton == NULL){
+        hacksWindow->hide();
+        return;
+    }
+
+    activeHacksButton->blockSignals(true);
+    activeHacksButton->setChecked(true);
+    activeHacksButton->blockSignals(false);
+    GuiFunct::setEditorPopupButtonActive(activeHacksButton, true);
+}
+
+bool PropertiesTrackObj::hasSelectedTrackForHacks() const{
+    return hacksSelection != NULL
+        && hacksSelection->loaded
+        && hacksSelection->type == "trackobj";
+}
+
+bool PropertiesTrackObj::hasSelectedStaticForHacks() const{
+    return hacksSelection != NULL
+        && hacksSelection->loaded
+        && !hacksSelection->fileName.trimmed().isEmpty()
+        && (hacksSelection->typeID == WorldObj::sstatic
+            || hacksSelection->typeID == WorldObj::gantry
+            || hacksSelection->typeID == WorldObj::collideobject);
+}
+
 void PropertiesTrackObj::hacksWindowClosed(){
-    hacks.blockSignals(true);
-    hacks.setChecked(false);
-    hacks.blockSignals(false);
+    if(activeHacksButton != NULL){
+        GuiFunct::setEditorPopupButtonActive(activeHacksButton, false);
+        activeHacksButton->blockSignals(true);
+        activeHacksButton->setChecked(false);
+        activeHacksButton->blockSignals(false);
+        activeHacksButton = NULL;
+    }
     requestMainFocus();
 }
 
@@ -1095,10 +1002,8 @@ void PropertiesTrackObj::removeAllInteractivesEnabled(){
         "level crossings, car spawners, hazards, and linked sound regions.\n\n"
         "Track and road geometry will not be removed.\n\n"
         "Make a full route backup first. Continue?";
-    const QMessageBox::StandardButton answer = QMessageBox::warning(
-        hacksWindow, "Remove All Interactives", warning,
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if(answer != QMessageBox::Yes)
+    if(!GuiFunct::confirmDestructiveAction(
+            hacksWindow, "Remove All Interactives", warning))
         return;
 
     const int removed = Game::currentRoute->removeAllInteractives(true);
@@ -1117,29 +1022,63 @@ void PropertiesTrackObj::removeAllInteractivesEnabled(){
     }
 }
 
+void PropertiesTrackObj::deleteSelectedInstancesEnabled(){
+    if(Game::currentRoute == NULL || !hasSelectedStaticForHacks())
+        return;
+
+    const QString selectedFile = hacksSelection->fileName;
+    const QString warning =
+        "This will load every world tile and delete every instance of the selected "
+        "static object from the full route:\n\n"
+        + selectedFile
+        + "\n\nOnly objects with the same type and filename will be deleted.\n\n"
+          "Make a full route backup first. Continue?";
+    if(!GuiFunct::confirmDestructiveAction(
+            hacksWindow, "Delete Instances", warning))
+        return;
+
+    const int removed =
+        Game::currentRoute->deleteAllInstances(hacksSelection, true);
+    hacksSelection = NULL;
+    if(hacksWindow != NULL)
+        hacksWindow->refreshSelection();
+
+    if(removed == 0){
+        QMessageBox::information(
+            hacksWindow, "Delete Instances",
+            "No matching static-object instances were found.");
+    } else {
+        QMessageBox::information(
+            hacksWindow, "Delete Instances",
+            QString::number(removed)
+                + " matching object instance(s) deleted from the route.\n\n"
+                  "If this removal was accidental, use Undo before saving or closing TSRE.");
+    }
+}
+
 void PropertiesTrackObj::haxElevTDBVectorEnabled(){
-    if(trackObj == NULL)
+    if(!hasSelectedTrackForHacks())
         return;
     if(Game::currentRoute == NULL)
         return;
-    Game::currentRoute->fixTDBVectorElevation(trackObj);
+    Game::currentRoute->fixTDBVectorElevation(hacksSelection);
 }
 
 void PropertiesTrackObj::haxRemoveTDBVectorEnabled(){
-    if(trackObj == NULL)
+    if(!hasSelectedTrackForHacks())
         return;
     if(Game::currentRoute == NULL)
         return;
-    Game::currentRoute->deleteTDBVector(trackObj);
+    Game::currentRoute->deleteTDBVector(hacksSelection);
 }
 
 void PropertiesTrackObj::haxRemoveTDBTreeEnabled(){
-    if(trackObj == NULL)
+    if(!hasSelectedTrackForHacks())
         return;
     if(Game::currentRoute == NULL)
         return;
     
-    Game::currentRoute->deleteTDBTree(trackObj);
+    Game::currentRoute->deleteTDBTree(hacksSelection);
 }
 
 void PropertiesTrackObj::showObj(GameObj* obj){

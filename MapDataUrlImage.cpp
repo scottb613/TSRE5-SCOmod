@@ -23,11 +23,11 @@
 #include <QUrl>
 #include <QUrlQuery>
 #include "CoordsMkr.h"
-#include "GeoCoordinates.h"
 #include "GLMatrix.h"
 #include <QTime>
 #include <algorithm>
 #include "Game.h"
+#include "GuiFunct.h"
 #include "MapWindow.h"
 #include "UriImageDrawThread.h"
 
@@ -35,12 +35,6 @@ double MapDataUrlImage::Resolution = 640;
 
 MapDataUrlImage::MapDataUrlImage(double zoom) {
     this->zoom = zoom;
-}
-
-MapDataUrlImage::MapDataUrlImage(const MapDataUrlImage& orig) {
-}
-
-MapDataUrlImage::~MapDataUrlImage() {
 }
 
 MapDataUrlImage::MapRequest::MapRequest(){
@@ -111,13 +105,19 @@ void MapDataUrlImage::load() {
     
     if(Game::imageMapsUrl.length() < 2){
         QMessageBox msgBox;
-        msgBox.setText("Enter imageMapsUrl in F12 Settings and save settings.json.");
+        msgBox.setWindowTitle(Game::AppName);
+        msgBox.setText("MAP IMAGERY");
+        msgBox.setInformativeText("Configure an imagery provider in F3 Map settings.");
+        GuiFunct::styleEditorDialog(&msgBox);
         msgBox.exec();
         return;
     }
     if(zoom == -1){    
         QMessageBox msgBox;
-        msgBox.setText("The Image Maps Zoom Offset in F12 Settings may cause unexpected results.");
+        msgBox.setWindowTitle(Game::AppName);
+        msgBox.setText("MAP IMAGERY");
+        msgBox.setInformativeText("The imagery Zoom Offset configured in F3 Map settings is not valid for this request.");
+        GuiFunct::styleEditorDialog(&msgBox);
         msgBox.exec();
         return;
     }
@@ -204,7 +204,7 @@ void MapDataUrlImage::autoTimerGet(){
         imageMapsUrl.replace("{zoom}", QString::number(requests[i].zoom + Game::imageMapsZoomOffset));  /// EFO Adjustment for MapBox
         imageMapsUrl.replace("{res}", QString::number(Resolution));
         QNetworkRequest req(QUrl(QString("")+imageMapsUrl));
-        qDebug() << req.url();
+        qDebug() << "Requesting map imagery from" << req.url().host();
 
         QNetworkReply* r = mgr->get(req);
         //r->setProperty("centerLat", QVariant(center->Latitude));
@@ -279,13 +279,13 @@ void MapDataUrlImage::get(LatitudeLongitudeCoordinate* center, double tzoom) {
     // the HTTP request
     qDebug() << "wait";
         
-    QString imageMapsUrl = Game::imageMapsUrl;
+    QString imageMapsUrl = Game::imageMapsUrl + Game::MapAPIKey;
     imageMapsUrl.replace("{lat}", QString::number(center->Latitude));
     imageMapsUrl.replace("{lon}", QString::number(center->Longitude));
     imageMapsUrl.replace("{zoom}", QString::number(tzoom + Game::imageMapsZoomOffset)); /// EFO Adjustment for MapBox
     imageMapsUrl.replace("{res}", QString::number(Resolution));
     QNetworkRequest req(QUrl(QString("")+imageMapsUrl));
-    qDebug() << req.url();
+    qDebug() << "Requesting map imagery from" << req.url().host();
 
     QNetworkReply* r = mgr->get(req);
     r->setProperty("centerLat", QVariant(center->Latitude));

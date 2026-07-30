@@ -92,7 +92,9 @@ public:
     virtual void updateTrackSection(int id);
     virtual void updateTrackShape(int id);
     void save();
+    void prepareSave();
     void saveToStream(QTextStream &out);
+    void saveTitToStream(QTextStream &out);
     int updateTrNodeData(FileBuffer *data);
     TRitem *updateTrItemData(FileBuffer *data);
     void updateTrackShapeData(FileBuffer *data);

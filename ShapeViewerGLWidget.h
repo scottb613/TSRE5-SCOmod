@@ -77,6 +77,7 @@ public slots:
 signals:
     void selected(int id);
     void refreshItem();
+    void replaceSelectedUnitRequested();
     
 protected:
     void initializeGL() Q_DECL_OVERRIDE;

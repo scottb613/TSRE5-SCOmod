@@ -16,7 +16,6 @@
 #include "Activity.h"
 #include "Eng.h"
 #include "EngLib.h"
-#include "OverwriteDialog.h"
 #include "GuiFunct.h"
 
 ConListWidget::ConListWidget() : QWidget(){
@@ -258,14 +257,9 @@ void ConListWidget::deleteCurrentCon(){
         delete e;
         return;
     }
-    OverwriteDialog owerwriteDialog;
-    owerwriteDialog.setWindowTitle("Delete?");
-    owerwriteDialog.label->setText("Delete this consist from disk?\n\n"+
-        e->pathid+"\n");
-    owerwriteDialog.setFixedWidth(250);
-    owerwriteDialog.exec();
-
-    if(owerwriteDialog.changed == 1){
+    if(GuiFunct::confirmDestructiveAction(
+            this, "Delete Consist",
+            "Delete this consist from disk?\n\n" + e->pathid)){
         QFile file (e->pathid);
         file.remove();
     }

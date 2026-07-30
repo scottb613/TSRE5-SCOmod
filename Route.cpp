@@ -9,10 +9,13 @@
  */
 
 #include <QDebug>
+#include <QBuffer>
 #include <QFile>
+#include <QFileInfo>
 #include <QDir>
 #include <QMessageBox>
-#include <QPushButton>
+#include <QTextStream>
+#include <functional>
 #include "Route.h"
 #include "TSectionDAT.h"
 #include "GLUU.h"
@@ -23,7 +26,10 @@
 #include "TerrainLibQt.h"
 #include "TFile.h"
 #include "Game.h"
+#include "GuiFunct.h"
 #include "TrackObj.h"
+#include "TrWatermarkObj.h"
+#include "RulerObj.h"
 #include "Path.h"
 #include "Terrain.h"
 #include "FileFunctions.h"
@@ -71,6 +77,7 @@
 #include "ShapeLib.h"
 #include "SFile.h"
 #include "RouteMergeDialog.h"
+#include "RouteSaveTransaction.h"
 #include "UnsafeModeDialog.h"
 #include "TerrainTools.h" // EFO
 #include <math.h>
@@ -79,6 +86,55 @@
 namespace {
 bool tdbTerrainBiasConfirmedThisSession = false;
 bool rdbTerrainBiasConfirmedThisSession = false;
+
+void clearRouteHealthInventories() {
+    Route::fileList.clear();
+    Route::trackList.clear();
+    Route::shapesList.clear();
+    Route::texturesList.clear();
+    Route::missingList.clear();
+    Route::staticFlagList.clear();
+    Route::missingTextureList.clear();
+}
+
+QString activeRouteRoot() {
+    return QDir::cleanPath(Game::root + "/routes/" + Game::route);
+}
+
+QString activeRouteBackupRoot() {
+    return Game::appDataDir() + "/atomicSaves/" + Game::routeAppDataKey();
+}
+
+bool serializeUtf16Text(int precision,
+                        const QString &signature,
+                        const std::function<void(QTextStream &)> &writer,
+                        QByteArray &data,
+                        QString &error) {
+    data.clear();
+    QBuffer buffer(&data);
+    if(!buffer.open(QIODevice::WriteOnly)){
+        error = "Could not allocate the route save buffer.";
+        return false;
+    }
+    QTextStream out(&buffer);
+    out.setRealNumberPrecision(precision);
+    out.setCodec("UTF-16");
+    out.setGenerateByteOrderMark(true);
+    out << signature;
+    writer(out);
+    out.flush();
+    if(out.status() != QTextStream::Ok){
+        error = "Could not serialize one of the route key files.";
+        return false;
+    }
+    buffer.close();
+    return !data.isEmpty();
+}
+
+bool recoverRouteSaveIfRequired(QString &message) {
+    return RouteSaveTransaction::recoverInterrupted(
+                activeRouteRoot(), activeRouteBackupRoot(), &message);
+}
 }
 
 
@@ -94,12 +150,14 @@ Route::Route() {
     QStringList Route::texturesList ;    
     QStringList Route::missingList;
     QStringList Route::staticFlagList;
+    QStringList Route::missingTextureList;
 
 void Route::load(){
 
     Game::currentRoute = this;
     trkName = Game::trkName;
     routeDir = Game::route;
+    clearRouteHealthInventories();
 
     ///  Check for Unsafe early
     if(Game::UnsafeMode){
@@ -134,6 +192,19 @@ void Route::load(){
             if(Game::debugOutput) qDebug() << "new Route";
             Route::createNew();
         }
+    }
+
+    QString recoveryMessage;
+    if(!recoverRouteSaveIfRequired(recoveryMessage)){
+        qWarning() << "Route save recovery failed:" << recoveryMessage;
+        if(Game::gui)
+            QMessageBox::critical(NULL, QObject::tr("Route recovery failed"), recoveryMessage);
+        return;
+    }
+    if(!recoveryMessage.isEmpty()){
+        qWarning() << recoveryMessage;
+        if(Game::gui)
+            QMessageBox::information(NULL, QObject::tr("Route save recovered"), recoveryMessage);
     }
 
     trk = new Trk();
@@ -176,12 +247,12 @@ void Route::load(){
     Game::roadDB = this->roadDB;  
     loadAddons();    
     
-    loadMkrList();        
-    createMkrPlaces();
+    loadMkrList();
     loadServices();
     loadTraffic();
     loadPaths();
-    loadActivities();
+    if(Game::loadActivities)
+        loadActivities();
 
     soundList = new SoundList();
     soundList->loadSoundSources(Game::root + "/routes/" + Game::route + "/ssource.dat");
@@ -198,11 +269,6 @@ void Route::load(){
     if(Game::loadAllWFiles){        
         //qDebug() << "190";                 
         preloadWFilesInit();        
-        //qDebug() << "192";
-        if(Game::listFiles == true)
-        {        
-            ListFiles();        
-        }        
     }
     //qDebug() << "198";
     checkRouteDatabase();
@@ -228,6 +294,7 @@ void Route::load(){
 
 
 void Route::load(QString name){
+    clearRouteHealthInventories();
     if(!Game::useQuadTree)
         terrainLib = new TerrainLibSimple();
     else
@@ -253,6 +320,15 @@ void Route::load(QString name){
     Game::checkRoute(Game::route);
     routeDir = Game::route;
     trkName = Game::trkName;
+
+    QString recoveryMessage;
+    if(!recoverRouteSaveIfRequired(recoveryMessage)){
+        qWarning() << "Route save recovery failed:" << recoveryMessage;
+        return;
+    }
+    if(!recoveryMessage.isEmpty())
+        qWarning() << recoveryMessage;
+
     trk = new Trk();
     trk->load();
     //Game::useSuperelevation = trk->tsreSuperelevation;
@@ -541,6 +617,7 @@ Route::Route(const Route& orig) {
 }
 
 Route::~Route() {
+    clearMkrList();
 }
 
 void Route::loadAddons(){
@@ -678,25 +755,33 @@ void Route::createMkrPlaces(){
 
 }
 
+void Route::clearMkrList(){
+    qDeleteAll(mkrList);
+    mkrList.clear();
+    mkr = NULL;
+    Game::markerFiles.clear();
+}
+
 void Route::loadMkrList(){
     /// Step one of Markers -- pulls the files in the files in the route directory
     //this->mkr = new CoordsMkr(Game::root + "/routes/" + Game::route + "/" + Game::routeName +".mkr");
-    if(mkrList.size() > 0)
-        { qDebug() << "Clearing Marker List " << mkrList.size(); 
-          mkrList.clear(); 
-          Game::markerFiles.clear();
-    } // clean up existing
-    
+    if(!mkrList.isEmpty() && Game::debugOutput)
+        qDebug() << "Clearing Marker List" << mkrList.size();
+    clearMkrList();
+
     QDir dir(Game::root + "/routes/" + Game::route);
     dir.setFilter(QDir::Files);
     foreach(QString dirFile, dir.entryList()){
-        if(dirFile.endsWith(".mkr", Qt::CaseInsensitive))
+        if(dirFile.endsWith(".mkr", Qt::CaseInsensitive)){
             mkrList[(dirFile).toLower()] = new CoordsMkr(Game::root + "/routes/" + Game::route + "/" + dirFile);
-        if(dirFile.endsWith(".kml", Qt::CaseInsensitive))
+            Game::markerFiles.append(dirFile);
+        } else if(dirFile.endsWith(".kml", Qt::CaseInsensitive)){
             mkrList[(dirFile).toLower()] = new CoordsKml(Game::root + "/routes/" + Game::route + "/" + dirFile);
-        if(dirFile.endsWith(".gpx", Qt::CaseInsensitive))
+            Game::markerFiles.append(dirFile);
+        } else if(dirFile.endsWith(".gpx", Qt::CaseInsensitive)){
             mkrList[(dirFile).toLower()] = new CoordsGpx(Game::root + "/routes/" + Game::route + "/" + dirFile);
-        Game::markerFiles.append(dirFile);
+            Game::markerFiles.append(dirFile);
+        }
     }
     if(mkrList.size() > 0){
         if(mkrList[(Game::routeName+".mkr").toLower()] != NULL){
@@ -765,7 +850,8 @@ void Route::loadServices(){
 
         if(checkFile.size() > 100) {
             int id = ActLib::AddService(dir.path(), actfile);
-            //service.push_back(ActLib::Services[id]);
+            if(id >= 0 && !serviceId.contains(id))
+                serviceId.push_back(id);
             if(Game::debugOutput) qDebug() << "service loaded" ;
         } else {
             qDebug() << actfile << " is too small, not loaded" ;
@@ -796,7 +882,9 @@ void Route::loadTraffic(){
 
         // Only add if the file size exceeds 100 bytes   /// EFO
         if(checkFile.size() > 100) {
-            activityId.push_back(ActLib::AddTraffic(dir.path(), actfile)); 
+            int id = ActLib::AddTraffic(dir.path(), actfile);
+            if(id >= 0 && !trafficId.contains(id))
+                trafficId.push_back(id);
             if(Game::debugOutput) qDebug() << "traffic loaded";
         }
         else
@@ -1223,6 +1311,34 @@ void Route::render(GLUU *gluu, float * playerT, float* playerW, float* target, f
             }
         }
     }
+
+    // A multi-tile water ruler belongs to the world tile containing its first
+    // point. Normal object/tile LOD would therefore hide the entire guide when
+    // the camera follows a long river away from that first tile. Render this
+    // one editor guide explicitly whenever normal tile rendering culled it.
+    if(waterRulerObj != NULL && waterRulerObj->loaded
+            && renderMode != gluu->RENDER_SELECTION){
+        int offsetX = waterRulerObj->x - (int)playerT[0];
+        int offsetZ = waterRulerObj->y - (int)playerT[1];
+        float lodx = offsetX * 2048.0f
+                + waterRulerObj->position[0] - playerW[0];
+        float lodz = offsetZ * 2048.0f
+                + waterRulerObj->position[2] - playerW[2];
+        float lod = std::sqrt(lodx * lodx + lodz * lodz);
+        bool homeTileRendered = offsetX >= mintile && offsetX <= maxtile
+                && offsetZ >= mintile && offsetZ <= maxtile;
+        bool normalObjectRendered = homeTileRendered
+                && (lod < Game::objectLod || waterRulerObj->isInternalLodControl());
+        if(!normalObjectRendered){
+            gluu->mvPushMatrix();
+            Mat4::translate(gluu->mvMatrix, gluu->mvMatrix,
+                            2048.0f * offsetX, 0, 2048.0f * offsetZ);
+            waterRulerObj->render(gluu, lod, lodx, lodz,
+                                  playerW, target, fov, 0, renderMode);
+            gluu->mvPopMatrix();
+        }
+    }
+
     if (renderMode == gluu->RENDER_DEFAULT) {
         if(Game::viewTrackDbLines && trackDB != NULL)
             trackDB->renderAll(gluu, playerT, playerRot);
@@ -1472,22 +1588,17 @@ bool Route::confirmTerrainConformBias(bool roadDatabase){
         return true;
 
     const QString databaseName = roadDatabase ? "RDB" : "TDB";
-    QMessageBox warning;
-    warning.setIcon(QMessageBox::Warning);
-    warning.setWindowTitle(QString("Non-standard %1 Terrain Bias").arg(databaseName));
-    warning.setText(
+    const QString message =
         QString("%1 terrain conform height bias is set to %2 m.\n\n"
                 "This non-standard setting will offset terrain height whenever "
-                "terrain is conformed to the %1 during this session.")
+                "terrain is conformed to the %1 during this session.\n\n"
+                "Continue with this terrain conform operation?")
             .arg(databaseName)
-            .arg(bias, 0, 'f', 2));
-    warning.setInformativeText("Continue with this terrain conform operation?");
-    QPushButton *continueButton = warning.addButton("Continue", QMessageBox::AcceptRole);
-    warning.addButton(QMessageBox::Cancel);
-    warning.setDefaultButton(QMessageBox::Cancel);
-    warning.exec();
-
-    if(warning.clickedButton() != continueButton)
+            .arg(bias, 0, 'f', 2);
+    if(!GuiFunct::confirmDestructiveAction(
+            NULL,
+            QString("Non-standard %1 Terrain Bias").arg(databaseName),
+            message))
         return false;
 
     confirmed = true;
@@ -2322,6 +2433,12 @@ void Route::replaceWorldObjPointer(WorldObj* o, WorldObj* n){
         if(tTile->obiekty[i] == NULL) continue;
         if(tTile->obiekty[i]->UiD == o->UiD){
             tTile->obiekty[i] = n;
+            if(waterRulerObj == o){
+                RulerObj *replacementRuler = dynamic_cast<RulerObj*>(n);
+                waterRulerObj = replacementRuler != NULL
+                        && replacementRuler->isWaterRuler()
+                        ? replacementRuler : NULL;
+            }
             emit objectSelected((GameObj*)n);
             return;
         }
@@ -2481,6 +2598,109 @@ void Route::addToTDBIfNotExist(WorldObj* obj) {
     addToTDB(obj);
 }
 
+RulerObj* Route::placeWaterRuler(int x, int z, float *p) {
+    if(p == NULL)
+        return NULL;
+    // There may be only one route-wide water ruler. Check saved world files
+    // as well as loaded tiles before creating another marker.
+    RulerObj *existingRuler = findWaterRuler(true);
+    if(existingRuler != NULL)
+        return existingRuler;
+    Game::check_coords(x, z, p);
+    Tile *worldTile = requestTile(x, z);
+    if(worldTile == NULL || worldTile->loaded != 1)
+        return NULL;
+
+    WorldObj *base = WorldObj::createObj("ruler");
+    RulerObj *rulerObj = dynamic_cast<RulerObj*>(base);
+    if(rulerObj == NULL){
+        delete base;
+        return NULL;
+    }
+    float q[4];
+    Quat::fill(q);
+    rulerObj->initPQ(p, q);
+    rulerObj->setWaterRuler(true);
+    rulerObj->load(x, z);
+    worldTile->placeObject(rulerObj);
+    Undo::PushWorldObjPlaced(rulerObj);
+    waterRulerObj = rulerObj;
+    return rulerObj;
+}
+
+RulerObj* Route::findWaterRuler(bool loadWorldTiles) {
+    auto findInLoadedTiles = [this]() -> RulerObj* {
+        QList<int> keys = tile.keys();
+        for(int key : keys){
+            Tile *worldTile = tile.value(key, NULL);
+            if(worldTile == NULL || worldTile->loaded != 1)
+                continue;
+            for(int i = 0; i < worldTile->jestObiektow; i++){
+                RulerObj *rulerObj = dynamic_cast<RulerObj*>(worldTile->obiekty[i]);
+                if(rulerObj != NULL && rulerObj->loaded && rulerObj->isWaterRuler())
+                    return rulerObj;
+            }
+        }
+        return NULL;
+    };
+
+    RulerObj *loadedRuler = findInLoadedTiles();
+    if(loadedRuler != NULL){
+        waterRulerObj = loadedRuler;
+        return loadedRuler;
+    }
+    if(!loadWorldTiles)
+        return loadedRuler;
+
+    // Do not preload every world object merely to recover one helper ruler.
+    // Large routes can exhaust address space when that is followed immediately
+    // by loading a terrain corridor. Newly saved WaterRuler objects live in
+    // uncompressed UTF-16 world files, so locate the owning file cheaply and
+    // load only that one tile.
+    QString worldPath = Game::root + "/routes/" + Game::route + "/world";
+    QDir worldDir(worldPath);
+    worldDir.setFilter(QDir::Files);
+    worldDir.setNameFilters(QStringList() << "*.w");
+    QStringList worldFiles = worldDir.entryList();
+
+    QByteArray utf16Marker;
+    const QString marker = "WaterRuler";
+    for(QChar c : marker){
+        ushort value = c.unicode();
+        utf16Marker.append((char)(value & 0xff));
+        utf16Marker.append((char)((value >> 8) & 0xff));
+    }
+
+    for(int i = 0; i < worldFiles.size(); i++){
+        const QString &worldFile = worldFiles[i];
+        QFile file(worldDir.filePath(worldFile));
+        if(!file.open(QIODevice::ReadOnly))
+            continue;
+        QByteArray raw = file.readAll();
+        if(!raw.contains(utf16Marker) && !raw.contains("WaterRuler"))
+            continue;
+        if(worldFile.length() != 17)
+            continue;
+        bool xOk = false;
+        bool zOk = false;
+        int worldX = worldFile.midRef(1, 7).toInt(&xOk);
+        int worldZ = -worldFile.midRef(8, 7).toInt(&zOk);
+        if(!xOk || !zOk)
+            continue;
+        Tile *worldTile = requestTile(worldX, worldZ);
+        if(worldTile == NULL || worldTile->loaded != 1)
+            continue;
+        for(int i = 0; i < worldTile->jestObiektow; i++){
+            RulerObj *rulerObj = dynamic_cast<RulerObj*>(worldTile->obiekty[i]);
+            if(rulerObj != NULL && rulerObj->loaded && rulerObj->isWaterRuler()){
+                waterRulerObj = rulerObj;
+                return rulerObj;
+            }
+        }
+    }
+    return NULL;
+}
+
 bool Route::placementEndpointBelongsToTrack(const WorldObj *placed, int x, int y, unsigned int uid) const {
     if(placed == NULL || placed->placementSnapNodeId < 0)
         return false;
@@ -2620,6 +2840,8 @@ void Route::deleteObj(WorldObj* obj) {
         return;
     if(obj->typeObj != WorldObj::worldobj)
         return;
+    if(obj == waterRulerObj)
+        waterRulerObj = NULL;
     if(obj->typeID == obj->groupobject) {
         GroupObj *gobj = (GroupObj*)obj;
         for(int i = 0; i < gobj->objects.size(); i++ ){
@@ -2707,6 +2929,66 @@ int Route::removeAllInteractives(bool gui) {
     return interactives.size();
 }
 
+int Route::deleteAllInstances(WorldObj *selected, bool gui) {
+    if(selected == NULL
+    || (selected->typeID != WorldObj::sstatic
+        && selected->typeID != WorldObj::gantry
+        && selected->typeID != WorldObj::collideobject))
+        return 0;
+
+    const WorldObj::TypeID selectedType = selected->typeID;
+    const QString selectedFileName = selected->fileName.trimmed();
+    if(selectedFileName.isEmpty())
+        return 0;
+
+    // Instance cleanup must inspect the route, not merely the tiles currently
+    // around the camera. Constructing missing Tile objects loads their world
+    // files before the matching pass begins.
+    preloadWFiles(gui);
+
+    QVector<WorldObj*> matches;
+    foreach (Tile *tTile, tile) {
+        if(tTile == NULL || tTile->loaded != 1)
+            continue;
+        for(auto it = tTile->obiekty.begin(); it != tTile->obiekty.end(); ++it) {
+            WorldObj *obj = it->second;
+            if(obj == NULL || !obj->loaded || obj->typeID != selectedType)
+                continue;
+            if(QString::compare(
+                    obj->fileName.trimmed(), selectedFileName,
+                    Qt::CaseInsensitive) == 0)
+                matches.push_back(obj);
+        }
+    }
+
+    if(matches.isEmpty())
+        return 0;
+
+    QProgressDialog *progress = NULL;
+    if(gui) {
+        progress = new QProgressDialog(
+            "Deleting Matching Object Instances ...", "", 0, matches.size());
+        progress->setWindowModality(Qt::WindowModal);
+        progress->setCancelButton(NULL);
+        progress->setWindowFlags(Qt::CustomizeWindowHint);
+        progress->show();
+    }
+
+    Undo::StateBegin();
+    for(int i = 0; i < matches.size(); ++i) {
+        deleteObj(matches[i]);
+        if(progress != NULL) {
+            progress->setValue(i + 1);
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        }
+    }
+    Undo::StateEnd();
+
+    delete progress;
+    emit sendMsg("unselect");
+    return matches.size();
+}
+
 void Route::removeTrackFromTDB(WorldObj* obj) {
     if(obj->typeObj != WorldObj::worldobj)
         return;
@@ -2766,6 +3048,7 @@ void Route::getUnsavedInfo(QVector<QString> &items){
 
 
 void Route::save() {
+    lastSaveResult = false;
     if (!Game::writeEnabled) return;
     qDebug() << __FILE__ << " " << __LINE__ << ":" << "save";
     foreach (Tile* tTile, tile){
@@ -2776,9 +3059,21 @@ void Route::save() {
         }
     }
     Game::terrainLib->save();
-    this->trackDB->save();
-    this->roadDB->save();
-    this->trk->save();
+
+    QString keySaveError;
+    if(!saveKeyRouteFiles(keySaveError)){
+        qWarning() << "Route key-file save failed:" << keySaveError;
+        emit sendMsg("saveError");
+        if(Game::gui){
+            QMessageBox::critical(NULL, QObject::tr("Route save failed"),
+                    QObject::tr("The route key files were not saved.\n\n%1\n\n"
+                                "The previous files were left intact or restored from "
+                                "the managed backup.")
+                    .arg(keySaveError));
+        }
+        return;
+    }
+
     ActLib::SaveAll();
     
     /// EFO this is a hack to trick the updated timestamp on the folder.  It could be used as a stub for 
@@ -2789,6 +3084,7 @@ void Route::save() {
     file.open(QIODevice::WriteOnly);
     file.close(); 
     QFile::remove(filePath);
+    lastSaveResult = true;
     
     
     /*foreach(Service *s, service){
@@ -2803,6 +3099,80 @@ void Route::save() {
         if(p->isModified())
             p->save();
     }*/
+}
+
+bool Route::lastSaveSucceeded() const {
+    return lastSaveResult;
+}
+
+bool Route::saveKeyRouteFiles(QString &error) {
+    if(!Game::writeTDB && (trk == NULL || !trk->isModified()))
+        return true;
+    if(trackDB == NULL || roadDB == NULL || tsection == NULL || trk == NULL){
+        error = "The route databases are not fully loaded.";
+        return false;
+    }
+
+    if(Game::writeTDB){
+        trackDB->prepareSave();
+        roadDB->prepareSave();
+    }
+
+    RouteSaveTransaction transaction(activeRouteRoot(), activeRouteBackupRoot());
+    const QString routeBase = activeRouteRoot() + "/" + Game::routeName;
+    QByteArray data;
+
+    if(Game::writeTDB){
+        if(!serializeUtf16Text(Game::rnp, "SIMISA@@@@@@@@@@JINX0T0t______\n\n",
+                              [this](QTextStream &out){ trackDB->saveToStream(out); },
+                              data, error)
+                || !transaction.addFile(routeBase + ".tdb", data, &error))
+            return false;
+
+        if(!serializeUtf16Text(Game::rnp, "SIMISA@@@@@@@@@@JINX0T0t______\n\n",
+                              [this](QTextStream &out){ trackDB->saveTitToStream(out); },
+                              data, error)
+                || !transaction.addFile(routeBase + ".tit", data, &error))
+            return false;
+
+        if(tsection->routeMaxIdx >= 3){
+            if(!serializeUtf16Text(6, "SIMISA@@@@@@@@@@JINX0T0t______\n\n",
+                                  [this](QTextStream &out){ tsection->saveRouteToStream(out); },
+                                  data, error)
+                    || !transaction.addFile(activeRouteRoot() + "/tsection.dat", data, &error))
+                return false;
+        }
+
+        if(!serializeUtf16Text(Game::rnp, "SIMISA@@@@@@@@@@JINX0T0t______\n\n",
+                              [this](QTextStream &out){ roadDB->saveToStream(out); },
+                              data, error)
+                || !transaction.addFile(routeBase + ".rdb", data, &error))
+            return false;
+
+        if(!serializeUtf16Text(Game::rnp, "SIMISA@@@@@@@@@@JINX0T0t______\n\n",
+                              [this](QTextStream &out){ roadDB->saveTitToStream(out); },
+                              data, error)
+                || !transaction.addFile(routeBase + ".rit", data, &error))
+            return false;
+    }
+
+    const bool saveTrk = trk->isModified();
+    if(saveTrk){
+        if(!serializeUtf16Text(8, "SIMISA@@@@@@@@@@JINX0r1t______\n\n",
+                              [this](QTextStream &out){ trk->saveToStream(out); },
+                              data, error)
+                || !transaction.addFile(activeRouteRoot() + "/" + Game::trkName + ".trk",
+                                        data, &error))
+            return false;
+    }
+
+    if(!transaction.commit(&error))
+        return false;
+
+    if(saveTrk)
+        trk->setModified(false);
+    qDebug() << "Route key files saved atomically";
+    return true;
 }
 
 void Route::createNewPaths() {
@@ -2971,54 +3341,139 @@ void Route::showTrkEditr(Trk * val){
     trkWindow.exec();
 }
 
+bool Route::prepareHealthReportData(int &worldFileCount,
+                                    QStringList &unloadedWorldFiles,
+                                    QString &error) {
+    const QString worldPath =
+            QDir::cleanPath(Game::root + "/routes/" + Game::route + "/world");
+    QDir worldDir(worldPath);
+    worldDir.setFilter(QDir::Files);
+    worldDir.setNameFilters(QStringList() << "*.w");
+    if(!worldDir.exists()){
+        error = QObject::tr("The route world folder could not be found:\n%1")
+                .arg(QDir::toNativeSeparators(worldPath));
+        return false;
+    }
 
-void Route::ListFiles(){
-//     
-    qDebug() << " Listing out files.... ";
-    /// EFO List world shapes
-    QFile file("./" + Game::route + "_filesUsed.txt");
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file);
-        QStringList sortedFileList = fileList;
-        sortedFileList.sort();
-        for (const QString& fileName : sortedFileList) {
-            if(fileName.size() > 0) 
-            out << fileName << " \n";
+    const QStringList worldFiles = worldDir.entryList();
+    worldFileCount = worldFiles.size();
+    unloadedWorldFiles.clear();
+
+    // A report must not run the editor's optional auto-repair while it loads
+    // every world tile for inspection.
+    const bool originalAutoFix = Game::autoFix;
+    Game::autoFix = false;
+    preloadWFiles(true);
+    Game::autoFix = originalAutoFix;
+
+    for(const QString& worldFile : worldFiles){
+        bool xOk = false;
+        bool zOk = false;
+        if(worldFile.length() != 17){
+            unloadedWorldFiles.push_back(worldFile + " (unexpected filename)");
+            continue;
         }
-        file.close();
-    }  
 
-    
-    
-    /// EFO List track pieces
-    file.setFileName("./" + Game::route + "_trackUsed.txt");
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file);
-        QStringList sortedFileList = trackList;
-        sortedFileList.sort();
-        for (const QString& fileName : sortedFileList) {
-            out << fileName << " \n";
-        }
-        file.close();
-    }  
-
-
-    /// EFO List static flags
-    file.setFileName("./" + Game::route + "_staticFlags.txt");
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file);
-        QStringList sortedFileList = staticFlagList;
-        sortedFileList.sort();
-        for (const QString& fileName : sortedFileList) {
-            out << fileName << " \n";
-        }
-        file.close();
-    }  
-
-    
-    qDebug() << " Done listing out files.... ";
+        const int worldX = worldFile.midRef(1, 7).toInt(&xOk);
+        const int worldZ = -worldFile.midRef(8, 7).toInt(&zOk);
+        const Tile *worldTile = (xOk && zOk)
+                ? tile.value(worldX * 10000 + worldZ, NULL)
+                : NULL;
+        if(worldTile == NULL || worldTile->loaded != 1)
+            unloadedWorldFiles.push_back(worldFile);
+    }
+    return true;
 }
 
+void Route::collectHealthReportData(QStringList &usedObjects,
+                                    QStringList &usedTrack,
+                                    QStringList &staticFlags,
+                                    QStringList &uidIssues,
+                                    QStringList &trackSectionIssues) const {
+    for(auto tileIt = tile.constBegin(); tileIt != tile.constEnd(); ++tileIt){
+        const Tile *routeTile = tileIt.value();
+        if(routeTile == NULL)
+            continue;
+
+        const QString worldFileName =
+                "w" + Tile::getNameXY(routeTile->x)
+                + Tile::getNameXY(-routeTile->z) + ".w";
+        QHash<unsigned int, int> worldUidCounts;
+        QHash<unsigned int, int> soundUidCounts;
+
+        for(auto objectIt = routeTile->obiekty.cbegin();
+                objectIt != routeTile->obiekty.cend(); ++objectIt){
+            WorldObj *object = objectIt->second;
+            if(object == NULL || !object->loaded)
+                continue;
+            // Tr_Watermark is world-file metadata. Its UID is intentionally
+            // zero and must not be diagnosed as a route object UID failure.
+            if(dynamic_cast<TrWatermarkObj*>(object) != NULL)
+                continue;
+
+            QHash<unsigned int, int> &uidCounts =
+                    object->isSoundItem() ? soundUidCounts : worldUidCounts;
+            uidCounts[object->UiD] = uidCounts.value(object->UiD, 0) + 1;
+
+            QString fileName = object->fileName;
+            fileName.replace("\\", "/");
+            const int shapesIndex =
+                    fileName.indexOf("/shapes/", 0, Qt::CaseInsensitive);
+            if(shapesIndex >= 0)
+                fileName = fileName.mid(shapesIndex + 8);
+            else if(fileName.startsWith("shapes/", Qt::CaseInsensitive))
+                fileName = fileName.mid(7);
+
+            if(!fileName.trimmed().isEmpty()){
+                if(object->type.compare("trackobj", Qt::CaseInsensitive) == 0)
+                    usedTrack.push_back(fileName.toLower());
+                else
+                    usedObjects.push_back(fileName.toLower());
+            }
+
+            staticFlags.push_back(
+                    QString("0x%1 | %2 | %3")
+                    .arg(QString::number(object->staticFlags, 16).toUpper())
+                    .arg(ParserX::MakeFlagsString(object->staticFlags))
+                    .arg(object->type));
+
+            if((object->typeID == WorldObj::trackobj
+                    || object->typeID == WorldObj::dyntrack)
+                    && object->sectionIdx >= 0
+                    && (tsection == NULL
+                        || tsection->shape.find(object->sectionIdx)
+                           == tsection->shape.end()
+                        || tsection->shape.at(object->sectionIdx) == NULL)){
+                trackSectionIssues.push_back(
+                        QString("%1 | %2 | %3 | %4 | %5")
+                        .arg(worldFileName, -17)
+                        .arg("Missing TrackShape entry in active tsection.dat", -48)
+                        .arg(object->UiD, 8)
+                        .arg(object->sectionIdx, 10)
+                        .arg(fileName.isEmpty() ? object->type : fileName));
+            }
+        }
+
+        const auto appendDuplicateUids =
+                [&uidIssues, &worldFileName](
+                    const QHash<unsigned int, int> &uidCounts,
+                    const QString &uidType){
+            for(auto uidIt = uidCounts.constBegin();
+                    uidIt != uidCounts.constEnd(); ++uidIt){
+                if(uidIt.value() > 1){
+                    uidIssues.push_back(
+                            QString("%1 | duplicate %2 UID %3 | %4 objects")
+                            .arg(worldFileName)
+                            .arg(uidType)
+                            .arg(uidIt.key())
+                            .arg(uidIt.value()));
+                }
+            }
+        };
+        appendDuplicateUids(worldUidCounts, "world");
+        appendDuplicateUids(soundUidCounts, "sound");
+    }
+}
 
 
 void Route::confirmMerge() {

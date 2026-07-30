@@ -34,11 +34,13 @@ public:
     void setColor(int r, int g, int b);
     void setOColor(int r, int g, int b);
     void setFontName(QString val);
+    void setFontSize(int val);
     void setRotOffset(float val);
     void setHeight(float val);
 private:
     QString text;
     QString fontName;
+    int fontSize = 24;
     void init();
     QColor color;
     QColor ocolor;

@@ -58,6 +58,21 @@ GeoTools::GeoTools(QString name)
     label0->setContentsMargins(12,0,0,0);
     label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     vbox->addWidget(label0);
+
+    QFormLayout *mapProviderLayout = new QFormLayout;
+    mapProviderLayout->setSpacing(2);
+    mapProviderLayout->setContentsMargins(3,0,3,0);
+    mapProvider.addItem("OSM Vector only", "None");
+    mapProvider.addItem("Google satellite", "Google");
+    mapProvider.addItem("Mapbox satellite", "Mapbox");
+    mapProvider.addItem("Custom imagery", "Custom");
+    mapProvider.setStyleSheet("combobox-popup: 0;");
+    mapProviderLayout->addRow("Imagery:", &mapProvider);
+    vbox->addLayout(mapProviderLayout);
+
+    QPushButton *configureMapProvider = new QPushButton("Configure Map Imagery...", this);
+    configureMapProvider->setToolTip("Select and configure optional satellite imagery. OSM Vector does not require an account or API key.");
+    vbox->addWidget(configureMapProvider);
     vbox->addWidget(buttonTools["mapTileShowTool"]);
     vbox->addWidget(buttonTools["mapTileLoadTool"]);
     vbox->addWidget(buttonTools["makeTileTextureTool"]);
@@ -160,10 +175,164 @@ GeoTools::GeoTools(QString name)
     
     QObject::connect(chAutoGeoTerrain, SIGNAL(stateChanged(int)),
                       this, SLOT(chAutoGeoTerrainEnabled(int)));
+
+    QObject::connect(&mapProvider, SIGNAL(currentIndexChanged(int)),
+                      this, SLOT(mapProviderChanged(int)));
+    QObject::connect(configureMapProvider, SIGNAL(released()),
+                      this, SLOT(configureMapProviderEnabled()));
+
+    syncMapProviderUi();
     
 }
 
+void GeoTools::syncMapProviderUi(){
+    const QString selectedProvider = Game::mapEngine.isEmpty() ? "None" : Game::mapEngine;
+    int selectedIndex = mapProvider.findData(selectedProvider);
+    if(selectedIndex < 0)
+        selectedIndex = 0;
+
+    QSignalBlocker blocker(&mapProvider);
+    mapProvider.setCurrentIndex(selectedIndex);
+
+    const QString provider = mapProvider.currentData().toString();
+    const bool keyedProvider = provider == "Google" || provider == "Mapbox";
+    const bool ready = !Game::imageMapsUrl.trimmed().isEmpty()
+            && (!keyedProvider || !Game::MapAPIKey.trimmed().isEmpty());
+    if(provider == "None")
+        mapProvider.setToolTip("OSM Vector is available without an account or API key.");
+    else if(ready)
+        mapProvider.setToolTip(provider + " imagery is configured and will be offered by the map loader.");
+    else
+        mapProvider.setToolTip(provider + " is selected but still needs a URL or API key. OSM Vector remains available.");
+}
+
+void GeoTools::mapProviderChanged(int index){
+    if(index < 0)
+        return;
+    Game::mapEngine = mapProvider.itemData(index).toString();
+    Game::configureMapProvider();
+    if(!Game::saveMapProviderSettings())
+        QMessageBox::warning(this, "Map Settings Save Failed",
+                             "The imagery selection could not be saved to settings.json.");
+    syncMapProviderUi();
+}
+
+void GeoTools::configureMapProviderEnabled(){
+    QDialog dialog(this);
+    GuiFunct::applyEditorPanelStyle(&dialog);
+    dialog.setWindowTitle("F3 Map Imagery");
+    dialog.setMinimumWidth(scaledUiSize(720));
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
+    QLabel *title = new QLabel("MAP IMAGERY");
+    GuiFunct::styleEditorTitle(title);
+    mainLayout->addWidget(title);
+
+    QLabel *guidance = new QLabel(
+        "OSM Vector is always available without an account or API key. "
+        "Satellite services require credentials supplied by their provider.");
+    guidance->setWordWrap(true);
+    mainLayout->addWidget(guidance);
+
+    QFormLayout *form = new QFormLayout;
+    QComboBox *provider = new QComboBox;
+    provider->addItem("OSM Vector only", "None");
+    provider->addItem("Google satellite", "Google");
+    provider->addItem("Mapbox satellite", "Mapbox");
+    provider->addItem("Custom imagery", "Custom");
+
+    QSpinBox *resolution = new QSpinBox;
+    resolution->setRange(256, 8192);
+    resolution->setSingleStep(256);
+    resolution->setValue(Game::mapImageResolution);
+    resolution->setSuffix(" px");
+
+    QLineEdit *url = new QLineEdit;
+    QLineEdit *apiKey = new QLineEdit;
+    apiKey->setEchoMode(QLineEdit::PasswordEchoOnEdit);
+    QSpinBox *zoomOffset = new QSpinBox;
+    zoomOffset->setRange(-10, 10);
+
+    QLabel *urlLabel = new QLabel("Image URL:");
+    QLabel *keyLabel = new QLabel("API key/token:");
+    QLabel *zoomLabel = new QLabel("Zoom offset:");
+    form->addRow("Provider:", provider);
+    form->addRow("Map resolution:", resolution);
+    form->addRow(urlLabel, url);
+    form->addRow(keyLabel, apiKey);
+    form->addRow(zoomLabel, zoomOffset);
+    mainLayout->addLayout(form);
+
+    auto loadProviderFields = [=](const QString& providerName) {
+        const QString selected = providerName.toLower();
+        const bool usesImagery = selected != "none";
+        urlLabel->setVisible(usesImagery);
+        url->setVisible(usesImagery);
+        keyLabel->setVisible(usesImagery);
+        apiKey->setVisible(usesImagery);
+        zoomLabel->setVisible(usesImagery);
+        zoomOffset->setVisible(usesImagery);
+
+        if(selected == "google"){
+            url->setText(Game::googleImageMapsUrl);
+            apiKey->setText(Game::googleMapAPIKey);
+            zoomOffset->setValue(Game::googleImageMapsZoomOffset);
+        } else if(selected == "mapbox"){
+            url->setText(Game::mapboxImageMapsUrl);
+            apiKey->setText(Game::mapboxMapAPIKey);
+            zoomOffset->setValue(Game::mapboxImageMapsZoomOffset);
+        } else if(selected == "custom"){
+            url->setText(Game::customImageMapsUrl);
+            apiKey->setText(Game::customMapAPIKey);
+            zoomOffset->setValue(Game::customImageMapsZoomOffset);
+        } else {
+            url->clear();
+            apiKey->clear();
+            zoomOffset->setValue(0);
+        }
+    };
+
+    int providerIndex = provider->findData(Game::mapEngine.isEmpty() ? "None" : Game::mapEngine);
+    provider->setCurrentIndex(providerIndex >= 0 ? providerIndex : 0);
+    loadProviderFields(provider->currentData().toString());
+    QObject::connect(provider, &QComboBox::currentTextChanged, &dialog, [=]() {
+        loadProviderFields(provider->currentData().toString());
+    });
+
+    QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    mainLayout->addWidget(buttons);
+
+    if(dialog.exec() != QDialog::Accepted)
+        return;
+
+    const QString selected = provider->currentData().toString();
+    if(selected == "Google"){
+        Game::googleImageMapsUrl = url->text().trimmed();
+        Game::googleMapAPIKey = apiKey->text().trimmed();
+        Game::googleImageMapsZoomOffset = zoomOffset->value();
+    } else if(selected == "Mapbox"){
+        Game::mapboxImageMapsUrl = url->text().trimmed();
+        Game::mapboxMapAPIKey = apiKey->text().trimmed();
+        Game::mapboxImageMapsZoomOffset = zoomOffset->value();
+    } else if(selected == "Custom"){
+        Game::customImageMapsUrl = url->text().trimmed();
+        Game::customMapAPIKey = apiKey->text().trimmed();
+        Game::customImageMapsZoomOffset = zoomOffset->value();
+    }
+
+    Game::mapEngine = selected;
+    Game::mapImageResolution = resolution->value();
+    Game::configureMapProvider();
+    if(!Game::saveMapProviderSettings())
+        QMessageBox::warning(this, "Map Settings Save Failed",
+                             "The F3 imagery settings could not be saved to settings.json.");
+    syncMapProviderUi();
+}
+
 void GeoTools::mkrList(QMap<QString, Coords*> list){
+    markerFiles.clear();
     mkrFiles = list;
     for (auto it = list.begin(); it != list.end(); ++it ){
         if(it.value() == NULL)

@@ -1,0 +1,10 @@
+TEMPLATE = app
+CONFIG += console c++11
+CONFIG -= app_bundle
+QT = core
+TARGET = RouteSaveTransactionTest
+DESTDIR = .
+OBJECTS_DIR = build
+SOURCES += RouteSaveTransactionTest.cpp ../RouteSaveTransaction.cpp
+HEADERS += ../RouteSaveTransaction.h
+INCLUDEPATH += ..

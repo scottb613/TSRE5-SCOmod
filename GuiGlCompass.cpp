@@ -20,49 +20,53 @@ GuiGlCompass::GuiGlCompass() {
     GLUU* gluu = GLUU::get();
     float *punkty = new float[54];
     int ptr = 0;
-    int i = 0;
 
     float alpha = -gluu->alphaTest;
-    float sizex = 0.3;
-    float sizey = 0.1;
+    // Keep the tape clear of the viewport edge and large enough to read
+    // without returning to the tall legacy presentation.
+    const float top = 0.96;
+    const float sizex = 0.425;
+    // Match the 2048x256 texture's 8:1 aspect ratio so lettering and ticks
+    // retain their native proportions on screen.
+    const float sizey = sizex / 8.0;
     
     punkty[ptr++] = (-sizex / 2);
-    punkty[ptr++] = 1.0;
+    punkty[ptr++] = top;
     punkty[ptr++] = 0;
     punkty[ptr++] = 0.0;
     punkty[ptr++] = 0.0;
     punkty[ptr++] = alpha;
 
     punkty[ptr++] = (-sizex / 2);
-    punkty[ptr++] = 1.0-sizey;
+    punkty[ptr++] = top-sizey;
     punkty[ptr++] = 0;
     punkty[ptr++] = 0.0;
     punkty[ptr++] = 1.0;
     punkty[ptr++] = alpha;
 
     punkty[ptr++] = (sizex / 2);
-    punkty[ptr++] = 1.0-sizey;
+    punkty[ptr++] = top-sizey;
     punkty[ptr++] = 0;
     punkty[ptr++] = 0.4;
     punkty[ptr++] = 1.0;
     punkty[ptr++] = alpha;
 
     punkty[ptr++] = (sizex / 2);
-    punkty[ptr++] = 1.0;
+    punkty[ptr++] = top;
     punkty[ptr++] = 0;
     punkty[ptr++] = 0.4;
     punkty[ptr++] = 0.0;
     punkty[ptr++] = alpha;
 
     punkty[ptr++] = (-sizex / 2);
-    punkty[ptr++] = 1.0;
+    punkty[ptr++] = top;
     punkty[ptr++] = 0;
     punkty[ptr++] = 0.0;
     punkty[ptr++] = 0.0;
     punkty[ptr++] = alpha;
 
     punkty[ptr++] = (sizex / 2);
-    punkty[ptr++] = 1.0-sizey;
+    punkty[ptr++] = top-sizey;
     punkty[ptr++] = 0;
     punkty[ptr++] = 0.4;
     punkty[ptr++] = 1.0;
