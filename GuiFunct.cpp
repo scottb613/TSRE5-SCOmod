@@ -18,6 +18,8 @@
 #endif
 
 namespace {
+void applyDimWindowsCaptionText(QWidget *window);
+
 class ImportantDialogCenteringFilter : public QObject {
 public:
     explicit ImportantDialogCenteringFilter(QObject *parent)
@@ -29,6 +31,28 @@ protected:
         QWidget *dialog = qobject_cast<QWidget*>(watched);
         if(dialog == NULL || event->type() != QEvent::Show)
             return QObject::eventFilter(watched, event);
+
+        // Combo-box lists and menus are temporary top-level popup widgets.
+        // Styling them through QWidget::winId() while Qt is positioning them
+        // can force premature native-window creation and detach the list from
+        // its Object Selection control.  Defer caption styling and apply it
+        // only to genuine titled application windows.
+        const Qt::WindowType windowType = static_cast<Qt::WindowType>(
+            int(dialog->windowFlags() & Qt::WindowType_Mask));
+        const bool isTransientPopup =
+            windowType == Qt::Popup
+            || windowType == Qt::ToolTip
+            || windowType == Qt::SplashScreen;
+
+        if(dialog->isWindow() && !isTransientPopup
+        && !dialog->windowTitle().trimmed().isEmpty()
+        && !(dialog->windowFlags() & Qt::FramelessWindowHint)){
+            QPointer<QWidget> guardedWindow(dialog);
+            QTimer::singleShot(0, dialog, [guardedWindow](){
+                if(!guardedWindow.isNull())
+                    applyDimWindowsCaptionText(guardedWindow.data());
+            });
+        }
 
         const bool importantMessage =
             qobject_cast<QMessageBox*>(dialog) != NULL
@@ -107,6 +131,12 @@ void applyDimWindowsCaptionText(QWidget *window){
     if(window == NULL)
         return;
 
+    // Never manufacture a native handle during widget construction.  Use the
+    // top-level QWindow only after Qt has created it during Show.
+    QWindow *nativeWindow = window->windowHandle();
+    if(nativeWindow == NULL)
+        return;
+
     typedef HRESULT (WINAPI *DwmSetWindowAttributeFunction)(
         HWND, DWORD, LPCVOID, DWORD);
     HMODULE dwmLibrary = LoadLibraryW(L"dwmapi.dll");
@@ -119,7 +149,7 @@ void applyDimWindowsCaptionText(QWidget *window){
                   "Windows function pointer sizes must match");
     std::memcpy(&setAttribute, &resolvedFunction, sizeof(setAttribute));
     if(setAttribute != NULL){
-        const HWND handle = reinterpret_cast<HWND>(window->winId());
+        const HWND handle = reinterpret_cast<HWND>(nativeWindow->winId());
         const COLORREF dimText = RGB(145, 145, 145);
         const DWORD textColor = 36;
         setAttribute(handle, textColor, &dimText, sizeof(dimText));

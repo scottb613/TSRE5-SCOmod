@@ -21,7 +21,7 @@ v0.8 Dynamic Track, JSON settings, and Activity Builder completion release
 - SCOmodWIP/Terrain.h
 - SCOmodWIP/Undo.cpp
 - SCOmodWIP/Undo.h
-  - Expanded Water Helper with one terrain-snapped multi-point watercourse ruler, bounded ruler-following terrain loading and shoreline scanning, nine-point patch tests, seam-matched tile-corner elevations, water-patch enabling, saved-ruler recovery, an Undo Last action, a latched Water Ruler workflow, progress guidance, and memory-safety limits.
+  - Expanded Water Helper with one terrain-snapped multi-point watercourse ruler, bounded ruler-following terrain loading and shoreline scanning, nine-point patch tests, seam-matched tile-corner elevations, water-patch enabling, saved-ruler recovery, Undo/restart/removal controls, progress guidance, and memory-safety limits.
   - Added strict repeat-strip seam matching, long-ruler visibility, scaled status messages, standard action/completion sounds, and cleanup of the working ruler without removing generated water.
 
 - SCOmodWIP/GuiFunct.cpp

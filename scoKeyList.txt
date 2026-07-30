@@ -79,6 +79,12 @@ E / Shift     Key release restores normal speed
 ROUTE EDITOR WINDOW
 Esc           Close route editor window when handled by RouteEditorWindow
 
+F4 ACTIVITY BUILDER / PATH EDITING
+F4            Close the full-screen Activity Builder
+Ctrl+Z        Undo the last path-building or path-editing operation
+Ctrl+Y        Redo the last undone path operation
+Delete        Remove the selected start/end, reverse, wait/advanced, or passing-path control
+
 SHAPE VIEWER / CONSIST VIEW CONTEXT
 Delete        Delete selected consist item
 F             Flip selected consist item
