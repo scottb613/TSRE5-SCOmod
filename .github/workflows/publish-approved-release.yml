@@ -105,7 +105,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          comparison="$(gh api "repos/$GITHUB_REPOSITORY/compare/$TAG...$BRANCH" --jq '.status')"
+          tag_commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq '.sha')"
+          branch_commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/$BRANCH" --jq '.sha')"
+          comparison="$(gh api "repos/$GITHUB_REPOSITORY/compare/$tag_commit...$branch_commit" --jq '.status')"
           if [[ "$comparison" != "ahead" && "$comparison" != "identical" ]]; then
             echo "Tag $TAG is not contained in $BRANCH (comparison: $comparison)." >&2
             exit 1
@@ -132,7 +134,6 @@ jobs:
           fi
 
           release_id="$(jq -r '.id' "$release_json")"
-          tag_commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq '.sha')"
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
           echo "tag_commit=$tag_commit" >> "$GITHUB_OUTPUT"
 
