@@ -113,13 +113,17 @@ jobs:
             exit 1
           fi
 
+          release_matches="$RUNNER_TEMP/release-matches.json"
           release_json="$RUNNER_TEMP/release.json"
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > "$release_json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+            jq -s --arg tag "$TAG" '[.[][] | select(.tag_name == $tag and .draft == true)]' > "$release_matches"
 
-          if [[ "$(jq -r '.draft' "$release_json")" != "true" ]]; then
-            echo "Release $TAG is not a draft. Published releases are never overwritten." >&2
+          match_count="$(jq 'length' "$release_matches")"
+          if [[ "$match_count" != "1" ]]; then
+            echo "Expected exactly one draft release for $TAG; found $match_count. Published releases are never overwritten." >&2
             exit 1
           fi
+          jq '.[0]' "$release_matches" > "$release_json"
 
           if ! jq -e --arg name "$ASSET_NAME" '.assets[] | select(.name == $name and .state == "uploaded" and .size > 0)' "$release_json" >/dev/null; then
             echo "The approved asset is missing, empty, or incomplete: $ASSET_NAME" >&2
