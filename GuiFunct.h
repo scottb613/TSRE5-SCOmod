@@ -44,6 +44,8 @@ public:
                                       const QString &subtitle = QString());
     static void showEditorNotice(QWidget *parent, const QString &heading,
                                  const QString &message);
+    static void showEditorStopped(QWidget *parent, const QString &heading,
+                                  const QString &message);
     static void installImportantDialogCentering();
     static void setupWindowPinButton(QToolButton *button);
     static QPoint snappedWindowPosition(QWidget *window, int snapDistance = 10);

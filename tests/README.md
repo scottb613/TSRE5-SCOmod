@@ -1,6 +1,6 @@
 # Tests
 
-The v0.9 CMake build includes focused automated checks for file compatibility,
+The CMake build includes focused automated checks for file compatibility,
 texture decoding, and the route regression evidence harness.
 
 Current automated coverage includes:

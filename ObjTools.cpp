@@ -619,6 +619,22 @@ void ObjTools::routeLoaded(Route* a){
     item.clas = "tsre tools";
     item.type = "ruler";
     route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(item);
+
+    Ref::RefItem waterRulerItem;
+    waterRulerItem.filename.push_back("");
+    waterRulerItem.description = "Ruler Water";
+    waterRulerItem.clas = "tsre tools";
+    // This is a launcher for the Water Helper workflow, not a serialized
+    // world-object type. RouteEditorGLWidget intercepts it before placement.
+    waterRulerItem.type = "rulerwater";
+    route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(waterRulerItem);
+
+    Ref::RefItem vegetationRulerItem;
+    vegetationRulerItem.filename.push_back("");
+    vegetationRulerItem.description = "Ruler Vegetation";
+    vegetationRulerItem.clas = "tsre tools";
+    vegetationRulerItem.type = "rulervegetation";
+    route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(vegetationRulerItem);
     
     refOther.addItem("ALL");
     refOther.addItem("Signals");

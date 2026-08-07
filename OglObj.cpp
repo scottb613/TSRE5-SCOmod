@@ -15,6 +15,8 @@
 #include "RenderItem.h"
 #include "Renderer.h"
 #include "Vector4f.h"
+#include <QVector>
+#include <cmath>
 
 OglObj::OglObj() {
     loaded = false;
@@ -29,7 +31,7 @@ OglObj::OglObj(const OglObj& orig) {
 }
 
 OglObj::~OglObj() {
-
+    delete color;
 }
 
 void OglObj::setMaterial(float r, float g, float b) {
@@ -130,6 +132,37 @@ void OglObj::init(float* punkty, int ptr, enum RenderItem::VertexAttr v, int typ
     loaded = true;
 }
 
+void OglObj::initLitTriangles(const float* positions, int positionFloatCount) {
+    if(positions == NULL || positionFloatCount < 9 || positionFloatCount % 9 != 0)
+        return;
+    QVector<float> vertices;
+    vertices.reserve((positionFloatCount / 3) * RenderItem::VNTA);
+    for(int i = 0; i + 8 < positionFloatCount; i += 9){
+        float ux = positions[i+3] - positions[i];
+        float uy = positions[i+4] - positions[i+1];
+        float uz = positions[i+5] - positions[i+2];
+        float vx = positions[i+6] - positions[i];
+        float vy = positions[i+7] - positions[i+1];
+        float vz = positions[i+8] - positions[i+2];
+        float nx = uy*vz - uz*vy;
+        float ny = uz*vx - ux*vz;
+        float nz = ux*vy - uy*vx;
+        float normalLength = std::sqrt(nx*nx + ny*ny + nz*nz);
+        if(normalLength > 0.0001f){
+            nx /= normalLength;
+            ny /= normalLength;
+            nz /= normalLength;
+        }
+        for(int vertex = 0; vertex < 3; vertex++){
+            int p = i + vertex*3;
+            vertices << positions[p] << positions[p+1] << positions[p+2]
+                     << nx << ny << nz << 0.0f << 0.0f << 1.0f;
+        }
+    }
+    init(vertices.data(), static_cast<int>(vertices.size()),
+         RenderItem::VNTA, GL_TRIANGLES);
+}
+
 void OglObj::setLineWidth(int val){
     lineWidth = val;
 }
@@ -161,6 +194,8 @@ void OglObj::pushRenderItem(int selectionColor, float lod){
     
     RenderItem *r = new RenderItem();
     r->setVertexAttributes(vAttribures);
+    if(selectionColor != 0)
+        r->normalsEnabled = 0;
 
     if(selectionColor != 0){
         r->disableTextures(selectionColor);
@@ -200,15 +235,15 @@ void OglObj::render(int selectionColor, float lod) {
     
     if(vAttribures == RenderItem::NO_ATTR){
         return;
-    } else if(vAttribures == RenderItem::V){
-        gluu->disableNormals();
-    } else if(vAttribures == RenderItem::VT){
-        gluu->disableNormals();
-    } else if(vAttribures == RenderItem::VNT){
+    }
+
+    const bool vertexNormalsAvailable = vAttribures == RenderItem::VNT
+            || vAttribures == RenderItem::VNTA;
+    const bool useLighting = selectionColor == 0 && vertexNormalsAvailable;
+    if(useLighting)
         gluu->enableNormals();
-    }   else if(vAttribures == RenderItem::VNTA){
-        gluu->enableNormals();
-    }  
+    else
+        gluu->disableNormals();
     
     if(selectionColor != 0){
         gluu->disableTextures(selectionColor);

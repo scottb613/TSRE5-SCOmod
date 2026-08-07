@@ -24,6 +24,7 @@ public:
     OglObj(const OglObj& orig);
     virtual ~OglObj();
     void init(float* punkty, int ptr, enum RenderItem::VertexAttr v, int type);
+    void initLitTriangles(const float* positions, int positionFloatCount);
     virtual void pushRenderItem();
     virtual void pushRenderItem(int selectionColor, float lod = 0);
     virtual void render();

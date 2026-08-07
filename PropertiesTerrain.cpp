@@ -353,6 +353,20 @@ bool PropertiesTerrain::support(GameObj* obj){
     return false;
 }
 
+void PropertiesTerrain::startWaterRuler(Terrain *terrain){
+    if(terrain == NULL)
+        return;
+
+    showObj(terrain);
+    if(!waterHelperButton.isChecked())
+        waterHelperButton.setChecked(true);
+    else
+        bWaterEditorEnabled();
+
+    if(waterWindow != NULL)
+        waterWindow->activateRuler();
+}
+
 void PropertiesTerrain::bWaterEditorEnabled(){
     if(terrainObj == NULL){
         waterHelperButton.setChecked(false);

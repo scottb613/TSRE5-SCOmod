@@ -118,7 +118,7 @@ int TexLib::getTex(QString pathid) {
 }
 
 int TexLib::addTex(QString pathid, bool reload) {
-    
+    const QString requestedPathid = pathid;
     Texture* newFile = NULL;
     for ( auto it = mtex.begin(); it != mtex.end(); ++it ){
         if(it->second == NULL) continue;
@@ -178,6 +178,35 @@ int TexLib::addTex(QString pathid, bool reload) {
             }
         }    
     }        
+
+    // A shape normally names an ACE texture even when Image Upgrade resolves
+    // that request to DDS. Cache the requested ACE name on the resolved DDS
+    // texture so later references reuse it instead of decoding another copy.
+    // Keep this resolution-aware: direct DDS files and excluded TERRTEX ACE
+    // files remain distinct unless substitution/upgrade actually changed the
+    // requested path.
+    if(pathid != requestedPathid){
+        for(auto it = mtex.begin(); it != mtex.end(); ++it){
+            Texture *texture = it->second;
+            if(texture == NULL)
+                continue;
+            if(!texture->hashid.contains(pathid))
+                continue;
+
+            if(!texture->hashid.contains(requestedPathid))
+                texture->hashid.push_back(requestedPathid);
+            if(!reload){
+                texture->ref++;
+                if(texture->missing
+                        && !Route::missingTextureList.contains(
+                            requestedPathid, Qt::CaseInsensitive))
+                    Route::missingTextureList.append(requestedPathid.toLower());
+                return (int)it->first;
+            }
+            newFile = texture;
+            break;
+        }
+    }
     
     if(tType == "ace" || tType == "dds"){
         if(!QFile::exists(pathid)){
@@ -206,6 +235,10 @@ int TexLib::addTex(QString pathid, bool reload) {
     } else {
         newFile->delVBO();
     }
+
+    if(pathid != requestedPathid
+            && !newFile->hashid.contains(requestedPathid))
+        newFile->hashid.push_back(requestedPathid);
 
     //qDebug() << pathid.toLower();
     //qDebug() << tType;

@@ -37,6 +37,7 @@ public:
     unsigned int shaderTextureEnabled;
     unsigned int shaderShapeColor;
     unsigned int shaderEnableNormals;
+    unsigned int shaderSelectionPass;
     unsigned int shaderDiffuseColor;
     unsigned int shaderAmbientColor;
     unsigned int shaderSpecularColor;

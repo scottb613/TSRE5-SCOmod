@@ -32,6 +32,8 @@ WorldObj* SoundSourceObj::clone(){
 }
 
 SoundSourceObj::~SoundSourceObj() {
+    delete pointer3d;
+    delete pointer3dSelected;
 }
 
 bool SoundSourceObj::allowNew(){

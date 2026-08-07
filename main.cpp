@@ -76,7 +76,7 @@ protected:
         return QObject::eventFilter(watched, event);
     }
 
-private:
+public:
     static void play(const QString &fileName) {
         if(!Game::scoSoundEnabled)
             return;
@@ -357,6 +357,18 @@ static int finishApplication(QApplication &app, QSharedMemory &singleInstance){
     return result;
 }
 
+static bool isShapeViewerLaunch(const QStringList &arguments){
+    for(int i = 1; i < arguments.size(); ++i){
+        QString option = arguments.at(i).trimmed().toLower();
+        while(option.startsWith('-'))
+            option.remove(0, 1);
+        if(option == "shapeview")
+            return true;
+    }
+
+    return arguments.size() == 2 && QFileInfo::exists(arguments.at(1));
+}
+
 int main(int argc, char *argv[]){
 
    // #ifdef  Q_OS_WIN32 
@@ -405,15 +417,12 @@ int main(int argc, char *argv[]){
     const QString mainLoadConsistRoot =
             qEnvironmentVariable("TSRE_MAIN_LOAD_CONSIST_ROOT");
     const bool mainLoadConsistEditor = !mainLoadConsistRoot.isEmpty();
+    const bool shapeViewerLaunch = isShapeViewerLaunch(QCoreApplication::arguments());
     const QString instanceKey = mainLoadConsistEditor
             ? QString("TSRE5-consist-editor-%1")
                   .arg(QCoreApplication::applicationPid())
             : QString("TSRE5-single-instance");
     QSharedMemory singleInstance(instanceKey);
-    if(!singleInstance.create(1)){
-        QMessageBox::warning(NULL, "TSRE5 already running", "TSRE5 is already running.");
-        return 0;
-    }
     
     QString workingDir = QDir::currentPath();
 
@@ -510,6 +519,15 @@ int main(int argc, char *argv[]){
         appPointSize = 9.0;
     appFont.setPointSizeF(appPointSize * Game::uiScale);
     app.setFont(appFont);
+
+    if(!mainLoadConsistEditor && !shapeViewerLaunch
+            && Game::instanceProtection && !singleInstance.create(1)){
+        UiInteractionSoundFilter::play("SCObuzz.wav");
+        GuiFunct::showEditorStopped(
+            NULL, "Instance Protection",
+            "Action stopped because TSRE Route Editor is already open.");
+        return 0;
+    }
 
     Game::InitAssets();
     

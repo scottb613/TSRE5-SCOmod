@@ -47,12 +47,22 @@ public:
     bool isWaterRuler() const;
     void setWaterRuler(bool enabled);
     void appendWaterPoint(int x, int z, float *p);
+    bool isVegetationRuler() const;
+    void setVegetationRuler(bool enabled);
+    void appendVegetationPoint(int x, int z, float *p);
+    void selectVegetationPointNear(int x, int z, const float *p);
+    void snapSelectedVegetationPointToTerrain();
     void createRoadPaths();
     void removeRoadPaths();
     void enableShape();
     void render(GLUU* gluu, float lod, float posx, float posz, float* playerW, float* target, float fov, int selectionColor, int renderMode);
 
 private:
+    static constexpr float VegetationHalfWidth = 50.0f;
+    static constexpr float VegetationPostHeight = 50.0f;
+    static constexpr float VegetationHandleGap = 5.0f;
+    static constexpr float VegetationHandleSize = 4.0f;
+
     struct Point {
         bool selected = false;
         int shapeType = 0;
@@ -66,10 +76,16 @@ private:
     OglObj* point3d = NULL;
     OglObj* line3d = NULL;
     OglObj* point3dSelected = NULL;
+    OglObj* vegetationPost3d = NULL;
+    OglObj* vegetationPostSelected3d = NULL;
+    OglObj* vegetationBounds3d = NULL;
+    OglObj* vegetationHandle3d = NULL;
     int selectionValue = 0;
     float length = 0;
     float geoLength = 0;
     bool waterRuler = false;
+    bool vegetationRuler = false;
+    bool vegetationPointMoved = false;
     
     void refreshLength();
     bool shapeEnabled = false;

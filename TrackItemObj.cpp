@@ -34,7 +34,7 @@ TrackItemObj::TrackItemObj(int type) : OglObj() {
             0,0,1
             };        int ptr = 18*3;    /// was 18*3
         this->setMaterial(0.0, 1.0, 0.0);
-        this->init(punkty, ptr, RenderItem::V, GL_TRIANGLES);
+        initLitTriangles(punkty, ptr);
         //delete[] punkty;
     }    else if(type == 2) {   // classic pyramid
         float punkty[18*3]{
@@ -59,7 +59,7 @@ TrackItemObj::TrackItemObj(int type) : OglObj() {
             };
         int ptr = 18*3;
         this->setMaterial(0.0, 1.0, 0.0);
-        this->init(punkty, ptr, RenderItem::V, GL_TRIANGLES);
+        initLitTriangles(punkty, ptr);
         //delete[] punkty;
 
     } else if(type == 3) {
@@ -191,7 +191,7 @@ TrackItemObj::TrackItemObj(int type) : OglObj() {
             };
         int ptr = 18*3;    /// was 18*3
         this->setMaterial(0.0, 1.0, 0.0);
-        this->init(punkty, ptr, RenderItem::V, GL_TRIANGLES);
+        initLitTriangles(punkty, ptr);
         //delete[] punkty;
     }
      else if(type == 6) {
@@ -289,7 +289,7 @@ TrackItemObj::TrackItemObj(int type) : OglObj() {
         };
         int ptr = 36*3;
         this->setMaterial(0.0, 1.0, 0.0);
-        this->init(punkty, ptr, RenderItem::V, GL_TRIANGLES);
+        initLitTriangles(punkty, ptr);
         //delete[] punkty;
     }
 }

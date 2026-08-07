@@ -573,6 +573,61 @@ void GuiFunct::showEditorNotice(QWidget *parent, const QString &heading,
     notice.exec();
 }
 
+void GuiFunct::showEditorStopped(QWidget *parent, const QString &heading,
+                                 const QString &message){
+    QMessageBox stopped(parent);
+    const int standardWidth =
+        qRound(420.0f * qMax(1.0f, Game::uiScale));
+    stopped.setIcon(QMessageBox::Warning);
+    stopped.setWindowTitle(Game::AppName);
+    stopped.setText(heading.toUpper());
+    stopped.setInformativeText(message);
+    stopped.setStandardButtons(QMessageBox::Ok);
+    styleEditorDialog(&stopped);
+    stopped.setStyleSheet(stopped.styleSheet() + QString(
+        "QLabel#qt_msgbox_label {"
+        " color: %1; font-weight: bold;"
+        " background-color: #292929; border: none;"
+        " border-left: 3px solid %1;"
+        " padding: 6px 8px;"
+        "}").arg(Game::StyleOrangeButton));
+
+    QTimer::singleShot(0, &stopped, [&stopped, parent, standardWidth](){
+        const int textWidth = qMax(
+            qRound(260.0f * qMax(1.0f, Game::uiScale)),
+            standardWidth - qRound(100.0f * qMax(1.0f, Game::uiScale)));
+        const char *labelNames[2] = {
+            "qt_msgbox_label", "qt_msgbox_informativelabel"
+        };
+        for(int i = 0; i < 2; ++i){
+            QLabel *label = stopped.findChild<QLabel*>(labelNames[i]);
+            if(label == NULL)
+                continue;
+            label->setMinimumWidth(textWidth);
+            label->setMaximumWidth(textWidth);
+            label->setWordWrap(true);
+        }
+        stopped.setMinimumWidth(standardWidth);
+        stopped.setMaximumWidth(standardWidth);
+        stopped.adjustSize();
+        stopped.resize(standardWidth, stopped.height());
+        QPoint point = parent == NULL
+            ? QCursor::pos() : parent->window()->frameGeometry().center();
+        QScreen *screen = QGuiApplication::screenAt(point);
+        if(screen == NULL)
+            screen = QGuiApplication::primaryScreen();
+        if(screen == NULL)
+            return;
+        const QRect available = screen->availableGeometry();
+        stopped.move(available.left()
+                        + (available.width() - stopped.frameGeometry().width()) / 2,
+                     available.top()
+                        + (available.height() - stopped.frameGeometry().height()) / 2);
+    });
+
+    stopped.exec();
+}
+
 void GuiFunct::setupWindowPinButton(QToolButton *button){
     if(button == NULL)
         return;

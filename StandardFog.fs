@@ -30,6 +30,7 @@ uniform float secondTexEnabled;
 uniform mat4 uMVMatrix;
 uniform mat4 uMSMatrix;
 uniform float enableNormals;
+uniform float selectionPass;
 uniform float colorBrightness;
 
 vec2 poissonDisk[16] = vec2[]( 
@@ -65,6 +66,17 @@ float insideBox(vec2 v, vec2 bottomLeft, vec2 topRight) {
 void main() {
         if(textureEnabled == 0) {
             fragColor = shapeColor;
+            if(enableNormals > 0.5 && selectionPass < 0.5) {
+            vec3 solidNormal = normalize(mat3(uMVMatrix) * mat3(uMSMatrix) * vNormal);
+            vec3 solidLight = normalize(lightDirection);
+            float solidCosTheta = clamp(dot(solidNormal, solidLight), 0, 1);
+            float solidSkyAmount = clamp(solidNormal.y * 0.5 + 0.5, 0.0, 1.0);
+            vec3 solidAmbientTint = mix(vec3(0.86, 0.78, 0.68),
+                                        vec3(0.75, 0.84, 1.00), solidSkyAmount);
+            vec3 solidLitColor = ambientColor.xyz * solidAmbientTint
+                    + diffuseColor.xyz * vec3(1.00, 0.94, 0.84) * solidCosTheta;
+            fragColor.xyz *= solidLitColor*colorBrightness;
+            }
         } else {
             fragColor = texture(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
             vec4 tex2 = texture(uSampler2, vec2(vTextureCoord.s*secondTexEnabled, vTextureCoord.t*secondTexEnabled));

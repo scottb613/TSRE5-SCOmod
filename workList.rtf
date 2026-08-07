@@ -1,18 +1,34 @@
 {\rtf1\ansi\ansicpg1252\deff0\deflang1033{\fonttbl{\f0\fnil\fcharset0 Consolas;}}
 \viewkind4\uc1\pard\f0\fs20
-\b TSRE GenX v0.9 Complete Improvements\b0\par
+\b TSRE GenX v0.10 WIP Work List\b0\par
 \par
 ======================================================================================================\par
 \par
 \b SCOPE\b0\par
 \par
-\b TSRE GenX is a maintained development line of the TSRE route editor for MSTS and Open Rails route building. The work began with practical terrain and route-editor improvements, expanded through Dynamic Track, Activity Path Editor, settings, save safety, maps, and interface work, and now includes the complete Qt6/CMake modernization delivered in v0.9.\b0\par
+\b TSRE GenX is a maintained development line of the TSRE route editor for MSTS and Open Rails route building. v0.9 delivered the Qt6/CMake modernization on master; v0.10 is the active source-only work-in-progress line.\b0\par
 \par
 TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Gr\u248?nb\u230?k Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.\par
 \par
 ======================================================================================================\par
 \par
-\b HIGHLIGHTS\b0\par
+\b V0.10 WIP HIGHLIGHTS\b0\par
+\par
+- Aligned the application, CMake, vcpkg, resource, and launcher identity with v0.10.\par
+- Added an Object Selection dropdown for Ruler and Water tools, including a persistent per-route Ruler Vegetation placeholder for future foliage-spline work.\par
+- Added F12 Instance Protection, defaulting to False, while keeping Shape Viewer unrestricted.\par
+- Restored ACE-to-DDS cache reuse while respecting the image-control settings.\par
+- Fixed the selection-pick shader regression by bypassing solid lighting during pick rendering.\par
+- Updated the maintained Bloom and Fog shaders in the root, shaders, and shaders330 locations.\par
+- Restored flat-face shading for the original 3D markers while leaving the newer 2D markers unchanged.\par
+- Routed Sound Source posts through the shaded marker path.\par
+- Added the New Symbols setting with a fresh-install default of Off.\par
+\par
+The shader set passed focused glslang validation. Long compile and editor checks remain operator-run for this WIP source checkpoint.\par
+\par
+======================================================================================================\par
+\par
+\b V0.9 AND EARLIER HIGHLIGHTS\b0\par
 \par
 - Moved the complete [TSRE GenX v0.9 application] from Qt5/qmake to Qt 6.11.1, CMake, a current 64-bit MinGW compiler, and vcpkg-managed supporting libraries.\par
 - Established one reproducible [Windows build and deployment system] for the Route Editor, Consist Editor, Shape Viewer, Activity Path Editor, runtime assets, and required Qt/MinGW/vcpkg libraries.\par
@@ -112,7 +128,7 @@ TSRE GenX source repository:\par
 \par
 https://github.com/scottb613/TSRE5-SCOmod\par
 \par
-\b v0.9 is published as source code on master and at the v0.9 tag. No v0.9 binary package or GitHub Release was created.\b0\par
+\b v0.10 is published only as source on the tsre-scomod-wip branch and v0.10 source tag. No executable, dist directory, archive, or GitHub Release is published for this checkpoint.\b0\par
 \par
 ======================================================================================================\par
 \par
@@ -153,7 +169,7 @@ Route Editor shutdown and return-to-loader handling now follows the complete QOb
 \par
 \b    --- v0.9 Build and Test Result ---\b0\par
 \par
-\b The approved Qt6 Debug build configured, compiled, and linked successfully. The accepted v0.9 executable matched the verified build output at SHA-256 942D9FAED2B95D38D9CFBBD9790A1B8868215EF50A5ADAD260C7004DEB13189B. The Qt5/Qt6 text encoding probe, DDS decoder probe, and route regression harness all pass.\b0\par
+\b The accepted v0.9 Qt6 Debug executable matched its verified build output at SHA-256 942D9FAED2B95D38D9CFBBD9790A1B8868215EF50A5ADAD260C7004DEB13189B. The Qt5/Qt6 text encoding probe, DDS decoder probe, and route regression harness passed for v0.9. v0.10 is a source-only WIP checkpoint; long compile and manual editor checks are assigned to the operator.\b0\par
 \par
 \par
 \b    --- Acknowledgments and Source Lineage ---\b0\par
@@ -795,7 +811,7 @@ Eric's route-listing idea was also adapted into a single explicit workflow under
 \par
 \b DISTRIBUTION NOTES\b0\par
 \par
-\b The v0.9 package is self-contained and should be extracted into its own folder rather than copied over another TSRE installation.\b0\par
+\b v0.10 has no binary distribution. Use the WIP branch or source tag for review and development; build and runtime packaging remain local operator tasks.\b0\par
 \par
 ======================================================================================================\par
 \par

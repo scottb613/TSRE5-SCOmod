@@ -48,7 +48,7 @@
 //////// Version
 //////////////////////////////////
 
-QString Game::AppVersion = "v0.9";  // over-ride from main.cpp
+QString Game::AppVersion = "v0.10";  // over-ride from main.cpp
 
 
 bool Game::ServerMode = false;
@@ -122,6 +122,7 @@ bool Game::viewMarkers = false;
 bool Game::viewSnapable = false;
 bool Game::viewCompass = true;
 bool Game::warningBox = true;
+bool Game::instanceProtection = false;
 bool Game::leaveTrackShapeAfterDelete = false;
 bool Game::renderTrItems = false;
 int Game::newRouteX = -5000;
@@ -266,10 +267,10 @@ float Game::restoreCameraRotY = 0;
 
 bool  Game::debugOutput = false;
 bool  Game::legacySupport = false; 
-bool  Game::newSymbols = true;
-int   Game::pointerIn = 4;
-int   Game::pointerOut = 3;
-int   Game::pyramid = 5;
+bool  Game::newSymbols = false;
+int   Game::pointerIn = 2;
+int   Game::pointerOut = 2;
+int   Game::pyramid = 0;
 int   Game::maxAutoPlacement = 999;
 int   Game::imageMapsZoomOffset = 0;
 float Game::railProfile[] = {0.7175, 0.7895};
@@ -978,6 +979,9 @@ void Game::load() {
                     warningBox = true;
                 else
                     warningBox = false;
+            }
+            if(setname =="instanceprotection"){
+                instanceProtection = (setval == "true") || (setval == "1") || (setval == "on");
             }
             if(setname =="leavetrackshapeafterdelete"){
                 if((setval == "true") or (setval == "1") or (setval == "on"))

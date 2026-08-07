@@ -133,6 +133,7 @@ public:
     static bool viewSnapable;
     static bool viewCompass;
     static bool warningBox;
+    static bool instanceProtection;
     static bool viewPointer3d;
     static bool leaveTrackShapeAfterDelete;
     static bool renderTrItems;

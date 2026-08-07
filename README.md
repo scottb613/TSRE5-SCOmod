@@ -6,15 +6,26 @@ This branch is based on Eric's `TSRE8.006 baseline` from the `master` branch of 
 
 TSRE GenX combines Piotr Gadecki's original TSRE5 foundation, Eric Olesen's continuing TSRE 8.006 development as eric-from-trainsim, Peter Grønbæk Andersen's independent Qt6/CMake work, and the GenX route-building improvements described below.
 
-## v0.9 source release
+## Branches
 
-The `v0.9` tag is the complete Qt6/CMake source release. The application source
-remains at the repository root, following the public layout used by v0.8.
+- The version tags through `v0.8` preserve the earlier stable checkpoints.
+- `master` contains the source-only v0.9 Qt6/CMake line.
+- `tsre-scomod-wip` contains the active v0.10 source development line.
 
-Configure with the checked-in CMake presets and a local `CMakeUserPresets.json`
-that selects the installed Qt 6, matching MinGW compiler, and vcpkg toolchain.
+## v0.10 WIP highlights
 
-## Highlights
+- Updated the shared application, CMake, vcpkg, and Windows resource identity to v0.10.
+- Added Object Selection launchers for the existing Water Helper ruler and a persistent per-route Vegetation Ruler placeholder.
+- Added optional F12 Instance Protection while leaving Shape Viewer unrestricted.
+- Restored ACE-to-DDS texture cache reuse without overriding the current image-upgrade and substitution controls.
+- Protected encoded object-picking colors by bypassing solid-marker lighting during selection renders in all maintained Fog and Bloom shaders.
+- Added flat-face lighting to original 3D marker cubes, directional pyramids, and Sound Source posts while preserving exact selection colors.
+- Made the original shaded 3D markers the fresh-install default; existing New Symbols preferences remain respected.
+
+See `RELEASE-NOTES-v0.10.md` for the focused verification status and remaining
+manual checks.
+
+## v0.9 and earlier highlights
 
 - Moved the complete application from Qt5/qmake to Qt 6.11.1, CMake, a current 64-bit MinGW compiler, and vcpkg-managed supporting libraries.
 - Established one reproducible Windows build and deployment system for the Route Editor, Consist Editor, Shape Viewer, Activity Path Editor, runtime assets, and required libraries.
@@ -26,7 +37,7 @@ that selects the installed Qt 6, matching MinGW compiler, and vcpkg toolchain.
 - Restored DDS rolling-stock textures in the Qt6 Consist Editor with tested DXT1, DXT3, DXT5, 24-bit, and 32-bit decoding.
 - Stabilized native Windows captions, dropdown placement, Route Editor helper shutdown, rejected-Load sound feedback, Terrain Brush sizing, and Water Helper height steps.
 - Retained the legacy renderer as the parity reference while keeping native compressed GPU texture work and renderer replacement as separate later work.
-- Built v0.9 from the complementary work of Piotr Gadecki, Eric Olesen, and Peter Grønbæk Andersen, acknowledged in detail below.
+- Built v0.9 from the combined foundation of Piotr Gadecki (GokuMK), original author of TSRE5 who shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), who continued the direct TSRE 8.006 source line; and Peter Grønbæk Andersen, whose independent Qt6/CMake and DDS-loading work provided proven modernization references.
 - Updated `code` to build with current MSYS2/MinGW tooling.
 - Added atomic terrain-file replacement and truthful failure reporting to route-wide cleanup tools.
 - Added crash-safe coordinated saves for route databases and modified TRK files.
@@ -126,15 +137,15 @@ as the primary build-structure and dependency-management reference. His CMake,
 vcpkg, deployment, and DDS-loading work supplied proven solutions that were
 reviewed and narrowly adapted to the GenX source rather than copied wholesale.
 
-TSRE GenX v0.9 exists because these three bodies of work complement one
-another: Piotr's original application and technical foundation, Eric's
-sustained TSRE 8.x development, and Peter's independent modern build and Qt6
-migration work.
+TSRE GenX continues because these three bodies of work complement one another:
+Piotr's original application and technical foundation, Eric's sustained TSRE
+8.x development, and Peter's independent modern build and Qt6 migration work.
 
-## Downloads
+## Source distribution
 
-v0.9 is published as source code on `master` and at the `v0.9` tag. No v0.9
-binary package or GitHub Release accompanies this source publication.
+v0.10 is published as source code on `tsre-scomod-wip` and at the `v0.10`
+source tag. It does not include an executable, a `dist` package, or a GitHub
+Release.
 
 TSRE GenX follows the original TSRE5 GPLv3 license. Runtime libraries used by
 locally built copies remain under their respective upstream licenses.
@@ -144,8 +155,9 @@ locally built copies remain under their respective upstream licenses.
 - `scoWorkList.txt` contains the detailed change summary.
 - `scoFileEdit.txt` lists the code/project files touched during the work.
 - `THIRD-PARTY-NOTICES.txt` records upstream authorship, acknowledgements, and bundled runtime-library notices.
-- `RELEASE-NOTES-v0.9.md` summarizes the Qt6/CMake release.
+- `RELEASE-NOTES-v0.10.md` summarizes the current WIP source checkpoint.
 
 ## Status
 
-TSRE GenX v0.9 is the Qt6/CMake release line for continued GenX development.
+TSRE GenX v0.9 remains on `master`. TSRE GenX v0.10 is the active source-only
+development line on `tsre-scomod-wip`.

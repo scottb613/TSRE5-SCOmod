@@ -1340,6 +1340,32 @@ void Route::render(GLUU *gluu, float * playerT, float* playerW, float* target, f
         }
     }
 
+    // Keep the route-wide vegetation guide visible when its owning world tile
+    // is outside the normal render window. Selection remains on the ordinary
+    // world-tile pass so its control-point color encoding stays unchanged.
+    if(vegetationRulerObj != NULL && vegetationRulerObj->loaded
+            && renderMode != gluu->RENDER_SELECTION){
+        int offsetX = vegetationRulerObj->x - (int)playerT[0];
+        int offsetZ = vegetationRulerObj->y - (int)playerT[1];
+        float lodx = offsetX * 2048.0f
+                + vegetationRulerObj->position[0] - playerW[0];
+        float lodz = offsetZ * 2048.0f
+                + vegetationRulerObj->position[2] - playerW[2];
+        float lod = std::sqrt(lodx * lodx + lodz * lodz);
+        bool homeTileRendered = offsetX >= mintile && offsetX <= maxtile
+                && offsetZ >= mintile && offsetZ <= maxtile;
+        bool normalObjectRendered = homeTileRendered
+                && (lod < Game::objectLod || vegetationRulerObj->isInternalLodControl());
+        if(!normalObjectRendered){
+            gluu->mvPushMatrix();
+            Mat4::translate(gluu->mvMatrix, gluu->mvMatrix,
+                            2048.0f * offsetX, 0, 2048.0f * offsetZ);
+            vegetationRulerObj->render(gluu, lod, lodx, lodz,
+                                       playerW, target, fov, 0, renderMode);
+            gluu->mvPopMatrix();
+        }
+    }
+
     if (renderMode == gluu->RENDER_DEFAULT) {
         if(Game::viewTrackDbLines && trackDB != NULL)
             trackDB->renderAll(gluu, playerT, playerRot);
@@ -2440,6 +2466,12 @@ void Route::replaceWorldObjPointer(WorldObj* o, WorldObj* n){
                         && replacementRuler->isWaterRuler()
                         ? replacementRuler : NULL;
             }
+            if(vegetationRulerObj == o){
+                RulerObj *replacementRuler = dynamic_cast<RulerObj*>(n);
+                vegetationRulerObj = replacementRuler != NULL
+                        && replacementRuler->isVegetationRuler()
+                        ? replacementRuler : NULL;
+            }
             emit objectSelected((GameObj*)n);
             return;
         }
@@ -2630,6 +2662,10 @@ RulerObj* Route::placeWaterRuler(int x, int z, float *p) {
 }
 
 RulerObj* Route::findWaterRuler(bool loadWorldTiles) {
+    if(waterRulerObj != NULL && waterRulerObj->loaded
+            && waterRulerObj->isWaterRuler())
+        return waterRulerObj;
+
     auto findInLoadedTiles = [this]() -> RulerObj* {
         QList<int> keys = tile.keys();
         for(int key : keys){
@@ -2697,6 +2733,102 @@ RulerObj* Route::findWaterRuler(bool loadWorldTiles) {
                 waterRulerObj = rulerObj;
                 return rulerObj;
             }
+        }
+    }
+    return NULL;
+}
+
+RulerObj* Route::placeVegetationRuler(int x, int z, float *p) {
+    if(p == NULL)
+        return NULL;
+    RulerObj *existingRuler = findVegetationRuler(true);
+    if(existingRuler != NULL)
+        return existingRuler;
+    Game::check_coords(x, z, p);
+    Tile *worldTile = requestTile(x, z);
+    if(worldTile == NULL || worldTile->loaded != 1)
+        return NULL;
+
+    WorldObj *base = WorldObj::createObj("ruler");
+    RulerObj *rulerObj = dynamic_cast<RulerObj*>(base);
+    if(rulerObj == NULL){
+        delete base;
+        return NULL;
+    }
+    float q[4];
+    Quat::fill(q);
+    rulerObj->initPQ(p, q);
+    rulerObj->setVegetationRuler(true);
+    rulerObj->load(x, z);
+    worldTile->placeObject(rulerObj);
+    Undo::PushWorldObjPlaced(rulerObj);
+    vegetationRulerObj = rulerObj;
+    return rulerObj;
+}
+
+RulerObj* Route::findVegetationRuler(bool loadWorldTiles) {
+    if(vegetationRulerObj != NULL && vegetationRulerObj->loaded
+            && vegetationRulerObj->isVegetationRuler())
+        return vegetationRulerObj;
+
+    auto findInLoadedTiles = [this]() -> RulerObj* {
+        QList<int> keys = tile.keys();
+        for(int key : keys){
+            Tile *worldTile = tile.value(key, NULL);
+            if(worldTile == NULL || worldTile->loaded != 1)
+                continue;
+            for(int i = 0; i < worldTile->jestObiektow; i++){
+                RulerObj *rulerObj = dynamic_cast<RulerObj*>(worldTile->obiekty[i]);
+                if(rulerObj != NULL && rulerObj->loaded && rulerObj->isVegetationRuler())
+                    return rulerObj;
+            }
+        }
+        return NULL;
+    };
+
+    RulerObj *loadedRuler = findInLoadedTiles();
+    if(loadedRuler != NULL){
+        vegetationRulerObj = loadedRuler;
+        return loadedRuler;
+    }
+    if(!loadWorldTiles)
+        return NULL;
+
+    QString worldPath = Game::root + "/routes/" + Game::route + "/world";
+    QDir worldDir(worldPath);
+    worldDir.setFilter(QDir::Files);
+    worldDir.setNameFilters(QStringList() << "*.w");
+    QStringList worldFiles = worldDir.entryList();
+    QByteArray utf16Marker;
+    const QString marker = "VegetationRuler";
+    for(QChar c : marker){
+        ushort value = c.unicode();
+        utf16Marker.append((char)(value & 0xff));
+        utf16Marker.append((char)((value >> 8) & 0xff));
+    }
+
+    for(const QString &worldFile : worldFiles){
+        QFile file(worldDir.filePath(worldFile));
+        if(!file.open(QIODevice::ReadOnly))
+            continue;
+        QByteArray raw = file.readAll();
+        if(!raw.contains(utf16Marker) && !raw.contains("VegetationRuler"))
+            continue;
+        if(worldFile.length() != 17)
+            continue;
+        bool xOk = false;
+        bool zOk = false;
+        int worldX = worldFile.mid(1, 7).toInt(&xOk);
+        int worldZ = -worldFile.mid(8, 7).toInt(&zOk);
+        if(!xOk || !zOk)
+            continue;
+        Tile *worldTile = requestTile(worldX, worldZ);
+        if(worldTile == NULL || worldTile->loaded != 1)
+            continue;
+        RulerObj *rulerObj = findInLoadedTiles();
+        if(rulerObj != NULL){
+            vegetationRulerObj = rulerObj;
+            return rulerObj;
         }
     }
     return NULL;
@@ -2843,6 +2975,8 @@ void Route::deleteObj(WorldObj* obj) {
         return;
     if(obj == waterRulerObj)
         waterRulerObj = NULL;
+    if(obj == vegetationRulerObj)
+        vegetationRulerObj = NULL;
     if(obj->typeID == obj->groupobject) {
         GroupObj *gobj = (GroupObj*)obj;
         for(int i = 0; i < gobj->objects.size(); i++ ){

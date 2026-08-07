@@ -269,6 +269,8 @@ RouteEditorWindow::RouteEditorWindow() {
     PropertiesTrackObj *trackProperties =
         qobject_cast<PropertiesTrackObj*>(objProperties["TrackObj"]);
     if(terrainProperties != NULL){
+        QObject::connect(glWidget, &RouteEditorGLWidget::waterRulerPlacementRequested,
+                         terrainProperties, &PropertiesTerrain::startWaterRuler);
         QObject::connect(terrainProperties, &PropertiesTerrain::placeWaterRulerRequested,
                          glWidget, &RouteEditorGLWidget::placeWaterRuler);
         QObject::connect(terrainProperties, &PropertiesTerrain::scanWaterRulerRequested,

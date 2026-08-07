@@ -4,6 +4,53 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.10 WIP source checkpoint
+
+- CMakeLists.txt
+- vcpkg.json
+- Game.cpp
+- Game.h
+- main.cpp
+- TSRE5_resource.rc
+- GuiFunct.cpp
+- GuiFunct.h
+- SettingsDialog.cpp
+  - Aligned the application, build metadata, resources, launch behavior, and fresh settings defaults with v0.10.
+
+- ObjTools.cpp
+- Route.cpp
+- Route.h
+- RouteEditorGLWidget.cpp
+- RouteEditorGLWidget.h
+- RouteEditorWindow.cpp
+- RouteEditorWindow.h
+- RulerObj.cpp
+- RulerObj.h
+- TerrainWaterWindow2.cpp
+- TerrainWaterWindow2.h
+- PropertiesTerrain.cpp
+- PropertiesTerrain.h
+  - Added the Object Selection Ruler/Water dropdown, persistent per-route Ruler Vegetation placeholder, and related editor integration.
+
+- OglObj.cpp
+- OglObj.h
+- PoleObj.cpp
+- SoundSourceObj.cpp
+- TrackItemObj.cpp
+- GLUU.cpp
+- Shader.h
+- StandardBloom.fs
+- StandardFog.fs
+- tsre_appdata/0.697/shaders/StandardBloom.fs
+- tsre_appdata/0.697/shaders/StandardFog.fs
+- tsre_appdata/0.697/shaders330/StandardBloom.fs
+- tsre_appdata/0.697/shaders330/StandardFog.fs
+  - Fixed selection picking, restored shaded 3D marker faces, routed Sound Source posts through that marker path, and updated every maintained Bloom/Fog shader copy.
+
+- TexLib.cpp
+- Texture.cpp
+  - Restored ACE-to-DDS cache reuse while respecting image-control settings.
+
 v0.9 Qt6/CMake migration and parity release
 
 - CMakeLists.txt

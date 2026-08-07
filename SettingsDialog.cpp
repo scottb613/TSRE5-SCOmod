@@ -216,6 +216,7 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "usennumpad") return "Allows numpad keys to act as movement/editing shortcuts.";
     if (k == "useworkingdir") return "When true, TSRE writes working files relative to the current working directory. When false, logs stay beside TSRE.";
     if (k == "warningbox") return "Shows a warning before closing when route changes have not been saved.";
+    if (k == "instanceprotection") return "When True, only one Route Editor instance can run at a time. Shape Viewer windows are never counted and may be opened freely. When False, multiple Route Editor instances are allowed.";
     if (k == "logfiledays") return "Deletes log files older than this many days during log cleanup.";
     if (k == "logfilemax") return "Keeps at most this many log files. Larger values preserve history but can clutter the TSRE folder.";
     if (k == "gameroot") return "Optional path to the MSTS or ORTS Train Simulator folder. If set, it can bypass folder browsing at startup.";
@@ -536,6 +537,7 @@ void SettingsDialog::setupUi() {
     addRow(l, "usenNumPad", "bool", "Use NumPad", "");
     addRow(l, "useWorkingDir", "bool", "Use Working Dir", "false saves logs to TSRE folder");
     addRow(l, "warningBox", "bool", "Warning Box", "warn before exiting without save");
+    addRow(l, "instanceProtection", "bool", "Instance Protection", "True allows only one Route Editor; Shape Viewer is never counted");
 
     createScrollTab(l, tabs, "Logging");
     addRow(l, "logfiledays", "number", "Log File Days", "delete files older than X days");
@@ -720,6 +722,7 @@ bool SettingsDialog::save(const QString& filename) {
     writeSetting(out, "usenNumPad", "true");
     writeSetting(out, "useWorkingDir", "false", "false saves logs to the TSRE folder");
     writeSetting(out, "warningBox", "true", "warn before exiting without saving");
+    writeSetting(out, "instanceProtection", "false", "true allows only one Route Editor; Shape Viewer is never counted");
 
     out << "\n\n//// Logging\n\n";
     writeSetting(out, "logfiledays", "20", "delete logs older than X days");
@@ -761,7 +764,7 @@ bool SettingsDialog::save(const QString& filename) {
     writeSetting(out, "imageUpgrade", "true", "prefer DDS if available; false uses shape-defined texture only");
     writeSetting(out, "maxObjLag", "10");
     writeSetting(out, "MSTSshadows", "false", "simplified shadows when true");
-    writeSetting(out, "newSymbols", "true", "true uses newer TSRE symbols; false uses older pyramids");
+    writeSetting(out, "newSymbols", "false", "true uses newer TSRE symbols; false uses older shaded pyramids");
     writeSetting(out, "objectLod", "2000", "2000 is plenty for most routes");
     writeSetting(out, "railProfile", "0.7175, 0.7895", "rail edges for dynamic track display");
     writeSetting(out, "shadowLowMapSize", "1024");
@@ -1123,6 +1126,7 @@ QString SettingsDialog::getGameValue(const QString& key) {
     if (key == "viewmarkers") return Game::viewMarkers ? "true" : "false";
     if (key == "viewcompass") return Game::viewCompass ? "true" : "false";
     if (key == "warningbox") return Game::warningBox ? "true" : "false";
+    if (key == "instanceprotection") return Game::instanceProtection ? "true" : "false";
     if (key == "leavetrackshapeafterdelete") return Game::leaveTrackShapeAfterDelete ? "true" : "false";
     if (key == "rendertritems") return Game::renderTrItems ? "true" : "false";
     if (key == "consoleoutput") return Game::consoleOutput ? "true" : "false";

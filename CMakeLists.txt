@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
     TSREvc
-    VERSION 0.9.0
+    VERSION 0.10.0
     DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )

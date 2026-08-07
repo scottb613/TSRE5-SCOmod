@@ -101,6 +101,7 @@ void GLUU::initShader() {
         currentShader->shaderTextureEnabled = currentShader->uniformLocation("textureEnabled");
         currentShader->shaderShapeColor = currentShader->uniformLocation("shapeColor");
         currentShader->shaderEnableNormals = currentShader->uniformLocation("enableNormals");
+        currentShader->shaderSelectionPass = currentShader->uniformLocation("selectionPass");
         currentShader->shaderDiffuseColor = currentShader->uniformLocation("diffuseColor");
         currentShader->shaderAmbientColor = currentShader->uniformLocation("ambientColor");
         currentShader->shaderSpecularColor = currentShader->uniformLocation("specularColor");

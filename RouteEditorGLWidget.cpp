@@ -352,6 +352,7 @@ void RouteEditorGLWidget::clearRouteSession(){
     CamObj = NULL;
     copyPasteObj = NULL;
     activeWaterRuler = NULL;
+    activeVegetationRuler = NULL;
     waterScanUndoAvailable = false;
     waterScanPending = false;
     mouseLPressed = false;
@@ -711,6 +712,9 @@ void RouteEditorGLWidget::paintGL2() {
     int renderMode = GLUU::RENDER_DEFAULT;
     if (selection)
         renderMode = GLUU::RENDER_SELECTION;
+    gluu->currentShader->setUniformValue(
+        gluu->currentShader->shaderSelectionPass,
+        renderMode == GLUU::RENDER_SELECTION ? 1.0f : 0.0f);
 
     glClearColor(gluu->skyColor[0], gluu->skyColor[1], gluu->skyColor[2], 1.0);
     glViewport(0, 0, (float) this->width() * Game::PixelRatio, (float) this->height() * Game::PixelRatio);
@@ -938,6 +942,16 @@ void RouteEditorGLWidget::handleSelection() {
                     if(Game::debugOutput) qDebug() << "brak obiektu";
                 } else {
                     selectedObj->select(cdata);
+                    RulerObj *selectedRuler = dynamic_cast<RulerObj*>(selectedObj);
+                    if(selectedRuler != NULL && selectedRuler->isVegetationRuler()){
+                        int pointerTileX = (int)camera->pozT[0];
+                        int pointerTileZ = (int)camera->pozT[1];
+                        float pointerPosition[3];
+                        Vec3::copy(pointerPosition, aktPointerPos);
+                        Game::check_coords(pointerTileX, pointerTileZ, pointerPosition);
+                        selectedRuler->selectVegetationPointNear(
+                            pointerTileX, pointerTileZ, pointerPosition);
+                    }
                 }
             }
         } else if( ww == 10 ){
@@ -1735,7 +1749,52 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
 
         /// placing an item onto the world EFO
 
-        if (toolEnabled == "placeTool") {
+        const bool rulerWaterPlacement = toolEnabled == "placeTool"
+            && route->ref->selected != NULL
+            && route->ref->selected->type.compare("rulerwater", Qt::CaseInsensitive) == 0;
+        if(rulerWaterPlacement){
+            int pointTileX = (int)camera->pozT[0];
+            int pointTileZ = (int)camera->pozT[1];
+            float point[3];
+            Vec3::copy(point, aktPointerPos);
+            Game::check_coords(pointTileX, pointTileZ, point);
+            Terrain *pointTerrain = Game::terrainLib->getTerrainByXY(
+                pointTileX, pointTileZ, true);
+            if(pointTerrain == NULL || !pointTerrain->loaded){
+                emit waterHelperStatus("Unable to load terrain beneath the ruler point.");
+            } else {
+                // Open Water Helper and press its Ruler Water button through
+                // the same signal path used by the user-facing controls. The
+                // independent waterRulerTool block below consumes this click
+                // as the first terrain-snapped point.
+                emit waterRulerPlacementRequested(pointTerrain);
+            }
+        }
+
+        const bool rulerVegetationPlacement = toolEnabled == "placeTool"
+            && route->ref->selected != NULL
+            && route->ref->selected->type.compare("rulervegetation", Qt::CaseInsensitive) == 0;
+        if(rulerVegetationPlacement){
+            int pointTileX = (int)camera->pozT[0];
+            int pointTileZ = (int)camera->pozT[1];
+            float point[3];
+            Vec3::copy(point, aktPointerPos);
+            Game::check_coords(pointTileX, pointTileZ, point);
+            Terrain *pointTerrain = Game::terrainLib->getTerrainByXY(
+                pointTileX, pointTileZ, true);
+            if(pointTerrain == NULL || !pointTerrain->loaded){
+                emit waterHelperStatus("Unable to load terrain beneath the vegetation ruler point.");
+            } else {
+                if(activeVegetationRuler == NULL || !activeVegetationRuler->loaded)
+                    activeVegetationRuler = route->findVegetationRuler(true);
+                enableTool("vegetationRulerTool");
+                emit waterHelperStatus(
+                    "Vegetation ruler active — click terrain to add control points.");
+            }
+        }
+
+        if (toolEnabled == "placeTool" && !rulerWaterPlacement
+                && !rulerVegetationPlacement) {
 
         //QString selectedFilename = selectedObj->objectName();
         //qDebug() << "placed objName: " << selectedFilename;
@@ -1874,8 +1933,50 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                         selectedObj->unselect();
                     setSelectedObj(activeWaterRuler);
                     activeWaterRuler->select(0);
+                    if(rulerWaterPlacement)
+                        showPlacementSuccess();
                 } else {
                     emit waterHelperStatus("Unable to create the water ruler.");
+                }
+            }
+        }
+        if (toolEnabled == "vegetationRulerTool") {
+            int pointTileX = (int)camera->pozT[0];
+            int pointTileZ = (int)camera->pozT[1];
+            float point[3];
+            Vec3::copy(point, aktPointerPos);
+            Game::check_coords(pointTileX, pointTileZ, point);
+            Terrain *pointTerrain = Game::terrainLib->getTerrainByXY(
+                pointTileX, pointTileZ, true);
+            if(pointTerrain == NULL || !pointTerrain->loaded){
+                emit waterHelperStatus("Unable to load terrain beneath the vegetation ruler point.");
+            } else {
+                float terrainHeight = Game::terrainLib->getHeight(
+                    pointTileX, pointTileZ, point[0], point[2], false);
+                if(terrainHeight > -10000.0f)
+                    point[1] = terrainHeight;
+
+                if(activeVegetationRuler == NULL || !activeVegetationRuler->loaded)
+                    activeVegetationRuler = route->findVegetationRuler(true);
+                if(activeVegetationRuler == NULL){
+                    activeVegetationRuler = route->placeVegetationRuler(
+                        pointTileX, pointTileZ, point);
+                } else {
+                    Undo::PushWorldObjData(activeVegetationRuler);
+                    activeVegetationRuler->appendVegetationPoint(
+                        pointTileX, pointTileZ, point);
+                }
+
+                if(activeVegetationRuler != NULL){
+                    if(selectedObj != NULL && selectedObj != activeVegetationRuler)
+                        selectedObj->unselect();
+                    setSelectedObj(activeVegetationRuler);
+                    activeVegetationRuler->select(
+                        activeVegetationRuler->getPointCount() - 1);
+                    if(rulerVegetationPlacement)
+                        showPlacementSuccess();
+                } else {
+                    emit waterHelperStatus("Unable to create the vegetation ruler.");
                 }
             }
         }
@@ -2042,6 +2143,13 @@ void RouteEditorGLWidget::mouseReleaseEvent(QMouseEvent* event) {
             showContextMenu(event->pos());
     }
     if ((event->button()) == Qt::LeftButton) {
+        if(selectedObj != NULL && selectedObj->typeObj == GameObj::worldobj){
+            RulerObj *selectedRuler = dynamic_cast<RulerObj*>((WorldObj*)selectedObj);
+            if(selectedRuler != NULL && selectedRuler->isVegetationRuler()){
+                selectedRuler->snapSelectedVegetationPointToTerrain();
+                selectedRuler->setMartix();
+            }
+        }
         mouseLPressed = false;
         Undo::StateEnd();
     }

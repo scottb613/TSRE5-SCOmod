@@ -30,15 +30,8 @@ Texture::Texture(QString pathid) {
   
     
     this->hashid.push_back(pathid);
-    //temp fix for dds/ace loading
-    // Openrails uses .dds textures instead of .ace
-    QString tType = pathid.toLower().split(".").last();
-    /*   /// EFO there's no good reason to swap DDS and ACE files... use what's defined
-    if(tType == "dds"){
-     //   hashid.push_back(pathid.left(pathid.length() - 3)+"ace");   /// EFO ehy is this overriding to ACE???
-        if(Game::debugOutput)    qDebug() << " dds found: " << pathid.toLower();
-    }
-      */
+    // TexLib adds an alternate ACE/DDS hash only when its substitution or
+    // upgrade policy actually resolves the request to the other file type.
 }
     
 Texture::Texture(int x, int y, int bpp, Brush* brush){

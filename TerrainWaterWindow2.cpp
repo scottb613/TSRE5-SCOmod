@@ -117,7 +117,7 @@ TerrainWaterWindow2::TerrainWaterWindow2(QWidget* parent)
 
     QGridLayout *autoButtons = new QGridLayout;
     autoButtons->setContentsMargins(3,0,3,0);
-    placeRulerButton = new QPushButton("Water Ruler");
+    placeRulerButton = new QPushButton("Ruler Water");
     placeRulerButton->setCheckable(true);
     QPushButton *processWaterTiles = new QPushButton("Process Water Tiles");
     QPushButton *undoScan = new QPushButton("Undo Last");
@@ -244,6 +244,17 @@ void TerrainWaterWindow2::bAdjustEdited(){
         e[i].setText(QString::number(we[i]));
     
     terrain->setAdjacentWaterLevels(we);
+}
+
+void TerrainWaterWindow2::activateRuler(){
+    if(placeRulerButton == NULL)
+        return;
+
+    // Mirror the control state and action without synthesizing clicked(). The
+    // successful world placement supplies the normal placement sound once.
+    if(!placeRulerButton->isChecked())
+        placeRulerButton->setChecked(true);
+    emit placeRulerRequested();
 }
 
 void TerrainWaterWindow2::deactivateRuler(){

@@ -13,6 +13,9 @@
 #include "TrackObj.h"
 #include "GLMatrix.h"
 #include "TrackItemObj.h"
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <math.h>
 #include "ParserX.h"
 #include <QDebug>
@@ -24,6 +27,8 @@
 #include "Route.h"
 #include "GeoCoordinates.h"
 #include "ProceduralShape.h"
+#include "Terrain.h"
+#include "TerrainLib.h"
 
 bool RulerObj::TwoPointRuler = false;
 bool RulerObj::DrawPoints = false;
@@ -52,6 +57,7 @@ RulerObj::RulerObj(const RulerObj& o) : WorldObj(o){
     length = o.length;
     geoLength = o.geoLength;
     waterRuler = o.waterRuler;
+    vegetationRuler = o.vegetationRuler;
     internalLodControl = o.internalLodControl;
 }
 
@@ -60,6 +66,13 @@ WorldObj* RulerObj::clone(){
 }
 
 RulerObj::~RulerObj() {
+    delete point3d;
+    delete line3d;
+    delete point3dSelected;
+    delete vegetationPost3d;
+    delete vegetationPostSelected3d;
+    delete vegetationBounds3d;
+    delete vegetationHandle3d;
 }
 
 void RulerObj::load(int x, int y) {
@@ -120,6 +133,10 @@ void RulerObj::set(QString sh, FileBuffer* data) {
         waterRuler = ParserX::GetNumber(data) != 0;
         return;
     }
+    if (sh == ("vegetationruler")) {
+        vegetationRuler = ParserX::GetNumber(data) != 0;
+        return;
+    }
     
     WorldObj::set(sh, data);
     return;
@@ -140,6 +157,24 @@ void RulerObj::setTemplate(QString name){
 }
 
 void RulerObj::setPosition(int x, int z, float* p){
+    if(vegetationRuler && selectionValue >= 0 && selectionValue < points.size()){
+        float newX = -2048*(this->x-x) + p[0];
+        float newY = p[1];
+        float newZ = -2048*(this->y-z) + p[2];
+        Point &point = points[selectionValue];
+        if(std::fabs(point.position[0] - newX) < 0.001f
+                && std::fabs(point.position[1] - newY) < 0.001f
+                && std::fabs(point.position[2] - newZ) < 0.001f)
+            return;
+        point.position[0] = newX;
+        point.position[1] = newY;
+        point.position[2] = newZ;
+        vegetationPointMoved = true;
+        setModified();
+        if(line3d != NULL)
+            line3d->deleteVBO();
+        return;
+    }
     if(selectionValue > 0){
         points[selectionValue].position[0] = -2048*(this->x-x) + p[0];
         points[selectionValue].position[1] = p[1];
@@ -225,6 +260,87 @@ void RulerObj::setWaterRuler(bool enabled) {
 void RulerObj::appendWaterPoint(int px, int pz, float *p) {
     selectionValue = 0;
     setPosition(px, pz, p);
+}
+
+bool RulerObj::isVegetationRuler() const {
+    return vegetationRuler;
+}
+
+void RulerObj::setVegetationRuler(bool enabled) {
+    vegetationRuler = enabled;
+    setModified();
+    if(vegetationBounds3d != NULL)
+        vegetationBounds3d->deleteVBO();
+    if(line3d != NULL)
+        line3d->deleteVBO();
+}
+
+void RulerObj::appendVegetationPoint(int px, int pz, float *p) {
+    if(p == NULL)
+        return;
+    Point point;
+    point.position[0] = -2048*(this->x-px) + p[0];
+    point.position[1] = p[1];
+    point.position[2] = -2048*(this->y-pz) + p[2];
+    if(points.size() > 0 && Vec3::dist(points.back().position, point.position) <= 1)
+        return;
+    points.push_back(point);
+    selectionValue = points.size() - 1;
+    setModified();
+    if(line3d != NULL)
+        line3d->deleteVBO();
+    if(vegetationBounds3d != NULL)
+        vegetationBounds3d->deleteVBO();
+}
+
+void RulerObj::selectVegetationPointNear(int px, int pz, const float *p) {
+    if(!vegetationRuler || p == NULL || points.isEmpty())
+        return;
+    float localX = -2048*(this->x-px) + p[0];
+    float localZ = -2048*(this->y-pz) + p[2];
+    int nearestIndex = 0;
+    float nearestDistanceSquared = std::numeric_limits<float>::max();
+    for(int i = 0; i < points.size(); i++){
+        float dx = points[i].position[0] - localX;
+        float dz = points[i].position[2] - localZ;
+        float distanceSquared = dx*dx + dz*dz;
+        if(distanceSquared < nearestDistanceSquared){
+            nearestDistanceSquared = distanceSquared;
+            nearestIndex = i;
+        }
+    }
+    selectionValue = nearestIndex;
+    selected = true;
+}
+
+void RulerObj::snapSelectedVegetationPointToTerrain() {
+    if(!vegetationRuler || !vegetationPointMoved
+            || selectionValue < 0 || selectionValue >= points.size())
+        return;
+
+    vegetationPointMoved = false;
+
+    // A point may have moved even when the terrain tile cannot be sampled at
+    // release. Always discard the pre-drag corridor; terrain lookup below is
+    // only responsible for correcting the point height.
+    if(vegetationBounds3d != NULL)
+        vegetationBounds3d->deleteVBO();
+
+    int tileX = x;
+    int tileZ = y;
+    float localX = points[selectionValue].position[0];
+    float localZ = points[selectionValue].position[2];
+    Game::check_coords(tileX, tileZ, localX, localZ);
+    Terrain *terrain = Game::terrainLib->getTerrainByXY(tileX, tileZ, true);
+    if(terrain == NULL || !terrain->loaded)
+        return;
+    float height = Game::terrainLib->getHeight(tileX, tileZ, localX, localZ, false);
+    if(height <= -10000.0f)
+        return;
+    points[selectionValue].position[1] = height;
+    setModified();
+    if(line3d != NULL)
+        line3d->deleteVBO();
 }
 
 void RulerObj::createRoadPaths(){
@@ -318,7 +434,43 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
     if(!Game::viewInteractives) 
         return;
     
-    if(point3d == NULL){
+    if((vegetationRuler && vegetationHandle3d == NULL)
+            || (!vegetationRuler && point3d == NULL)){
+        if(vegetationRuler){
+            const float h = VegetationHandleSize * 0.5f;
+            const float faceCorners[6][12] = {
+                {-h,-h, h,  h,-h, h,  h, h, h, -h, h, h},
+                { h,-h,-h, -h,-h,-h, -h, h,-h,  h, h,-h},
+                {-h,-h,-h, -h,-h, h, -h, h, h, -h, h,-h},
+                { h,-h, h,  h,-h,-h,  h, h,-h,  h, h, h},
+                {-h, h, h,  h, h, h,  h, h,-h, -h, h,-h},
+                {-h,-h,-h,  h,-h,-h,  h,-h, h, -h,-h, h}
+            };
+            QVector<float> handlePositions;
+            handlePositions.reserve(36*3);
+            for(int faceIndex = 0; faceIndex < 6; faceIndex++){
+                const float *c = faceCorners[faceIndex];
+                float faceVertices[18] = {
+                    c[0],c[1],c[2], c[3],c[4],c[5], c[6],c[7],c[8],
+                    c[0],c[1],c[2], c[6],c[7],c[8], c[9],c[10],c[11]
+                };
+                for(float value : faceVertices)
+                    handlePositions.push_back(value);
+            }
+            vegetationHandle3d = new OglObj();
+            vegetationHandle3d->setMaterial(0.65f, 0.58f, 0.15f);
+            vegetationHandle3d->initLitTriangles(
+                handlePositions.constData(), static_cast<int>(handlePositions.size()));
+            vegetationPost3d = new OglObj();
+            vegetationPost3d->setMaterial(0.13f,0.55f,0.13f);
+            vegetationPost3d->setLineWidth(8);
+            float postPoints[6] = { 0, 0, 0, 0, VegetationPostHeight, 0 };
+            vegetationPost3d->init(postPoints, 6, RenderItem::V, GL_LINES);
+            vegetationPostSelected3d = new OglObj();
+            vegetationPostSelected3d->setMaterial(0.13f,0.55f,0.13f);
+            vegetationPostSelected3d->setLineWidth(8);
+            vegetationPostSelected3d->init(postPoints, 6, RenderItem::V, GL_LINES);
+        } else {
         point3d = new OglObj();
         if(waterRuler)
             point3d->setMaterial(0.10f,0.45f,1.0f);
@@ -350,11 +502,14 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
         punkty[ptr++] = 0;
         point3dSelected->init(punkty, ptr, RenderItem::V, GL_LINES);
         delete[] punkty;
+        }
     }
     if(line3d == NULL){
         line3d = new OglObj();
         line3d->setLineWidth(2);
-        if(waterRuler)
+        if(vegetationRuler)
+            line3d->setMaterial(0.13f,0.55f,0.13f);
+        else if(waterRuler)
             line3d->setMaterial(0.10f,0.45f,1.0f);
         else
             line3d->setMaterial(1,1,1);
@@ -375,19 +530,168 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
         delete[] punkty;
         refreshLength();
     }
+
+    if(vegetationRuler && vegetationBounds3d == NULL){
+        vegetationBounds3d = new OglObj();
+        vegetationBounds3d->setMaterial(1.0f,0.0f,1.0f);
+        vegetationBounds3d->setLineWidth(3);
+    }
+    if(vegetationRuler && vegetationBounds3d != NULL
+            && !vegetationBounds3d->loaded && points.size() >= 2){
+        struct BoundaryPoint {
+            float x;
+            float z;
+        };
+
+        const int pointCount = points.size();
+        QVector<BoundaryPoint> directions(pointCount - 1);
+        QVector<BoundaryPoint> normals(pointCount - 1);
+        for(int i = 0; i < pointCount - 1; i++){
+            float dx = points[i+1].position[0] - points[i].position[0];
+            float dz = points[i+1].position[2] - points[i].position[2];
+            float segmentLength = std::sqrt(dx*dx + dz*dz);
+            if(segmentLength < 0.001f){
+                if(i > 0)
+                    directions[i] = directions[i-1];
+                else
+                    directions[i] = { 1.0f, 0.0f };
+            } else {
+                directions[i] = { dx/segmentLength, dz/segmentLength };
+            }
+            normals[i] = { -directions[i].z, directions[i].x };
+        }
+
+        QVector<BoundaryPoint> left(pointCount);
+        QVector<BoundaryPoint> right(pointCount);
+        left[0] = {
+            points[0].position[0] + normals[0].x*VegetationHalfWidth,
+            points[0].position[2] + normals[0].z*VegetationHalfWidth
+        };
+        right[0] = {
+            points[0].position[0] - normals[0].x*VegetationHalfWidth,
+            points[0].position[2] - normals[0].z*VegetationHalfWidth
+        };
+
+        for(int i = 1; i < pointCount - 1; i++){
+            float miterX = normals[i-1].x + normals[i].x;
+            float miterZ = normals[i-1].z + normals[i].z;
+            float denominator = miterX*normals[i].x + miterZ*normals[i].z;
+            float scale = VegetationHalfWidth;
+            if(std::fabs(denominator) > 0.05f)
+                scale = VegetationHalfWidth/denominator;
+
+            // Near reversals do not have a useful finite intersection. Keep
+            // the guide bounded with a conservative miter limit.
+            if(std::fabs(scale) > VegetationHalfWidth*10.0f){
+                miterX = normals[i].x;
+                miterZ = normals[i].z;
+                scale = VegetationHalfWidth;
+            }
+
+            left[i] = {
+                points[i].position[0] + miterX*scale,
+                points[i].position[2] + miterZ*scale
+            };
+            right[i] = {
+                points[i].position[0] - miterX*scale,
+                points[i].position[2] - miterZ*scale
+            };
+        }
+
+        const int last = pointCount - 1;
+        left[last] = {
+            points[last].position[0] + normals[last-1].x*VegetationHalfWidth,
+            points[last].position[2] + normals[last-1].z*VegetationHalfWidth
+        };
+        right[last] = {
+            points[last].position[0] - normals[last-1].x*VegetationHalfWidth,
+            points[last].position[2] - normals[last-1].z*VegetationHalfWidth
+        };
+
+        QVector<float> boundaryVertices;
+        auto terrainHeight = [this](float localX, float localZ, float fallback) -> float {
+            int tileX = x;
+            int tileZ = y;
+            Game::check_coords(tileX, tileZ, localX, localZ);
+            Terrain *terrain = Game::terrainLib->getTerrainByXY(tileX, tileZ, true);
+            if(terrain == NULL || !terrain->loaded)
+                return fallback + 0.35f;
+            float height = Game::terrainLib->getHeight(
+                tileX, tileZ, localX, localZ, false);
+            return height > -10000.0f ? height + 0.35f : fallback + 0.35f;
+        };
+        auto appendTerrainLine = [&boundaryVertices, &terrainHeight](
+                const BoundaryPoint &a, const BoundaryPoint &b,
+                float fallbackA, float fallbackB){
+            float dx = b.x - a.x;
+            float dz = b.z - a.z;
+            float distance = std::sqrt(dx*dx + dz*dz);
+            int steps = std::max(1, (int)std::ceil(distance/25.0f));
+            for(int step = 0; step < steps; step++){
+                float t0 = (float)step/(float)steps;
+                float t1 = (float)(step + 1)/(float)steps;
+                float x0 = a.x + dx*t0;
+                float z0 = a.z + dz*t0;
+                float x1 = a.x + dx*t1;
+                float z1 = a.z + dz*t1;
+                float fallback0 = fallbackA + (fallbackB-fallbackA)*t0;
+                float fallback1 = fallbackA + (fallbackB-fallbackA)*t1;
+                boundaryVertices.push_back(x0);
+                boundaryVertices.push_back(terrainHeight(x0, z0, fallback0));
+                boundaryVertices.push_back(z0);
+                boundaryVertices.push_back(x1);
+                boundaryVertices.push_back(terrainHeight(x1, z1, fallback1));
+                boundaryVertices.push_back(z1);
+            }
+        };
+
+        for(int i = 0; i < pointCount - 1; i++){
+            appendTerrainLine(left[i], left[i+1],
+                              points[i].position[1], points[i+1].position[1]);
+            appendTerrainLine(right[i], right[i+1],
+                              points[i].position[1], points[i+1].position[1]);
+        }
+        appendTerrainLine(left[0], right[0],
+                          points[0].position[1], points[0].position[1]);
+        appendTerrainLine(left[last], right[last],
+                          points[last].position[1], points[last].position[1]);
+
+        if(!boundaryVertices.isEmpty())
+            vegetationBounds3d->init(boundaryVertices.data(), boundaryVertices.size(),
+                                     RenderItem::V, GL_LINES);
+    }
     
     gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
     line3d->render(selectionColor);
-    
+    if(vegetationRuler && vegetationBounds3d != NULL)
+        vegetationBounds3d->render(selectionColor);
+
     for(int i = 0; i < points.size(); i++){
         gluu->mvPushMatrix();
         Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, points[i].position[0], points[i].position[1], points[i].position[2]);
         gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
-        if(i == 0 || i == points.size() - 1 || DrawPoints){
-            if(this->selected && this->selectionValue == i) 
+        if(i == 0 || i == points.size() - 1 || DrawPoints || vegetationRuler){
+            if(vegetationRuler && vegetationPost3d != NULL){
+                if(this->selected && this->selectionValue == i)
+                    vegetationPostSelected3d->render(selectionColor | (i&0xF)*useSC);
+                else
+                    vegetationPost3d->render(selectionColor | (i&0xF)*useSC);
+                Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, 0,
+                                VegetationPostHeight + VegetationHandleGap
+                                + VegetationHandleSize*0.5f, 0);
+                gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
+                if(selectionColor == 0){
+                    if(this->selected && this->selectionValue == i)
+                        vegetationHandle3d->setMaterial(1.0f, 0.95f, 0.10f);
+                    else
+                        vegetationHandle3d->setMaterial(0.65f, 0.58f, 0.15f);
+                }
+                vegetationHandle3d->render(selectionColor | (i&0xF)*useSC);
+            } else if(this->selected && this->selectionValue == i) {
                 point3dSelected->render(selectionColor | (i&0xF)*useSC);
-            else
+            } else {
                 point3d->render(selectionColor | (i&0xF)*useSC);
+            }
         //    pointer3d->render(selectionColor + (i+1)*131072*8*useSC);
         }
         gluu->mvPopMatrix();
@@ -463,6 +767,9 @@ if(shapeEnabled){
 }
 if(waterRuler){
 *(out) << "		WaterRuler ( 1 )\n";
+}
+if(vegetationRuler){
+*(out) << "		VegetationRuler ( 1 )\n";
 }
 *(out) << "	)\n";
 }

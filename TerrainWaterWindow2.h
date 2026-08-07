@@ -23,6 +23,7 @@ public:
     TerrainWaterWindow2(QWidget* parent);
     ~TerrainWaterWindow2() override;
     void setTerrain(Terrain *t);
+    void activateRuler();
     void deactivateRuler();
 
 signals:

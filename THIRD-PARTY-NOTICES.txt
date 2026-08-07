@@ -62,7 +62,7 @@ their respective upstream projects and MSYS2 package metadata.
 
 Source code for this TSRE5-SCOmod build is available at:
 
-https://github.com/scottb613/TSRE5-SCOmod/tree/v0.9
+https://github.com/scottb613/TSRE5-SCOmod/tree/tsre-scomod-wip
 
 Upstream projects:
 

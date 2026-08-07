@@ -44,6 +44,7 @@ class GuiGlCompass;
 class QFrame;
 class QLabel;
 class RulerObj;
+class Terrain;
 
 QT_FORWARD_DECLARE_CLASS(QOpenGLShaderProgram)
 
@@ -169,6 +170,7 @@ signals:
     void mkrList(QMap<QString, Coords*> list);
     void refreshObjLists();
     void reloadMkrLists();
+    void waterRulerPlacementRequested(Terrain *terrain);
     
     void sendMsg(QString name);
     void sendMsg(QString name, bool val);
@@ -257,6 +259,7 @@ private:
     WorldObj* CamObj = NULL;
     WorldObj* copyPasteObj = NULL;
     RulerObj* activeWaterRuler = NULL;
+    RulerObj* activeVegetationRuler = NULL;
     bool waterScanUndoAvailable = false;
     bool waterScanPending = false;
     QLabel* waterMessageLabel = NULL;

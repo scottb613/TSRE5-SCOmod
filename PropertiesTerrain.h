@@ -28,6 +28,7 @@ public:
     QPushButton *hacksButton();
     
 public slots:
+    void startWaterRuler(Terrain *terrain);
     void bWaterEditorEnabled();
     void bHeightMapResetEnabled();
     void waterHelperClosed();
