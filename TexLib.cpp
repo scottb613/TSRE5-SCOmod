@@ -120,6 +120,7 @@ int TexLib::getTex(QString pathid) {
 int TexLib::addTex(QString pathid, bool reload) {
     const QString requestedPathid = pathid;
     Texture* newFile = NULL;
+    int texId = -1;
     for ( auto it = mtex.begin(); it != mtex.end(); ++it ){
         if(it->second == NULL) continue;
         for(int i = 0; i < ((Texture*) it->second)->hashid.size(); i++)
@@ -134,9 +135,12 @@ int TexLib::addTex(QString pathid, bool reload) {
                         return (int)it->first;
                     } else {
                         newFile = ((Texture*) it->second);
+                        texId = (int)it->first;
                         break;
                     }
                 }
+        if(newFile != NULL)
+            break;
     }
     //qDebug() << "Nowa " << jesttextur << " textura: " << pathid;
     
@@ -204,6 +208,7 @@ int TexLib::addTex(QString pathid, bool reload) {
                 return (int)it->first;
             }
             newFile = texture;
+            texId = (int)it->first;
             break;
         }
     }
@@ -225,7 +230,6 @@ int TexLib::addTex(QString pathid, bool reload) {
         }
     }
     
-    int texId = 0;
     if(newFile == NULL){
         newFile = new Texture(pathid);
         newFile->ref++;
@@ -246,32 +250,43 @@ int TexLib::addTex(QString pathid, bool reload) {
     if(tType == "ace"){
         AceLib* t = new AceLib();
         t->texture = newFile;
-        if(AceLib::IsThread && !reload)
+        if(AceLib::IsThread && !reload){
+            QObject::connect(t, &QThread::finished, t, &QObject::deleteLater);
             t->start();
-        else
+        } else {
             t->run();
+            delete t;
+        }
     } else if(tType == "png"||tType == "bmp"||tType == "jpg"||tType == "tga"){
         ImageLib* t = new ImageLib();
         t->texture = newFile;
-        if(ImageLib::IsThread && !reload)
+        if(ImageLib::IsThread && !reload){
+            QObject::connect(t, &QThread::finished, t, &QObject::deleteLater);
             t->start();
-        else
+        } else {
             t->run();
+            delete t;
+        }
     } else if(tType == "dds"){
         DdsLib* t = new DdsLib();
         t->texture = newFile;
-        if(DdsLib::IsThread && !reload)
+        if(DdsLib::IsThread && !reload){
+            QObject::connect(t, &QThread::finished, t, &QObject::deleteLater);
             t->start();
-        else
+        } else {
             t->run();
+            delete t;
+        }
     } else if(tType == ":painttex"){
         PaintTexLib* t = new PaintTexLib();
         t->texture = newFile;
         //t->start();
         t->run();
+        delete t;
     } else if(tType == ":maptex"){
         MapLib* t = new MapLib();
         t->texture = newFile;
+        QObject::connect(t, &QThread::finished, t, &QObject::deleteLater);
         t->start();
     }
     //AceLib::LoadACE(newFile);

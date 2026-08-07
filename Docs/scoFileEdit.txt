@@ -4,7 +4,7 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
-v0.10 WIP source checkpoint
+v0.11 community open-testing release
 
 - CMakeLists.txt
 - vcpkg.json
@@ -15,7 +15,24 @@ v0.10 WIP source checkpoint
 - GuiFunct.cpp
 - GuiFunct.h
 - SettingsDialog.cpp
-  - Aligned the application, build metadata, resources, launch behavior, and fresh settings defaults with v0.10.
+  - Aligned the application, build metadata, resources, launch behavior, and fresh settings defaults with v0.11.
+
+- ParserX.cpp
+  - Recognized Unicode whitespace in ENG/WAG token parsing so affected community Steam locomotives load without altering normal token serialization.
+
+- DdsDecoder.cpp
+- DdsDecoder.h
+- DdsLib.cpp
+- DdsLib.h
+- ImageLib.cpp
+  - Added bounded native DDS decoding for DXT1, DXT3, DXT5, 24-bit RGB, and 32-bit RGBA; corrected NVIDIA linear-size header handling and ordinary-image failure state.
+
+- Flex.cpp
+- Flex.h
+- PropertiesDyntrack.cpp
+- PropertiesDyntrack.h
+- Ref.cpp
+  - Retired Classic Flex and made NextGen S-C-S-C-S Auto-Flex the single Dynamic Track solver and editor-owned placement choice.
 
 - ObjTools.cpp
 - Route.cpp
@@ -30,7 +47,8 @@ v0.10 WIP source checkpoint
 - TerrainWaterWindow2.h
 - PropertiesTerrain.cpp
 - PropertiesTerrain.h
-  - Added the Object Selection Ruler/Water dropdown, persistent per-route Ruler Vegetation placeholder, and related editor integration.
+- PropertiesRuler.cpp
+  - Added mutually exclusive water, vegetation, and grade rulers; movable terrain-snapped points; average-grade reporting; standardized orange handles; and improved cube picking.
 
 - OglObj.cpp
 - OglObj.h
@@ -49,7 +67,7 @@ v0.10 WIP source checkpoint
 
 - TexLib.cpp
 - Texture.cpp
-  - Fixed excessive memory growth from repeated ACE references resolving to DDS by recording the requested ACE path on the resolved texture and reusing one decoded DDS copy while respecting image-control settings.
+  - Fixed excessive memory growth from repeated ACE references resolving to DDS, corrected cached reload IDs, and released temporary loader helpers while respecting image-control settings.
 
 - LoadWindow.cpp
 - NewRouteWindow.cpp
@@ -70,6 +88,11 @@ v0.10 WIP source checkpoint
 - qt-linux_debug.pro (removed)
 - tests/RouteSaveTransactionTest.pro (removed)
   - Removed the final legacy qmake project inputs, qmake prerequisite check, and obsolete qmake-stash ignore rule after CMake/CTest parity was accepted.
+
+- v0.11 compiler-warning audit (maintained application sources)
+  - Corrected actionable out-of-bounds access, mismatched array deletion, strict-aliasing conversion, uninitialized parser state, malformed comparisons, assignment-in-condition, null-as-float calls, unsafe temporary-buffer lifetime, unchecked file-write opens, hidden overloads, deprecated Qt APIs, misleading control flow, and non-standard variable-length arrays.
+  - Removed dead local allocations and no-effect variables while retaining callback/virtual parameters required by interface contracts and parser reads whose evaluation advances MSTS/Open Rails input state.
+  - Kept compiler diagnostics enabled; the final incremental changed-file build reported only six required unused TerrainLibQt interface parameters.
 
 v0.9 Qt6/CMake migration and parity release
 

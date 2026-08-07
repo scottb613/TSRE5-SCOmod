@@ -260,6 +260,7 @@ private:
     WorldObj* copyPasteObj = NULL;
     RulerObj* activeWaterRuler = NULL;
     RulerObj* activeVegetationRuler = NULL;
+    RulerObj* activeGradeRuler = NULL;
     bool waterScanUndoAvailable = false;
     bool waterScanPending = false;
     QLabel* waterMessageLabel = NULL;

@@ -28,6 +28,8 @@ class ContentHierarchyInfo;
 
 class Consist : public GameObj {
 public:
+    using GameObj::select;
+
     struct EngItem{
         bool flip = false;
         int uid = 0;

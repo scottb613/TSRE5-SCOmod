@@ -10,23 +10,27 @@ TSRE GenX combines Piotr Gadecki's original TSRE5 foundation, Eric Olesen's cont
 
 - The version tags through `v0.8` preserve the earlier stable checkpoints.
 - `master` contains the source-only v0.9 Qt6/CMake line.
-- `tsre-scomod-wip` contains the active v0.10 source development line.
+- `tsre-scomod-wip` contains the active v0.11 community open-testing line.
 
-## v0.10 WIP highlights
+## v0.11 highlights
 
-- Updated the shared application, CMake, vcpkg, and Windows resource identity to v0.10.
+- Updated the shared application, CMake, vcpkg, and Windows resource identity to v0.11.
 - Removed the final retained qmake project inputs and prerequisite check; CMake/CTest is now the only maintained build path.
-- Added Object Selection launchers for the existing Water Helper ruler and a persistent per-route Vegetation Ruler placeholder.
+- Corrected Unicode-whitespace ENG/WAG parsing so affected Steam locomotives appear in Consist Editor.
+- Corrected NVIDIA-style 24-bit and 32-bit uncompressed DDS loading, ACE-to-DDS cache reuse, cached reload IDs, and short-lived decoder ownership.
+- Made NextGen S-C-S-C-S Auto-Flex the single Dynamic Track solver and editor-owned placement choice.
+- Added mutually exclusive `Ruler (water)`, `Ruler (vegetation)`, and two-point magenta `Ruler (grade)` workflows with movable terrain-snapped points and improved cube picking.
 - Added optional F12 Instance Protection while leaving Shape Viewer unrestricted.
 - Hardened New Route latitude/longitude entry for high-precision coordinates, valid geographic ranges, checked MSTS conversion, and safe failure feedback.
-- Fixed excessive memory growth from repeated ACE references resolving to DDS by reusing the already decoded texture, without overriding the current image-upgrade and substitution controls.
 - Protected encoded object-picking colors by bypassing solid-marker lighting during selection renders in all maintained Fog and Bloom shaders.
 - Added flat-face lighting to original 3D marker cubes, directional pyramids, and Sound Source posts while preserving exact selection colors.
 - Made the original shaded 3D markers the fresh-install default; existing New Symbols preferences remain respected.
 - Added guarded manual GitHub Actions for source tags, draft releases, approved-ZIP SHA-256 verification, and deliberate release publication.
+- Completed a compiler-warning audit that corrected actionable correctness, ownership, file-write, overload, deprecated-API, and control-flow findings without globally suppressing diagnostics.
 
-See `RELEASE-NOTES-v0.10.md` for the focused verification status and remaining
-manual checks.
+The v0.11 Release build completed successfully, and all four configured automated tests passed: text encoding, DDS decoding, Unicode-whitespace parsing, and the route-regression harness. Manual community checks remain outstanding for the new rulers, Auto-Flex, representative rolling-stock textures and cache memory, instance handling, New Route coordinates, shaded selection markers, settings defaults, and route save/reload; the detailed status is maintained in `TEST-MATRIX-v0.11.md` and `RELEASE-NOTES-v0.11.md`.
+
+See `RELEASE-NOTES-v0.11.md` for the complete community-release summary.
 
 ## v0.9 and earlier highlights
 
@@ -144,25 +148,26 @@ TSRE GenX continues because these three bodies of work complement one another:
 Piotr's original application and technical foundation, Eric's sustained TSRE
 8.x development, and Peter's independent modern build and Qt6 migration work.
 
-## Source distribution
+## Source and executable distribution
 
-v0.10 is published as source code on `tsre-scomod-wip` and at the `v0.10`
-source tag. It does not include an executable, a `dist` package, or a GitHub
-Release.
+v0.11 is prepared from the reviewed `tsre-scomod-wip` source line. Its
+immutable source tag and executable ZIP must identify the same source. The
+executable package is distributed through GitHub Releases rather than stored
+on a source branch.
 
 TSRE GenX follows the original TSRE5 GPLv3 license. Runtime libraries used by
 locally built copies remain under their respective upstream licenses.
 
 ## Documentation
 
-- `Docs/` contains the immutable v0.10 document set and its SHA-256 manifest.
 - `scoWorkList.txt` contains the detailed change summary.
 - `scoFileEdit.txt` lists the code/project files touched during the work.
 - `THIRD-PARTY-NOTICES.txt` records upstream authorship, acknowledgements, and bundled runtime-library notices.
-- `RELEASE-NOTES-v0.10.md` summarizes the current WIP source checkpoint.
+- `RELEASE-NOTES-v0.11.md` summarizes the current community open-testing release.
 - `.github/RELEASE-WORKFLOW.md` documents the guarded manual tag, draft, asset-verification, and publication process.
 
 ## Status
 
-TSRE GenX v0.9 remains on `master`. TSRE GenX v0.10 is the active source-only
-development line on `tsre-scomod-wip`.
+TSRE GenX v0.9 remains on `master`. TSRE GenX v0.11 is the active community
+open-testing line on `tsre-scomod-wip`; v0.10 remains an immutable source-only
+checkpoint.

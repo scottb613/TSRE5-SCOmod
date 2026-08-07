@@ -19,6 +19,9 @@ class TrackItemObj;
 
 class LevelCrObj : public WorldObj {
 public:
+    using WorldObj::select;
+    using WorldObj::set;
+
     static float MaxPlacingDistance;
     
     LevelCrObj();

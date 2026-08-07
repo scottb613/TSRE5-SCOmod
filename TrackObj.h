@@ -20,6 +20,8 @@ class OglObj;
 
 class TrackObj : public WorldObj  {
 public:
+    using WorldObj::set;
+
     TrackObj();
     TrackObj(const TrackObj& o);
     WorldObj* clone();

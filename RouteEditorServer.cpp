@@ -224,7 +224,6 @@ void RouteEditorServer::onNewConnection(){
 }
 
 void RouteEditorServer::processTextMessage(QString message){
-    QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
     qDebug() << "Text Message received:" << message;
     //if (pClient) {
     //    pClient->sendTextMessage(message);

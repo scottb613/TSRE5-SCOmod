@@ -252,7 +252,10 @@ bool TSectionDAT::saveRoute() {
     path.replace("//", "/");
     if(Game::debugOutput) qDebug() << path;
     QFile file(path);
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to save route tsection.dat" << path << file.errorString();
+        return false;
+    }
     QTextStream out(&file);
     out.setRealNumberPrecision(6);
     out.setEncoding(QStringConverter::Utf16);
@@ -318,9 +321,7 @@ void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
     int index = 0;
     QString sh;
     int newIdx = 0, newSdx = 0;
-    int prevIdx;
-    int thisIdx;
-    int IdxGap;
+    int prevIdx = -1;
     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
         //qDebug() << sh;
         if (sh == "tracksections") {
@@ -354,15 +355,14 @@ void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
                     
                     }
                     
-                thisIdx = sekcja[index]->id;
-                if(index > 1)                 
-                
-                // qDebug() << "LocalT: ID:" << thisIdx;
-                IdxGap = thisIdx - prevIdx;
-                if(IdxGap > 2)
-                   qDebug() << "Local TSection: Gap found:" << IdxGap;                                                       
+                    const int thisIdx = sekcja[index]->id;
+                    if(prevIdx >= 0){
+                        const int idxGap = thisIdx - prevIdx;
+                        if(idxGap > 2)
+                            qDebug() << "Local TSection: Gap found:" << idxGap;
+                    }
+                    prevIdx = thisIdx;
                 }
-                prevIdx = sekcja[index]->id;
                 ParserX::SkipToken(data);
             }
             ParserX::SkipToken(data);

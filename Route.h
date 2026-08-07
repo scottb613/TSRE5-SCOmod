@@ -146,6 +146,9 @@ public:
     RulerObj* findWaterRuler(bool loadWorldTiles);
     RulerObj* placeVegetationRuler(int x, int z, float *p);
     RulerObj* findVegetationRuler(bool loadWorldTiles);
+    RulerObj* placeGradeRuler(int x, int z, float *p);
+    RulerObj* findGradeRuler(bool loadWorldTiles);
+    void deleteSpecialRulers();
     WorldObj* autoPlaceObject(int x, int z, float* p, int mode);
     void replaceWorldObjPointer(WorldObj* o, WorldObj* n);
     void autoPlacementDeleteLast();
@@ -215,6 +218,7 @@ protected:
     QVector<WorldObj*> autoPlacementLastPlaced;
     RulerObj *waterRulerObj = NULL;
     RulerObj *vegetationRulerObj = NULL;
+    RulerObj *gradeRulerObj = NULL;
     Activity* currentActivity = NULL;
     int loadingProgress = 0;
 };

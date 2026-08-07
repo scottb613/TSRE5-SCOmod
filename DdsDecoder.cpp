@@ -20,6 +20,7 @@
 namespace {
 
 constexpr qsizetype DdsFileHeaderSize = 128;
+constexpr quint32 DdsHeaderPitch = 0x00000008;
 constexpr quint32 DdsPixelFormatFourCc = 0x00000004;
 constexpr quint32 DdsPixelFormatRgb = 0x00000040;
 constexpr quint32 FourCcDxt1 = 0x31545844;
@@ -221,6 +222,7 @@ bool DdsDecoder::decode(
         return false;
     }
 
+    const quint32 headerFlags = readU32(header + 8);
     const quint32 heightValue = readU32(header + 12);
     const quint32 widthValue = readU32(header + 16);
     if(widthValue == 0 || heightValue == 0
@@ -306,7 +308,8 @@ bool DdsDecoder::decode(
             static_cast<quint64>(widthValue) * bytesPerPixel;
         quint64 sourcePitch = tightPitch;
         const quint32 declaredPitch = readU32(header + 20);
-        if(declaredPitch >= tightPitch)
+        if((headerFlags & DdsHeaderPitch) != 0
+                && declaredPitch >= tightPitch)
             sourcePitch = declaredPitch;
         const quint64 required = sourcePitch * heightValue;
         if(required > static_cast<quint64>(available)) {

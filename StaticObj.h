@@ -18,6 +18,8 @@
 class StaticObj : public WorldObj  {
     Q_OBJECT
 public:
+    using WorldObj::set;
+
     StaticObj();
     StaticObj(const StaticObj& o);
     WorldObj* clone();

@@ -685,7 +685,7 @@ void SoundDefinitionGroup::Stream::init(QString path, bool stereo){
         //dataChunkSize = dataChunkSize/channels;
         unsigned char* bufferData = new unsigned char[dataChunkSize];
         //if (channels == 1)
-            for(int ii = 0; ii < dataChunkSize; ii++)
+            for(unsigned int ii = 0; ii < dataChunkSize; ii++)
                 bufferData[ii] = filedata->get();
         /*if (channels == 2)
             for(int ii = 0; ii < dataChunkSize; ii+=2){
@@ -695,7 +695,6 @@ void SoundDefinitionGroup::Stream::init(QString path, bool stereo){
                 bufferData[ii+1] = filedata->get();
             }
         */
-        float duration = float(dataChunkSize) / byteRate;
         ALenum formatinfo = AL_FORMAT_STEREO16;
         if (channels == 1)
                 formatinfo = AL_FORMAT_MONO16;

@@ -480,7 +480,7 @@ void SignalObj::linkSignal(int trackId, int dist){
     for(int i = 1; i < 32; i++){
         if((signalUnit[i].enabled) & (signalUnit[i].head))
         {
-            if(!getLinkedJunctionValue(i) > 0 )
+            if(getLinkedJunctionValue(i) <= 0)
             spointer3d->setMaterial(1,1,0);    
         }
     }
@@ -771,7 +771,7 @@ void SignalObj::renderTritems(GLUU* gluu, int selectionColor){
         for(int i = 1; i < 32; i++){
           if((signalUnit[i].enabled) & (signalUnit[i].head))
              {
-                 if(!getLinkedJunctionValue(i) > 0 )
+                 if(getLinkedJunctionValue(i) <= 0)
                  spointer3d->setMaterial(1,0,0);    
              }
           }
@@ -930,7 +930,7 @@ Ref::RefItem* SignalObj::getRefInfo(){ //
 
 void SignalObj::save(QTextStream* out){
     if (!loaded) return;
-    if (!trLoaded < 0) return;
+    if (trLoaded < 0) return;
     if(Game::useOnlyPositiveQuaternions)
         Quat::makePositive(this->qDirection);
     

@@ -31,7 +31,7 @@
 TerrainLibQt::TerrainLibQt() {
 }
 
-TerrainLibQt::TerrainLibQt(const TerrainLibQt& orig) {
+TerrainLibQt::TerrainLibQt(const TerrainLibQt&) : TerrainLib() {
 }
 
 TerrainLibQt::~TerrainLibQt() {
@@ -1194,7 +1194,7 @@ void TerrainLibQt::fillTerrainData(Terrain* tTile, float* offsetXYZ){
     //tTile->mojez;
     //QHash<int, Terrain*> tt;
     //Terrain *t;
-    int x, z, xx, zz;
+    int x, z;
     float position[3];
     position[1] = offsetXYZ[1];
     
@@ -1228,7 +1228,6 @@ void TerrainLibQt::fillTerrainData(Terrain* tTile, float* offsetXYZ){
             tTile->setHeight(tTile->mojex, tTile->mojez, i, j, h + offsetXYZ[1], false);
         }
     
-    Brush *brush = new Brush();
     for(int i = -1023; i < 1024; i+= 128)
         for(int j = -1023; j < 1024; j+= 128){
             x = tTile->mojex;
@@ -1301,14 +1300,6 @@ void TerrainLibQt::fillRaw(Terrain *cTerr, int mojex, int mojez) {
 }
 
 void TerrainLibQt::renderWater(GLUU* gluu, float* playerT, float* playerW, float* target, float fov, int renderMode, int layer) {
-    int mintile = -Game::tileLod;
-    int maxtile = Game::tileLod;
-
-    if (renderMode == gluu->RENDER_SELECTION) {
-        mintile = -1;
-        maxtile = 1;
-    }
-
     gluu->currentShader->setUniformValue(gluu->currentShader->shaderAlpha, 0.0f);
     gluu->enableNormals();
 
@@ -1317,8 +1308,9 @@ void TerrainLibQt::renderWater(GLUU* gluu, float* playerT, float* playerW, float
     int i = 0, j = 0;
     QHash<QString, bool> rendered;
     for (int n = -1; n < (Game::tileLod * 2 + 1)*(Game::tileLod * 2 + 1) - 1; n++) {
-        if (n != -1)
+        if (n != -1){
             spiralLoop(n, i, j);
+        }
 
         tTile = getTerrainByXY((int) playerT[0] + i, (int) playerT[1] + j, true);
         if(tTile == NULL)
@@ -1359,8 +1351,9 @@ void TerrainLibQt::renderWaterLo(GLUU* gluu, float* playerT, float* playerW, flo
     int selectionColor = 0;
     unsigned int terrainNameId;
     for (int n = -1, i = 0, j = 0; n < renderCount; n+=16) {
-        if (n != -1)
+        if (n != -1){
             spiralLoop(n, i, j);
+        }
 
             terrainNameId = quadTreeLo->getMyNameId((int) playerT[0] + i, -(int) playerT[1] - j);
             if (terrainNameId == 0)
@@ -1411,8 +1404,9 @@ void TerrainLibQt::renderShadowMap(GLUU *gluu, float * playerT, float* playerW, 
     int i = 0, j = 0;
     QHash<QString, bool> rendered;
     for (int n = -1; n < 9 - 1; n++) {
-        if (n != -1)
+        if (n != -1){
             spiralLoop(n, i, j);
+        }
 
         tTile = getTerrainByXY((int) playerT[0] + i, (int) playerT[1] + j, true);
         if(tTile == NULL)
@@ -1438,8 +1432,9 @@ void TerrainLibQt::renderShadowMap(GLUU *gluu, float * playerT, float* playerW, 
 void TerrainLibQt::renderEmpty(GLUU *gluu, float * playerT, float* playerW, float* target, float fov) {
     int i = 0, j = 0;
     for (int n = -1; n < 9 - 1; n++) {
-        if (n != -1)
+        if (n != -1){
             spiralLoop(n, i, j);
+        }
         getTerrainByXY((int) playerT[0] + i, (int) playerT[1] + j, true);
     }
 }
@@ -1457,8 +1452,9 @@ void TerrainLibQt::pushRenderItems(float * playerT, float* playerW, float* targe
     QHash<QString, bool> rendered;
     
     for (int n = -1, i = 0, j = 0; n < renderCount - 1; n++) {
-        if (n != -1)
+        if (n != -1){
             spiralLoop(n, i, j);
+        }
 
         tTile = getTerrainByXY((int) playerT[0] + i, (int) playerT[1] + j, true);
         if(tTile == NULL)
@@ -1517,8 +1513,9 @@ void TerrainLibQt::render(GLUU *gluu, float * playerT, float* playerW, float* ta
     QHash<QString, bool> rendered;
     
     for (int n = -1, i = 0, j = 0; n < renderCount - 1; n++) {
-        if (n != -1)
+        if (n != -1){
             spiralLoop(n, i, j);
+        }
 
         tTile = getTerrainByXY((int) playerT[0] + i, (int) playerT[1] + j, true);
         if(tTile == NULL)
@@ -1579,8 +1576,9 @@ void TerrainLibQt::renderLo(GLUU *gluu, float * playerT, float* playerW, float* 
     int selectionColor = 0;
     unsigned int terrainNameId;
     for (int n = -1, i = 0, j = 0; n < renderCount; n+=16) {
-        if (n != -1)
+        if (n != -1){
             spiralLoop(n, i, j);
+        }
 
             terrainNameId = quadTreeLo->getMyNameId((int) playerT[0] + i, -(int) playerT[1] - j);
             if (terrainNameId == 0)

@@ -163,6 +163,49 @@ int main(int argc, char **argv) {
         pixelEquals(image, 0, 0, 255, 0, 128),
         "32-bit DDS pixel was decoded incorrectly");
 
+    QByteArray rgb24LinearPixels(
+        "\x00\x00\xff\x00\xff\x00\xff\x00\x00\xff\xff\xff",
+        12);
+    QByteArray rgb24Linear = makeRgbDds(
+        24, 0x00ff0000, 0x0000ff00, 0x000000ff, 0,
+        rgb24LinearPixels);
+    writeU32(rgb24Linear, 8, 0x00081007);
+    writeU32(rgb24Linear, 12, 2);
+    writeU32(rgb24Linear, 16, 2);
+    writeU32(rgb24Linear, 20, rgb24LinearPixels.size());
+    passed &= check(
+        DdsDecoder::decode(rgb24Linear, image, &error),
+        "24-bit DDS with DDSD_LINEARSIZE failed: " + error);
+    passed &= check(
+        image.width == 2 && image.height == 2
+            && pixelEquals(image, 0, 255, 0, 0, 255)
+            && pixelEquals(image, 3, 255, 255, 255, 255),
+        "DDSD_LINEARSIZE was incorrectly used as the per-row pitch");
+
+    QByteArray rgba32LinearPixels(
+        "\x00\x00\xff\x20\x00\xff\x00\x40"
+        "\xff\x00\x00\x80\xff\xff\xff\xff",
+        16);
+    QByteArray rgba32Linear = makeRgbDds(
+        32,
+        0x00ff0000,
+        0x0000ff00,
+        0x000000ff,
+        0xff000000,
+        rgba32LinearPixels);
+    writeU32(rgba32Linear, 8, 0x00081007);
+    writeU32(rgba32Linear, 12, 2);
+    writeU32(rgba32Linear, 16, 2);
+    writeU32(rgba32Linear, 20, rgba32LinearPixels.size());
+    passed &= check(
+        DdsDecoder::decode(rgba32Linear, image, &error),
+        "32-bit DDS with DDSD_LINEARSIZE failed: " + error);
+    passed &= check(
+        image.width == 2 && image.height == 2
+            && pixelEquals(image, 0, 255, 0, 0, 32)
+            && pixelEquals(image, 3, 255, 255, 255, 255),
+        "32-bit DDSD_LINEARSIZE or alpha was decoded incorrectly");
+
     QByteArray truncated = makeDds(0x33545844, dxt3);
     truncated.chop(1);
     passed &= check(

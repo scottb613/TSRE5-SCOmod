@@ -19,6 +19,8 @@ class TrackItemObj;
 
 class PickupObj : public WorldObj {
 public:
+    using WorldObj::set;
+
     PickupObj();
     PickupObj(const PickupObj& o);
     WorldObj* clone();

@@ -9,9 +9,21 @@
  */
 
 #include "ParserX.h"
-#include "SFile.h"
 #include <QDebug>
+#include <QChar>
 #include <math.h>
+
+namespace {
+
+bool isParserWhitespace(unsigned short value){
+    return QChar(value).isSpace();
+}
+
+bool isTokenCharacter(unsigned short value){
+    return value > 63 && !isParserWhitespace(value);
+}
+
+}
 
 QString ParserX::AddComIfReq(QString n){
     if(n.length() == 0)
@@ -98,7 +110,8 @@ int ParserX::FindTokenDomIgnore(QString sh, FileBuffer* bufor){
             poziom--;
         }
         if (poziom > 0) continue;
-        if ((b > 64) || (b>47 && b<58 && czytam == 1)) {
+        if ((b > 64 && !isParserWhitespace(b))
+                || (b>47 && b<58 && czytam == 1)) {
             czytam = 1;
             sekcja += b;
             i++;
@@ -150,7 +163,8 @@ QString ParserX::NextTokenDomIgnore(FileBuffer* bufor){
         }
         if (poziom > 0) continue;
 
-        if ((b > 64) || (b>47 && b<58 && czytam == 1)) {
+        if ((b > 64 && !isParserWhitespace(b))
+                || (b>47 && b<58 && czytam == 1)) {
             czytam = 1;
             sekcja += b;
             i++;
@@ -200,7 +214,7 @@ QString ParserX::NextTokenInside(FileBuffer* bufor){
             return "";
         }
         //console.log("p "+String.fromCharCode(b)+" "+poziom);
-        if ((b > 63) || (b>47 && b<58 && czytam == 1) ) {
+        if (isTokenCharacter(b) || (b>47 && b<58 && czytam == 1) ) {
             czytam = 1;
             sekcja += b;
             i++;
@@ -214,7 +228,7 @@ QString ParserX::NextTokenInside(FileBuffer* bufor){
                         return "";
                     b = bufor->getShort();
                     //bufor->off++;
-                    if (b > 63) {
+                    if (isTokenCharacter(b)) {
                         //qDebug() << "PARSER FAIL ===================== " << sekcja;
                         bufor->off-=2;
                         return sekcja;
@@ -237,7 +251,8 @@ QString ParserX::NextTokenInside(FileBuffer* bufor){
 QString ParserX::GetString(FileBuffer* bufor){
     QString sciezka = "";
     unsigned short int b = 0;
-    while ((b < 46) && (b != 34) && (b!=33)&&(b!=35)&&(b!=36)&&(b!=37)&&(b!=38)) {
+    while (isParserWhitespace(b)
+            || ((b < 46) && (b != 34) && (b!=33)&&(b!=35)&&(b!=36)&&(b!=37)&&(b!=38))) {
         b = bufor->getShort();
     }
     //bufor.position(bufor.position()-2); 
@@ -254,7 +269,8 @@ QString ParserX::GetString(FileBuffer* bufor){
         }
     } else {
         bufor->off -= 2;
-        while (((b = bufor->getShort()) > 32) && (b != 41)) {
+        while (((b = bufor->getShort()) > 32) && (b != 41)
+                && !isParserWhitespace(b)) {
             //bufor->off++;
             sciezka += QChar(b);
         }
@@ -271,7 +287,8 @@ QString ParserX::GetString(FileBuffer* bufor){
 QString ParserX::GetStringInside(FileBuffer* bufor){
     QString sciezka = "";
     unsigned short int b = 0;
-    while ((b < 46) && (b != 34) && (b!=33)&&(b!=35)&&(b!=36)&&(b!=37)&&(b!=38)) {
+    while (isParserWhitespace(b)
+            || ((b < 46) && (b != 34) && (b!=33)&&(b!=35)&&(b!=36)&&(b!=37)&&(b!=38))) {
         b = bufor->getShort();
         if (b == 41){
             bufor->off -= 2;
@@ -301,7 +318,8 @@ QString ParserX::GetStringInside(FileBuffer* bufor){
         return sciezka;
     } else {
         bufor->off -= 2;
-        while (((b = bufor->getShort()) > 32) && (b != 41)) {
+        while (((b = bufor->getShort()) > 32) && (b != 41)
+                && !isParserWhitespace(b)) {
             //bufor->off++;
             sciezka += QChar(b);
         }
@@ -321,7 +339,8 @@ QString ParserX::GetAlternativeTokenName(FileBuffer* bufor){
     if(bufor->data[bufor->off - 2] == 40)
         return sciezka;
     unsigned short int b = 0;
-    while ((b < 46) && (b != 34) && (b!=33)&&(b!=35)&&(b!=36)&&(b!=37)&&(b!=38)) {
+    while (isParserWhitespace(b)
+            || ((b < 46) && (b != 34) && (b!=33)&&(b!=35)&&(b!=36)&&(b!=37)&&(b!=38))) {
         b = bufor->getShort();
         if (b == 40){
             return "";
@@ -355,7 +374,8 @@ QString ParserX::GetAlternativeTokenName(FileBuffer* bufor){
         return sciezka;
     } else {
         bufor->off -= 2;
-        while (((b = bufor->getShort()) > 32) && (b != 40)) {
+        while (((b = bufor->getShort()) > 32) && (b != 40)
+                && !isParserWhitespace(b)) {
             sciezka += QChar(b);
         }
         bufor->off -= 2;

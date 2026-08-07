@@ -195,10 +195,7 @@ void Eng::load(){
     /// Reading the input file
     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
         /// Local vars for this wagon or engine
-        bool loaddoublestacker= false;        
         float loadoroffset[] = {0,0,0};
-        int loadcontainers = 0;
-        float loadarealength = 0;
         float loadbase = 2.6;        
         //qDebug() << sh;
         if (sh == ("simisa@@@@@@@@@@jinx0d0t______")) {    /// Header Record
@@ -429,7 +426,6 @@ void Eng::load(){
                 }
 
                 if (sh == ("ortsfreightanims")) {
-                    loaddoublestacker= false;        
                     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
                         //qDebug() << "orts " << sh;
                         if (sh == ("mstsfreightanimenabled")) {
@@ -450,12 +446,11 @@ void Eng::load(){
                          }
                         
                         if (sh == ("loadingarealength")) {
-                            loadarealength = ParserX::GetNumber(data);
+                            (void)ParserX::GetNumber(data);
                              ParserX::SkipToken(data);
                              continue;                            
                         }
                         if (sh == ("doublestacker")) {
-                             loaddoublestacker = true;
                              ParserX::SkipToken(data);
                              continue;                            
                         }
@@ -504,9 +499,8 @@ void Eng::load(){
                                         
                                 /// values to pass to the freight animation
                                 QString loadcontainertype;
-                                float loadoffset[3];
+                                float loadoffset[3] = {0.0f, 0.0f, 0.0f};
                                 QString loadshape;
-                                float loadcontainerlen;
                                         
                                 for (int li = 0; li < contents.size(); ++li) {
                                     // qDebug() << "Line " << li;
@@ -520,10 +514,12 @@ void Eng::load(){
                                      if(loadtag == "containertype"){ loadcontainertype = loadvalue; }
                                      if(loadtag == "intrinsicshapeoffset")
                                         { 
-                                         tempstring = loadvalue.split(" ");  /// can't split the string without a stringlist
-                                         loadoffset[0] = tempstring[0].toFloat();
-                                         loadoffset[1] = tempstring[1].toFloat();
-                                         loadoffset[2] = tempstring[2].toFloat(); 
+                                         tempstring = loadvalue.split(" ", Qt::SkipEmptyParts);  /// can't split the string without a stringlist
+                                         if(tempstring.size() >= 3){
+                                             loadoffset[0] = tempstring[0].toFloat();
+                                             loadoffset[1] = tempstring[1].toFloat();
+                                             loadoffset[2] = tempstring[2].toFloat();
+                                         }
                                         }
                                       // qDebug() << "Line " << li << ": " << loadparts[0] << " : " << loadparts[1];
                                     } 
@@ -532,14 +528,14 @@ void Eng::load(){
                                 /// Apply the lenght & height per the ORTS code -- this may require maintenance at some point
                                 /// if new trailer types are defined.  Maybe refactor this into a flatfile import?
                                                                 
-                                     if(loadcontainertype == "c20ft")     { loadcontainerlen = 6.095; loadbase = 2.6; }
-                                else if(loadcontainertype ==  "c40ft")    { loadcontainerlen = 12.19; loadbase = 2.6; }
-                                else if(loadcontainertype ==  "c45ft")    { loadcontainerlen = 13.7 ; loadbase = 2.6; }
-                                else if(loadcontainertype ==  "c48ft")    { loadcontainerlen = 14.6 ; loadbase = 2.9; }
-                                else if(loadcontainertype ==  "c53ft")    { loadcontainerlen = 16.15; loadbase = 2.9; }
-                                else if(loadcontainertype ==  "c40fthc")  { loadcontainerlen = 12.19; loadbase = 2.9; }
-                                else if(loadcontainertype ==  "c45fthc")  { loadcontainerlen = 13.7 ; loadbase = 2.9; }                                    
-                                  else                                    { loadcontainerlen = 12.19; loadbase = 2.6; };
+                                     if(loadcontainertype == "c20ft")     { loadbase = 2.6; }
+                                else if(loadcontainertype ==  "c40ft")    { loadbase = 2.6; }
+                                else if(loadcontainertype ==  "c45ft")    { loadbase = 2.6; }
+                                else if(loadcontainertype ==  "c48ft")    { loadbase = 2.9; }
+                                else if(loadcontainertype ==  "c53ft")    { loadbase = 2.9; }
+                                else if(loadcontainertype ==  "c40fthc")  { loadbase = 2.9; }
+                                else if(loadcontainertype ==  "c45fthc")  { loadbase = 2.9; }
+                                  else                                    { loadbase = 2.6; }
 
                                 /// Adjust the height of the stack by loadbase (which is derived from loadcontainertype)
                                 if(loadpos == "above") loadoffset[1] = loadoffset[1] + loadbase;
@@ -553,11 +549,8 @@ void Eng::load(){
                                 freightanimShape.back().y = loadoroffset[1] + loadoffset[1];
                                 freightanimShape.back().z = loadoroffset[2] + loadoffset[2];                                                                                                                                  
 
-                               // if(Game::debugOutput) qDebug() << "loadarealength    : " << loadarealength;
-                               // if(Game::debugOutput) qDebug() << "loaddoublestacker : " << loaddoublestacker;
                                // if(Game::debugOutput) qDebug() << "loadshape         : " << loadshape;
                                // if(Game::debugOutput) qDebug() << "loadcontainertype : " << loadcontainertype;
-                               // if(Game::debugOutput) qDebug() << "loadcontainerlen  : " << loadcontainerlen;
                                // if(Game::debugOutput) qDebug() << "loadpos           : " << loadpos;
                                // if(Game::debugOutput) qDebug() << "loadbase          : " << loadbase;
                                // if(Game::debugOutput) qDebug() << "loadoffset        : " << loadoffset[0] << "-" << loadoffset[1] << "-" << loadoffset[2] ;
@@ -1291,8 +1284,6 @@ float Eng::getTotalDistanceDownPath(){
 }
 
 void Eng::initOnTrack(float *tpos, int direction, QMap<int, int>* junctionDirections){
-    TDB* tdb = Game::trackDB;
-    
     if(ruch1 == NULL)
         ruch1 = new Ruch();
     ruch1->set(tpos[0], tpos[1], direction, junctionDirections);

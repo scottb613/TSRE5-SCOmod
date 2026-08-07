@@ -18,6 +18,8 @@ class OglObj;
 
 class DynTrackObj : public WorldObj {
 public:
+    using WorldObj::set;
+
     struct Section{
         int type;
         unsigned int sectIdx;

@@ -467,7 +467,8 @@ void TDB::loadTit(){
                 } else {
                     if(nowy->trSignalDirs > 0){
                         this->trackItems[nowy->trItemId]->trSignalRDir = new float[nowy->trSignalDirs * 6];
-                        memcpy(this->trackItems[nowy->trItemId]->trSignalRDir, nowy->trSignalRDir, sizeof(float[nowy->trSignalDirs * 6]));
+                        memcpy(this->trackItems[nowy->trItemId]->trSignalRDir, nowy->trSignalRDir,
+                               sizeof(float) * nowy->trSignalDirs * 6);
                     }
                 }
                 ParserX::SkipToken(bufor);
@@ -4232,7 +4233,10 @@ void TDB::saveEmpty(bool road) {
     bkpath = path + "-" + QDateTime::currentDateTime().toString("yyyyMMdd-hhmm") + ".bkup";
     QFile file(path);
     file.copy(path,bkpath);
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to save empty track database" << path << file.errorString();
+        return;
+    }
     QTextStream out(&file);
     out.setRealNumberPrecision(Game::rnp);
     out.setEncoding(QStringConverter::Utf16);
@@ -4252,7 +4256,10 @@ void TDB::saveEmpty(bool road) {
     bkpath = path + "-" + QDateTime::currentDateTime().toString("yyyyMMdd-hhmm") + ".bkup";
     QFile file2(path);
     file2.copy(path,bkpath);    
-    file2.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file2.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to save empty track-item table" << path << file2.errorString();
+        return;
+    }
     QTextStream out2(&file2);
     out2.setRealNumberPrecision(Game::rnp);
     out2.setEncoding(QStringConverter::Utf16);
@@ -4297,7 +4304,10 @@ void TDB::save() {
     qDebug() << "opening " << path;
     QFile file(path);
 
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to save track database" << path << file.errorString();
+        return;
+    }
     QTextStream out(&file);
     out.setRealNumberPrecision(Game::rnp);  //// EFO Let's see if this blows up vectors at (7) was (8)
     //out.setRealNumberNotation(QTextStream::FixedNotation);
@@ -4535,7 +4545,10 @@ void TDB::saveTit() {
     if(Game::debugOutput) qDebug() << path;
     QFile file(path);
     //qDebug() << "TDB 3746";
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to save track-item table" << path << file.errorString();
+        return;
+    }
     QTextStream out(&file);
     out.setRealNumberPrecision(Game::rnp);   //// EFO this might fix some of the node issues... was (8) now (7)
     //out.setRealNumberNotation(QTextStream::FixedNotation);

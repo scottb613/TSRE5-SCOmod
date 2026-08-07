@@ -10,6 +10,7 @@
 
 #include "Terrain.h"
 #include <cmath>
+#include <cstring>
 #include <QDebug>
 #include "Game.h"
 #include <QFile>
@@ -31,6 +32,20 @@
 
 QString Terrain::TileDir[2] = {"tiles", "lo_tiles"};
 Brush* Terrain::DefaultBrush = NULL;
+
+namespace {
+float storedTerrainFloat(const int bits){
+    static_assert(sizeof(bits) == sizeof(float));
+    float value = 0.0f;
+    std::memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+void setStoredTerrainFloat(int& bits, const float value){
+    static_assert(sizeof(bits) == sizeof(value));
+    std::memcpy(&bits, &value, sizeof(bits));
+}
+}
 
 Terrain::Terrain(){
 
@@ -554,7 +569,10 @@ void Terrain::SaveEmpty(QString name, int samples, int sampleSize, int patches, 
     }
     QFile file(path);
     if (!file.exists()){
-        file.open(QIODevice::WriteOnly);
+        if(!file.open(QIODevice::WriteOnly)){
+            qWarning() << "Unable to create terrain elevation file" << path << file.errorString();
+            return;
+        }
         QDataStream write(&file);
         write.setByteOrder(QDataStream::BigEndian);
         unsigned short value = 128;
@@ -957,8 +975,7 @@ void Terrain::makeTextureFromMap(){
     }
     *tfile->materials[newMat].tex[0] = tname;
     *tfile->amaterials[newMat].tex[0] = tname;
-    float *texmult = (float*)&tfile->materials[newMat].itex[1][3];
-    *texmult = 32*16;
+    setStoredTerrainFloat(tfile->materials[newMat].itex[1][3], 32.0f * 16.0f);
 
     int newTexture = TexLib::cloneTex(mapTexid);
     TexLib::mtex[newTexture]->pathid = tname;
@@ -2096,8 +2113,9 @@ void Terrain::pushRenderItem(float lodx, float lodz, int tileX, int tileY, float
                             if (!TexLib::mtex[texid2[yy * patches + uu]]->glLoaded)
                                 TexLib::mtex[texid2[yy * patches + uu]]->GLTextures(true);
                             r->enableTextures(TexLib::mtex[texid2[yy * patches + uu]]->tex[0]);
-                            if(shaderSecondTexUV != *(float*)&tfile->materials[(int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6]].itex[1][3]){
-                                shaderSecondTexUV = *(float*)&tfile->materials[(int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6]].itex[1][3];
+                            const float secondTexUv = storedTerrainFloat(tfile->materials[(int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6]].itex[1][3]);
+                            if(shaderSecondTexUV != secondTexUv){
+                                shaderSecondTexUV = secondTexUv;
                                 gluu->currentShader->setUniformValue(gluu->currentShader->shaderSecondTexEnabled, shaderSecondTexUV);
                             }
                         } else {
@@ -2268,7 +2286,7 @@ void Terrain::pushRenderItemWater(float lodx, float lodz, float tileX, float til
                     //water[uu * 16 + yy].setMaterial(texturePath);
                     w[uu * patches + yy].setMaterial(&Game::currentRoute->env->water[layer].tex);
                     w[uu * patches + yy].init(punkty, ptr, RenderItem::VNTA, GL_TRIANGLES);
-                    delete punkty;
+                    delete[] punkty;
                 }
                 if(selectionColor != 0)
                     tselectionColor = selectionColor | (yy * patches + uu);
@@ -2402,8 +2420,9 @@ void Terrain::render(float lodx, float lodz, int tileX, int tileY, float* player
                                 TexLib::mtex[texid2[yy * patches + uu]]->GLTextures(true);
                             f->glActiveTexture(GL_TEXTURE1);
                             f->glBindTexture(GL_TEXTURE_2D, TexLib::mtex[texid2[yy * patches + uu]]->tex[0]);
-                            if(shaderSecondTexUV != *(float*)&tfile->materials[(int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6]].itex[1][3]){
-                                shaderSecondTexUV = *(float*)&tfile->materials[(int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6]].itex[1][3];
+                            const float secondTexUv = storedTerrainFloat(tfile->materials[(int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6]].itex[1][3]);
+                            if(shaderSecondTexUV != secondTexUv){
+                                shaderSecondTexUV = secondTexUv;
                                 gluu->currentShader->setUniformValue(gluu->currentShader->shaderSecondTexEnabled, shaderSecondTexUV);
                             }
                         } else {
@@ -2587,7 +2606,7 @@ void Terrain::renderWater(float lodx, float lodz, float tileX, float tileY, floa
                     //water[uu * 16 + yy].setMaterial(texturePath);
                     w[uu * patches + yy].setMaterial(&Game::currentRoute->env->water[layer].tex);
                     w[uu * patches + yy].init(punkty, ptr, RenderItem::VNTA, GL_TRIANGLES);
-                    delete punkty;
+                    delete[] punkty;
                 }
                 if(selectionColor != 0)
                     tselectionColor = selectionColor | (yy * patches + uu);

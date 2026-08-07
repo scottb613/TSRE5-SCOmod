@@ -82,13 +82,14 @@ void PropertiesSoundSource::showObj(GameObj* obj){
     this->infoLabel->setText("Object: "+sobj->type);
     
     this->sources.clear();
-    if(Game::soundList != NULL)
+    if(Game::soundList != NULL){
         foreach (SoundListItem* it, Game::soundList->sources){
         //for (auto it = Game::soundList->sources.begin(); it != Game::soundList->sources.end(); ++it ){
             if(it->file1.toLower() == sobj->fileName.toLower())
                 this->sName.setText(it->name);
             this->sources.addItem(it->name);
         }
+    }
 }
 
 bool PropertiesSoundSource::support(GameObj* obj){

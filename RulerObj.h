@@ -20,6 +20,11 @@ class OglObj;
 
 class RulerObj : public WorldObj {
 public:
+    using WorldObj::getPosition;
+    using WorldObj::select;
+    using WorldObj::set;
+    using WorldObj::setPosition;
+
     static bool TwoPointRuler;
     static bool DrawPoints;
     
@@ -50,8 +55,12 @@ public:
     bool isVegetationRuler() const;
     void setVegetationRuler(bool enabled);
     void appendVegetationPoint(int x, int z, float *p);
-    void selectVegetationPointNear(int x, int z, const float *p);
-    void snapSelectedVegetationPointToTerrain();
+    bool isGradeRuler() const;
+    void setGradeRuler(bool enabled);
+    void appendGradePoint(int x, int z, float *p);
+    bool isSpecialRuler() const;
+    void selectSpecialPoint(int encodedIndex, int x, int z, const float *p);
+    void snapSelectedSpecialPointToTerrain();
     void createRoadPaths();
     void removeRoadPaths();
     void enableShape();
@@ -62,6 +71,7 @@ private:
     static constexpr float VegetationPostHeight = 50.0f;
     static constexpr float VegetationHandleGap = 5.0f;
     static constexpr float VegetationHandleSize = 4.0f;
+    static constexpr float SpecialHandlePickSize = 7.0f;
 
     struct Point {
         bool selected = false;
@@ -80,14 +90,17 @@ private:
     OglObj* vegetationPostSelected3d = NULL;
     OglObj* vegetationBounds3d = NULL;
     OglObj* vegetationHandle3d = NULL;
+    OglObj* specialHandlePick3d = NULL;
     int selectionValue = 0;
     float length = 0;
     float geoLength = 0;
     bool waterRuler = false;
     bool vegetationRuler = false;
-    bool vegetationPointMoved = false;
+    bool gradeRuler = false;
+    bool specialPointMoved = false;
     
     void refreshLength();
+    void appendSpecialPoint(int x, int z, float *p);
     bool shapeEnabled = false;
     bool proceduralShapeInit = false;
 

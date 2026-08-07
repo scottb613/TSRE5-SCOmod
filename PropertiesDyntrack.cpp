@@ -60,15 +60,10 @@ PropertiesDyntrack::PropertiesDyntrack() {
     flexModeLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     flexModeLabel->setContentsMargins(3,0,0,0);
     vbox->addWidget(flexModeLabel);
-    flexNextGen.setText("NextGen Flex S-C-S-C-S");
-    flexNextGen.setChecked(true);
-    flexNextGen.setContentsMargins(6,0,0,0);
-    flexNextGen.setToolTip("Allows the solver to use up to two curve sections for compound and S-curve connections.");
-    flexClassic.setText("Classic Flex S-C-S");
-    flexClassic.setContentsMargins(6,0,0,0);
-    flexClassic.setToolTip("Restricts the solver to a single curve between two straight sections.");
-    vbox->addWidget(&flexNextGen);
-    vbox->addWidget(&flexClassic);
+    QLabel *nextGenFlexLabel = new QLabel("NextGen Flex S-C-S-C-S");
+    nextGenFlexLabel->setContentsMargins(6,0,0,0);
+    nextGenFlexLabel->setToolTip("Allows the solver to use up to two curve sections for compound and S-curve connections.");
+    vbox->addWidget(nextGenFlexLabel);
     vbox->addSpacing(3);
     QWidget *flexButtonRow = new QWidget;
     QHBoxLayout *flexButtonLayout = new QHBoxLayout(flexButtonRow);
@@ -474,7 +469,7 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
     bool success = Flex::AutoFlex(sourceX, sourceZ, (float*)p1,
             destinationX, destinationZ, (float*)p2,
             (float*)dyntrackData, visualElev, averageElev, 0.0f,
-            flexClassic.isChecked(), sourceQ, destinationQ,
+            sourceQ, destinationQ,
             &resolvedSourceYaw);
     if(Game::debugOutput) qDebug() << "flex2" << visualElev << averageElev;
     if(success){

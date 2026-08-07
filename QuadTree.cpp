@@ -194,10 +194,11 @@ int QuadTree::QuadTile::listNames() {
                 tn = nameId << 2*prefix | !j << (1 + 2*prefix) | !(j^i) << (0 + 2*prefix);
                 //qDebug() ;
                 outCount++;
-                if(count == 0)
+                if(count == 0){
                     if(Game::debugOutput) qDebug() << level << prefix << i << j << (i * 2 + (i^j)) << x << y << "[visible] QuadTile name: " << PrefixString[prefix]+QString::number(tn, 16);
-                else
+                } else {
                     if(Game::debugOutput) qDebug() << level << prefix << i << j << (i * 2 + (i^j)) << x << y << "[hidden]  QuadTile name: " << PrefixString[prefix]+QString::number(tn, 16);
+                }
             }
             
         }
@@ -212,7 +213,7 @@ QString QuadTree::QuadTile::getMyName(int tileX, int tileY){
     
     int pow = 0;
     for(pow = 0; pow < 32; pow++){
-        if((level >> pow)&1 == 1)
+        if(((level >> pow) & 1) == 1)
             break;
     }
     pow = (pow+1) / 2;
@@ -247,7 +248,7 @@ unsigned int QuadTree::QuadTile::getMyNameId(int tileX, int tileY){
     
     int pow = 0;
     for(pow = 0; pow < 32; pow++){
-        if((level >> pow)&1 == 1)
+        if(((level >> pow) & 1) == 1)
             break;
     }
     pow = (pow+1) / 2;
@@ -275,7 +276,7 @@ bool QuadTree::QuadTile::fillTerrainInfo(int tileX, int tileY, TerrainInfo* info
 
     int pow = 0;
     for(pow = 0; pow < 32; pow++){
-        if((level >> pow)&1 == 1)
+        if(((level >> pow) & 1) == 1)
             break;
     }
     pow = (pow+1) / 2;
@@ -419,7 +420,10 @@ void QuadTree::save() {
         path = Game::root + "/routes/" + Game::route + "/td/lo_td_idx.dat";
     path.replace("//", "/");
     QFile file(path);
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to save terrain index" << path << file.errorString();
+        return;
+    }
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf16);
     out.setGenerateByteOrderMark(true);

@@ -141,7 +141,11 @@ void Ref::loadUtf16Data(FileBuffer* data, QString path){
             
             ParserX::SkipToken(data);
         }
-        if (item.clas != "") {
+        // Dynamic Track is an editor tool, not route REF content.  Ignore all
+        // route and addon REF attempts to define it; ObjTools supplies the
+        // single built-in NextGen Auto-Flex entry.
+        if (item.type.compare("dyntrack", Qt::CaseInsensitive) != 0
+                && item.clas != "") {
             refItems[item.clas.trimmed()].push_back(item);
         }
         ParserX::SkipToken(data);
@@ -282,7 +286,10 @@ void Ref::save() {
     filepath = "./refoutput.txt";
     file.setFileName(filepath);
     //qDebug() << filepath;
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to save reference output" << filepath << file.errorString();
+        return;
+    }
     out.setDevice(&file);
 
     foreach (QVector<RefItem> items, refItems){

@@ -368,21 +368,25 @@ void CameraFree::keyUp(QKeyEvent * e) {
             break;
         case Qt::Key_Left:    
             if(!Game::usenNumPad) break;
+            [[fallthrough]];
         case Qt::Key_A: // A 
             moveL = false;
             break;
         case Qt::Key_Up:    
             if(!Game::usenNumPad) break;
+            [[fallthrough]];
         case Qt::Key_W: // W
             moveF = false;
             break;
         case Qt::Key_Right:   
             if(!Game::usenNumPad) break;
+            [[fallthrough]];
         case Qt::Key_D: // D
             moveR = false;
             break;
         case Qt::Key_Down:    
             if(!Game::usenNumPad) break;
+            [[fallthrough]];
         case Qt::Key_S: // D
             moveB = false;
             break;
@@ -416,21 +420,25 @@ void CameraFree::keyDown(QKeyEvent * e) {
             break;
         case Qt::Key_Left:    
             if(!Game::usenNumPad) break;
+            [[fallthrough]];
         case Qt::Key_A: // A 
             moveL = true;
             break;
         case Qt::Key_Up:    
             if(!Game::usenNumPad) break;
+            [[fallthrough]];
         case Qt::Key_W: // W
             moveF = true;
             break;
         case Qt::Key_Right:   
             if(!Game::usenNumPad) break;
+            [[fallthrough]];
         case Qt::Key_D: // D
             moveR = true;
             break;
         case Qt::Key_Down:    
             if(!Game::usenNumPad) break;
+            [[fallthrough]];
         case Qt::Key_S: // D
             moveB = true;
             break;

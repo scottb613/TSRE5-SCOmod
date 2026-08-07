@@ -42,7 +42,7 @@ TRnode::TRnode(const TRnode& o) {
     iTri = o.iTri;
     if(iTri > 0){
         trItemRef = new int[iTri];
-        memcpy(trItemRef, o.trItemRef, sizeof(int[iTri]));
+        memcpy(trItemRef, o.trItemRef, sizeof(int) * iTri);
     }
     TrP1 = o.TrP1;
     TrP2 = o.TrP2;

@@ -279,12 +279,12 @@ TRitem::TRitem(const TRitem& o) {
     trSignalDir = o.trSignalDir;
     if(trSignalDir != NULL){
         trSignalDir = new int[trSignalDirs * 4];
-        memcpy(trSignalDir, o.trSignalDir, sizeof(int[trSignalDirs * 4]));
+        memcpy(trSignalDir, o.trSignalDir, sizeof(int) * trSignalDirs * 4);
     }
     trSignalRDir = o.trSignalRDir;
     if(trSignalRDir != NULL){
         trSignalRDir = new float[trSignalDirs * 6];
-        memcpy(trSignalRDir, o.trSignalRDir, sizeof(float[trSignalDirs * 6]));
+        memcpy(trSignalRDir, o.trSignalRDir, sizeof(float) * trSignalDirs * 6);
     }
     
     titLoading = o.titLoading;

@@ -994,9 +994,8 @@ void Consist::save(){
     QFile file(spath);
     
     
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
-    if(!file.isOpen()) {
-        if(Game::debugOutput) qDebug() << "con file write error. file not open " << spath;
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to save consist" << spath << file.errorString();
         return;
     }
     QTextStream out(&file);

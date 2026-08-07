@@ -1366,6 +1366,29 @@ void Route::render(GLUU *gluu, float * playerT, float* playerW, float* target, f
         }
     }
 
+    if(gradeRulerObj != NULL && gradeRulerObj->loaded
+            && renderMode != gluu->RENDER_SELECTION){
+        int offsetX = gradeRulerObj->x - (int)playerT[0];
+        int offsetZ = gradeRulerObj->y - (int)playerT[1];
+        float lodx = offsetX * 2048.0f
+                + gradeRulerObj->position[0] - playerW[0];
+        float lodz = offsetZ * 2048.0f
+                + gradeRulerObj->position[2] - playerW[2];
+        float lod = std::sqrt(lodx * lodx + lodz * lodz);
+        bool homeTileRendered = offsetX >= mintile && offsetX <= maxtile
+                && offsetZ >= mintile && offsetZ <= maxtile;
+        bool normalObjectRendered = homeTileRendered
+                && (lod < Game::objectLod || gradeRulerObj->isInternalLodControl());
+        if(!normalObjectRendered){
+            gluu->mvPushMatrix();
+            Mat4::translate(gluu->mvMatrix, gluu->mvMatrix,
+                            2048.0f * offsetX, 0, 2048.0f * offsetZ);
+            gradeRulerObj->render(gluu, lod, lodx, lodz,
+                                  playerW, target, fov, 0, renderMode);
+            gluu->mvPopMatrix();
+        }
+    }
+
     if (renderMode == gluu->RENDER_DEFAULT) {
         if(Game::viewTrackDbLines && trackDB != NULL)
             trackDB->renderAll(gluu, playerT, playerRot);
@@ -2133,7 +2156,7 @@ void Route::dragWorldObject(WorldObj* obj, int x, int z, float* pos){
 
 TRitem *Route::getTrackItem(int TID, int UID){
     if(TID == 0)
-        return trackDB->trackItems[UID];  if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
+        return trackDB->trackItems[UID];
     if(TID == 1)
         return roadDB->trackItems[UID]; // if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
     return NULL;
@@ -2295,14 +2318,10 @@ WorldObj* Route::autoPlaceObject(int x, int z, float* p, int mode) {
     z = playerT[1];
     int trackNodeIdx = tpos[0];
     int length = tdb->getVectorSectionLength(trackNodeIdx);
-    int metry = 0;
     float drawPosition1[7];
     float drawPosition2[7];
     float xyz[3];
     float *quat = Quat::create();
-    float *vec1 = Vec3::create();
-    vec1[2] = -1.0;
-    float *vec2 = Vec3::create();
     float step = placementAutoLength;
     float startPos = 0;
     float endPos = length;
@@ -2472,6 +2491,12 @@ void Route::replaceWorldObjPointer(WorldObj* o, WorldObj* n){
                         && replacementRuler->isVegetationRuler()
                         ? replacementRuler : NULL;
             }
+            if(gradeRulerObj == o){
+                RulerObj *replacementRuler = dynamic_cast<RulerObj*>(n);
+                gradeRulerObj = replacementRuler != NULL
+                        && replacementRuler->isGradeRuler()
+                        ? replacementRuler : NULL;
+            }
             emit objectSelected((GameObj*)n);
             return;
         }
@@ -2634,6 +2659,12 @@ void Route::addToTDBIfNotExist(WorldObj* obj) {
 RulerObj* Route::placeWaterRuler(int x, int z, float *p) {
     if(p == NULL)
         return NULL;
+    RulerObj *vegetationRuler = findVegetationRuler(true);
+    if(vegetationRuler != NULL)
+        deleteObj(vegetationRuler);
+    RulerObj *gradeRuler = findGradeRuler(true);
+    if(gradeRuler != NULL)
+        deleteObj(gradeRuler);
     // There may be only one route-wide water ruler. Check saved world files
     // as well as loaded tiles before creating another marker.
     RulerObj *existingRuler = findWaterRuler(true);
@@ -2741,6 +2772,12 @@ RulerObj* Route::findWaterRuler(bool loadWorldTiles) {
 RulerObj* Route::placeVegetationRuler(int x, int z, float *p) {
     if(p == NULL)
         return NULL;
+    RulerObj *waterRuler = findWaterRuler(true);
+    if(waterRuler != NULL)
+        deleteObj(waterRuler);
+    RulerObj *gradeRuler = findGradeRuler(true);
+    if(gradeRuler != NULL)
+        deleteObj(gradeRuler);
     RulerObj *existingRuler = findVegetationRuler(true);
     if(existingRuler != NULL)
         return existingRuler;
@@ -2832,6 +2869,113 @@ RulerObj* Route::findVegetationRuler(bool loadWorldTiles) {
         }
     }
     return NULL;
+}
+
+RulerObj* Route::placeGradeRuler(int x, int z, float *p) {
+    if(p == NULL)
+        return NULL;
+    deleteSpecialRulers();
+    Game::check_coords(x, z, p);
+    Tile *worldTile = requestTile(x, z);
+    if(worldTile == NULL || worldTile->loaded != 1)
+        return NULL;
+
+    WorldObj *base = WorldObj::createObj("ruler");
+    RulerObj *rulerObj = dynamic_cast<RulerObj*>(base);
+    if(rulerObj == NULL){
+        delete base;
+        return NULL;
+    }
+    float q[4];
+    Quat::fill(q);
+    rulerObj->initPQ(p, q);
+    rulerObj->setGradeRuler(true);
+    rulerObj->load(x, z);
+    worldTile->placeObject(rulerObj);
+    Undo::PushWorldObjPlaced(rulerObj);
+    gradeRulerObj = rulerObj;
+    return rulerObj;
+}
+
+RulerObj* Route::findGradeRuler(bool loadWorldTiles) {
+    if(gradeRulerObj != NULL && gradeRulerObj->loaded
+            && gradeRulerObj->isGradeRuler())
+        return gradeRulerObj;
+
+    auto findInLoadedTiles = [this]() -> RulerObj* {
+        QList<int> keys = tile.keys();
+        for(int key : keys){
+            Tile *worldTile = tile.value(key, NULL);
+            if(worldTile == NULL || worldTile->loaded != 1)
+                continue;
+            for(int i = 0; i < worldTile->jestObiektow; i++){
+                RulerObj *rulerObj = dynamic_cast<RulerObj*>(worldTile->obiekty[i]);
+                if(rulerObj != NULL && rulerObj->loaded && rulerObj->isGradeRuler())
+                    return rulerObj;
+            }
+        }
+        return NULL;
+    };
+
+    RulerObj *loadedRuler = findInLoadedTiles();
+    if(loadedRuler != NULL){
+        gradeRulerObj = loadedRuler;
+        return loadedRuler;
+    }
+    if(!loadWorldTiles)
+        return NULL;
+
+    QString worldPath = Game::root + "/routes/" + Game::route + "/world";
+    QDir worldDir(worldPath);
+    worldDir.setFilter(QDir::Files);
+    worldDir.setNameFilters(QStringList() << "*.w");
+    const QStringList worldFiles = worldDir.entryList();
+    QByteArray utf16Marker;
+    const QString marker = "GradeRuler";
+    for(QChar c : marker){
+        ushort value = c.unicode();
+        utf16Marker.append((char)(value & 0xff));
+        utf16Marker.append((char)((value >> 8) & 0xff));
+    }
+
+    for(const QString &worldFile : worldFiles){
+        QFile file(worldDir.filePath(worldFile));
+        if(!file.open(QIODevice::ReadOnly))
+            continue;
+        const QByteArray raw = file.readAll();
+        if(!raw.contains(utf16Marker) && !raw.contains("GradeRuler"))
+            continue;
+        if(worldFile.length() != 17)
+            continue;
+        bool xOk = false;
+        bool zOk = false;
+        int worldX = worldFile.mid(1, 7).toInt(&xOk);
+        int worldZ = -worldFile.mid(8, 7).toInt(&zOk);
+        if(!xOk || !zOk)
+            continue;
+        Tile *worldTile = requestTile(worldX, worldZ);
+        if(worldTile == NULL || worldTile->loaded != 1)
+            continue;
+        RulerObj *rulerObj = findInLoadedTiles();
+        if(rulerObj != NULL){
+            gradeRulerObj = rulerObj;
+            return rulerObj;
+        }
+    }
+    return NULL;
+}
+
+void Route::deleteSpecialRulers() {
+    RulerObj *waterRuler = findWaterRuler(true);
+    RulerObj *vegetationRuler = findVegetationRuler(true);
+    RulerObj *gradeRuler = findGradeRuler(true);
+    if(waterRuler != NULL)
+        deleteObj(waterRuler);
+    if(vegetationRuler != NULL && vegetationRuler != waterRuler)
+        deleteObj(vegetationRuler);
+    if(gradeRuler != NULL && gradeRuler != waterRuler
+            && gradeRuler != vegetationRuler)
+        deleteObj(gradeRuler);
 }
 
 bool Route::placementEndpointBelongsToTrack(const WorldObj *placed, int x, int y, unsigned int uid) const {
@@ -2977,6 +3121,8 @@ void Route::deleteObj(WorldObj* obj) {
         waterRulerObj = NULL;
     if(obj == vegetationRulerObj)
         vegetationRulerObj = NULL;
+    if(obj == gradeRulerObj)
+        gradeRulerObj = NULL;
     if(obj->typeID == obj->groupobject) {
         GroupObj *gobj = (GroupObj*)obj;
         for(int i = 0; i < gobj->objects.size(); i++ ){
@@ -3216,8 +3362,11 @@ void Route::save() {
     QString filePath;
     filePath = Game::root + "/routes/" + Game::route + "/" + Game::routeName + "tsreupd.txt";
     QFile file(filePath);    
-    file.open(QIODevice::WriteOnly);
-    file.close(); 
+    if(file.open(QIODevice::WriteOnly)){
+        file.close();
+    } else {
+        qWarning() << "Unable to update route timestamp marker" << filePath << file.errorString();
+    }
     QFile::remove(filePath);
     lastSaveResult = true;
     

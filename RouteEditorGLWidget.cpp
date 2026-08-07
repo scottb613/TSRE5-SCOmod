@@ -353,6 +353,7 @@ void RouteEditorGLWidget::clearRouteSession(){
     copyPasteObj = NULL;
     activeWaterRuler = NULL;
     activeVegetationRuler = NULL;
+    activeGradeRuler = NULL;
     waterScanUndoAvailable = false;
     waterScanPending = false;
     mouseLPressed = false;
@@ -778,7 +779,7 @@ void RouteEditorGLWidget::paintGL2() {
         gluu->setMatrixUniforms();
         gluu->currentShader->setUniformValue(gluu->currentShader->lod, 0.0f);
 
-        compass->render(camera->getRotX()+M_PI);
+        compass->render(static_cast<float>(camera->getRotX() + M_PI));
         compassPointer->render();
     }
 
@@ -870,10 +871,9 @@ void RouteEditorGLWidget::handleSelection() {
 
         float winZ[4];
 
-        int* viewport = new int[4];
-        float* mvmatrix = new float[16];
-        float* projmatrix = new float[16];
-        float* wcoord = new float[4];
+        int viewport[4];
+        float mvmatrix[16];
+        float projmatrix[16];
 
         glGetIntegerv(GL_VIEWPORT, viewport);
         glGetFloatv(GL_MODELVIEW_MATRIX, mvmatrix);
@@ -891,8 +891,10 @@ void RouteEditorGLWidget::handleSelection() {
         if(ww == 0){
             if (selectedObj != NULL) {
                 selectedObj->unselect();
-                if (autoAddToTDB)
-                    route->addToTDBIfNotExist((WorldObj*)selectedObj); if(Game::debugOutput) qDebug() << "REGLW 687";
+                if (autoAddToTDB){
+                    route->addToTDBIfNotExist((WorldObj*)selectedObj);
+                }
+                if(Game::debugOutput) qDebug() << "REGLW 687";
                 setSelectedObj(NULL);
             }
         } else if( ww >= 1 && ww <= 9 ){
@@ -943,14 +945,14 @@ void RouteEditorGLWidget::handleSelection() {
                 } else {
                     selectedObj->select(cdata);
                     RulerObj *selectedRuler = dynamic_cast<RulerObj*>(selectedObj);
-                    if(selectedRuler != NULL && selectedRuler->isVegetationRuler()){
+                    if(selectedRuler != NULL && selectedRuler->isSpecialRuler()){
                         int pointerTileX = (int)camera->pozT[0];
                         int pointerTileZ = (int)camera->pozT[1];
                         float pointerPosition[3];
                         Vec3::copy(pointerPosition, aktPointerPos);
                         Game::check_coords(pointerTileX, pointerTileZ, pointerPosition);
-                        selectedRuler->selectVegetationPointNear(
-                            pointerTileX, pointerTileZ, pointerPosition);
+                        selectedRuler->selectSpecialPoint(
+                            cdata, pointerTileX, pointerTileZ, pointerPosition);
                     }
                 }
             }
@@ -983,8 +985,10 @@ void RouteEditorGLWidget::handleSelection() {
         } else if( ww == 11 ){
             if (selectedObj != NULL) {
                 selectedObj->unselect();
-                if (autoAddToTDB)
-                    route->addToTDBIfNotExist((WorldObj*)selectedObj); if(Game::debugOutput) qDebug() << "REGLW 769";
+                if (autoAddToTDB){
+                    route->addToTDBIfNotExist((WorldObj*)selectedObj);
+                }
+                if(Game::debugOutput) qDebug() << "REGLW 769";
                 setSelectedObj(NULL);
             }
             int CID = ((colorHash) >> 8) & 0xFFF;
@@ -1001,8 +1005,10 @@ void RouteEditorGLWidget::handleSelection() {
         } else if( ww == 12 ){
             if (selectedObj != NULL) {
                 selectedObj->unselect();
-                if (autoAddToTDB)
-                    route->addToTDBIfNotExist((WorldObj*)selectedObj); if(Game::debugOutput) qDebug() << "REGLW 787";
+                if (autoAddToTDB){
+                    route->addToTDBIfNotExist((WorldObj*)selectedObj);
+                }
+                if(Game::debugOutput) qDebug() << "REGLW 787";
                 setSelectedObj(NULL);
             }
             int TID = ((colorHash) >> 19) & 0x1;
@@ -1017,8 +1023,10 @@ void RouteEditorGLWidget::handleSelection() {
         } else if( ww == 13 ){
             if (selectedObj != NULL) {
                 selectedObj->unselect();
-                if (autoAddToTDB)
-                    route->addToTDBIfNotExist((WorldObj*)selectedObj); if(Game::debugOutput) qDebug() << "REGLW 803";
+                if (autoAddToTDB){
+                    route->addToTDBIfNotExist((WorldObj*)selectedObj);
+                }
+                if(Game::debugOutput) qDebug() << "REGLW 803";
                 setSelectedObj(NULL);
             }
             int CID = ((colorHash) >> 8) & 0xFFF;
@@ -1035,8 +1043,10 @@ void RouteEditorGLWidget::handleSelection() {
         } else {
             if (selectedObj != NULL) {
                 selectedObj->unselect();
-                if (autoAddToTDB)
-                    route->addToTDBIfNotExist((WorldObj*)selectedObj); if(Game::debugOutput) qDebug() << "REGLW 821";
+                if (autoAddToTDB){
+                    route->addToTDBIfNotExist((WorldObj*)selectedObj);
+                }
+                if(Game::debugOutput) qDebug() << "REGLW 821";
                 setSelectedObj(NULL);
             }
         }
@@ -1509,6 +1519,7 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
             case Qt::Key_Up:
                 if (Game::usenNumPad)
                     break;
+                [[fallthrough]];
             case Qt::Key_8:
                 Undo::PushGameObjData(selectedObj);
                 if (resizeTool && selectedObj != NULL) {
@@ -1524,6 +1535,7 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
             case Qt::Key_Down:
                 if (Game::usenNumPad)
                     break;
+                [[fallthrough]];
             case Qt::Key_2:
                 Undo::PushGameObjData(selectedObj);
                 if (resizeTool && selectedObj != NULL) {
@@ -1539,6 +1551,7 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
             case Qt::Key_Left:
                 if (Game::usenNumPad)
                     break;
+                [[fallthrough]];
             case Qt::Key_4:
                 Undo::PushGameObjData(selectedObj);
                 if (resizeTool && selectedObj != NULL) {
@@ -1554,6 +1567,7 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
             case Qt::Key_Right:
                 if (Game::usenNumPad)
                     break;
+                [[fallthrough]];
             case Qt::Key_6:
                 Undo::PushGameObjData(selectedObj);
                 if (resizeTool && selectedObj != NULL) {
@@ -1763,7 +1777,7 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             if(pointTerrain == NULL || !pointTerrain->loaded){
                 emit waterHelperStatus("Unable to load terrain beneath the ruler point.");
             } else {
-                // Open Water Helper and press its Ruler Water button through
+                // Open Water Helper and press its Ruler (water) button through
                 // the same signal path used by the user-facing controls. The
                 // independent waterRulerTool block below consumes this click
                 // as the first terrain-snapped point.
@@ -1785,16 +1799,54 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             if(pointTerrain == NULL || !pointTerrain->loaded){
                 emit waterHelperStatus("Unable to load terrain beneath the vegetation ruler point.");
             } else {
-                if(activeVegetationRuler == NULL || !activeVegetationRuler->loaded)
-                    activeVegetationRuler = route->findVegetationRuler(true);
+                RulerObj *selectedRuler = selectedObj != NULL
+                    ? dynamic_cast<RulerObj*>(selectedObj) : NULL;
+                const bool selectedSpecialRuler = selectedRuler != NULL
+                    && selectedRuler->isSpecialRuler();
+                route->deleteSpecialRulers();
+                if(selectedSpecialRuler)
+                    setSelectedObj(NULL);
+                activeWaterRuler = NULL;
+                activeVegetationRuler = NULL;
+                activeGradeRuler = NULL;
                 enableTool("vegetationRulerTool");
                 emit waterHelperStatus(
                     "Vegetation ruler active — click terrain to add control points.");
             }
         }
 
+        const bool rulerGradePlacement = toolEnabled == "placeTool"
+            && route->ref->selected != NULL
+            && route->ref->selected->type.compare("rulergrade", Qt::CaseInsensitive) == 0;
+        if(rulerGradePlacement){
+            int pointTileX = (int)camera->pozT[0];
+            int pointTileZ = (int)camera->pozT[1];
+            float point[3];
+            Vec3::copy(point, aktPointerPos);
+            Game::check_coords(pointTileX, pointTileZ, point);
+            Terrain *pointTerrain = Game::terrainLib->getTerrainByXY(
+                pointTileX, pointTileZ, true);
+            if(pointTerrain == NULL || !pointTerrain->loaded){
+                emit waterHelperStatus("Unable to load terrain beneath the grade ruler point.");
+            } else {
+                RulerObj *selectedRuler = selectedObj != NULL
+                    ? dynamic_cast<RulerObj*>(selectedObj) : NULL;
+                const bool selectedSpecialRuler = selectedRuler != NULL
+                    && selectedRuler->isSpecialRuler();
+                route->deleteSpecialRulers();
+                if(selectedSpecialRuler)
+                    setSelectedObj(NULL);
+                activeWaterRuler = NULL;
+                activeVegetationRuler = NULL;
+                activeGradeRuler = NULL;
+                enableTool("gradeRulerTool");
+                emit waterHelperStatus(
+                    "Grade ruler active - place the two grade endpoints.");
+            }
+        }
+
         if (toolEnabled == "placeTool" && !rulerWaterPlacement
-                && !rulerVegetationPlacement) {
+                && !rulerVegetationPlacement && !rulerGradePlacement) {
 
         //QString selectedFilename = selectedObj->objectName();
         //qDebug() << "placed objName: " << selectedFilename;
@@ -1929,10 +1981,13 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                 waterScanUndoAvailable = false;
 
                 if(activeWaterRuler != NULL){
+                    activeVegetationRuler = NULL;
+                    activeGradeRuler = NULL;
                     if(selectedObj != NULL && selectedObj != activeWaterRuler)
                         selectedObj->unselect();
                     setSelectedObj(activeWaterRuler);
-                    activeWaterRuler->select(0);
+                    activeWaterRuler->select(
+                        activeWaterRuler->getPointCount() - 1);
                     if(rulerWaterPlacement)
                         showPlacementSuccess();
                 } else {
@@ -1968,6 +2023,8 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                 }
 
                 if(activeVegetationRuler != NULL){
+                    activeWaterRuler = NULL;
+                    activeGradeRuler = NULL;
                     if(selectedObj != NULL && selectedObj != activeVegetationRuler)
                         selectedObj->unselect();
                     setSelectedObj(activeVegetationRuler);
@@ -1977,6 +2034,51 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                         showPlacementSuccess();
                 } else {
                     emit waterHelperStatus("Unable to create the vegetation ruler.");
+                }
+            }
+        }
+        if (toolEnabled == "gradeRulerTool") {
+            int pointTileX = (int)camera->pozT[0];
+            int pointTileZ = (int)camera->pozT[1];
+            float point[3];
+            Vec3::copy(point, aktPointerPos);
+            Game::check_coords(pointTileX, pointTileZ, point);
+            Terrain *pointTerrain = Game::terrainLib->getTerrainByXY(
+                pointTileX, pointTileZ, true);
+            if(pointTerrain == NULL || !pointTerrain->loaded){
+                emit waterHelperStatus("Unable to load terrain beneath the grade ruler point.");
+            } else {
+                float terrainHeight = Game::terrainLib->getHeight(
+                    pointTileX, pointTileZ, point[0], point[2], false);
+                if(terrainHeight > -10000.0f)
+                    point[1] = terrainHeight;
+
+                if(activeGradeRuler == NULL || !activeGradeRuler->loaded)
+                    activeGradeRuler = route->findGradeRuler(true);
+                if(activeGradeRuler == NULL){
+                    activeGradeRuler = route->placeGradeRuler(
+                        pointTileX, pointTileZ, point);
+                } else if(activeGradeRuler->getPointCount() < 2){
+                    Undo::PushWorldObjData(activeGradeRuler);
+                    activeGradeRuler->appendGradePoint(pointTileX, pointTileZ, point);
+                }
+
+                if(activeGradeRuler != NULL){
+                    activeWaterRuler = NULL;
+                    activeVegetationRuler = NULL;
+                    if(selectedObj != NULL && selectedObj != activeGradeRuler)
+                        selectedObj->unselect();
+                    setSelectedObj(activeGradeRuler);
+                    activeGradeRuler->select(
+                        activeGradeRuler->getPointCount() - 1);
+                    if(rulerGradePlacement)
+                        showPlacementSuccess();
+                    if(activeGradeRuler->getPointCount() >= 2){
+                        emit waterHelperStatus(
+                            "Grade ruler complete - press Select to move either endpoint.");
+                    }
+                } else {
+                    emit waterHelperStatus("Unable to create the grade ruler.");
                 }
             }
         }
@@ -2145,8 +2247,8 @@ void RouteEditorGLWidget::mouseReleaseEvent(QMouseEvent* event) {
     if ((event->button()) == Qt::LeftButton) {
         if(selectedObj != NULL && selectedObj->typeObj == GameObj::worldobj){
             RulerObj *selectedRuler = dynamic_cast<RulerObj*>((WorldObj*)selectedObj);
-            if(selectedRuler != NULL && selectedRuler->isVegetationRuler()){
-                selectedRuler->snapSelectedVegetationPointToTerrain();
+            if(selectedRuler != NULL && selectedRuler->isSpecialRuler()){
+                selectedRuler->snapSelectedSpecialPointToTerrain();
                 selectedRuler->setMartix();
             }
         }
@@ -3003,15 +3105,18 @@ void RouteEditorGLWidget::placeWaterRuler(){
         emit waterHelperStatus("Water ruler changes are locked until processing finishes.");
         return;
     }
-    if(selectedObj != NULL && selectedObj->typeObj == GameObj::worldobj){
-        RulerObj *selectedRuler = dynamic_cast<RulerObj*>((WorldObj*)selectedObj);
-        if(selectedRuler != NULL && selectedRuler->isWaterRuler())
-            activeWaterRuler = selectedRuler;
-    }
-    if(activeWaterRuler == NULL || !activeWaterRuler->loaded)
-        activeWaterRuler = route->findWaterRuler(true);
-    if(activeWaterRuler != NULL)
-        removeWaterRuler();
+    RulerObj *selectedRuler = selectedObj != NULL
+        ? dynamic_cast<RulerObj*>(selectedObj) : NULL;
+    const bool selectedSpecialRuler = selectedRuler != NULL
+        && selectedRuler->isSpecialRuler();
+    Undo::StateBeginIfNotExist();
+    route->deleteSpecialRulers();
+    if(selectedSpecialRuler)
+        setSelectedObj(NULL);
+    activeWaterRuler = NULL;
+    activeVegetationRuler = NULL;
+    activeGradeRuler = NULL;
+    waterScanUndoAvailable = false;
     enableTool("waterRulerTool");
     emit waterHelperStatus(
         "Water ruler active — click along the watercourse bottom, then Process Water Tiles.");
@@ -3495,8 +3600,6 @@ void RouteEditorGLWidget::pickObjRotForPlacement(){
 }
 
 void RouteEditorGLWidget::pickObjRotForCamera(){
-    double spinval = (M_PI );
-
     /*
     if (selectedObj != NULL) {
         if(selectedObj->typeObj == GameObj::worldobj){
@@ -3515,7 +3618,7 @@ void RouteEditorGLWidget::pickObjRotForCamera(){
             double camrotz = ((WorldObj*)selectedObj)->qDirection[3];
             double camrot = (2.0 * std::atan2(camrotw, camrotz));
 
-            camera->setPlayerRot(camrot,NULL);
+            camera->setPlayerRot(camrot, 0.0f);
             selectedObj->unselect(); setSelectedObj(NULL);
 
          }
@@ -3577,7 +3680,7 @@ void RouteEditorGLWidget::pickObjRotForCamera(){
 
             qDebug() << "starting = " << currcam << " camrot = " << camrot;
 
-            camera->setPlayerRot(camrot,NULL);
+            camera->setPlayerRot(camrot, 0.0f);
             CamObj = NULL;
             return;
   //      }
@@ -3586,7 +3689,7 @@ void RouteEditorGLWidget::pickObjRotForCamera(){
 
 void RouteEditorGLWidget::pickObjRotForCameraFlip(){
             double camrot = (camera->getRotX()) + M_PI;
-            camera->setPlayerRot(camrot,NULL);
+            camera->setPlayerRot(camrot, 0.0f);
             if(selectedObj != NULL) selectedObj->unselect();
             setSelectedObj(NULL);
 }

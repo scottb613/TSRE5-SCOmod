@@ -19,6 +19,8 @@ class PoleObj;
 
 class SoundSourceObj : public WorldObj {
 public:
+    using WorldObj::set;
+
     SoundSourceObj();
     SoundSourceObj(const SoundSourceObj& o);
     WorldObj* clone();

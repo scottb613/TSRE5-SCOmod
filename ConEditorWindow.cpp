@@ -560,12 +560,12 @@ void ConEditorWindow::eOpenInExternalEditor(){
 
 void ConEditorWindow::copyImgShapeView(){
     if(glShapeWidget->screenShot != NULL)
-        QApplication::clipboard()->setImage((glShapeWidget->screenShot->mirrored(false, true)), QClipboard::Clipboard);
+        QApplication::clipboard()->setImage(glShapeWidget->screenShot->flipped(Qt::Vertical), QClipboard::Clipboard);
 }
 
 void ConEditorWindow::saveImgShapeView(){
     if(glShapeWidget->screenShot != NULL){
-        QImage img = glShapeWidget->screenShot->mirrored(false, true);
+        QImage img = glShapeWidget->screenShot->flipped(Qt::Vertical);
         QFileDialog fileDialog(this);
         fileDialog.setOption(QFileDialog::DontUseNativeDialog, true);
         fileDialog.setAcceptMode(QFileDialog::AcceptSave);
@@ -583,8 +583,12 @@ void ConEditorWindow::saveImgShapeView(){
         if(Game::debugOutput) qDebug() << __FILE__ << __LINE__ << path;
         if(path.length() < 1) return;
         QFile file(path);
-        file.open(QIODevice::WriteOnly);
-        img.save(&file);
+        if(!file.open(QIODevice::WriteOnly)){
+            qWarning() << "Unable to save preview image" << path << file.errorString();
+            return;
+        }
+        if(!img.save(&file))
+            qWarning() << "Unable to encode preview image" << path;
     }
 }
 

@@ -17,6 +17,8 @@
 
 class TransferObj : public WorldObj {
 public:
+    using WorldObj::set;
+
     /*struct Shape{
         int iloscv;
         QOpenGLBuffer VBO;

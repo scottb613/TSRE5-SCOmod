@@ -21,6 +21,10 @@ class OglObj;
 
 class PlatformObj : public WorldObj  {
 public:
+    using WorldObj::select;
+    using WorldObj::set;
+    using WorldObj::setPosition;
+
     PlatformObj();
     PlatformObj(const PlatformObj& o);
     WorldObj* clone();

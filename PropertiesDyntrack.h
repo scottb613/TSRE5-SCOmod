@@ -56,9 +56,6 @@ private:
     QLineEdit eSectionIdx;
     QLineEdit eLength;
     QLineEdit eCurveCount;
-    QRadioButton flexNextGen;
-    QRadioButton flexClassic;
-    
     QComboBox elevType;
     QLineEdit elevStep;
     QLineEdit elevProm;

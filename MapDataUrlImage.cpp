@@ -10,6 +10,7 @@
 
 
 #include "MapDataUrlImage.h"
+#include <array>
 #include <QDebug>
 #include <QFile>
 #include <QString>
@@ -77,8 +78,8 @@ bool MapDataUrlImage::draw(QImage* myImage) {
     igh = Game::GeoCoordConverter->ConvertToInternal(aCoords);
     Game::GeoCoordConverter->ConvertToLatLon(igh, &llpoint01);
     
-    int numThreads = 8;
-    UriImageDrawThread threads[numThreads];
+    constexpr int numThreads = 8;
+    std::array<UriImageDrawThread, numThreads> threads;
     int wstep = myImage->width() / numThreads;
     for(int i = 0; i < numThreads; i++){
         threads[i].llpoint00 = &llpoint00;

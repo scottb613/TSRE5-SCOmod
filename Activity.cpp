@@ -354,7 +354,10 @@ void Activity::save() {
     qDebug() << tpath;
     QFile file(tpath);
 
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to save activity" << tpath << file.errorString();
+        return;
+    }
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf16);
     out.setGenerateByteOrderMark(true);

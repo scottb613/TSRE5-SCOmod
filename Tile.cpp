@@ -161,7 +161,7 @@ void Tile::checkForErrors(){
             int sdl = obj->staticDetailLevel;
             QString sfl = ParserX::MakeFlagsString(obj->staticFlags) + " " + obj->type; 
             
-            if(sdl = -1) sdl = 0;
+            if(sdl == -1) sdl = 0;
                         
             int index = trimmedFile.indexOf("shapes\\\\");
             if ((index != -1)) {
@@ -718,7 +718,10 @@ void Tile::saveEmpty(int nx, int nz) {
     QFile file(path);
     if(file.exists()) return;
     
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to create empty world tile" << path << file.errorString();
+        return;
+    }
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf16);
     out.setGenerateByteOrderMark(true);
@@ -751,7 +754,10 @@ void Tile::save() {
     // if(Game::debugOutput) qDebug() << "tile667: " << path;
     QFile file(path);
     
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to save world tile" << path << file.errorString();
+        return;
+    }
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf16);
     out.setGenerateByteOrderMark(true);
@@ -825,7 +831,10 @@ void Tile::saveWS() {
         return;
     }
     
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to save world sound tile" << path << file.errorString();
+        return;
+    }
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf16);
     out.setGenerateByteOrderMark(true);

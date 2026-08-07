@@ -16,6 +16,28 @@ last approval gate before GitHub grants write access.
 Keep the repository's default workflow-token permission read-only. Each release
 job requests only `contents: write`; all other jobs remain read-only.
 
+## Prepare the public source branch locally
+
+The development checkout and public source branch intentionally use different
+layouts. The development checkout retains `TSREvcWIP`, private migration
+records, build evidence, snapshots, and distribution staging. The public branch
+contains only the flattened maintained source, CMake support, tests, workflows,
+and the approved versioned document set.
+
+Create a linked worktree for the existing public WIP branch, then run the
+guarded exporter. The exporter accepts only a clean worktree below
+`tmp/release-worktrees`, validates version metadata and the document manifest,
+removes the prior tracked public tree, exports the approved layout, rejects
+private/generated artifacts, stages the result, and prints the staged manifest.
+
+```powershell
+git worktree add -b tsre-scomod-wip .\tmp\release-worktrees\v0.11 origin/tsre-scomod-wip 2>&1 | Tee-Object -FilePath .\AAA_Git-v0.11-prepare.log
+.\scripts\Prepare-SourceRelease.ps1 -Version v0.11 -Destination .\tmp\release-worktrees\v0.11 -Stage 2>&1 | Tee-Object -FilePath .\AAA_Git-v0.11-prepare.log -Append
+```
+
+Review `git -C .\tmp\release-worktrees\v0.11 diff --cached` before committing.
+Never stage the development checkout wholesale.
+
 ## Source-only checkpoint
 
 Run **Prepare TSRE GenX release** with:
@@ -44,7 +66,7 @@ Upload the approved ZIP to that draft. This can be done in the GitHub draft
 release editor or from the approved local checkout:
 
 ```powershell
-gh release upload v0.11 dist\tsre-genx-v0.11.zip --repo scottb613/TSRE5-SCOmod
+gh release upload v0.11 dist\tsre-scomod-v0.11.zip --repo scottb613/TSRE5-SCOmod 2>&1 | Tee-Object -FilePath .\AAA_Git-v0.11-release.log
 ```
 
 Do not upload loose executables, DLLs, PDBs, or unrelated archives.

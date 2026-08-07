@@ -1,37 +1,47 @@
-TSRE GenX v0.10 WIP Work List
+TSRE GenX v0.11 Community Open-Testing Work List
 
 ======================================================================================================
 
 SCOPE
 
-TSRE GenX is a maintained development line of the TSRE route editor for MSTS and Open Rails route building. v0.9 delivered the Qt6/CMake modernization on master; v0.10 is the active source-only work-in-progress line.
+TSRE GenX is a maintained development line of the TSRE route editor for MSTS and Open Rails route building. v0.9 delivered the Qt6/CMake modernization on master, v0.10 preserved the initial post-migration source checkpoint, and v0.11 carries the complete subsequent work into a community open-testing release on `tsre-scomod-wip`.
 
 TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Grønbæk Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.
 
 ======================================================================================================
 
-CURRENT RELEASE: V0.10 WIP
+CURRENT RELEASE: V0.11 COMMUNITY OPEN TESTING
 
 Identity and release handling
 
-- Aligned the application, CMake, vcpkg, Windows resource, and development-launcher identity with v0.10.
+- Aligned the application, CMake, vcpkg, Windows resource, development-launcher, and public-document identity with v0.11.
 - Removed the eight retained legacy qmake project files, the obsolete qmake prerequisite check, and the `.qmake.stash` ignore rule; CMake/CTest is now the only maintained build path.
-- Published current v0.10 source on `tsre-scomod-wip` while retaining the immutable `v0.10` tag at its initial checkpoint, with no executable, `dist` package, archive, or GitHub Release.
+- Preserved the immutable v0.10 source tag and document snapshot while preparing v0.11 as a new matching source tag and executable package on `tsre-scomod-wip`.
 - Added guarded manual GitHub Actions for immutable source tags, optional draft releases, approved-ZIP SHA-256 verification, and deliberate publication.
+- Completed a compiler-warning audit without global suppression, correcting actionable correctness, ownership, file-write, overload, deprecated-API, and control-flow findings while retaining required interface parameters and state-advancing parser reads.
+
+Dynamic Track and rolling-stock compatibility
+
+- Retired Classic Flex and made NextGen S-C-S-C-S Auto-Flex the only Dynamic Track solver and editor-owned placement choice.
+- Corrected Unicode-whitespace ENG/WAG token parsing so affected community Steam locomotives appear in Consist Editor.
+- Corrected NVIDIA-style 24-bit RGB and 32-bit RGBA uncompressed DDS loading while retaining DXT1, DXT3, and DXT5 support.
 
 Rulers and editor controls
 
-- Added an Object Selection dropdown for Ruler Water and Ruler Vegetation. Ruler Water launches the existing terrain-snapped Water Helper workflow; Ruler Vegetation provides one persistent per-route planning ruler for future foliage-spline work.
+- Unified `Ruler (water)` and `Ruler (vegetation)` with terrain-snapped movable points, fifty-meter posts, highway-cone-orange cube handles, terrain snap on release, and Undo.
+- Added a magenta two-endpoint `Ruler (grade)` whose Properties panel reports Average Grade as per-mille, 1-in-X, angle, and percent.
+- Made water, vegetation, and grade mutually exclusive while leaving the ordinary measurement Ruler independent; enlarged the invisible cube pick volume and honored the clicked encoded point directly.
 - Added F12 Instance Protection, defaulting to False, while keeping Shape Viewer unrestricted.
 - Hardened New Route latitude/longitude entry for up to twelve decimal places, strict geographic ranges, checked MSTS coordinate conversion, and standard stopped-action feedback instead of a crash.
 
 Memory, selection, and marker presentation
 
 - Fixed excessive memory growth from repeated ACE references resolving to DDS by reusing one decoded texture while preserving the image-upgrade, substitution, direct-DDS, and TERRTEX rules.
+- Corrected cached-texture reload IDs so terrain reloads retain the intended texture instead of falling back to texture 0, and release short-lived decoder worker objects after loading.
 - Fixed the selection-pick regression by bypassing solid-marker lighting during pick rendering in all maintained Fog and Bloom shaders.
 - Restored flat-face shading for original 3D cubes, directional pyramids, and Sound Source posts while leaving the newer 2D symbols unchanged; New Symbols now defaults to Off for fresh settings.
 
-Focused texture compilation and the DDS decoder probe passed, and Khronos glslang 16.4.0 validated all six maintained shader copies. Long compile, peak-memory comparison, and manual editor checks remain operator-run for this WIP checkpoint.
+v0.11 is designated for community open testing and remains separate from official TSRE development.
 
 ======================================================================================================
 
@@ -115,37 +125,42 @@ TSRE GenX source repository:
 
 https://github.com/scottb613/TSRE5-SCOmod
 
-Current v0.10 development is published only as source on `tsre-scomod-wip`; the immutable `v0.10` source tag remains at the initial checkpoint. No executable, `dist` directory, archive, or GitHub Release is published.
+The immutable v0.10 source tag remains at its initial checkpoint. v0.11 is the next `tsre-scomod-wip` source and executable release candidate; its source tag and ZIP must identify the same reviewed source.
 
 ======================================================================================================
 
 WORK DETAIL
 
-CURRENT RELEASE - v0.10 WIP
-===========================
+CURRENT RELEASE - v0.11 COMMUNITY OPEN TESTING
+==============================================
 
-   --- v0.10 Version Identity and Source Checkpoint ---
-The application, CMake project, vcpkg manifest, Windows resource, and development launchers now share the v0.10 identity. After CMake/CTest parity was accepted, the seven retained application qmake projects and qmake-only RouteSaveTransaction test project were removed. The prerequisite checker no longer requires qmake, and the obsolete `.qmake.stash` ignore rule is gone; CMake is the only maintained build path. Current v0.10 source is published on `tsre-scomod-wip`, while the immutable `v0.10` tag records the initial source checkpoint. Neither includes an executable, `dist` directory, archive, or GitHub Release.
+   --- v0.11 Version Identity and Release Line ---
+The application, CMake project, vcpkg manifest, Windows resource, development launchers, and public documents share the v0.11 identity. The existing v0.10 source tag and document snapshot remain immutable. v0.11 carries all completed post-v0.10 work into a new `tsre-scomod-wip` source tag and matching community executable package. CMake is the only maintained build path after removal of the retained qmake application and test projects, qmake prerequisite, and obsolete `.qmake.stash` rule.
 
-   --- v0.10 Rulers and Vegetation Preparation ---
-Object Selection now includes a Ruler Water launcher that starts the existing terrain-snapped Water Helper ruler from the placement click. It preserves the existing single-water-ruler lifecycle and placement feedback.
+   --- v0.11 Dynamic Track ---
+Classic Flex has been retired. NextGen S-C-S-C-S Auto-Flex is the single Dynamic Track solver, the F1 panel presents that fixed mode without obsolete radio controls, and Object Selection supplies one editor-owned `NextGen Dynamic Track` category containing `Dynamic Track (Auto-Flex)`. Route and addon REF-file `dyntrack` entries are ignored so old external definitions cannot restore conflicting placement modes.
 
-The persistent per-route Ruler Vegetation placeholder provides terrain-snapped control points, shaded selectable handles, and a terrain-following influence corridor for future foliage-spline work. Reusing the launcher continues the current ruler rather than creating a duplicate. Vegetation processing and user-configurable corridor width remain future work; manual editor verification remains required.
+   --- v0.11 Rulers and Vegetation Preparation ---
+Object Selection names the special tools `Ruler (water)`, `Ruler (vegetation)`, and `Ruler (grade)`. Water and vegetation use the same fifty-meter post layout, visible four-meter highway-cone-orange top cubes, Select-mode point movement, terrain snap on release, and Undo. The vegetation planning ruler retains its forest-green centerline and fixed magenta influence corridor fifty meters to each side, with bounded mitered joins and perpendicular end caps.
 
-   --- v0.10 Instance Management ---
-F12 General now includes Instance Protection, defaulting to False. Enabling it preserves the single Route Editor restriction; disabling it permits multiple Route Editor instances. Shape Viewer remains unrestricted. Manual startup verification remains required.
+The magenta grade ruler accepts exactly two endpoints and reports Average Grade as per-mille, 1-in-X, angle, and percent using endpoint rise over horizontal run. Starting any water, vegetation, or grade ruler removes the existing special ruler while leaving the ordinary measurement Ruler independent. A seven-meter invisible selection volume surrounds each visible cube, and selection honors the clicked encoded point directly, falling back to terrain proximity only for genuine index collisions above sixteen points.
 
-   --- v0.10 New Route Coordinate Validation ---
-New Route latitude and longitude fields now accept up to twelve decimal places while enforcing the valid -90 to 90 and -180 to 180 degree ranges. Both the dialog and Route Loader verify numeric conversion, MSTS projection, and tile conversion before using the result. Invalid, unsupported, or out-of-range coordinates keep TSRE running and use the standard orange stopped-action popup instead of causing a crash. Focused source compilation passed; high-precision, boundary, invalid, and ordinary coordinate cases remain pending manual creation tests.
+   --- v0.11 Instance Management ---
+F12 General includes Instance Protection, defaulting to False. Enabling it preserves the single Route Editor restriction; disabling it permits multiple Route Editor instances. Shape Viewer remains unrestricted, and a blocked editor launch uses the shared stopped-action popup and sound.
 
-   --- v0.10 DDS, ACE Texture Cache, and Memory ---
-Repeated ACE references that resolved to DDS could decode and retain duplicate texture objects, driving excessive memory growth during route and shape loading. The resolved DDS texture now records both its DDS path and the originally requested ACE path, so later ACE references reuse the same decoded texture instead of allocating another DDS copy. Image Upgrade, Image Substitution, direct DDS behavior, and route TERRTEX exclusions remain respected. Focused TexLib/Texture compilation and the DDS decoder probe passed; operator startup and peak-memory comparison against v0.698 remains pending.
+   --- v0.11 New Route Coordinate Validation ---
+New Route latitude and longitude fields accept up to twelve decimal places while enforcing the valid -90 to 90 and -180 to 180 degree ranges. Both the dialog and Route Loader verify numeric conversion, MSTS projection, and tile conversion before using the result. Invalid, unsupported, or out-of-range coordinates keep TSRE running and use the standard orange stopped-action popup instead of causing a crash.
 
-   --- v0.10 Interactive Markers and Shaders ---
-All maintained Fog and Bloom fragment shaders now bypass solid-color lighting during the selection pass so encoded picking colors remain exact. Original 3D marker cubes and directional pyramids use flat-face normals and the shared editor sunlight while the newer 2D symbols remain unchanged. Sound Source posts use the same shaded marker path, and New Symbols defaults to Off for fresh settings. Khronos glslang 16.4.0 validated all six maintained shader copies; manual presentation and selection checks remain required.
+   --- v0.11 ENG Parsing, DDS, ACE Texture Cache, and Memory ---
+ENG/WAG token parsing now recognizes Unicode whitespace found in community Steam locomotive definitions without changing ordinary MSTS/Open Rails token handling. NVIDIA-style uncompressed DDS headers now treat `dwPitchOrLinearSize` as row pitch only when `DDSD_PITCH` is present, restoring valid 24-bit RGB and 32-bit RGBA rolling-stock textures while retaining DXT1, DXT3, and DXT5 support.
 
-   --- v0.10 Release Automation ---
-Two manually dispatched GitHub Actions now define the guarded release path. Prepare TSRE GenX Release validates the selected branch head, requested version, release notes, public source layout, and confirmation before creating a new annotated tag; it can stop at a source-only checkpoint or create an unpublished draft release. Publish Approved TSRE GenX Release requires a protected `release` environment, verifies that the tag belongs to the selected branch, accepts only the named draft ZIP, compares its exact SHA-256, adds a checksum file, and publishes only after explicit confirmation. Existing tags and published releases are never replaced. Actionlint 1.7.12 passed both workflows; activation still requires an explicit Git push and GitHub environment configuration.
+Repeated ACE references that resolve to DDS reuse one decoded texture by recording both the resolved DDS path and requested ACE name. Image Upgrade, Image Substitution, direct DDS behavior, and route TERRTEX exclusions remain respected. Cached reloads return the matched texture's real ID rather than texture 0, and temporary ACE, DDS, ordinary-image, paint-texture, and map-texture loader helpers are released after their work completes.
+
+   --- v0.11 Interactive Markers and Shaders ---
+All maintained Fog and Bloom fragment shaders bypass solid-color lighting during the selection pass so encoded picking colors remain exact. Original 3D marker cubes and directional pyramids use flat-face normals and the shared editor sunlight while the newer 2D symbols remain unchanged. Sound Source posts use the same shaded marker path, and New Symbols defaults to Off for fresh settings.
+
+   --- v0.11 Release Automation ---
+Two manually dispatched GitHub Actions define the guarded release path. Prepare TSRE GenX Release validates the selected branch head, requested version, release notes, public source layout, and confirmation before creating a new annotated tag; it can stop at a source-only checkpoint or create an unpublished draft release. Publish Approved TSRE GenX Release requires a protected `release` environment, verifies that the tag belongs to the selected branch, accepts only the named draft ZIP, compares its exact SHA-256, adds a checksum file, and publishes only after explicit confirmation. Existing tags and published releases are never replaced.
 
 CAPPED PLATFORM RELEASE - v0.9
 ==============================
@@ -735,7 +750,14 @@ The older automatic loose report files in the TSRE working directory were remove
 
 DISTRIBUTION NOTES
 
-v0.10 has no binary distribution. Use the WIP branch or source tag for review and development; build and runtime packaging remain local operator tasks.
+   --- v0.11 Build and Test Status ---
+The complete Release build configured, compiled, and linked successfully. The authoritative clean-build diagnostic count fell from 1,272 to 744 before the final low-risk cleanup. A final incremental changed-file pass built successfully with six warnings, all required but unused TerrainLibQt interface parameters; no actionable warning remained in the files rebuilt by that pass. Warning categories were not globally disabled.
+
+All four configured automated tests passed in 2.28 seconds: MSTS/Open Rails text-encoding compatibility, DDS decoding including NVIDIA-style 24-bit RGB and 32-bit RGBA linear-size headers, Unicode-whitespace parser handling, and the route-regression harness self-test. Khronos glslang validation also passed all maintained Fog and Bloom shader copies.
+
+Outstanding community manual checks are the new water, vegetation, and grade ruler placement/edit/save workflows and difficult-angle picking; NextGen Auto-Flex placement and Open Rails operation; SCO_MEC282/SCO_RUT282 Consist Editor appearance; ACE-to-DDS cache reuse and VSL peak memory; Instance Protection and Shape Viewer exclusion; high-precision and invalid New Route coordinates; shaded marker appearance and exact selection; New Symbols defaults; and representative route save/reload behavior. The authoritative per-case status and procedures are recorded in `TEST-MATRIX-v0.11.md`; none of these pending manual checks is represented as passed.
+
+v0.11 is prepared as one `tsre-scomod-v0.11.zip` executable package plus its SHA-256 checksum. The package contains the application, required runtime libraries and plugins, runtime content/assets, and public documents; it excludes source, build output, debug symbols, logs, caches, and user settings.
 
 ======================================================================================================
 

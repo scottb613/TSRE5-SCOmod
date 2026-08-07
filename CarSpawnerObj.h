@@ -21,6 +21,10 @@ class SFile;
 
 class CarSpawnerObj : public WorldObj  {
 public:
+    using WorldObj::select;
+    using WorldObj::set;
+    using WorldObj::setPosition;
+
     struct CarSpawnerList {
         QString name;
         bool ignoreXRot = false;

@@ -151,18 +151,22 @@ void ShapeViewerWindow::vSetColorShapeViewSelected(){
 
 void ShapeViewerWindow::copyImgShapeView(){
     if(glShapeWidget->screenShot != NULL)
-        QApplication::clipboard()->setImage((glShapeWidget->screenShot->mirrored(false, true)), QClipboard::Clipboard);
+        QApplication::clipboard()->setImage(glShapeWidget->screenShot->flipped(Qt::Vertical), QClipboard::Clipboard);
 }
 
 void ShapeViewerWindow::saveImgShapeView(){
     if(glShapeWidget->screenShot != NULL){
-        QImage img = glShapeWidget->screenShot->mirrored(false, true);
+        QImage img = glShapeWidget->screenShot->flipped(Qt::Vertical);
         QString path = QFileDialog::getSaveFileName(this, "Save File", "./", "Images (*.png *.jpg)");
         qDebug() << path;
         if(path.length() < 1) return;
         QFile file(path);
-        file.open(QIODevice::WriteOnly);
-        img.save(&file);
+        if(!file.open(QIODevice::WriteOnly)){
+            qWarning() << "Unable to save Shape Viewer image" << path << file.errorString();
+            return;
+        }
+        if(!img.save(&file))
+            qWarning() << "Unable to encode Shape Viewer image" << path;
     }
 }
 

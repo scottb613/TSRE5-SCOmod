@@ -93,9 +93,9 @@ void TerrainClient::load(){
                 seasonPath = Game::season.toLower() + "/";
 
             if(Game::season.toLower() == "winter" || Game::season.toLower() == "autumnsnow" || Game::season.toLower() == "wintersnow" || Game::season.toLower() == "springsnow" ){
-                if(esdAlternativeTexture & Game::TextureFlags["snow"] != 0)
+                if((esdAlternativeTexture & Game::TextureFlags["snow"]) != 0)
                     seasonPath = "snow/";
-                if(esdAlternativeTexture & Game::TextureFlags["snowtrack"] != 0)
+                if((esdAlternativeTexture & Game::TextureFlags["snowtrack"]) != 0)
                     seasonPath = "snow/";
             }
 

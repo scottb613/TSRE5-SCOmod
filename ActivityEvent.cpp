@@ -327,7 +327,7 @@ void ActivityEvent::Outcome::setModified(bool val){
 }
 
 void ActivityEvent::render(GLUU* gluu, float * playerT, float playerRot, int renderMode){
-    if(category == EventTypeLocation){
+    if(category == CategoryLocation){
         if(!Game::viewInteractives)
             return;
         gluu->setMatrixUniforms();
@@ -336,8 +336,6 @@ void ActivityEvent::render(GLUU* gluu, float * playerT, float playerRot, int ren
             simpleMarkerObj = new OglObj();
             float *punkty = new float[3 * 2];
             int ptr = 0;
-            int i = 0;
-
             punkty[ptr++] = 0;
             punkty[ptr++] = 0;
             punkty[ptr++] = 0;

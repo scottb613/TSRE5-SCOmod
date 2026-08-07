@@ -801,31 +801,19 @@ TerrainTools::TerrainTools(QString name)
     
     // EFO pre-populate terrainTools values from Settings
 
-    if(Game::terrainTools != NULL)
-    {
-      this->setEsize(Game::terrainTools[0]);
-      this->setEemb(Game::terrainTools[1]);
-      this->setEcut(Game::terrainTools[2]);
-      this->setEradius(Game::terrainTools[3]);
-      this->setBrushSize(Game::terrainTools[4]);
-      this->setBrushAlpha(Game::terrainTools[5]); 
-      
-      sSize->setValue(paintBrush->size);
-      sIntensity->setValue(paintBrush->alpha*100);
-      sEsize->setValue(paintBrush->eSize);
-      sEemb->setValue(paintBrush->eEmb);
-      sEcut->setValue(paintBrush->eCut);
-      sEradius->setValue(paintBrush->eRadius);                  
-    }
-    else
-    {
-      Game::terrainTools[0] = 1;
-      Game::terrainTools[1] = 5;
-      Game::terrainTools[2] = 5;
-      Game::terrainTools[3] = 9;
-      Game::terrainTools[4] = 1;
-      Game::terrainTools[5] = 10; 
-    }
+    this->setEsize(Game::terrainTools[0]);
+    this->setEemb(Game::terrainTools[1]);
+    this->setEcut(Game::terrainTools[2]);
+    this->setEradius(Game::terrainTools[3]);
+    this->setBrushSize(Game::terrainTools[4]);
+    this->setBrushAlpha(Game::terrainTools[5]);
+
+    sSize->setValue(paintBrush->size);
+    sIntensity->setValue(paintBrush->alpha*100);
+    sEsize->setValue(paintBrush->eSize);
+    sEemb->setValue(paintBrush->eEmb);
+    sEcut->setValue(paintBrush->eCut);
+    sEradius->setValue(paintBrush->eRadius);
     refreshPaintPresets();
     
 }
@@ -1214,7 +1202,7 @@ void TerrainTools::setHtype(int val){
         if(val == 2){
             fheight->setToolTip("Target terrain height.");
             bool valid = false;
-            const float currentHeight = fheight->text().toFloat(&valid);
+            (void)fheight->text().toFloat(&valid);
             if(!valid){
                 fheight->setText("0.00");
                 this->paintBrush->hFixed = 0.0f;
@@ -1933,23 +1921,20 @@ void TerrainTools::resetDefaultValues()
         colorw->setStyleSheet("background-color:" + Game::terrBrushColor->name() + ";");
         colorw->setText(Game::terrBrushColor->name());
     }
-    if(Game::terrainTools != NULL)
-    {
-      setEsize(Game::terrainTools[0]);
-      setEemb(Game::terrainTools[1]);
-      setEcut(Game::terrainTools[2]);
-      setEradius(Game::terrainTools[3]);
-      setBrushSize(Game::terrainTools[4]);
-      setBrushAlpha(Game::terrainTools[5]);   
-      setTextureRotation(0);
-      sSize->setValue(paintBrush->size);
-      sIntensity->setValue(paintBrush->alpha*100);
-      sTextureRotation->setValue(paintBrush->texRotationDegrees);
-      sEsize->setValue(paintBrush->eSize);
-      sEemb->setValue(paintBrush->eEmb);
-      sEcut->setValue(paintBrush->eCut);
-      sEradius->setValue(paintBrush->eRadius);
-    }
+    setEsize(Game::terrainTools[0]);
+    setEemb(Game::terrainTools[1]);
+    setEcut(Game::terrainTools[2]);
+    setEradius(Game::terrainTools[3]);
+    setBrushSize(Game::terrainTools[4]);
+    setBrushAlpha(Game::terrainTools[5]);
+    setTextureRotation(0);
+    sSize->setValue(paintBrush->size);
+    sIntensity->setValue(paintBrush->alpha*100);
+    sTextureRotation->setValue(paintBrush->texRotationDegrees);
+    sEsize->setValue(paintBrush->eSize);
+    sEemb->setValue(paintBrush->eEmb);
+    sEcut->setValue(paintBrush->eCut);
+    sEradius->setValue(paintBrush->eRadius);
    
     preloadTextures();
     refreshPaintPresets();

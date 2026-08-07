@@ -56,7 +56,7 @@ PropertiesRuler::PropertiesRuler() {
     vbox->addItem(vlist);
     
     
-    label = new QLabel("Average Elevation:");
+    label = new QLabel("Average Grade:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
@@ -202,11 +202,12 @@ void PropertiesRuler::showObj(GameObj* obj){
         eTemplate.setCurrentText(templateName);
     
     elevType.setCurrentText(ElevTypeName);
-    float elev = sin(robj->getElevation())*1000;
-    float oneInXm = 0.0;
-    float prog = qRadiansToDegrees(qAtan(elev/1000.0));
-    float prop = elev/10.0;
-    oneInXm = 1000.0/elev;
+    const float gradeAngle = robj->getElevation();
+    const float gradeRatio = qTan(gradeAngle);
+    float elev = gradeRatio*1000.0f;
+    float oneInXm = qFuzzyIsNull(gradeRatio) ? 0.0f : 1.0f/gradeRatio;
+    float prog = qRadiansToDegrees(gradeAngle);
+    float prop = gradeRatio*100.0f;
     this->elevProm.setText(QString::number(elev));
     this->elevProg.setText(QString::number(prog));
     this->elevProp.setText(QString::number(prop));
@@ -231,11 +232,12 @@ void PropertiesRuler::updateObj(GameObj* obj){
     if(!lengthGM.hasFocus())
         lengthGM.setText(QString::number(robj->getGeoLength(), 'G', 4));
     
-    float elev = sin(robj->getElevation())*1000;
-    float oneInXm = 0.0;
-    float prog = qRadiansToDegrees(qAtan(elev/1000.0));
-    float prop = elev/10.0;
-    oneInXm = 1000.0/elev;
+    const float gradeAngle = robj->getElevation();
+    const float gradeRatio = qTan(gradeAngle);
+    float elev = gradeRatio*1000.0f;
+    float oneInXm = qFuzzyIsNull(gradeRatio) ? 0.0f : 1.0f/gradeRatio;
+    float prog = qRadiansToDegrees(gradeAngle);
+    float prop = gradeRatio*100.0f;
     if(!this->elevProm.hasFocus() && !this->elev1inXm.hasFocus() && !this->elevProg.hasFocus() && !this->elevProp.hasFocus()){
         this->elevProm.setText(QString::number(elev));
         this->elevProg.setText(QString::number(prog));

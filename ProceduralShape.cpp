@@ -209,7 +209,7 @@ void ProceduralShape::GenShape(QString templateName, QVector<OglObj*>& shape, Co
     QHashIterator<QString, ShapeTemplateElement*> i(sTemplate->elements);
     while (i.hasNext()) {
         i.next();
-        if(i.value()->type == NULL)
+        if(i.value()->type == ShapeTemplateElement::NONE)
             continue;
         if(i.value()->type == ShapeTemplateElement::TIE)
             GenTie(i.value(), shape, line);

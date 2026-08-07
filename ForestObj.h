@@ -20,6 +20,8 @@ class OglObj;
 
 class ForestObj : public WorldObj{
 public:
+    using WorldObj::set;
+
     /*struct Shape{
         int iloscv;
         QOpenGLBuffer VBO;

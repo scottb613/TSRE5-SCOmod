@@ -123,9 +123,29 @@ jobs:
             exit 1
           fi
 
-          forbidden_pattern='(^|/)(dist|build|out|TSREvcWIP|TSREvcTST|masterDocs|docs|\.vscode)(/|$)|(^|/)(AGENTS\.md|AI_HouseRules\.txt)$|\.(exe|dll|pdb|zip|7z)$|\.backup\.|(^|/)Makefile[^/]*\.mk$'
+          for required_file in main.cpp Game.cpp vcpkg.json Docs/MANIFEST-SHA256.txt; do
+            if [[ ! -s "$required_file" ]]; then
+              echo "Required public-source file is missing or empty: $required_file" >&2
+              exit 1
+            fi
+          done
+
+          forbidden_pattern='(^|/)(dist|build|out|TSREvcWIP|TSREvcTST|masterDocs|docs|refs|snapshots|tmp|\.test-temp|\.vscode)(/|$)|(^|/)(AGENTS\.md|AI_HouseRules\.txt|CMakeUserPresets\.json)$|(^|/)AAA_|\.(exe|dll|pdb|zip|7z|log|pro)$|\.backup\.|(^|/)Makefile[^/]*\.mk$'
           if git ls-tree -r --name-only HEAD | grep -E "$forbidden_pattern"; then
             echo "The source checkpoint contains private layout, build output, or release artifacts." >&2
+            exit 1
+          fi
+
+          manifest_failures=0
+          while read -r expected file; do
+            [[ -n "$expected" && -n "$file" ]] || continue
+            actual="$(sha256sum "Docs/$file" | awk '{print toupper($1)}')"
+            if [[ "$actual" != "$expected" ]]; then
+              echo "Release document hash mismatch: Docs/$file" >&2
+              manifest_failures=1
+            fi
+          done < <(awk '/^[0-9A-F]{64}  / { print $1, substr($0, 67) }' Docs/MANIFEST-SHA256.txt)
+          if [[ "$manifest_failures" -ne 0 ]]; then
             exit 1
           fi
 

@@ -287,7 +287,6 @@ ActivityTools::ActivityTools(QString name)
     
     QHBoxLayout *vbox1 = new QHBoxLayout;
     int row = 0;
-    int labelWidth = 70;
     QGridLayout *vlist = new QGridLayout;
     vlist->setSpacing(2);
     vlist->setContentsMargins(0,0,1,0);
@@ -708,7 +707,6 @@ void ActivityTools::activitySelected(QString n){
         return;
     int id = actShow.currentData().toInt();
     if(Game::debugOutput) qDebug() << "id" << id;
-    Consist *e;
     Activity *a = ActLib::Act[id];
     
     if(ActLib::Act[id] == NULL)

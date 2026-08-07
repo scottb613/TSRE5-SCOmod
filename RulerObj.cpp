@@ -58,6 +58,7 @@ RulerObj::RulerObj(const RulerObj& o) : WorldObj(o){
     geoLength = o.geoLength;
     waterRuler = o.waterRuler;
     vegetationRuler = o.vegetationRuler;
+    gradeRuler = o.gradeRuler;
     internalLodControl = o.internalLodControl;
 }
 
@@ -73,6 +74,7 @@ RulerObj::~RulerObj() {
     delete vegetationPostSelected3d;
     delete vegetationBounds3d;
     delete vegetationHandle3d;
+    delete specialHandlePick3d;
 }
 
 void RulerObj::load(int x, int y) {
@@ -95,7 +97,11 @@ void RulerObj::load(int x, int y) {
         
         Vec3::copy(point.position, this->position);
         this->points.push_back(point);
-        if(TwoPointRuler){
+        // The legacy two-point preference applies only to the ordinary
+        // measurement ruler. Special rulers build their control points from
+        // explicit terrain clicks; the grade ruler in particular must wait
+        // for its second endpoint instead of synthesizing one here.
+        if(TwoPointRuler && !isSpecialRuler()){
             Point point2;
             Vec3::copy(point2.position, this->position);
             point2.position[2] += 1;
@@ -131,10 +137,26 @@ void RulerObj::set(QString sh, FileBuffer* data) {
     }
     if (sh == ("waterruler")) {
         waterRuler = ParserX::GetNumber(data) != 0;
+        if(waterRuler){
+            vegetationRuler = false;
+            gradeRuler = false;
+        }
         return;
     }
     if (sh == ("vegetationruler")) {
         vegetationRuler = ParserX::GetNumber(data) != 0;
+        if(vegetationRuler){
+            waterRuler = false;
+            gradeRuler = false;
+        }
+        return;
+    }
+    if (sh == ("graderuler")) {
+        gradeRuler = ParserX::GetNumber(data) != 0;
+        if(gradeRuler){
+            waterRuler = false;
+            vegetationRuler = false;
+        }
         return;
     }
     
@@ -157,7 +179,7 @@ void RulerObj::setTemplate(QString name){
 }
 
 void RulerObj::setPosition(int x, int z, float* p){
-    if(vegetationRuler && selectionValue >= 0 && selectionValue < points.size()){
+    if(isSpecialRuler() && selectionValue >= 0 && selectionValue < points.size()){
         float newX = -2048*(this->x-x) + p[0];
         float newY = p[1];
         float newZ = -2048*(this->y-z) + p[2];
@@ -169,7 +191,7 @@ void RulerObj::setPosition(int x, int z, float* p){
         point.position[0] = newX;
         point.position[1] = newY;
         point.position[2] = newZ;
-        vegetationPointMoved = true;
+        specialPointMoved = true;
         setModified();
         if(line3d != NULL)
             line3d->deleteVBO();
@@ -219,8 +241,15 @@ void RulerObj::refreshLength(){
 float RulerObj::getElevation(){
     if(points.size() < 2)
         return 0;
-    float height = points[points.size()-1].position[1] - points[0].position[1];
-    return asin(height/length);
+    const Point &first = points.first();
+    const Point &last = points.last();
+    const float dx = last.position[0] - first.position[0];
+    const float dz = last.position[2] - first.position[2];
+    const float horizontalRun = std::sqrt(dx*dx + dz*dz);
+    if(horizontalRun < 0.001f)
+        return 0;
+    const float rise = last.position[1] - first.position[1];
+    return std::atan2(rise, horizontalRun);
 }
 
 float RulerObj::getLength(){
@@ -248,6 +277,10 @@ bool RulerObj::isWaterRuler() const {
 
 void RulerObj::setWaterRuler(bool enabled) {
     waterRuler = enabled;
+    if(enabled){
+        vegetationRuler = false;
+        gradeRuler = false;
+    }
     setModified();
     if(point3d != NULL)
         point3d->deleteVBO();
@@ -258,8 +291,7 @@ void RulerObj::setWaterRuler(bool enabled) {
 }
 
 void RulerObj::appendWaterPoint(int px, int pz, float *p) {
-    selectionValue = 0;
-    setPosition(px, pz, p);
+    appendSpecialPoint(px, pz, p);
 }
 
 bool RulerObj::isVegetationRuler() const {
@@ -268,6 +300,10 @@ bool RulerObj::isVegetationRuler() const {
 
 void RulerObj::setVegetationRuler(bool enabled) {
     vegetationRuler = enabled;
+    if(enabled){
+        waterRuler = false;
+        gradeRuler = false;
+    }
     setModified();
     if(vegetationBounds3d != NULL)
         vegetationBounds3d->deleteVBO();
@@ -276,7 +312,36 @@ void RulerObj::setVegetationRuler(bool enabled) {
 }
 
 void RulerObj::appendVegetationPoint(int px, int pz, float *p) {
+    appendSpecialPoint(px, pz, p);
+}
+
+bool RulerObj::isGradeRuler() const {
+    return gradeRuler;
+}
+
+void RulerObj::setGradeRuler(bool enabled) {
+    gradeRuler = enabled;
+    if(enabled){
+        waterRuler = false;
+        vegetationRuler = false;
+    }
+    setModified();
+    if(line3d != NULL)
+        line3d->deleteVBO();
+}
+
+void RulerObj::appendGradePoint(int px, int pz, float *p) {
+    appendSpecialPoint(px, pz, p);
+}
+
+bool RulerObj::isSpecialRuler() const {
+    return waterRuler || vegetationRuler || gradeRuler;
+}
+
+void RulerObj::appendSpecialPoint(int px, int pz, float *p) {
     if(p == NULL)
+        return;
+    if(gradeRuler && points.size() >= 2)
         return;
     Point point;
     point.position[0] = -2048*(this->x-px) + p[0];
@@ -293,14 +358,27 @@ void RulerObj::appendVegetationPoint(int px, int pz, float *p) {
         vegetationBounds3d->deleteVBO();
 }
 
-void RulerObj::selectVegetationPointNear(int px, int pz, const float *p) {
-    if(!vegetationRuler || p == NULL || points.isEmpty())
+void RulerObj::selectSpecialPoint(
+        int encodedIndex, int px, int pz, const float *p) {
+    if(!isSpecialRuler() || points.isEmpty())
         return;
+    QVector<int> candidates;
+    for(int i = 0; i < points.size(); i++){
+        if((i & 0xF) == (encodedIndex & 0xF))
+            candidates.push_back(i);
+    }
+    if(candidates.isEmpty())
+        return;
+    if(candidates.size() == 1 || p == NULL){
+        selectionValue = candidates.first();
+        selected = true;
+        return;
+    }
     float localX = -2048*(this->x-px) + p[0];
     float localZ = -2048*(this->y-pz) + p[2];
-    int nearestIndex = 0;
+    int nearestIndex = candidates.first();
     float nearestDistanceSquared = std::numeric_limits<float>::max();
-    for(int i = 0; i < points.size(); i++){
+    for(int i : candidates){
         float dx = points[i].position[0] - localX;
         float dz = points[i].position[2] - localZ;
         float distanceSquared = dx*dx + dz*dz;
@@ -313,12 +391,12 @@ void RulerObj::selectVegetationPointNear(int px, int pz, const float *p) {
     selected = true;
 }
 
-void RulerObj::snapSelectedVegetationPointToTerrain() {
-    if(!vegetationRuler || !vegetationPointMoved
+void RulerObj::snapSelectedSpecialPointToTerrain() {
+    if(!isSpecialRuler() || !specialPointMoved
             || selectionValue < 0 || selectionValue >= points.size())
         return;
 
-    vegetationPointMoved = false;
+    specialPointMoved = false;
 
     // A point may have moved even when the terrain tile cannot be sampled at
     // release. Always discard the pre-drag corridor; terrain lookup below is
@@ -396,6 +474,7 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
     }
     
     int useSC = (float)selectionColor/(float)(selectionColor+0.000001);
+    const bool specialRuler = isSpecialRuler();
     
     if(shapeEnabled){
         if(proceduralShapeInit){
@@ -434,9 +513,9 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
     if(!Game::viewInteractives) 
         return;
     
-    if((vegetationRuler && vegetationHandle3d == NULL)
-            || (!vegetationRuler && point3d == NULL)){
-        if(vegetationRuler){
+    if((specialRuler && vegetationHandle3d == NULL)
+            || (!specialRuler && point3d == NULL)){
+        if(specialRuler){
             const float h = VegetationHandleSize * 0.5f;
             const float faceCorners[6][12] = {
                 {-h,-h, h,  h,-h, h,  h, h, h, -h, h, h},
@@ -458,16 +537,33 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
                     handlePositions.push_back(value);
             }
             vegetationHandle3d = new OglObj();
-            vegetationHandle3d->setMaterial(0.65f, 0.58f, 0.15f);
+            vegetationHandle3d->setMaterial(1.0f, 0.35f, 0.0f);
             vegetationHandle3d->initLitTriangles(
                 handlePositions.constData(), static_cast<int>(handlePositions.size()));
+            QVector<float> pickPositions = handlePositions;
+            const float pickScale = SpecialHandlePickSize / VegetationHandleSize;
+            for(float &value : pickPositions)
+                value *= pickScale;
+            specialHandlePick3d = new OglObj();
+            specialHandlePick3d->initLitTriangles(
+                pickPositions.constData(), static_cast<int>(pickPositions.size()));
             vegetationPost3d = new OglObj();
-            vegetationPost3d->setMaterial(0.13f,0.55f,0.13f);
+            if(gradeRuler)
+                vegetationPost3d->setMaterial(1.0f,0.0f,1.0f);
+            else if(waterRuler)
+                vegetationPost3d->setMaterial(0.10f,0.45f,1.0f);
+            else
+                vegetationPost3d->setMaterial(0.13f,0.55f,0.13f);
             vegetationPost3d->setLineWidth(8);
             float postPoints[6] = { 0, 0, 0, 0, VegetationPostHeight, 0 };
             vegetationPost3d->init(postPoints, 6, RenderItem::V, GL_LINES);
             vegetationPostSelected3d = new OglObj();
-            vegetationPostSelected3d->setMaterial(0.13f,0.55f,0.13f);
+            if(gradeRuler)
+                vegetationPostSelected3d->setMaterial(1.0f,0.0f,1.0f);
+            else if(waterRuler)
+                vegetationPostSelected3d->setMaterial(0.10f,0.45f,1.0f);
+            else
+                vegetationPostSelected3d->setMaterial(0.13f,0.55f,0.13f);
             vegetationPostSelected3d->setLineWidth(8);
             vegetationPostSelected3d->init(postPoints, 6, RenderItem::V, GL_LINES);
         } else {
@@ -507,7 +603,9 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
     if(line3d == NULL){
         line3d = new OglObj();
         line3d->setLineWidth(2);
-        if(vegetationRuler)
+        if(gradeRuler)
+            line3d->setMaterial(1.0f,0.0f,1.0f);
+        else if(vegetationRuler)
             line3d->setMaterial(0.13f,0.55f,0.13f);
         else if(waterRuler)
             line3d->setMaterial(0.10f,0.45f,1.0f);
@@ -670,8 +768,8 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
         gluu->mvPushMatrix();
         Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, points[i].position[0], points[i].position[1], points[i].position[2]);
         gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
-        if(i == 0 || i == points.size() - 1 || DrawPoints || vegetationRuler){
-            if(vegetationRuler && vegetationPost3d != NULL){
+        if(i == 0 || i == points.size() - 1 || DrawPoints || specialRuler){
+            if(specialRuler && vegetationPost3d != NULL){
                 if(this->selected && this->selectionValue == i)
                     vegetationPostSelected3d->render(selectionColor | (i&0xF)*useSC);
                 else
@@ -682,11 +780,13 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
                 gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
                 if(selectionColor == 0){
                     if(this->selected && this->selectionValue == i)
-                        vegetationHandle3d->setMaterial(1.0f, 0.95f, 0.10f);
+                        vegetationHandle3d->setMaterial(1.0f, 0.62f, 0.08f);
                     else
-                        vegetationHandle3d->setMaterial(0.65f, 0.58f, 0.15f);
+                        vegetationHandle3d->setMaterial(1.0f, 0.35f, 0.0f);
                 }
-                vegetationHandle3d->render(selectionColor | (i&0xF)*useSC);
+                OglObj *handle = selectionColor == 0
+                    ? vegetationHandle3d : specialHandlePick3d;
+                handle->render(selectionColor | (i&0xF)*useSC);
             } else if(this->selected && this->selectionValue == i) {
                 point3dSelected->render(selectionColor | (i&0xF)*useSC);
             } else {
@@ -770,6 +870,9 @@ if(waterRuler){
 }
 if(vegetationRuler){
 *(out) << "		VegetationRuler ( 1 )\n";
+}
+if(gradeRuler){
+*(out) << "		GradeRuler ( 1 )\n";
 }
 *(out) << "	)\n";
 }

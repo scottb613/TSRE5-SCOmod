@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
     TSREvc
-    VERSION 0.10.0
+    VERSION 0.11.0
     DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )
@@ -21,6 +21,7 @@ option(TSRE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 set(TSRE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
+
 find_package(
     Qt6 6.5 REQUIRED
     COMPONENTS
@@ -38,8 +39,8 @@ find_package(GLUT REQUIRED)
 
 include(cmake/TSREWarnings.cmake)
 
-# Keep the established public source layout at the repository root. Tests and
-# generated build directories are intentionally outside this glob.
+# Keep the established public source layout at the repository root.
+# Tests and rollback/build directories are intentionally outside this glob.
 file(
     GLOB TSRE_SOURCES CONFIGURE_DEPENDS
     "${TSRE_SOURCE_DIR}/*.c"
@@ -139,6 +140,28 @@ if(BUILD_TESTING)
             -E env
             "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
             tsre_dds_decoder_probe
+    )
+
+    add_executable(
+        tsre_parser_unicode_whitespace_probe
+        tests/ParserUnicodeWhitespaceProbe.cpp
+        ParserX.cpp
+        ParserX.h
+        FileBuffer.h
+    )
+    target_include_directories(
+        tsre_parser_unicode_whitespace_probe
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    target_link_libraries(tsre_parser_unicode_whitespace_probe PRIVATE Qt6::Core)
+    add_test(
+        NAME tsre_parser_unicode_whitespace_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            tsre_parser_unicode_whitespace_probe
     )
 
     if(WIN32)

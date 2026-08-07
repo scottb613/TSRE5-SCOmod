@@ -145,13 +145,14 @@ void PropertiesSoundRegion::showObj(GameObj* obj){
             );
     
     this->sources.clear();
-    if(Game::soundList != NULL)
+    if(Game::soundList != NULL){
         foreach (SoundListItem* it, Game::soundList->regions){
         //for (auto it = Game::soundList->regions.begin(); it != Game::soundList->regions.end(); ++it ){
             if(it->id == sobj->getSoundregionTrackType())
                 this->sName.setText(it->name);
             this->sources.addItem(it->name);
         }
+    }
         
     this->eMaxPlacingDistance.setText(QString::number(sobj->MaxPlacingDistance));
 }

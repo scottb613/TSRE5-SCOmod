@@ -16,6 +16,8 @@
 class RouteClient : public Route {
     Q_OBJECT
 public:
+    using Route::load;
+
     RouteClient();
     RouteClient(const RouteClient& orig);
     virtual ~RouteClient();

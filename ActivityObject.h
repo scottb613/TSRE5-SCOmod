@@ -27,6 +27,9 @@ class OglObj;
 class ActivityObject : public GameObj {
     Q_OBJECT
 public:
+    using GameObj::select;
+    using GameObj::setPosition;
+
     enum TypeActivityObject {
         NONE = 0,
         WAGONLIST = 1,

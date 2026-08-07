@@ -26,8 +26,9 @@
 
 void WindowManager::LoadShapeViewer(QString arg){
     ShapeViewerWindow* shapeWindow = new ShapeViewerWindow();
-    if(arg.length() > 0)
+    if(arg.length() > 0){
         shapeWindow->loadFile(arg);
+    }
 
         //// EFO Try to keep window on main window:
         const QScreen* primaryScreen = QApplication::primaryScreen();

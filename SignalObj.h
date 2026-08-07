@@ -20,6 +20,9 @@ class SignalShape;
 
 class SignalObj : public WorldObj  {
 public:
+    using WorldObj::select;
+    using WorldObj::set;
+
     struct SignalUnit {
         bool enabled = false;
         bool head = false;

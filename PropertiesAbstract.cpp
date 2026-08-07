@@ -182,8 +182,8 @@ void PropertiesAbstract::pastePREnabled(){
     this->posY.setText(args[1]);
     this->posZ.setText(args[2]);
     quat.setText(args[3]+" "+args[4]+" "+args[5]+" "+args[6]);
-    this->tX.setText(QString::number(nq[7]));
-    this->tY.setText(QString::number(nq[8]));
+    this->tX.setText(QString::number(nq[3]));
+    this->tY.setText(QString::number(nq[4]));
 
     if(Game::debugOutput) qDebug() << "PastePRE: " << args;        
     

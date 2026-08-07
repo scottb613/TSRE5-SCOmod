@@ -22,6 +22,9 @@ class OglObj;
 
 class SpeedpostObj : public WorldObj  {
 public:
+    using WorldObj::select;
+    using WorldObj::set;
+
     static float MaxPlacingDistance;
     SpeedpostObj();
     SpeedpostObj(const SpeedpostObj& o);

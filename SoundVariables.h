@@ -28,6 +28,7 @@ public:
     QMap<ValueName, float> value;
     SoundVariables();
     SoundVariables(const SoundVariables& o);
+    SoundVariables& operator=(const SoundVariables& o) = default;
     virtual ~SoundVariables();
     void set(SoundVariables *o);
 };

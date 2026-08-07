@@ -117,7 +117,7 @@ TerrainWaterWindow2::TerrainWaterWindow2(QWidget* parent)
 
     QGridLayout *autoButtons = new QGridLayout;
     autoButtons->setContentsMargins(3,0,3,0);
-    placeRulerButton = new QPushButton("Ruler Water");
+    placeRulerButton = new QPushButton("Ruler (water)");
     placeRulerButton->setCheckable(true);
     QPushButton *processWaterTiles = new QPushButton("Process Water Tiles");
     QPushButton *undoScan = new QPushButton("Undo Last");

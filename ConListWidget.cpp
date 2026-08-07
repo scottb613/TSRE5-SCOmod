@@ -180,8 +180,6 @@ void ConListWidget::fillConList(){
 void ConListWidget::fillConListLastQuery(){
     items.clear();
     //Game::currentEngLib = englib;
-    Consist * e;
-    
     for (int i = 0; i < query.count(); i++){
         new QListWidgetItem ( query.item(i)->text(), &items, query.item(i)->type());
     }

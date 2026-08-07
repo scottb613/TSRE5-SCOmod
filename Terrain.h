@@ -26,6 +26,8 @@ class QDataStream;
 class Terrain : public GameObj {
     Q_OBJECT
 public:
+    using GameObj::select;
+
     static Brush* DefaultBrush;
     int loaded = false;
     float **terrainData;

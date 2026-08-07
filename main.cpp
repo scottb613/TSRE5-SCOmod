@@ -110,9 +110,11 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
     QString output = QString("[%1] %2").arg(symbol).arg(msg);
     if(Game::consoleOutput)
         std::cout << output.toStdString() << std::endl;
-    logFileOut << output << "\n";
-    logFileOut.flush();
-    logFile.flush(); 
+    if(logFile.isOpen()){
+        logFileOut << output << "\n";
+        logFileOut.flush();
+        logFile.flush();
+    }
     
     if( type == QtFatalMsg ) abort(); 
 }
@@ -133,28 +135,29 @@ void LoadConsistEditorFromMainLoad(const QString &root){
 
 void LoadShapeViewer(QString arg){
     ShapeViewerWindow* shapeWindow = new ShapeViewerWindow();
-    if(arg.length() > 0)
+    if(arg.length() > 0){
         shapeWindow->loadFile(arg);
+    }
 
-        //// EFO Try to keep window on main window:
-        const QScreen* primaryScreen = QApplication::primaryScreen();
-        const QSize windowSize = shapeWindow->size();
+    //// EFO Try to keep window on main window:
+    const QScreen* primaryScreen = QApplication::primaryScreen();
+    const QSize windowSize = shapeWindow->size();
 
-        // Calculate the centered position based on both monitors
-        const QRect primaryGeometry = primaryScreen->geometry();
-        const QPoint centeredPos((primaryGeometry.width() - windowSize.width()) / 2,
-                                 (primaryGeometry.height() - windowSize.height()) / 2);
+    // Calculate the centered position based on both monitors
+    const QRect primaryGeometry = primaryScreen->geometry();
+    const QPoint centeredPos((primaryGeometry.width() - windowSize.width()) / 2,
+                             (primaryGeometry.height() - windowSize.height()) / 2);
         
-        if(Game::debugOutput) qDebug() << "Primary: " << primaryGeometry.width() << "/" << primaryGeometry.height();
-        if(Game::debugOutput) qDebug() << "Window: " << windowSize.width() << "/" << windowSize.height();
+    if(Game::debugOutput) qDebug() << "Primary: " << primaryGeometry.width() << "/" << primaryGeometry.height();
+    if(Game::debugOutput) qDebug() << "Window: " << windowSize.width() << "/" << windowSize.height();
         
-        if(Game::debugOutput) qDebug() << "Window   Orig: " << shapeWindow->pos() ;
+    if(Game::debugOutput) qDebug() << "Window   Orig: " << shapeWindow->pos() ;
         
-        // Ensure the window stays within the primary monitor bounds
-        shapeWindow->move(centeredPos.x() >= 0 ? centeredPos.x() : 0,
-                    centeredPos.y() >= 0 ? centeredPos.y() : 0);
+    // Ensure the window stays within the primary monitor bounds
+    shapeWindow->move(centeredPos.x() >= 0 ? centeredPos.x() : 0,
+                      centeredPos.y() >= 0 ? centeredPos.y() : 0);
  
-        if(Game::debugOutput) qDebug() << "Window Center: " << shapeWindow->pos() ;        
+    if(Game::debugOutput) qDebug() << "Window Center: " << shapeWindow->pos() ;
     
     QStringList winPos = Game::mainPos.split(","); 
     if(winPos.count() > 1) shapeWindow->move( winPos[0].trimmed().toInt(), winPos[1].trimmed().toInt());
@@ -247,6 +250,7 @@ void RunRouteEditorServer(){
     Game::loadAllWFiles = true;
     Game::gui = false;
     RouteEditorServer *server = new RouteEditorServer();
+    server->setParent(qApp);
     //..server->run();
 }
 
@@ -382,8 +386,12 @@ int main(int argc, char *argv[]){
     // EFO set log to date/time so it isn't overwritten
     logFile.setFileName("tsre-log-" + QDateTime::currentDateTime().toString("yyyyMMdd-hhmm") + ".txt");
     
-    logFile.open(QIODevice::WriteOnly);
-    logFileOut.setDevice(&logFile);
+    if(logFile.open(QIODevice::WriteOnly | QIODevice::Text)){
+        logFileOut.setDevice(&logFile);
+    } else {
+        std::cerr << "Unable to open TSRE log file: "
+                  << logFile.errorString().toStdString() << std::endl;
+    }
     qInstallMessageHandler( myMessageOutput );
 
     
@@ -404,7 +412,6 @@ int main(int argc, char *argv[]){
     //format.setSwapBehavior(QSurfaceFormat::TripleBuffer);
     QSurfaceFormat::setDefaultFormat(format);
     QApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
-    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling, true);
     QApplication::setApplicationName(Game::AppName);
     QApplication::setApplicationVersion(Game::AppVersion);
     //QApplication::pr

@@ -17,6 +17,8 @@
 
 class TrWatermarkObj : public WorldObj  {
 public:
+    using WorldObj::set;
+
     TrWatermarkObj();
     TrWatermarkObj(int level);
     TrWatermarkObj(const TrWatermarkObj& o);

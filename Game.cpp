@@ -48,7 +48,7 @@
 //////// Version
 //////////////////////////////////
 
-QString Game::AppVersion = "v0.10";  // over-ride from main.cpp
+QString Game::AppVersion = "v0.11";  // over-ride from main.cpp
 
 
 bool Game::ServerMode = false;
@@ -1916,7 +1916,10 @@ void Game::CheckForOpenAl(){
     qDebug() << "Network Reply Loop End";
     QByteArray data = r->readAll();
 
-    file.open(QIODevice::WriteOnly);
+    if(!file.open(QIODevice::WriteOnly)){
+        qWarning() << "Unable to save downloaded OpenAL library" << file.fileName() << file.errorString();
+        return;
+    }
     file.write(data);
     file.close();
 }
@@ -1946,7 +1949,10 @@ void Game::DownloadAppData(QString path){
     // Create bat file for Shape Viewer.
     QString conBatFile = QFileInfo(QCoreApplication::applicationFilePath()).fileName()+" --shapeview";
     QFile file2("./ShapeViewer.bat");
-    file2.open(QIODevice::WriteOnly | QIODevice::Text);
+    if(!file2.open(QIODevice::WriteOnly | QIODevice::Text)){
+        qWarning() << "Unable to create Shape Viewer launcher" << file2.fileName() << file2.errorString();
+        return;
+    }
     QTextStream out;
     out.setDevice(&file2);
     out << conBatFile;

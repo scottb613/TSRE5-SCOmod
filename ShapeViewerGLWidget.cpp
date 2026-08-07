@@ -252,10 +252,9 @@ void ShapeViewerGLWidget::paintGL() {
 
         float winZ[4];
 
-        int* viewport = new int[4];
-        float* mvmatrix = new float[16];
-        float* projmatrix = new float[16];
-        float* wcoord = new float[4];
+        int viewport[4];
+        float mvmatrix[16];
+        float projmatrix[16];
 
         glGetIntegerv(GL_VIEWPORT, viewport);
         glGetFloatv(GL_MODELVIEW_MATRIX, mvmatrix);

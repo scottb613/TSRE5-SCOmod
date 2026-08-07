@@ -14,7 +14,6 @@ param(
         (Join-Path $PSScriptRoot "..\.route-regression-evidence"),
 
     [string]$LogDirectory = $EvidenceRoot,
-
     [ValidateSet(
         "NoMaterialChange", "UndoRestoresData", "AllowChanges",
         "PathEdit", "TrackDbEdit", "RoadDbEdit"

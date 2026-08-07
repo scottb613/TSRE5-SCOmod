@@ -51,7 +51,7 @@ CoordsKml::CoordsKml(QString path) {
     reader.readNext();
     QString name;
     QXmlStreamAttributes attr;
-    int linecounter;
+    int linecounter = 0;
     while (!reader.isEndDocument()) {
         //qDebug() << reader.name().toString();
         if(reader.name().toString().trimmed() == "") linecounter++;

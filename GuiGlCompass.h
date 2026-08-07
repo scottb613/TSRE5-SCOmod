@@ -15,6 +15,8 @@
 
 class GuiGlCompass : public OglObj { 
 public:
+    using OglObj::render;
+
     GuiGlCompass();
     virtual ~GuiGlCompass();
     void render();

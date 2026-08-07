@@ -281,7 +281,7 @@ void Path::init3dShapes(bool initShapes){
     float posW[3];
     float tpos1[3] = {-1, 0, 0};
     int nodeId1, currentDistance;
-    int currentNodeId;
+    int currentNodeId = -1;
     int lastNodeId = -1;
     float lastDistance = 0;
     float distance1 = 0;
@@ -333,11 +333,12 @@ void Path::init3dShapes(bool initShapes){
                 distance2 = currentDistance;
             }
             
-            if(lastPathNode->typ == 2)
+            if(lastPathNode->typ == 2){
                 if(lastPathNode->TrPinS[1] == currentNodeId)
                     junctionDirections[lastNodeId] = 0;
                 else
                     junctionDirections[lastNodeId] = 1;
+            }
             
             lastNodeId = nodeId1;
             lastDistance = currentDistance;
@@ -388,11 +389,12 @@ void Path::init3dShapes(bool initShapes){
                 distance1 = lastDistance;
             }
             
-            if(i == 1)
+            if(i == 1){
                 if(trackNode(currentNodeId)->TrPinS[0] == nodeId1)
                     startDirection = 1;
                 else 
                     startDirection = 0;
+            }
             
             if(lastPathNode->typ == 2){
                 if(lastPathNode->TrPinS[1] == currentNodeId)
@@ -410,6 +412,10 @@ void Path::init3dShapes(bool initShapes){
         if(fail > 0)
             return;
         
+        if(currentNodeId < 0){
+            abortInvalidPath(tr("path point %1 did not resolve to a vector node").arg(i));
+            return;
+        }
         if(Game::debugOutput) qDebug() << "currentNodeId" << currentNodeId << distance1 << distance2 ;
 
         TRnode *currentPathNode = trackNode(currentNodeId);
@@ -608,7 +614,10 @@ void Path::CreatePaths(TDB * tdb){
             filepath = path+"/"+QString::number(i,10)+".pat";
             file.setFileName(filepath);
             //qDebug() << filepath;
-            file.open(QIODevice::WriteOnly | QIODevice::Text);
+            if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+                qWarning() << "Unable to create path file" << filepath << file.errorString();
+                continue;
+            }
             out.setDevice(&file);
             out.setRealNumberPrecision(8);
             out.setEncoding(QStringConverter::Utf16);

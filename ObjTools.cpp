@@ -113,15 +113,6 @@ static QString tdbCategoryKey(const QString& label, bool roadShape){
     return QString("#TDB#%1/%2").arg(roadShape ? "road" : "track", key);
 }
 
-static bool isDynamicTrackRefGroup(const QString& key, const QVector<Ref::RefItem>& items){
-    if(key.contains("dyntrack", Qt::CaseInsensitive) || key.contains("dynamic", Qt::CaseInsensitive))
-        return true;
-    for(const Ref::RefItem& item : items)
-        if(item.type.compare("dyntrack", Qt::CaseInsensitive) == 0)
-            return true;
-    return false;
-}
-
 ObjTools::ObjTools(QString name)
     : QWidget(){
     //QRadioButton *radio1 = new QRadioButton(tr("&Radio button 1"));
@@ -447,10 +438,8 @@ void ObjTools::routeLoaded(Route* a){
     }
     hash.sort(Qt::CaseInsensitive);
     hash.removeDuplicates();
-    for(const QString& key : hash){
-        const bool dynamicTrack = isDynamicTrackRefGroup(key, route->ref->refItems[key]);
-        refClass.addItem(dynamicTrack ? "<Dynamic Track>" : key, key);
-    }
+    for(const QString& key : hash)
+        refClass.addItem(key, key);
     refClass.setMaxVisibleItems(35);
     refClass.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
@@ -613,6 +602,17 @@ void ObjTools::routeLoaded(Route* a){
         route->ref->refItems[QString("#TSRE#")+"sound regions"].push_back(item);
     }
     
+    const QString nextGenDynamicTrackKey = QString("#TSRE#")
+            + "nextgen dynamic track";
+    route->ref->refItems[nextGenDynamicTrackKey].clear();
+    Ref::RefItem nextGenDynamicTrackItem;
+    nextGenDynamicTrackItem.filename.push_back("");
+    nextGenDynamicTrackItem.description = "Dynamic Track (Auto-Flex)";
+    nextGenDynamicTrackItem.clas = "nextgen dynamic track";
+    nextGenDynamicTrackItem.type = "dyntrack";
+    route->ref->refItems[nextGenDynamicTrackKey].push_back(
+            nextGenDynamicTrackItem);
+
     Ref::RefItem item;
     item.filename.push_back("");
     item.description = "Ruler";
@@ -622,7 +622,7 @@ void ObjTools::routeLoaded(Route* a){
 
     Ref::RefItem waterRulerItem;
     waterRulerItem.filename.push_back("");
-    waterRulerItem.description = "Ruler Water";
+    waterRulerItem.description = "Ruler (water)";
     waterRulerItem.clas = "tsre tools";
     // This is a launcher for the Water Helper workflow, not a serialized
     // world-object type. RouteEditorGLWidget intercepts it before placement.
@@ -631,10 +631,17 @@ void ObjTools::routeLoaded(Route* a){
 
     Ref::RefItem vegetationRulerItem;
     vegetationRulerItem.filename.push_back("");
-    vegetationRulerItem.description = "Ruler Vegetation";
+    vegetationRulerItem.description = "Ruler (vegetation)";
     vegetationRulerItem.clas = "tsre tools";
     vegetationRulerItem.type = "rulervegetation";
     route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(vegetationRulerItem);
+
+    Ref::RefItem gradeRulerItem;
+    gradeRulerItem.filename.push_back("");
+    gradeRulerItem.description = "Ruler (grade)";
+    gradeRulerItem.clas = "tsre tools";
+    gradeRulerItem.type = "rulergrade";
+    route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(gradeRulerItem);
     
     refOther.addItem("ALL");
     refOther.addItem("Signals");
@@ -646,6 +653,7 @@ void ObjTools::routeLoaded(Route* a){
     refOther.addItem("SpeedWarning");
     refOther.addItem("Milepost");
     refOther.addItem("Route/Shapes Directory");
+    refOther.addItem("NextGen Dynamic Track");
     refOther.addItem("TSRE Tools");
     refOther.setMaxVisibleItems(35);
     
@@ -780,12 +788,11 @@ void ObjTools::populateObjectListForKey(QString key, QString searchText){
     currentItemList.clear();
     int idx = 0;
 
-    const bool dynamicTrack = isDynamicTrackRefGroup(key, route->ref->refItems[key]);
     for (int it = 0; it < route->ref->refItems[key].size(); ++it ){
         Ref::RefItem* item = &route->ref->refItems[key][it];
         if(searchText.length() > 0 && !item->description.contains(searchText, Qt::CaseInsensitive))
             continue;
-        new QListWidgetItem ( dynamicTrack ? "Dynamic Track" : item->description, &refList, idx++ );
+        new QListWidgetItem ( item->description, &refList, idx++ );
         currentItemList.push_back(item);
     }
     refList.sortItems(Qt::AscendingOrder);
@@ -921,7 +928,8 @@ void ObjTools::itemSelected(Ref::RefItem* item){     /// EFO Item selected on th
     }
     QString text;
     if(item->type.compare("dyntrack", Qt::CaseInsensitive) == 0)
-        text = "Dynamic Track";
+        text = item->description.isEmpty()
+                ? "Dynamic Track (Auto-Flex)" : item->description;
     else if(item->description.length() > 1)
         text = item->description;
     else if (item->getShapeName().length() > 1)

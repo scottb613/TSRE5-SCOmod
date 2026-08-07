@@ -20,6 +20,8 @@ class TrackItemObj;
 
 class HazardObj : public WorldObj {
 public:
+    using WorldObj::set;
+
     HazardObj();
     HazardObj(const HazardObj& o);
     WorldObj* clone();

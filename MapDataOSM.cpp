@@ -613,26 +613,25 @@ void MapDataOSM::isData(QNetworkReply* r){
 }
 
 void MapDataOSM::loadData(QByteArray* data){
+    QByteArray fallbackData;
     if(data == NULL){
         QFile file("F:/OSM/tczew.osm");
         if (!file.open(QFile::ReadOnly | QFile::Text)) {
-            qDebug() << "no file" << file.errorString();
-            exit(0);
+            qWarning() << "Unable to open fallback OSM data:" << file.errorString();
+            return;
         }
         qDebug() <<  "file";
-        QByteArray data2 = file.readAll();
-        data = &data2;
+        fallbackData = file.readAll();
+        data = &fallbackData;
     } 
     
     int inode = 0;
     int iway = 0;
-    bool node = true;
+    bool node = false;
     bool way = false;
-    bool bounds = false;
-    int iii = 0, uuu = 0;
     
-    Node* tnode;
-    Way* tway;
+    Node* tnode = NULL;
+    Way* tway = NULL;
     
     QXmlStreamReader reader((*data));
     reader.readNext();
@@ -656,9 +655,9 @@ void MapDataOSM::loadData(QByteArray* data){
                 if (iway++ % 100000 == 0) qDebug() << "w " << iway;
                 tway = new Way(attr.value("id").toULongLong());
                 tway->ref.clear();
-            } else if (name.toUpper() == ("ND") && way) {
+            } else if (name.toUpper() == ("ND") && way && tway != NULL) {
                 tway->ref.push_back ((attr.value("ref").toLongLong()));
-            } else if (name.toUpper() == ("TAG")&&(way || node)) {
+            } else if (name.toUpper() == ("TAG") && ((way && tway != NULL) || (node && tnode != NULL))) {
                 //adres
                 if (attr.value("k").startsWith(u"ADDR", Qt::CaseInsensitive)) {
                 }
@@ -693,7 +692,6 @@ void MapDataOSM::loadData(QByteArray* data){
                     //inne budynki 
                     if (attr.value("k").startsWith(u"BUILDING", Qt::CaseInsensitive)) {
                         if (way) tway->type = (short) OSMFeatures::LIST["BUILDING_YES"];
-                        iii++;
                     }
                     //jakies gowna co nie chce
                     //if(attr.getValue("k").toUpperCase().startsWith("SOURCE", 0)) return;
@@ -712,7 +710,6 @@ void MapDataOSM::loadData(QByteArray* data){
                     if (OSMFeatures::LIST[fname.toStdString()] != 0) {
                         if (way) tway->type = (short) OSMFeatures::LIST[fname.toStdString()];
                         if (node) tnode->type = (short) OSMFeatures::LIST[fname.toStdString()];
-                        iii++; //System.out.println(fname);
                     } else {
                         //if(!fname.startsWith("source", Qt::CaseInsensitive)
                         //    && !fname.startsWith("created", Qt::CaseInsensitive)
@@ -721,7 +718,6 @@ void MapDataOSM::loadData(QByteArray* data){
                     }
                 }
             } else if (name.toUpper() == ("BOUNDS")) {
-                bounds = true;
                 //minlat = attr.value("minlat").toFloat();
                 //minlon = attr.value("minlon").toFloat();
                 //maxlat = attr.value("maxlat").toFloat();
@@ -732,11 +728,12 @@ void MapDataOSM::loadData(QByteArray* data){
             }
         } else if (reader.isEndElement()) {
             name = reader.name().toString();
-            if (name.toUpper() == ("NODE")) {
+            if (name.toUpper() == ("NODE") && tnode != NULL) {
                 nodes[tnode->id] = tnode;
+                tnode = NULL;
                 node = false;
             }
-            if (name.toUpper() == ("WAY")) {
+            if (name.toUpper() == ("WAY") && tway != NULL) {
                 //qDebug() << Features::LAYER[tway->type];
                 int tlayer = OSMFeatures::LAYER[tway->type];
                 if(tlayer > 9) tlayer = 9;
@@ -744,10 +741,8 @@ void MapDataOSM::loadData(QByteArray* data){
                     ways[9].push_back(tway);
                 else
                     ways[9-tlayer].push_back(tway);
+                tway = NULL;
                 way = false;
-            }
-            if (name.toUpper() == ("BOUNDS")) {
-                bounds = false;
             }
         } else if (reader.isCharacters()) {
 

@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+*.ace binary
+*.bmp binary
+*.ico binary
+*.jpg binary
+*.png binary
+*.raw binary
+*.rtf binary
+*.wav binary
