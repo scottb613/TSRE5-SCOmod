@@ -1,0 +1,15 @@
+{
+  "cmake.useCMakePresets": "always",
+  "cmake.configureOnOpen": false,
+  "cmake.preferredGenerators": [
+    "MinGW Makefiles"
+  ],
+  "files.associations": {
+    "*.t": "plaintext",
+    "*.w": "plaintext",
+    "*.trk": "plaintext",
+    "*.tdb": "plaintext",
+    "*.rdb": "plaintext",
+    "*.pat": "plaintext"
+  }
+}

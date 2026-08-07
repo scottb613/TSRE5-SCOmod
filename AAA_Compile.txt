@@ -1,0 +1,20 @@
+& '.\scripts\Invoke-CMake.ps1' --build --preset windows-debug-local --parallel 6 2>&1 |
+    ForEach-Object { $_.ToString() } |
+    Tee-Object -FilePath '.\build\windows-debug-local\full-build.log'
+	
+	
+	
+	Copy-Item -LiteralPath 'Y:\DEVCODE\VSwork\TSREvc\build\windows-debug-local\TSRE5.exe' `
+    -Destination 'Y:\DEVCODE\VSwork\TSREvc\TSREvcTST\TSRE5.exe' -Force
+	Get-FileHash -Algorithm SHA256 `
+    'Y:\DEVCODE\VSwork\TSREvc\build\windows-debug-local\TSRE5.exe', `
+    'Y:\DEVCODE\VSwork\TSREvc\TSREvcTST\TSRE5.exe'
+	
+	
+	
+	
+	
+Set-Location 'Y:\DEVCODE\VSwork\TSREvc'
+
+& '.\scripts\Invoke-CMake.ps1' --build --preset windows-debug-local --parallel 6 2>&1 |
+    Tee-Object -FilePath '.\build\windows-debug-local\dds-build.log'

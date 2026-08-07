@@ -1,0 +1,76 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "TSREvc: Check reference sources",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/Check-ReferenceSources.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "TSREvc: Check prerequisites",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/Check-Prerequisites.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "TSREvc: Audit Qt6 migration",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/Audit-Qt6.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "TSREvc: Configure Debug",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/Invoke-CMake.ps1",
+        "--preset",
+        "windows-debug-local"
+      ],
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "TSREvc: Build Debug",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/Invoke-CMake.ps1",
+        "--build",
+        "--preset",
+        "windows-debug-local"
+      ],
+      "problemMatcher": "$gcc",
+      "dependsOn": "TSREvc: Configure Debug"
+    }
+  ]
+}

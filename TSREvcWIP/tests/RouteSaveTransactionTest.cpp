@@ -1,0 +1,93 @@
+#include "RouteSaveTransaction.h"
+
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QTemporaryDir>
+#include <cstdio>
+
+namespace {
+
+bool writeFile(const QString &path, const QByteArray &data) {
+    QFile file(path);
+    return file.open(QIODevice::WriteOnly)
+            && file.write(data) == data.size();
+}
+
+QByteArray readFile(const QString &path) {
+    QFile file(path);
+    if(!file.open(QIODevice::ReadOnly))
+        return QByteArray();
+    return file.readAll();
+}
+
+int fail(const QString &message) {
+    std::fprintf(stderr, "FAIL: %s\n", qPrintable(message));
+    return 1;
+}
+
+}
+
+int main(int argc, char **argv) {
+    QCoreApplication application(argc, argv);
+    QTemporaryDir temp;
+    if(!temp.isValid())
+        return fail("Could not create the temporary test directory.");
+
+    const QString routeRoot = temp.path() + "/route";
+    const QString backupRoot = temp.path() + "/appdata/backups";
+    QDir().mkpath(routeRoot);
+    const QString tdb = routeRoot + "/sample.tdb";
+    const QString tit = routeRoot + "/sample.tit";
+    if(!writeFile(tdb, "old-tdb") || !writeFile(tit, "old-tit"))
+        return fail("Could not create source files.");
+
+    RouteSaveTransaction transaction(routeRoot, backupRoot);
+    QString error;
+    if(!transaction.addFile(tdb, "new-tdb", &error)
+            || !transaction.addFile(tit, "new-tit", &error)
+            || !transaction.commit(&error))
+        return fail(error);
+    if(readFile(tdb) != "new-tdb" || readFile(tit) != "new-tit")
+        return fail("Atomic commit did not install all new files.");
+
+    RouteSaveTransaction invalid(routeRoot, backupRoot);
+    if(invalid.addFile(temp.path() + "/outside.tdb", "bad", &error))
+        return fail("A destination outside the route was accepted.");
+
+    const QString interruptedDir = backupRoot + "/99999999-interrupted";
+    QDir().mkpath(interruptedDir);
+    if(!writeFile(interruptedDir + "/0000-sample.tdb", "known-good")
+            || !writeFile(tdb, "partial-write"))
+        return fail("Could not prepare interrupted-save fixtures.");
+
+    QJsonObject fileEntry;
+    fileEntry.insert("destination", QDir::cleanPath(tdb));
+    fileEntry.insert("existed", true);
+    fileEntry.insert("backup", "0000-sample.tdb");
+    QJsonArray files;
+    files.append(fileEntry);
+    QJsonObject manifest;
+    manifest.insert("version", 1);
+    manifest.insert("state", "committing");
+    manifest.insert("routeRoot", QDir::cleanPath(routeRoot));
+    manifest.insert("files", files);
+    if(!writeFile(interruptedDir + "/manifest.json",
+                  QJsonDocument(manifest).toJson(QJsonDocument::Indented)))
+        return fail("Could not create interrupted-save manifest.");
+
+    QString recoveryMessage;
+    if(!RouteSaveTransaction::recoverInterrupted(
+                routeRoot, backupRoot, &recoveryMessage))
+        return fail(recoveryMessage);
+    if(readFile(tdb) != "known-good")
+        return fail("Interrupted save was not rolled back.");
+    if(recoveryMessage.isEmpty())
+        return fail("Successful recovery was not reported.");
+
+    std::fprintf(stdout, "RouteSaveTransaction tests passed.\n");
+    return 0;
+}

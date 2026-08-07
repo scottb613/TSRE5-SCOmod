@@ -1,0 +1,164 @@
+SCO TSRE5 UI STYLE REFERENCE
+============================
+
+Purpose
+-------
+This is the visual baseline for new and updated SCO TSRE5 editor panels.
+Keep the interface compact, dark, readable, and consistent with the existing
+editor. Orange identifies controls the user can act on or edit.
+
+
+CORE PALETTE
+------------
+Panel background:             #303030
+Editor field background:      #202020
+List/table background:        #191919
+Title strip background:       #292929
+Primary text:                 #f2f2f2
+Disabled text:                #858585 to #b0b0b0
+Neutral border:               #555555
+Dark inset/top border:        #151515
+Dim editable border:          #70590e
+Focused editable border:      #8a7116
+Bright hover/accent orange:   #f08200
+Bright checked border:        #ffad3b
+Checked-button orange:        #f7a32d to #d46f00
+Secondary warm label accent:  #c4a480
+
+
+EDITABLE TEXT AND NUMBER FIELDS
+-------------------------------
+Applies to QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox,
+QDoubleSpinBox, QTimeEdit, QDateEdit, and QDateTimeEdit.
+
+Normal editable state:
+  - Dark #202020 background.
+  - White/#f2f2f2 normal-weight text.
+  - One-pixel DIM ORANGE #70590e border.
+  - This dim orange band is the visual cue that the value is user editable.
+
+Mouse hover:
+  - One-pixel BRIGHT ORANGE #f08200 border.
+  - Hover must remain bright even when the field already has focus.
+
+Keyboard focus without hover:
+  - One-pixel warm orange #8a7116 border.
+
+Read-only state:
+  - Neutral #555555 border with #151515 top edge.
+  - Do not show the orange editable band.
+
+Disabled state:
+  - Dark background with subdued text.
+  - Do not imply that the value can be edited.
+
+Text selection:
+  - #f08200 selection background with black selected text.
+
+
+BUTTONS
+-------
+Normal:
+  - Gray vertical gradient (#606060 through #414141).
+  - White text, one-pixel gray border, two-pixel corner radius.
+
+Hover:
+  - Slightly brighter gray gradient and border.
+
+Pressed:
+  - Darker/reversed gradient with a subtle one-pixel downward shift.
+
+Checked/active:
+  - Orange vertical gradient (#f7a32d to #d46f00).
+  - Dark text and bright #ffad3b border.
+
+Disabled:
+  - Muted gray text, background, and border.
+
+Pin controls:
+  - Use the shared compact, scale-aware icon from GuiFunct::setupWindowPinButton().
+  - Do not use a text label that changes helper-window width or competes with the panel title.
+  - Keep the icon legible in both pinned/checked and unpinned states.
+  - Pin controls remember placement only; they must not silently open a helper or change its workflow state.
+
+
+CHECKBOXES, RADIO BUTTONS, AND SLIDERS
+--------------------------------------
+Checkbox/radio indicators:
+  - Dark fill with a neutral gray border.
+  - Bright orange border on hover.
+  - Orange fill with bright orange border when checked.
+
+Sliders:
+  - Dark recessed groove.
+  - Muted orange filled portion (#b76512).
+  - Gray handle with bright orange border on hover.
+
+
+LISTS, TABLES, AND COMBO BOXES
+------------------------------
+Lists and tables use #191919 backgrounds with white text and #4c4c4c borders.
+Selected rows/items use #f08200 with black text.
+Combo boxes use the standard dark field treatment. Editable combo content should
+follow the same orange editable-state rule where applicable.
+
+
+TITLES AND LABELS
+-----------------
+Main editor titles:
+  - Bold warm accent text.
+  - #292929 title strip.
+  - Three-pixel accent bar on the left.
+  - Six-pixel vertical and eight-pixel horizontal padding.
+
+Subtitles:
+  - Bold warm accent text.
+  - Slight left indent to establish hierarchy.
+
+Ordinary labels:
+  - #f2f2f2 text.
+  - Do not make normal field text bold.
+
+
+LAYOUT AND SCALE
+----------------
+Keep panels compact and aligned.
+Standard editor fields have a minimum logical height of 22 pixels.
+Standard form/grid vertical row spacing is 3 logical pixels.
+All dimensions must respect Game::uiScale.
+Avoid adding decorative spacing that reduces the usable editor area.
+Context-sensitive docks, such as F4 Path Controls, should be visible only while
+their editing session is active and should not leave an empty permanent column.
+
+F2 terrain texture layout:
+  - Keep MAIN TERRTEX and SNOW TERRTEX previews paired and equal at 108x108 logical pixels.
+  - Use the preview border to identify the active terrain side; mark both only while valid mirror painting is active.
+  - Arrange the six Recent Texture swatches as two rows of three.
+  - Keep the active Brush swatch separate from Recent history.
+  - Keep Texture Set, terrain-layer tools, previews, presets, brush, embankment, and advanced maintenance as distinct work groups.
+  - Put uncommon conform-bias and route-reset operations in the pinnable Terrain Utilities helper rather than crowding the everyday F2 panel.
+
+
+TOOLTIPS
+--------
+Use white text on #252525 with a one-pixel #777777 border and three-pixel padding.
+Tooltips should identify unfamiliar controls or content without repeating obvious
+button labels.
+
+
+IMPLEMENTATION REFERENCE
+------------------------
+The source of truth is GuiFunct::scoEditorPanelStyle() in GuiFunct.cpp.
+Editor panels containing user-editable values should use:
+
+    GuiFunct::applyEditorPanelStyle(this);
+
+or, when the panel has deliberate custom sizing that must remain untouched:
+
+    setStyleSheet(GuiFunct::scoEditorPanelStyle());
+
+Use GuiFunct::scoPanelStyle() only for generic panels that do not need the
+editable-versus-read-only orange field distinction.
+
+Do not place a local widget stylesheet on an editable field unless necessary.
+A local stylesheet can override the shared hover, focus, and read-only states.

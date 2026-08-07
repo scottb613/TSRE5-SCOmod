@@ -1,19 +1,32 @@
 /build/
-/dist/
-/Resources/templateRoute/
-/resources/
-moc_*.cpp
-/log.txt
-/template_routes/
-/tsre_assets/
-/tsre_appdata/0.691/
-/tsre_appdata/0.692/
-/tsre_appdata/0.69/
-/tsre_appdata/0.693/
-/tsre_appdata/0.6937/
-/tsre_appdata/0.696/procedural/
-.qmake.stash
-dep.inc
-/nbproject/
-/nbproject/private/private.xml
-/nbproject/configurations.xml
+/out/
+/.cache/
+/.vcpkg/
+/vcpkg_installed/
+/CMakeUserPresets.json
+/.vscode/*.local.json
+/TSREvc.local.code-workspace
+
+*.user
+*.autosave
+*.o
+*.a
+*.lib
+*.dll
+*.exe
+*.pdb
+
+# Generated migration reports
+/reports/
+
+# Imported source assets include Wavefront .obj files, so do not ignore *.obj.
+# Build products and local rollback snapshots remain outside the v0.9 history.
+/TSREvcWIP/build/
+/TSREvcWIP/dist/
+/TSREvcWIP/tmp/
+/TSREvcTST/*
+!/TSREvcTST/README.md
+
+# Local Gate 5 route copies and generated evidence remain machine-specific.
+/Gate5Sandbox/
+/Gate5Evidence/

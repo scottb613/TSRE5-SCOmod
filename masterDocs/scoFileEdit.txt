@@ -1,0 +1,943 @@
+TSRE GenX Code File Edit Ledger
+
+Purpose
+
+This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
+
+v0.9 Qt6/CMake migration and parity release
+
+- CMakeLists.txt
+- CMakePresets.json
+- cmake/TSREWarnings.cmake
+- toolchains/qt-mingw-toolchain.cmake
+- vcpkg.json
+  - Replaced the Qt5/qmake build path with Qt 6.11.1, CMake, matched MinGW, vcpkg dependencies, AUTOMOC/AUTOUIC/AUTORCC, focused probes, and controlled Windows presets.
+
+- scripts/Audit-Qt6.ps1
+- scripts/Compare-Gate5Route.ps1
+- scripts/Invoke-RouteRegression.ps1
+- scripts/ui-tests/Get-TSREUiMap.ps1
+- scripts/ui-tests/Invoke-TSREPlacementPrototype.ps1
+- tests/DdsDecoderProbe.cpp
+- tests/RouteRegressionHarnessSelfTest.ps1
+- tests/TextStreamEncodingProbe.cpp
+  - Added repeatable Qt6 API auditing, byte-identical UTF-16 evidence, DDS DXT1/DXT3/DXT5 and 24/32-bit decoder coverage, full-route hash evidence, and deterministic UI placement support.
+
+- TSREvcWIP/AceLib.cpp
+- TSREvcWIP/AceLib.h
+- TSREvcWIP/ActionChooseDialog.cpp
+- TSREvcWIP/Activity.cpp
+- TSREvcWIP/ActivityBuilderWindow.cpp
+- TSREvcWIP/ActivityEventProperties.cpp
+- TSREvcWIP/ActivityTools.cpp
+- TSREvcWIP/ActivityTrackViewer.cpp
+- TSREvcWIP/ActivityTrackViewer.h
+- TSREvcWIP/ActivityTrafficProperties.cpp
+- TSREvcWIP/CameraFree.cpp
+- TSREvcWIP/CameraRot.cpp
+- TSREvcWIP/ConEditorWindow.cpp
+- TSREvcWIP/ConListWidget.cpp
+- TSREvcWIP/Consist.cpp
+- TSREvcWIP/Eng.cpp
+- TSREvcWIP/EngListWidget.cpp
+- TSREvcWIP/Game.cpp
+- TSREvcWIP/GuiFunct.cpp
+- TSREvcWIP/LoadWindow.cpp
+- TSREvcWIP/LoadWindow.h
+- TSREvcWIP/main.cpp
+- TSREvcWIP/MapDataOSM.cpp
+- TSREvcWIP/MapWindow.cpp
+- TSREvcWIP/MapWindow.h
+- TSREvcWIP/ObjTools.cpp
+- TSREvcWIP/PaintTexLib.cpp
+- TSREvcWIP/Path.cpp
+- TSREvcWIP/PlayActivitySelectWindow.cpp
+- TSREvcWIP/PropertiesAbstract.cpp
+- TSREvcWIP/PropertiesCarspawner.cpp
+- TSREvcWIP/PropertiesDyntrack.cpp
+- TSREvcWIP/PropertiesSignal.cpp
+- TSREvcWIP/PropertiesSoundRegion.cpp
+- TSREvcWIP/PropertiesSoundSource.cpp
+- TSREvcWIP/QuadTree.cpp
+- TSREvcWIP/RandomConsist.cpp
+- TSREvcWIP/Route.cpp
+- TSREvcWIP/RouteEditorClient.cpp
+- TSREvcWIP/RouteEditorGLWidget.cpp
+- TSREvcWIP/RouteEditorServer.cpp
+- TSREvcWIP/RouteEditorWindow.cpp
+- TSREvcWIP/RouteEditorWindow.h
+- TSREvcWIP/Service.cpp
+- TSREvcWIP/SettingsDialog.cpp
+- TSREvcWIP/SFileC.cpp
+- TSREvcWIP/ShapeHierarchyWindow.cpp
+- TSREvcWIP/ShapeViewerGLWidget.cpp
+- TSREvcWIP/ShapeViewerNavigatorWidget.cpp
+- TSREvcWIP/SignalWindow.cpp
+- TSREvcWIP/StatusWindow.cpp
+- TSREvcWIP/TDB.cpp
+- TSREvcWIP/TerrainTools.cpp
+- TSREvcWIP/TerrainWaterWindow2.cpp
+- TSREvcWIP/TFile.cpp
+- TSREvcWIP/Tile.cpp
+- TSREvcWIP/Traffic.cpp
+- TSREvcWIP/Trk.cpp
+- TSREvcWIP/TrkWindow.cpp
+- TSREvcWIP/TSectionDAT.cpp
+- TSREvcWIP/WindowManager.cpp
+  - Converted the removed Qt5 regular-expression, screen, stream, event, XML, font, layout, widget, container, and signal/slot APIs while preserving the complete GenX application and legacy renderer behavior.
+  - Stabilized Windows captions and popup placement, corrected Camera Terrain Lock, preserved Main Load and editor lifecycle behavior, and restored complete UI-sound feedback.
+
+- TSREvcWIP/DdsDecoder.cpp
+- TSREvcWIP/DdsDecoder.h
+- TSREvcWIP/DdsLib.cpp
+- TSREvcWIP/DdsLib.h
+- TSREvcWIP/ImageLib.cpp
+- TSREvcWIP/TexLib.cpp
+  - Restored Qt6 DDS rolling-stock textures through bounded DXT1/DXT3/DXT5 and uncompressed 24/32-bit decoding, with clean invalid-image rejection and CPU RGBA upload through the existing GenX texture model.
+
+- TSREvcWIP/content/SCOclick.wav
+  - Restored the complete GenX interface-sound set and Activity Path Editor point-placement feedback.
+
+v0.8 Dynamic Track, JSON settings, and Activity Builder completion release
+
+- SCOmodWIP/RulerObj.cpp
+- SCOmodWIP/RulerObj.h
+- SCOmodWIP/TerrainWaterWindow2.cpp
+- SCOmodWIP/TerrainWaterWindow2.h
+- SCOmodWIP/PropertiesTerrain.cpp
+- SCOmodWIP/PropertiesTerrain.h
+- SCOmodWIP/RouteEditorGLWidget.cpp
+- SCOmodWIP/RouteEditorGLWidget.h
+- SCOmodWIP/RouteEditorWindow.cpp
+- SCOmodWIP/Route.cpp
+- SCOmodWIP/Route.h
+- SCOmodWIP/Terrain.cpp
+- SCOmodWIP/Terrain.h
+- SCOmodWIP/Undo.cpp
+- SCOmodWIP/Undo.h
+  - Expanded Water Helper with one terrain-snapped multi-point watercourse ruler, bounded ruler-following terrain loading and shoreline scanning, nine-point patch tests, seam-matched tile-corner elevations, water-patch enabling, saved-ruler recovery, Undo/restart/removal controls, progress guidance, and memory-safety limits.
+  - Added strict repeat-strip seam matching, long-ruler visibility, scaled status messages, standard action/completion sounds, and cleanup of the working ruler without removing generated water.
+
+- SCOmodWIP/GuiFunct.cpp
+- SCOmodWIP/GuiFunct.h
+- SCOmodWIP/ActivityTools.cpp
+- SCOmodWIP/ConEditorWindow.cpp
+- SCOmodWIP/ConListWidget.cpp
+- SCOmodWIP/GeoTools.cpp
+- SCOmodWIP/ObjTools.cpp
+- SCOmodWIP/PropertiesTerrain.cpp
+- SCOmodWIP/PropertiesTrackObj.cpp
+- SCOmodWIP/Route.cpp
+- SCOmodWIP/RouteEditorWindow.cpp
+- SCOmodWIP/SettingsDialog.cpp
+- SCOmodWIP/TerrainTools.cpp
+- SCOmodWIP/OverwriteDialog.cpp (removed)
+- SCOmodWIP/OverwriteDialog.h (removed)
+- SCOmodWIP/qt-*.pro
+  - Replaced divergent destructive and overwrite prompts with one centered, UI-scale-aware GenX warning dialog and removed the obsolete OverwriteDialog implementation and project references.
+
+- SCOmodWIP/LoadWindow.cpp
+- SCOmodWIP/LoadWindow.h
+- SCOmodWIP/main.cpp
+- SCOmodWIP/ConEditorWindow.cpp
+- SCOmodWIP/ConEditorWindow.h
+  - Added the Main Load Consist Editor action, return-to-loader behavior, retained root selection, clearer route labeling and shortcut filtering, professional role-accented launcher controls, and isolated child-process CE startup.
+  - Preserved standalone CE behavior and independently persisted CE consist/shape view colors.
+
+- SCOmodWIP/Game.cpp
+- SCOmodWIP/SettingsDialog.cpp
+- SCOmodWIP/SettingsDialog.h
+- SCOmodWIP/TSRE5_resource.rc
+  - Replaced the legacy settings.txt location with per-user settings.json, atomic save/backup/recovery, defaults reset, terrain database height-bias settings, and v0.8 application metadata.
+  - Kept restart-and-restore as the safe way to apply process-wide settings instead of re-invoking Game::Load in a live editor.
+
+- SCOmodWIP/RouteSaveTransaction.cpp
+- SCOmodWIP/RouteSaveTransaction.h
+- SCOmodWIP/Route.cpp
+- SCOmodWIP/Route.h
+- SCOmodWIP/RouteEditorGLWidget.cpp
+- SCOmodWIP/RouteEditorWindow.cpp
+- SCOmodWIP/TDB.cpp
+- SCOmodWIP/TDB.h
+- SCOmodWIP/tests/RouteSaveTransactionTest.cpp
+- SCOmodWIP/tests/RouteSaveTransactionTest.pro
+- SCOmodWIP/qt-*.pro
+- SCOmodWIP/nbproject/qt-*.pro
+  - Added coordinated crash-safe saving for route TDB/TIT/TSECTION, RDB/RIT, and modified TRK files using same-directory atomic replacement with direct-write fallback disabled.
+  - Added per-route AppData backup generations, manifests and hashes, five-generation retention, rollback on failure, and automatic recovery of interrupted commits before route load.
+  - Added focused commit, path-containment, and interrupted-save recovery tests, plus truthful Saved/SAVE FAILED status reporting.
+
+- SCOmodWIP/DynTrackObj.cpp
+- SCOmodWIP/DynTrackObj.h
+- SCOmodWIP/Flex.cpp
+- SCOmodWIP/Flex.h
+- SCOmodWIP/ProceduralMstsDyntrack.cpp
+- SCOmodWIP/ProceduralShape.cpp
+- SCOmodWIP/PropertiesDyntrack.cpp
+- SCOmodWIP/PropertiesDyntrack.h
+  - Hardened Dynamic Track materials, replaced the selection box with a track outline, standardized Grade controls, and rebuilt direction-neutral NextGen Flex candidate generation and validation.
+  - Added transactional failure handling and exact endpoint, tangent, plane, internal-seam, non-backtracking, and two-connection requirements.
+  - Applied the shared snapping, grade-plane, validation, and TDB path to both Classic S-C-S and NextGen S-C-S-C-S modes; removed the unreachable staged Flex implementation and its dead Route/keyboard wrapper.
+
+- SCOmodWIP/TDB.cpp
+- SCOmodWIP/TDB.h
+- SCOmodWIP/Route.cpp
+- SCOmodWIP/RouteEditorGLWidget.cpp
+- SCOmodWIP/TextObj.cpp
+- SCOmodWIP/Vector3f.cpp
+  - Aligned Dynamic Track database geometry with the rendered mesh, corrected reverse graded frames, ignored deleted snap records, preferred fixed endpoints, and restored a continuous world-space yellow TrackDB overlay.
+  - Cleaned compiler warnings exposed by the TDB changes and corrected TextObj render overload selection.
+
+- SCOmodWIP/ActivityBuilderWindow.cpp
+- SCOmodWIP/ActivityBuilderWindow.h
+- SCOmodWIP/ActivityTools.cpp
+- SCOmodWIP/ActivityTools.h
+- SCOmodWIP/ActivityTrackViewer.cpp
+- SCOmodWIP/ActivityTrackViewer.h
+- SCOmodWIP/Path.cpp
+- SCOmodWIP/Path.h
+  - Completed explicit New/Edit/Clone sessions, active-session control locking, metadata editing, cancellation rollback, stable filenames, player-path flags, PAT validation/output, endpoint labels, reverse markers, service symbols, and selected-path presentation.
+  - Added Advanced Shunting WP editing and PAT round-tripping for timed horn, front/rear uncoupling with car count and pause, join/split, and pass-red requests, plus decoded H/U/J/R/T/W map markers.
+  - Strengthened path reconstruction and save checks for reverse legs, ordered wait/advanced points, live switch changes, passing-route reconnection, missing endpoints, and atomic output.
+
+- SCOmodWIP/GuiFunct.cpp
+- SCOmodWIP/GuiFunct.h
+- SCOmodWIP/ObjTools.cpp
+- SCOmodWIP/ObjTools.h
+- SCOmodWIP/PropertiesTrackObj.cpp
+- SCOmodWIP/RouteEditorWindow.cpp
+- SCOmodWIP/RouteEditorWindow.h
+- SCOmodWIP/StatusWindow.cpp
+- SCOmodWIP/StatusWindow.h
+- SCOmodWIP/TerrainTools.cpp
+  - Added shared scale-aware Pin icons, equal Select/Place button sizing, distinct movement-state color, and consolidated clean application shutdown with helper windows open.
+  - Revised Category Search with ALL defaults, mutually exclusive Tracks/Roads/Other filters, search inside the active category, Reset, bounded Recent Items, and cleaner Scale Rail family grouping.
+
+v0.7 Activity Builder and interface release
+
+- TSRE5-Trainsim.Com-Fork-master/ActivityBuilderWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityBuilderWindow.h
+  - Added the full-screen F4 Activity Builder workspace, fixed left/right panels, map controls, path controls, wait-point inputs, active tool toggles, F4 close toggle, and standalone path selection workflow.
+
+- TSRE5-Trainsim.Com-Fork-master/ActivityTrackViewer.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTrackViewer.h
+  - Added the scalable TrackDB renderer, path import/edit/save, natural-end water flow, live switch throwing, reverse and wait points, overlap detection, passing sidings and recalculation, selection/deletion, labels, interactives, markers, and overview performance levels.
+
+- TSRE5-Trainsim.Com-Fork-master/ActivityTools.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTools.h
+  - Reorganized F4 path and activity controls, added standalone path creation/edit/clone/delete behavior, selection placeholder handling, and consistent panel styling.
+
+- TSRE5-Trainsim.Com-Fork-master/Path.cpp
+- TSRE5-Trainsim.Com-Fork-master/Path.h
+  - Extended PAT parsing and writing support used by the standalone path editor, including wait, reverse, and passing-path control data.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
+  - Integrated the F4 workspace, unified F1-F4 panel behavior, user-click sounds, focus restoration, main-window maximizing, and pinnable utility-window presentation.
+
+- TSRE5-Trainsim.Com-Fork-master/GuiFunct.cpp
+- TSRE5-Trainsim.Com-Fork-master/GuiFunct.h
+  - Added the shared professional charcoal/orange panel treatment, title strips, consistent editable/read-only field states, hover treatment, buttons, and square choice indicators.
+
+- TSRE5-Trainsim.Com-Fork-master/ObjTools.cpp
+- TSRE5-Trainsim.Com-Fork-master/ObjTools.h
+  - Reworked Object Selection and Auto Place presentation and moved Auto Place into its own pinnable workflow.
+
+- TSRE5-Trainsim.Com-Fork-master/GeoTools.cpp
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.cpp
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.h
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.cpp
+  - Carried the shared panel hierarchy, title, spacing, control, and button treatment through the F2/F3 and Control Panel surfaces.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesAbstract.cpp
+- TSRE5-Trainsim.Com-Fork-master/PropertiesDyntrack.cpp
+- TSRE5-Trainsim.Com-Fork-master/PropertiesStatic.cpp
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp
+  - Standardized property-panel subtitles, spacing, button behavior, helper launch treatment, and editable-field presentation.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.cpp
+- TSRE5-Trainsim.Com-Fork-master/TDB.h
+  - Exposed TrackDB information required by the Activity Builder path graph and switch-state operations.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/TSRE5_resource.rc
+  - Advanced application, settings-output, and Windows executable metadata to v0.7.
+
+- TSRE5-Trainsim.Com-Fork-master/nbproject/qt-Release_x64.pro
+  - Added the Activity Builder and Track Viewer sources to the release build.
+
+Primary source files edited
+
+- TSRE5-Trainsim.Com-Fork-master/main.cpp
+  - Added single-instance startup guard.
+  - Added startup warning for a second TSRE launch.
+  - Applied global uiScale to the Segoe UI application font so editor text scales consistently with the surrounding controls.
+
+- TSRE5-Trainsim.Com-Fork-master/LoadWindow.cpp
+  - Fixed route-selection table refresh when switching MSTS root folders.
+  - Ensured route loading uses the route-name column.
+  - Added Restore Last Session startup button and AppData lastSession.json restore handling.
+  - Updated the startup window titlebar to TSRE GenX branding.
+  - Scaled the high-resolution startup splash into the loader banner area instead of displaying a cropped top-left image.
+  - Restored unified Control Panel geometry from the new session key with legacy Status Window fallback.
+
+- TSRE5-Trainsim.Com-Fork-master/LoadWindow.h
+  - Added Restore Last Session slot, button, and startup button layout helpers.
+
+- TSRE5-Trainsim.Com-Fork-master/CELoadWindow.cpp
+  - Removed the obsolete seasonal-editing startup reset.
+  - Scaled the high-resolution consist-loader splash into the loader banner area instead of displaying a cropped top-left image.
+
+- TSRE5-Trainsim.Com-Fork-master/AboutWindow.cpp
+  - Scaled the high-resolution about/startup splash into the window banner area instead of displaying a cropped top-left image.
+
+- TSRE5-Trainsim.Com-Fork-master/Route.cpp
+  - Added/updated tile-level autopaint operations.
+  - Shared track/road tile vector painting path.
+  - Added water-edge tile painting and reset-tile/reset-route paint support.
+  - Added route-level season object refresh for procedural forest regions.
+  - Added selected-object Ctrl+F tile conform helper for selected track/road objects.
+  - Preserved the legacy staged Dynamic Track creation path after introducing the current Flex solver API.
+
+- TSRE5-Trainsim.Com-Fork-master/Route.h
+  - Added declarations for new route paint/reset helpers.
+  - Added declaration for season object refresh.
+  - Added declaration for selected-object Ctrl+F tile conform helper.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
+  - Added menu entries and event hookups for tile autopaint/reset commands.
+  - Added Shift+F terrain smoothing handling.
+  - Added Ctrl+F handling for selected track/road tile conforming.
+  - Added camera state export/restore support for Restore Last Session.
+  - Added Control Panel command handling for clickable editor-state buttons.
+  - Added richer selected-object status labels and clear-selection handling.
+  - Added Place Guard post-placement validation, automatic undo on rejected placements, and click/buzz WAV playback.
+  - Added SCOpress WAV feedback for deliberate user-commanded mode/status changes while leaving passive status refreshes silent.
+  - Added Alt+A selected-terrain-tile patch selection shortcut before camera movement handling.
+  - Rebuilt successful Flex Dynamic Track database geometry before success feedback to prevent stale endpoint gaps and duplicate-looking markers.
+  - Added mutually exclusive fast/slow camera movement locks and returned keyboard focus to the viewport after Control Panel presses.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
+  - Added declarations for new editor actions/helpers.
+  - Added selected track/road tile conform action declaration.
+  - Added Restore Last Session camera state declaration.
+  - Added Control Panel command slot declaration.
+  - Added Place Guard validation, placement sound, and mode-change sound helper declarations.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
+  - Added AppData lastSession.json writing on normal editor close.
+  - Added main-window and unified Control Panel geometry restore handling.
+  - Connected Control Panel commands, navigation data, marker lists, and Jump to the editor widget.
+  - Added global UI scaling for menu/dropdown controls and side panel widths.
+  - Connected actual manual property-panel button presses to standardized SCOpress feedback.
+  - Added Route > Open Route Folder with active-route validation and Windows Explorer launch.
+  - Removed the separate Navi action/window wiring and routed navigation controls through the unified Control Panel.
+
+- TSRE5-Trainsim.Com-Fork-master/Camera.cpp
+  - Added camera terrain-lock setter used by the clickable Control Panel.
+  - Added fast/slow movement-lock state switching.
+
+- TSRE5-Trainsim.Com-Fork-master/Camera.h
+  - Added camera terrain-lock setter declaration.
+  - Added fast/slow movement-lock declarations.
+
+- TSRE5-Trainsim.Com-Fork-master/CameraFree.cpp
+  - Applied the active fast/slow lock to normal keyboard camera movement.
+
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.cpp
+  - Converted passive status readouts into clickable button controls.
+  - Added state-aware button colors for editor modes and terrain-brush direction.
+  - Added selected-object clear button and Camera Free / Camera Terrain Free labels.
+  - Added gentle delayed window snapping to nearby window frame edges.
+  - Added Place Guard button state, red ERROR flash, and automatic restoration of the prior guard label.
+  - Applied global UI scaling to Control Panel dimensions and button sizing.
+  - Replaced overlapping one-shot Place Guard callbacks with an owned restartable guard-error timer.
+  - Integrated marker selectors, pointer/camera coordinates, latitude/longitude entry, object count, and Jump from the former Navi window.
+  - Added fast/slow toggle buttons with yellow active state, sound-command routing, and focus return.
+  - Moved the fast/slow movement-lock row directly below the Camera row and replaced the brown-mustard active state with a coordinated traditional yellow palette using charcoal `#232323` text for contrast.
+
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.h
+  - Added Control Panel command signal and button action slots.
+  - Added timer-based snap state/slot.
+  - Added Place Guard error-flash state.
+  - Added owned Place Guard error-timer state for reliable repeated error feedback.
+
+- TSRE5-Trainsim.Com-Fork-master/NaviWindow.cpp and NaviWindow.h
+  - Removed after all navigation controls and behavior were consolidated into the Control Panel.
+
+- TSRE5-Trainsim.Com-Fork-master/ObjTools.cpp
+  - Added right-side object panel search reset button.
+  - Added ALL defaults for Tracks/Roads/Other filters.
+  - Made Tracks/Roads/Other filters mutually exclusive and constrained search to the active filter.
+  - Grouped Scale Rail track categories by family/type instead of individual dimensions, radii, and variants.
+  - Standardized Dynamic Track object-list and Recent Items naming.
+  - Restyled the right object-selection panel with bold orange Title Case headings, orange checked states, and subtle category separators.
+  - Renamed Stick to Target to Stick Target.
+  - Added one SCOpress response for each actual manual right-panel push-button press while keeping programmatic changes silent.
+
+- TSRE5-Trainsim.Com-Fork-master/ObjTools.h
+  - Added object-panel search reset/filter helper declarations and Reset button state.
+
+- TSRE5-Trainsim.Com-Fork-master/GuiFunct.cpp and GuiFunct.h
+  - Added the shared professional dark panel stylesheet used across property and F1-F4 tool panels.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
+  - Added private Restore Last Session save/restore helpers.
+  - Removed separate Navi action/window declarations and added Route Folder support.
+
+- TSRE5-Trainsim.Com-Fork-master/Terrain.cpp
+  - Updated terrain conforming, smoothing, texture paint, and tile refresh/reset behavior.
+  - Added explicit terrain texture-set folder handling for base seasons, Winter/Snow, and Night fallback.
+  - Added ORTS-style seasonal texture resolver with per-file seasonal folder fallback to the root texture folder.
+  - Applied the resolver to terrain TERRTEX rendering so missing seasonal swatches fall back cleanly instead of rendering black.
+  - Added loaded-terrain seasonal texture rebinding so detailed and distant terrain tiles can re-resolve textures after an F2 season change.
+  - Added Mirror Seasons support for terrain texture painting.
+  - Added opposite-season placeholder patch creation when painting with Mirror Seasons off, using route or bundled GenX terrain.ace fallbacks.
+  - Removed terrain paint blocking/copy behavior from the old seasonal-editing workaround.
+  - Added select-all-patches helper for selected terrain tiles.
+
+- TSRE5-Trainsim.Com-Fork-master/Terrain.h
+  - Added declarations/state for terrain conforming, paint, reset, and texture helpers.
+  - Added seasonal TERRTEX path helpers, texture resolver declarations, terrain texture rebinding, and mirror paint helper declaration.
+  - Added select-all-patches method declaration for selected terrain tiles.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.cpp
+  - Added terrain paint presets UI.
+  - Moved route-specific paint preset JSON storage to AppData/TSRE instead of route folders.
+  - Added texture rotation control.
+  - Added reset route terrtex paint button and related UI wiring.
+  - Replaced the old Daytime/Night/Snow texture selector with Summer/Spring/Autumn/Winter/Night.
+  - Added Mirror Seasons checkbox and season-change terrain/object reload and preview refresh.
+  - Updated texture picker/preload, preset restore, and previous texture restore to use seasonal TERRTEX fallback.
+  - Disabled the obsolete settings-file seasonal workflow in favor of the F2 selector-driven seasonal preview.
+  - Applied global uiScale to the fixed Terrain Tools panel width.
+  - Rebuilt Texture Preview as paired 108x108 MAIN TERRTEX and SNOW TERRTEX views with source-filename tooltips, exact active-side display, readiness checks, status feedback, and active/mirrored border states.
+  - Reorganized texture history as six Recent swatches in two rows of three plus a separate Brush swatch.
+  - Added multi-file Load support for ACE, DDS, JPG/JPEG, PNG, BMP, and TGA sources, including decode validation, failed-file reporting, brush activation, and Recent history updates.
+  - Added Hide generated tile textures filtering and a complete Clear Recent operation that resets history, brush texture, previews, tooltips, Texture-tool state, and Mirror Season state together.
+  - Hardened Mirror Season control wiring so it requires matching decodable Main/Snow source textures and automatically rejects or clears invalid mirror state.
+  - Reorganized the panel into Texture Set, Edit Terrain Layers, Texture Preview, Presets, Brush Settings, Embankment Settings, and Advanced groups.
+  - Added the pinnable Terrain Utilities helper and moved TrackDB/RoadDB conform bias plus route TERRTEX reset maintenance out of the everyday panel.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.h
+  - Added declarations/state for presets, texture rotation, and reset controls.
+  - Added declarations/state for texture-set selection and Mirror Seasons.
+  - Added paired preview, preview-status, Recent/Brush swatch, texture-loading/filtering, Clear Recent, mirror-validation, and Terrain Utilities declarations/state.
+  - Updated Mirror Season control declarations for the current push-button implementation and fail-safe paired-source validation.
+
+- TSRE5-Trainsim.Com-Fork-master/GeoTools.cpp
+  - Applied global uiScale to the fixed Geo Tools panel width.
+  - Applied the shared panel style and standardized orange headings and controls.
+
+- TSRE5-Trainsim.Com-Fork-master/ActivityTools.cpp
+  - Applied global uiScale to the fixed Activity Tools panel width.
+  - Applied the shared panel style and standardized orange headings and controls.
+
+- TSRE5-Trainsim.Com-Fork-master/Brush.h
+  - Added/stored brush state needed by paint presets and texture rotation.
+  - Added active terrtex season folder and Mirror Seasons paint state.
+
+- TSRE5-Trainsim.Com-Fork-master/SFile.cpp
+  - Preserved base object texture paths separately from seasonal texture paths.
+  - Recomputed Winter/Snow object texture paths during shape reload.
+  - Added object-shape texture fallback so each seasonal texture file can fall back to the root texture folder if missing.
+  - Changed object seasonal lookup to try the active editor season first for every loaded shape texture, instead of relying only on legacy SD alternative-texture flags.
+  - Changed season refresh to invalidate cached shape texture IDs instead of synchronously reloading every texture, avoiding route-load/season-change stalls and wrong texture reuse.
+
+- TSRE5-Trainsim.Com-Fork-master/SFile.h
+  - Added base texture path state and seasonal texture path helper declaration.
+  - Added seasonal texture candidate helper declaration.
+
+- TSRE5-Trainsim.Com-Fork-master/ShapeLib.cpp
+  - Added loaded-shape texture reload support for season changes.
+
+- TSRE5-Trainsim.Com-Fork-master/ShapeLib.h
+  - Added shape-library reload declaration.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainLib.cpp
+  - Updated terrain library behavior used by paint/reset operations.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainLib.h
+  - Added declarations used by terrain paint/reset operations.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainLibQt.cpp
+  - Updated texture loading/saving behavior to protect editable terrain texture resolution.
+  - Changed loaded terrain season refresh to rebind texture IDs in place for both detailed and distant terrain tiles.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainLibQt.h
+  - Added declarations used by updated texture handling.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainLibSimple.cpp
+  - Updated terrain texture/material handling used by reset/paint operations.
+
+- TSRE5-Trainsim.Com-Fork-master/AceLib.cpp
+  - Updated ACE texture load/save safety around editable terrain texture buffers.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+  - Updated default/editor settings used by smoother startup and route editing.
+  - Added forest-region view toggle state.
+  - Removed the old seasonal-editing startup warning, generated settings-file hint, and settings parser hook.
+  - Updated application branding to TSRE GenX.
+  - Updated generated default mapImageResolution setting to 4096.
+  - Added global uiScale default, parser, bounds, and generated settings-file comment.
+  - Replaced separate Navi/Status defaults with the unified Control Panel setting and retained legacy Status Window parsing.
+
+- TSRE5-Trainsim.Com-Fork-master/MapDataOSM.cpp
+  - Hardened F3 OSM Vector Map network handling for TLS/HTTP/empty/non-XML failures.
+  - Applied the TLS configuration before starting the HTTPS request.
+  - Avoided blocking event-loop delay on failed OSM requests.
+
+- TSRE5-Trainsim.Com-Fork-master/GeoTools.cpp and GeoTools.h
+  - Adapted Eric-from-Trainsim's 8.006m imagery-provider work into the existing GenX F3 Map Layers panel.
+  - Added one provider/configuration workflow for keyless OSM Vector, Google, Mapbox, and Custom imagery.
+  - Moved map-image resolution into the same F3 configuration dialog so map controls are not duplicated.
+
+- TSRE5-Trainsim.Com-Fork-master/MapWindow.cpp and MapDataUrlImage.cpp
+  - Applied the active F3 provider to map downloads without restarting the editor.
+  - Hid unconfigured key-based providers and prevented API keys from appearing in request diagnostics.
+
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+  - Removed the redundant F12 Map tab while preserving F3 imagery settings during ordinary F12 saves.
+
+- TSRE5-Trainsim.Com-Fork-master/settings.txt
+  - Set packaged/default mapImageResolution to 4096.
+  - Added Restore Last Session window/camera restore state.
+  - Added shared AppData/TSRE JSON path helpers for session and route preset state.
+  - Reorganized the packaged settings file into readable GenX sections.
+  - Added current GenX defaults for uiScale, mouseSpeed, mapImageResolution, and GenX sound feedback.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.h
+  - Added declaration for forest-region view toggle state.
+  - Removed the obsolete seasonal-editing settings flag declaration.
+  - Added Restore Last Session window/camera restore state declarations.
+  - Added shared AppData/TSRE JSON path helper declarations.
+  - Added global uiScale declaration.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.cpp
+  - Touched during track/road vector paint investigation and shared paint path work.
+  - Added helper to extract one track/road database vector's points clipped to a specific tile.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.h
+  - Touched during track/road vector paint investigation and shared paint path work.
+  - Added declaration for tile-clipped single-vector point extraction.
+
+- TSRE5-Trainsim.Com-Fork-master/PolyForestObj.cpp
+  - Updated forest generation behavior for stutter reduction.
+  - Added forest-region view toggle render/generation guard.
+  - Added season texture refresh/rebuild support for generated tree geometry.
+  - Added seasonal forest texture lookup with root fallback.
+
+- TSRE5-Trainsim.Com-Fork-master/ForestObj.cpp
+  - Updated forest generation behavior for stutter reduction.
+  - Added forest-region view toggle render/generation guard.
+  - Added season texture refresh/rebuild support for generated tree geometry.
+  - Added seasonal forest texture lookup with root fallback.
+
+- TSRE5-Trainsim.Com-Fork-master/WorldObj.cpp
+  - Fixed accidental assignment-in-condition debug checks found during compiler cleanup.
+
+- TSRE5-Trainsim.Com-Fork-master/OglObj.cpp
+  - Reset cached texture IDs only when generated objects receive a changed material path, avoiding severe stutter from repeated same-material assignments while still allowing seasonal refreshes to bind new textures.
+
+- TSRE5-Trainsim.Com-Fork-master/TexLib.cpp
+  - Fixed texture reload mode so reloading an already-cached texture returns the existing texture's real ID instead of accidentally returning texture ID 0.
+
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+  - Removed the old visible Season/Seasonal Editing settings rows from the Settings panel.
+  - Removed the obsolete seasonal-editing settings lookup.
+  - Changed the Settings Editor save button to write active settings.txt instead of settings.txt.new.
+  - Added timestamped settings.txt backups before overwrite.
+  - Reworked the Settings Editor tabs to match the organized settings.txt categories.
+  - Added dark striped settings rows and moved row comments into full-sentence tooltips.
+  - Added a Key Assignments tab with a striped two-column shortcut reference.
+  - Added dialog support for current GenX settings such as uiScale, scoSoundEnabled, mainWindow, and decimal mouseSpeed.
+  - Replaced F6 Navi/F7 Status references and separate position rows with F7 Control Panel and one Control Panel position setting.
+
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.h
+  - Added Settings Editor helper declarations for active settings saving, timestamped backups, tooltips, and key assignment display.
+
+- TSRE5-Trainsim.Com-Fork-master/ProceduralMstsDyntrack.cpp
+  - Updated procedural dynamic track texture selection to follow the active season directly with normal-texture fallback.
+  - Added packaged fallback dynamic-track texture lookup for routes missing local dynamic-track texture files.
+
+- TSRE5-Trainsim.Com-Fork-master/DynTrackObj.cpp
+  - Synchronized the serialized Dynamic Track elevation value with the rotation applied by elevation editing.
+
+- TSRE5-Trainsim.Com-Fork-master/Flex.cpp
+  - Adapted GokuMK's newer Flex dynamic-track solving work for GenX testing.
+  - Separated Classic Flex S-C-S from NextGen Flex S-C-S-C-S candidate solving.
+  - Kept Classic candidates to at most one curve while allowing the richer NextGen multi-section path.
+  - Updated Flex elevation handling to use solved path length when available for smoother graded joins.
+
+- TSRE5-Trainsim.Com-Fork-master/Flex.h
+  - Added Flex helper declarations and the Classic/NextGen solver-mode parameter used by the adapted GokuMK Flex workflow.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesDyntrack.cpp
+  - Hid the old Flex debug graph during normal editor use.
+  - Renamed the action Auto-Flex and added selectable NextGen Flex S-C-S-C-S and Classic Flex S-C-S modes, with NextGen as the default.
+  - Added the Object: Dynamic Track title, Index, calculated Length, active Curves, and clearer named section metadata.
+  - Matched the left-panel dark styling with bold orange Title Case headings, orange checked states, active Auto-Flex state, and subtle separators.
+  - Passed the selected Classic/NextGen mode into the solver and reported the result after applying object changes.
+  - Added Flex result reporting so completed Flex connections use SCOpress feedback and failed attempts use buzz feedback.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesDyntrack.h
+  - Added Flex result signal and Classic/NextGen mode-control state used by the route editor widget.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesAbstract.cpp
+  - Added shared dark property-panel styling and orange checked states.
+  - Limited manual-button sound signaling to actual visible QPushButton clicks so programmatic state changes remain silent.
+  - Applied the shared professional control style used by all derived property panels.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesAbstract.h
+  - Added the shared manual push-button signal and per-panel button wiring state.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesStatic.cpp
+  - Standardized the title as Object: Static Object.
+  - Added category separators and corrected the final category heading to Actions:.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp
+  - Standardized the title as Object: Track.
+  - Applied bold orange Title Case category headings and subtle inset separators throughout the normal Track object panel.
+
+- TSRE5-Trainsim.Com-Fork-master/Properties*.cpp
+  - Standardized visible orange section headings to bold Title Case across the remaining object property panels.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
+  - Connected dynamic-track Flex result feedback to the main editor widget.
+  - Connected object-list selection focus return so shortcut keys continue working after right-side object list selections.
+  - Connected manual property-panel button signals to SCOpress feedback.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
+  - Suppressed Flex internal tool-change sounds so only deliberate operator actions produce feedback.
+  - Stopped overlapping SCO UI sounds before playing the next press, click, or buzz.
+  - Added focus return slot for right-side object list selections.
+  - Refreshed the Dynamic Track database entry after successful Flex application before playing success feedback.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
+  - Added focus return slot for object-list selection handling.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+  - Added Flex debug-window setting support.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.h
+  - Added Flex debug-window setting state.
+
+- TSRE5-Trainsim.Com-Fork-master/TransferObj.cpp
+  - Updated transfer texture selection to use the active seasonal texture folder with root fallback.
+  - Fixed transfer reload behavior so season changes invalidate cached transfer geometry/materials.
+
+- TSRE5-Trainsim.Com-Fork-master/TransferObj.h
+  - Initialized transfer texture path state for safer seasonal reloads.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainClient.cpp
+  - Updated terrain-client texture paths to use the shared TERRTEX season helper.
+
+- TSRE5-Trainsim.Com-Fork-master/TSRE5_resource.rc
+  - Added the TSRE icon to the Windows executable resource.
+  - Corrected the Windows resource file type to application.
+
+- AddShortcutDesktop.cmd
+  - Created desktop shortcut helper for the local/package TSRE GenX executable.
+
+- qt-*.pro and nbproject/qt-*.pro
+  - Removed the retired NaviWindow source/header entries from all maintained Qt project variants.
+
+Created source/test/reference code files
+
+- TSRE5-Trainsim.Com-Fork-master/content/SCOpress.wav
+  - Added the standardized manual-button and mode-change sound used by Status, property, and object panels.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainTrackMath.h
+  - Created helper for terrain-to-track width/conforming math.
+
+- TSRE5-Trainsim.Com-Fork-master/tests/TerrainTrackMathTest.cpp
+  - Created small independent test for terrain track math behavior.
+
+- reference/mstsexporter.py
+  - Saved local reference copy of the MSTS Blender exporter for future shape/export research.
+
+- TSRE5-Trainsim.Com-Fork-master/tsre.ico
+  - Added executable icon asset used by the Windows resource file.
+
+Project files edited
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
+  - Added right-click Edit > Copy Info clipboard diagnostics for all supported selection classes.
+  - Simplified the Grade Symbols legend to steady, transition, and crest/gully warning states.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
+  - Added the Copy Info selection-diagnostics slot.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.cpp
+  - Changed grade-transition detection to evaluate both connected ends without increasing/decreasing direction classification.
+  - Traversed vector-node and junction pins so endpoint transitions are not missed.
+  - Flagged direct connected crests and gullies as warnings when no level section separates them.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.h
+  - Reduced grade-marker state to stable, transitory, and warning.
+
+- TSRE5-Trainsim.Com-Fork-master/TrackObj.cpp
+  - Positioned Grade Symbols at the exact TSECTION path midpoint and aligned them to the local path tangent on curves.
+
+- TSRE5-Trainsim.Com-Fork-master/nbproject/Makefile-Release_x64.mk
+  - Updated by project/build configuration work as needed for the current MinGW/Qt build.
+
+- TSRE5-Trainsim.Com-Fork-master/nbproject/Makefile-Debug_x64.mk
+  - Updated by project/build configuration work as needed for the current MinGW/Qt build.
+
+- TSRE5-Trainsim.Com-Fork-master/nbproject/Makefile-impl.mk
+  - Updated by project/build configuration work as needed for the current MinGW/Qt build.
+
+- TSRE5-Trainsim.Com-Fork-master/nbproject/qt-Release_x64.pro
+  - Added explicit Windows resource file reference for the TSRE executable icon.
+  - Added WinMM link library for Place Guard WAV playback.
+
+
+v0.6 grade, visibility, and interface follow-up
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
+  - Replaced View > Unselect All with Toggle All, preserving and restoring the user's prior View selections while excluding Compass.
+  - Kept Grade Symbols synchronized with the global default-on state through the View menu.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
+  - Added Toggle All saved-selection state and the persistent Compass action reference.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
+  - Removed the introductory Grade Symbols viewport legend.
+  - Changed Jump feedback to play the normal press immediately and the chirp after one second.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
+  - Removed obsolete Grade Symbols legend members and positioning helper.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+  - Enabled Grade Symbols by default.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp
+  - Removed the redundant Grade Symbols checkbox from Track properties.
+  - Made Grade Helper target and step values follow the selected grade units.
+  - Added compact unit symbols, subdued required-input borders, visible spin controls, consistent fonts, and neutral read-only fields.
+  - Replaced hidden unit rows with one stacked grade-value row for consistent vertical spacing.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.h
+  - Added Grade Helper unit access and stacked grade-value controls while removing obsolete overlay and hidden-row members.
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.cpp
+  - Extended Grade Symbols classification to Dynamic Track.
+  - Rebuilt the transition cache when incrementally loaded track pieces are missing so cyan and red states do not remain incorrectly orange.
+
+- TSRE5-Trainsim.Com-Fork-master/DynTrackObj.cpp
+  - Added centered, tangent-aligned, direction-aware Grade Symbols using the shared orange, cyan, and red classifications and mirrored artwork.
+  - Invalidated grade-marker state after elevation changes and VBO rebuilds.
+
+- TSRE5-Trainsim.Com-Fork-master/DynTrackObj.h
+  - Added Dynamic Track Grade Symbol render objects, cached state, and helpers.
+
+- TSRE5-Trainsim.Com-Fork-master/Coords.cpp
+  - Replaced fragile single marker poles with three type-colored four-line square clusters at three times the configured marker height.
+  - Positioned the original black camera-facing marker labels at the corrected pole top.
+
+- TSRE5-Trainsim.Com-Fork-master/Coords.h
+  - Added the three reusable MKR type marker render objects.
+
+- TSRE5-Trainsim.Com-Fork-master/TextObj.cpp
+  - Kept the rendered vertical position synchronized when callers set a text height.
+
+- TSRE5-Trainsim.Com-Fork-master/TextObj.h
+  - Initialized text height to zero so marker and other labels cannot receive an undefined vertical offset.
+
+- TSRE5-Trainsim.Com-Fork-master/GuiFunct.cpp
+  - Added the shared editor-panel field style and post-construction font, height, spin-control, and vertical-spacing normalization.
+
+- TSRE5-Trainsim.Com-Fork-master/GuiFunct.h
+  - Added declarations for the shared editor-panel styling helpers.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesAbstract.cpp
+  - Applied the shared editor-panel field styling to all derived object property panels.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesDyntrack.cpp
+  - Applied the shared field styling to the Dynamic Track panel.
+
+- TSRE5-Trainsim.Com-Fork-master/ActivityTools.cpp
+  - Applied the shared field styling to Activity Tools.
+
+- TSRE5-Trainsim.Com-Fork-master/GeoTools.cpp
+  - Applied the shared field styling to Geo Tools.
+
+- TSRE5-Trainsim.Com-Fork-master/ObjTools.cpp
+  - Applied the shared field styling to Object Tools.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.cpp
+  - Applied the shared field styling to Terrain Tools.
+
+- TSRE5-Trainsim.Com-Fork-master/AboutWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActionChooseDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityEventProperties.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityEventWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityServiceProperties.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityServiceWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTimetableProperties.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTimetableWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTrafficProperties.cpp
+- TSRE5-Trainsim.Com-Fork-master/ActivityTrafficWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ChooseFileDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/ClientUsersWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ConInfoWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/ConListWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/ConUnitsWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/EditFileNameDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/EngInfoWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/EngListWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/ErrorMessageProperties.cpp
+- TSRE5-Trainsim.Com-Fork-master/ErrorMessagesWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/HeightWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/MapWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/NaviBox.cpp
+- TSRE5-Trainsim.Com-Fork-master/NewRouteWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/OverwriteDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/PlayActivitySelectWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/RandomConsist.cpp
+- TSRE5-Trainsim.Com-Fork-master/RandomTransformWorldObjDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/RouteMergeDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/ShapeHierarchyWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ShapeInfoWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/ShapeTexturesWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/ShapeViewerNavigatorWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/SignalWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/SignalWindowLink.cpp
+- TSRE5-Trainsim.Com-Fork-master/TerrainTreeWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/TerrainWaterWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/TerrainWaterWindow2.cpp
+- TSRE5-Trainsim.Com-Fork-master/TextEditDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/TransformWorldObjDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/TrkWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/UnsafeModeDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/UnsavedDialog.cpp
+  - Applied the shared editor-panel colors, normal field font, editable/read-only border treatment, spin controls, and vertical spacing where applicable.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+  - Added persistent shuffled splash-cycle discovery and state handling for runtime `Splash_*` artwork.
+  - Cached one selected image per process so every splash-bearing window stays synchronized during an application session.
+  - Closed the Windows state-file read handle before atomic replacement so the cycle advances reliably between launches.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.h
+  - Added the shared session splash-image path helper.
+
+- TSRE5-Trainsim.Com-Fork-master/LoadWindow.cpp
+  - Switched the Route Loader from the fixed `load.png` asset to the shared session splash cycle.
+  - Added consistent green, orange, and red action-button hover, pressed, disabled, border, and text states.
+
+- TSRE5-Trainsim.Com-Fork-master/CELoadWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/AboutWindow.cpp
+  - Switched the Consist Loader and About window to the shared session splash image.
+
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Arizona_Desert.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Australia_Blue_Mountains.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Canadian_Rockies.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Iowa_Farmland.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Italy_Cinque_Terre.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/Splash_Poland_Overcast.png
+  - Added the six runtime-discovered v0.6 splash images and removed the obsolete fixed `load.png` asset.
+
+
+v0.6 route-display, settings-restart, and UI-feedback follow-up
+
+- TSRE5-Trainsim.Com-Fork-master/TDB.cpp
+- TSRE5-Trainsim.Com-Fork-master/TDB.h
+- TSRE5-Trainsim.Com-Fork-master/Tile.cpp
+  - Replaced string-built Grade Symbol cache keys with compact typed keys.
+  - Moved cache invalidation to completed tile loads and database changes so rendering cannot trigger repeated full connectivity rebuilds.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.cpp
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorGLWidget.h
+  - Reused pointer depth results until mouse/camera input changes and removed the per-frame OpenGL viewport query.
+  - Bounded navigation, pointer, and Control Panel status emission frequency.
+
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.h
+  - Skipped unchanged camera/pointer coordinate rewrites.
+  - Kept the time-since-save warning as a read-only display without hover or pressed feedback.
+
+- TSRE5-Trainsim.Com-Fork-master/StandardFog.fs
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/shaders/StandardFog.fs
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/shaders330/StandardFog.fs
+  - Added warmer directional sunlight and cooler sky-facing ambient light while preserving neutral unlit editor overlays.
+
+- TSRE5-Trainsim.Com-Fork-master/TerrainTools.cpp
+  - Added texture-filename tooltips to both F2 Main/Snow previews, the Recent Texture swatches, and the active Brush swatch.
+
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.h
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.h
+- TSRE5-Trainsim.Com-Fork-master/Game.h
+- TSRE5-Trainsim.Com-Fork-master/main.cpp
+  - Moved UI Sounds below UI Scale and added the guarded Save, Restart and Restore workflow.
+  - Added automatic relaunch into the existing last-session restoration path after confirming that no route edits are pending.
+  - Added UI-sound feedback for radio buttons, checkboxes, combo-box selections, and selected menu actions.
+
+- TSRE5-Trainsim.Com-Fork-master/LoadWindow.cpp
+  - Played startup pushbutton feedback immediately and independently of the saved UI Sounds state.
+
+- TSRE5-Trainsim.Com-Fork-master/content/SCOtic.wav
+  - Added the compact toggle, checkbox, combo-selection, and menu-selection feedback sound.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesStatic.cpp
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp
+  - Added source-derived guidance for Detail Level, StaticFlags, and MSTS Collision controls.
+
+
+v0.6 final window, grade, sound, and interface polish
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp and Game.h
+- TSRE5-Trainsim.Com-Fork-master/main.cpp
+- TSRE5-Trainsim.Com-Fork-master/LoadWindow.cpp and LoadWindow.h
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp and RouteEditorWindow.h
+- TSRE5-Trainsim.Com-Fork-master/StatusWindow.cpp and StatusWindow.h
+  - Added compact persistent Pin controls for the main window and Control Panel, including main-window size and maximized-state restoration.
+  - Centered the startup loader and removed the superseded manual window-position settings from generated settings and F12.
+
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp and PropertiesTrackObj.h
+  - Added the Grade Helper position-only Pin without making the helper auto-open.
+  - Cleared manual Lock Grade when Grade Helper opens and silently restored Lock Grade when the target is achieved.
+  - Kept automatic state changes silent while using the normal placement click and delayed completion chirp.
+
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+  - Replaced the rough circular F12 True/False indicators with square checkbox-style indicators while preserving exclusive selection.
+
+- TSRE5-Trainsim.Com-Fork-master/Game.cpp
+- TSRE5-Trainsim.Com-Fork-master/main.cpp
+- TSRE5-Trainsim.Com-Fork-master/PropertiesTrackObj.cpp
+- TSRE5-Trainsim.Com-Fork-master/SignalWindow.cpp
+  - Standardized yellow button and indicator states on the Control Panel palette.
+
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/grade-decrease.png
+- TSRE5-Trainsim.Com-Fork-master/tsre_appdata/0.697/grade-decrease-mirror.png
+  - Removed obsolete Grade Symbol artwork no longer referenced by the renderer.
+
+
+v0.8 Eric 8.006m compatibility and route health reporting
+
+- TSRE5-Trainsim.Com-Fork-master/FileBuffer.cpp
+- TSRE5-Trainsim.Com-Fork-master/Eng.cpp
+  - Adapted Eric-from-Trainsim's 8.006m ORTS rolling-stock compatibility work.
+  - Normalized complete `.inc` candidate paths using platform path rules, preserving legitimate parent-directory segments.
+  - Tried the ordered ORTS and MSTS candidates once each and removed duplicate include insertion and unsafe heuristic fragment rewriting.
+
+- TSRE5-Trainsim.Com-Fork-master/Route.cpp and Route.h
+- TSRE5-Trainsim.Com-Fork-master/TexLib.cpp
+  - Adapted Eric-from-Trainsim's route-reporting idea with on-demand loaded-world-object inventory plus session tracking for missing textures.
+  - Loaded every route world file for the report with AutoFix temporarily disabled, recorded the complete file count, and listed any world file that could not be loaded.
+  - Collected missing shapes, used scenery, track shapes, and StaticFlags/object types without adding per-object overhead to normal tile checking.
+  - Cleared inventories for each route load and removed the older automatic loose report files from the TSRE working directory.
+
+- TSRE5-Trainsim.Com-Fork-master/RouteEditorWindow.cpp and RouteEditorWindow.h
+  - Added Route > Create Route Health Report.
+  - Atomically saved one `TSRE-Route-Health-Report.txt` inside the active route folder.
+  - Opened the same report immediately in a resizable read-only window with Copy All and Open Route Folder controls.
+  - Presented the complete route-world scan totals and a dedicated list of any world files that failed to load.
+
+- TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
+  - Corrected the legacy `listfiles` label and guidance: it now identifies the cleanup inventory required by Objects To Remove instead of promising obsolete exit-time report files.
+

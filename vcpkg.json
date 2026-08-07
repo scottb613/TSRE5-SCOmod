@@ -1,0 +1,9 @@
+{
+  "name": "tsrevc",
+  "version-string": "0.9.0",
+  "description": "Qt6/CMake migration of TSRE GenX",
+  "dependencies": [
+    "freeglut",
+    "openal-soft"
+  ]
+}
