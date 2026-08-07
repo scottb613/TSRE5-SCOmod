@@ -1,0 +1,74 @@
+TSRE GenX third-party notices
+
+TSRE GenX is based on TSRE5 by Piotr Gadecki / GokuMK and the TSRE 8.006
+Trainsim.Com development line maintained by Eric Olesen / eric-from-trainsim.
+The v0.9 Qt6/CMake migration also draws on the independent Eric-line port by
+Peter Grønbæk Andersen. The TSRE5 source code is distributed under the GNU
+General Public License version 3. See LICENSE.md.
+
+Acknowledgements
+
+Piotr Gadecki, known as GokuMK, is the original author of TSRE5. He created the
+core editor, MSTS/Open Rails file handling, texture, terrain, activity, consist,
+and rendering systems on which GenX is built and shared that invaluable body of
+work with the community. His later TSRE5vc Qt6 and native compressed-texture
+work also supplied an essential independent reference for DXT color,
+transparency, alpha, and future GPU texture work.
+
+Eric Olesen, known as eric-from-trainsim, carried TSRE forward through the TSRE
+8.006 line that directly precedes GenX. His continuing editor, compatibility,
+imagery, rolling-stock, route-reporting, and dedicated 8.006n Qt6 work provided
+the primary source/API reference for preserving the behavior of the immediate
+GenX parent line.
+
+Peter Grønbæk Andersen produced the independent Eric-line Qt6/CMake port used
+as the primary build-structure and dependency-management reference. His CMake,
+vcpkg, deployment, and DDS-loading work supplied proven solutions that were
+reviewed and narrowly adapted to the GenX source rather than copied wholesale.
+
+TSRE GenX v0.9 exists because these three bodies of work complement one
+another: Piotr's original application and technical foundation, Eric's
+sustained TSRE 8.x development, and Peter's independent modern build and Qt6
+migration work.
+
+A separately built binary package may include runtime libraries from the
+MinGW and Qt runtime environment so the program can run as a standalone
+Windows folder. These libraries remain under their own upstream licenses. A
+binary package may include components from, or associated with, the following
+projects:
+
+- Qt 6 runtime libraries and plugins
+- MinGW-w64 / GCC runtime libraries
+- OpenSSL runtime libraries
+- OpenAL Soft runtime library
+- zlib
+- libpng
+- FreeType
+- HarfBuzz
+- ICU
+- GLib
+- PCRE2
+- Brotli
+- bzip2
+- zstd
+- libiconv / gettext runtime components
+- fmt
+- freeglut
+- other transitive MinGW runtime support DLLs present in the package
+
+Where practical, the included DLL filenames retain their upstream project names.
+The authoritative license terms for those runtime components are provided by
+their respective upstream projects and MSYS2 package metadata.
+
+Source code for this TSRE5-SCOmod build is available at:
+
+https://github.com/scottb613/TSRE5-SCOmod/tree/tsre-scomod-wip
+
+Upstream projects:
+
+- Original TSRE5: https://github.com/GokuMK/TSRE5
+- Trainsim.Com fork: https://github.com/eric-from-trainsim/TSRE5-Trainsim.Com-Fork
+- Peter Grønbæk Andersen Qt6 fork: https://github.com/pgroenbaek/tsre5-trainsimcom-fork-qt6
+- MinGW-w64: https://www.mingw-w64.org/
+- Qt: https://www.qt.io/
+- OpenSSL: https://www.openssl.org/
