@@ -21,6 +21,7 @@
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include "Game.h"
+#include "GuiFunct.h"
 #include <QDebug>
 #include "NewRouteWindow.h"
 #include "GeoCoordinates.h"
@@ -601,13 +602,35 @@ void LoadWindow::setNewRoute(){
     if(newWindow.changed){
         if(newWindow.name.text().length() < 2) return;
         Game::route = newWindow.name.text();
-        double lat = newWindow.lat.text().toDouble();
-        double lon = newWindow.lon.text().toDouble();
+        bool latOk = false;
+        bool lonOk = false;
+        double lat = newWindow.lat.text().trimmed().toDouble(&latOk);
+        double lon = newWindow.lon.text().trimmed().toDouble(&lonOk);
+        if(!latOk || !lonOk
+                || lat < -90.0 || lat > 90.0
+                || lon < -180.0 || lon > 180.0){
+            GuiFunct::showEditorStopped(
+                this, "Invalid Route Location",
+                "The route coordinates are not valid latitude and longitude values.");
+            return;
+        }
         
         Game::GeoCoordConverter = new GeoMstsCoordinateConverter();
         
         igh = Game::GeoCoordConverter->ConvertToInternal(lat, lon, igh);
+        if(igh == NULL){
+            GuiFunct::showEditorStopped(
+                this, "Route Location Not Supported",
+                "TSRE could not convert this latitude and longitude to an MSTS route location. Try a nearby coordinate.");
+            return;
+        }
         aCoords = Game::GeoCoordConverter->ConvertToTile(igh, aCoords);
+        if(aCoords == NULL){
+            GuiFunct::showEditorStopped(
+                this, "Route Location Not Supported",
+                "TSRE could not convert this location to an MSTS route tile. Try a nearby coordinate.");
+            return;
+        }
         aCoords->setWxyz();
         Game::newRouteX = aCoords->TileX;
         Game::newRouteZ = aCoords->TileZ;

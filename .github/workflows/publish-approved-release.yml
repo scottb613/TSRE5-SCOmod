@@ -1,0 +1,213 @@
+name: Publish approved TSRE GenX release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing tag and draft release, for example v0.11
+        required: true
+        type: string
+      channel:
+        description: Branch that must contain the tagged commit
+        required: true
+        type: choice
+        options:
+          - master
+          - stable
+          - wip
+      release_class:
+        description: Stable releases become Latest; prereleases do not
+        required: true
+        type: choice
+        options:
+          - stable
+          - prerelease
+      asset_name:
+        description: Exact approved ZIP already uploaded to the draft release
+        required: true
+        type: string
+      asset_sha256:
+        description: Expected SHA-256 of the approved ZIP
+        required: true
+        type: string
+      confirmation:
+        description: Type PUBLISH <tag>, for example PUBLISH v0.11
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tsre-release-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Verify asset and publish ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+
+    steps:
+      - name: Validate publication request
+        id: request
+        shell: bash
+        env:
+          TAG: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+          ASSET_NAME: ${{ inputs.asset_name }}
+          EXPECTED_SHA256: ${{ inputs.asset_sha256 }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+
+          case "$CHANNEL" in
+            stable) branch="tsre-scomod-stable" ;;
+            master) branch="master" ;;
+            wip) branch="tsre-scomod-wip" ;;
+            *) echo "Unsupported release channel: $CHANNEL" >&2; exit 1 ;;
+          esac
+
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Version must look like v0.11 or v1.2.3." >&2
+            exit 1
+          fi
+
+          if [[ "$CONFIRMATION" != "PUBLISH $TAG" ]]; then
+            echo "Confirmation mismatch. Expected: PUBLISH $TAG" >&2
+            exit 1
+          fi
+
+          if [[ ! "$ASSET_NAME" =~ ^[A-Za-z0-9._-]+\.zip$ ]]; then
+            echo "Asset must be one ZIP filename without a directory path." >&2
+            exit 1
+          fi
+
+          normalized_sha="${EXPECTED_SHA256,,}"
+          if [[ ! "$normalized_sha" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "asset_sha256 must contain exactly 64 hexadecimal characters." >&2
+            exit 1
+          fi
+
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "sha256=$normalized_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag ancestry and draft release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.version }}
+          BRANCH: ${{ steps.request.outputs.branch }}
+          ASSET_NAME: ${{ inputs.asset_name }}
+        run: |
+          set -euo pipefail
+
+          comparison="$(gh api "repos/$GITHUB_REPOSITORY/compare/$TAG...$BRANCH" --jq '.status')"
+          if [[ "$comparison" != "ahead" && "$comparison" != "identical" ]]; then
+            echo "Tag $TAG is not contained in $BRANCH (comparison: $comparison)." >&2
+            exit 1
+          fi
+
+          release_json="$RUNNER_TEMP/release.json"
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > "$release_json"
+
+          if [[ "$(jq -r '.draft' "$release_json")" != "true" ]]; then
+            echo "Release $TAG is not a draft. Published releases are never overwritten." >&2
+            exit 1
+          fi
+
+          if ! jq -e --arg name "$ASSET_NAME" '.assets[] | select(.name == $name and .state == "uploaded" and .size > 0)' "$release_json" >/dev/null; then
+            echo "The approved asset is missing, empty, or incomplete: $ASSET_NAME" >&2
+            exit 1
+          fi
+
+          unexpected="$(jq -r --arg asset "$ASSET_NAME" '.assets[].name | select(. != $asset and . != ($asset + ".sha256"))' "$release_json")"
+          if [[ -n "$unexpected" ]]; then
+            echo "Unexpected release assets must be removed before publication:" >&2
+            echo "$unexpected" >&2
+            exit 1
+          fi
+
+          release_id="$(jq -r '.id' "$release_json")"
+          tag_commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq '.sha')"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          echo "tag_commit=$tag_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify approved ZIP
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.version }}
+          ASSET_NAME: ${{ inputs.asset_name }}
+          EXPECTED_SHA256: ${{ steps.request.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+
+          asset_dir="$RUNNER_TEMP/release-asset"
+          mkdir -p "$asset_dir"
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$ASSET_NAME" \
+            --dir "$asset_dir"
+
+          asset_path="$asset_dir/$ASSET_NAME"
+          actual_sha256="$(sha256sum "$asset_path" | awk '{print $1}')"
+          if [[ "$actual_sha256" != "$EXPECTED_SHA256" ]]; then
+            echo "SHA-256 mismatch for $ASSET_NAME." >&2
+            echo "Expected: $EXPECTED_SHA256" >&2
+            echo "Actual:   $actual_sha256" >&2
+            exit 1
+          fi
+
+          printf '%s  %s\n' "$actual_sha256" "$ASSET_NAME" > "$asset_path.sha256"
+          gh release upload "$TAG" "$asset_path.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+      - name: Publish verified draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          RELEASE_CLASS: ${{ inputs.release_class }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$RELEASE_CLASS" == "stable" ]]; then
+            prerelease=false
+            make_latest=true
+          else
+            prerelease=true
+            make_latest=false
+          fi
+
+          gh api \
+            --method PATCH \
+            "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false \
+            -F prerelease="$prerelease" \
+            -f make_latest="$make_latest" >/dev/null
+
+      - name: Write run summary
+        shell: bash
+        env:
+          TAG: ${{ inputs.version }}
+          BRANCH: ${{ steps.request.outputs.branch }}
+          ASSET_NAME: ${{ inputs.asset_name }}
+          SHA256: ${{ steps.request.outputs.sha256 }}
+          RELEASE_CLASS: ${{ inputs.release_class }}
+          TAG_COMMIT: ${{ steps.release.outputs.tag_commit }}
+        run: |
+          {
+            echo "## TSRE GenX release published"
+            echo
+            echo "- Tag: \`$TAG\`"
+            echo "- Branch: \`$BRANCH\`"
+            echo "- Commit: \`$TAG_COMMIT\`"
+            echo "- Asset: \`$ASSET_NAME\`"
+            echo "- SHA-256: \`$SHA256\`"
+            echo "- Class: \`$RELEASE_CLASS\`"
+          } >> "$GITHUB_STEP_SUMMARY"

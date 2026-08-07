@@ -15,12 +15,15 @@ TSRE GenX combines Piotr Gadecki's original TSRE5 foundation, Eric Olesen's cont
 ## v0.10 WIP highlights
 
 - Updated the shared application, CMake, vcpkg, and Windows resource identity to v0.10.
+- Removed the final retained qmake project inputs and prerequisite check; CMake/CTest is now the only maintained build path.
 - Added Object Selection launchers for the existing Water Helper ruler and a persistent per-route Vegetation Ruler placeholder.
 - Added optional F12 Instance Protection while leaving Shape Viewer unrestricted.
-- Restored ACE-to-DDS texture cache reuse without overriding the current image-upgrade and substitution controls.
+- Hardened New Route latitude/longitude entry for high-precision coordinates, valid geographic ranges, checked MSTS conversion, and safe failure feedback.
+- Fixed excessive memory growth from repeated ACE references resolving to DDS by reusing the already decoded texture, without overriding the current image-upgrade and substitution controls.
 - Protected encoded object-picking colors by bypassing solid-marker lighting during selection renders in all maintained Fog and Bloom shaders.
 - Added flat-face lighting to original 3D marker cubes, directional pyramids, and Sound Source posts while preserving exact selection colors.
 - Made the original shaded 3D markers the fresh-install default; existing New Symbols preferences remain respected.
+- Added guarded manual GitHub Actions for source tags, draft releases, approved-ZIP SHA-256 verification, and deliberate release publication.
 
 See `RELEASE-NOTES-v0.10.md` for the focused verification status and remaining
 manual checks.
@@ -156,6 +159,7 @@ locally built copies remain under their respective upstream licenses.
 - `scoFileEdit.txt` lists the code/project files touched during the work.
 - `THIRD-PARTY-NOTICES.txt` records upstream authorship, acknowledgements, and bundled runtime-library notices.
 - `RELEASE-NOTES-v0.10.md` summarizes the current WIP source checkpoint.
+- `.github/RELEASE-WORKFLOW.md` documents the guarded manual tag, draft, asset-verification, and publication process.
 
 ## Status
 

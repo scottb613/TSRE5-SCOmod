@@ -49,7 +49,27 @@ v0.10 WIP source checkpoint
 
 - TexLib.cpp
 - Texture.cpp
-  - Restored ACE-to-DDS cache reuse while respecting image-control settings.
+  - Fixed excessive memory growth from repeated ACE references resolving to DDS by recording the requested ACE path on the resolved texture and reusing one decoded DDS copy while respecting image-control settings.
+
+- LoadWindow.cpp
+- NewRouteWindow.cpp
+  - Hardened New Route latitude/longitude entry with twelve-decimal validators, geographic range checks, checked MSTS coordinate/tile conversion, and safe stopped-action feedback.
+
+- .github/workflows/prepare-release.yml
+- .github/workflows/publish-approved-release.yml
+  - Added manually dispatched, confirmation-gated source tagging, draft release preparation, approved-ZIP SHA-256 verification, and deliberate release publication.
+
+- scripts/Check-Prerequisites.ps1
+- .gitignore
+- qt-Debug.pro (removed)
+- qt-Debug_x64.pro (removed)
+- qt-Release.pro (removed)
+- qt-Release_x64.pro (removed)
+- qt-dynamic_release.pro (removed)
+- qt-linux.pro (removed)
+- qt-linux_debug.pro (removed)
+- tests/RouteSaveTransactionTest.pro (removed)
+  - Removed the final legacy qmake project inputs, qmake prerequisite check, and obsolete qmake-stash ignore rule after CMake/CTest parity was accepted.
 
 v0.9 Qt6/CMake migration and parity release
 

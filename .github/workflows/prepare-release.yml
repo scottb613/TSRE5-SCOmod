@@ -1,0 +1,183 @@
+name: Prepare TSRE GenX release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version tag to create, for example v0.11
+        required: true
+        type: string
+      channel:
+        description: Branch whose current head will receive the tag
+        required: true
+        type: choice
+        options:
+          - wip
+          - master
+          - stable
+      operation:
+        description: Create only a source tag, or also prepare a draft GitHub Release
+        required: true
+        type: choice
+        options:
+          - source-checkpoint
+          - create-draft-release
+      confirmation:
+        description: Type CREATE <tag> FROM <branch>, for example CREATE v0.11 FROM tsre-scomod-wip
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tsre-release-prepare
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate and prepare ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+
+    steps:
+      - name: Validate requested branch and confirmation
+        id: request
+        shell: bash
+        env:
+          TAG: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+
+          case "$CHANNEL" in
+            stable) branch="tsre-scomod-stable" ;;
+            master) branch="master" ;;
+            wip) branch="tsre-scomod-wip" ;;
+            *) echo "Unsupported release channel: $CHANNEL" >&2; exit 1 ;;
+          esac
+
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Version must look like v0.11 or v1.2.3." >&2
+            exit 1
+          fi
+
+          expected="CREATE $TAG FROM $branch"
+          if [[ "$CONFIRMATION" != "$expected" ]]; then
+            echo "Confirmation mismatch. Expected: $expected" >&2
+            exit 1
+          fi
+
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the selected branch head
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ steps.request.outputs.branch }}
+          fetch-depth: 0
+
+      - name: Validate source checkpoint
+        id: source
+        shell: bash
+        env:
+          TAG: ${{ inputs.version }}
+          BRANCH: ${{ steps.request.outputs.branch }}
+        run: |
+          set -euo pipefail
+
+          target_commit="$(git ls-remote --heads origin "refs/heads/$BRANCH" | awk 'NR == 1 {print $1}')"
+          checked_out_commit="$(git rev-parse 'HEAD^{commit}')"
+
+          if [[ -z "$target_commit" ]]; then
+            echo "Remote branch does not exist: $BRANCH" >&2
+            exit 1
+          fi
+
+          if [[ "$target_commit" != "$checked_out_commit" ]]; then
+            echo "The checked-out commit is not the current remote branch head." >&2
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists. Existing tags are never moved or replaced." >&2
+            exit 1
+          fi
+
+          version_number="${TAG#v}"
+          if [[ "$version_number" != *.*.* ]]; then
+            version_number="$version_number.0"
+          fi
+          version_regex="${version_number//./\\.}"
+
+          if ! grep -Eq "VERSION[[:space:]]+$version_regex([[:space:]]|$)" CMakeLists.txt; then
+            echo "CMakeLists.txt does not declare VERSION $version_number." >&2
+            exit 1
+          fi
+
+          notes_file="RELEASE-NOTES-$TAG.md"
+          if [[ ! -s "$notes_file" ]]; then
+            echo "Required release notes are missing or empty: $notes_file" >&2
+            exit 1
+          fi
+
+          forbidden_pattern='(^|/)(dist|build|out|TSREvcWIP|TSREvcTST|masterDocs|docs|\.vscode)(/|$)|(^|/)(AGENTS\.md|AI_HouseRules\.txt)$|\.(exe|dll|pdb|zip|7z)$|\.backup\.|(^|/)Makefile[^/]*\.mk$'
+          if git ls-tree -r --name-only HEAD | grep -E "$forbidden_pattern"; then
+            echo "The source checkpoint contains private layout, build output, or release artifacts." >&2
+            exit 1
+          fi
+
+          echo "target_commit=$target_commit" >> "$GITHUB_OUTPUT"
+          echo "notes_file=$notes_file" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push immutable version tag
+        shell: bash
+        env:
+          TAG: ${{ inputs.version }}
+          TARGET_COMMIT: ${{ steps.source.outputs.target_commit }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$TARGET_COMMIT" -m "TSRE GenX $TAG source"
+          git push origin "refs/tags/$TAG"
+
+      - name: Create draft GitHub Release
+        if: inputs.operation == 'create-draft-release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.version }}
+          NOTES_FILE: ${{ steps.source.outputs.notes_file }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --verify-tag \
+            --title "TSRE GenX $TAG" \
+            --notes-file "$NOTES_FILE"
+
+      - name: Write run summary
+        shell: bash
+        env:
+          TAG: ${{ inputs.version }}
+          BRANCH: ${{ steps.request.outputs.branch }}
+          OPERATION: ${{ inputs.operation }}
+          TARGET_COMMIT: ${{ steps.source.outputs.target_commit }}
+        run: |
+          {
+            echo "## TSRE GenX release preparation"
+            echo
+            echo "- Tag: \`$TAG\`"
+            echo "- Branch: \`$BRANCH\`"
+            echo "- Commit: \`$TARGET_COMMIT\`"
+            echo "- Operation: \`$OPERATION\`"
+            if [[ "$OPERATION" == "source-checkpoint" ]]; then
+              echo "- GitHub Release: not created"
+            else
+              echo "- GitHub Release: draft created; upload the approved ZIP before publishing"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
