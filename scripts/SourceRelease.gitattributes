@@ -8,3 +8,7 @@
 *.raw binary
 *.rtf binary
 *.wav binary
+
+# Preserve the approved release-copy bytes exactly; MANIFEST-SHA256.txt hashes
+# these files before export, so Git must not normalize their line endings.
+Docs/** binary
