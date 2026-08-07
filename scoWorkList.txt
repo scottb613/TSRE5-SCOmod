@@ -110,7 +110,7 @@ TSRE GenX source repository:
 
 https://github.com/scottb613/TSRE5-SCOmod
 
-Release packages are provided under RELEASES on the right side panel. The ZIP includes AddShortcutDesktop.cmd for creating a TSRE GenX desktop shortcut. Keep each extracted release in its own folder so its executable, runtime libraries, assets, and settings behavior remain together.
+v0.9 is published as source code on master and at the v0.9 tag. No v0.9 binary package or GitHub Release was created.
 
 ======================================================================================================
 
@@ -151,7 +151,7 @@ Route Editor shutdown and return-to-loader handling now follows the complete QOb
 
    --- v0.9 Build and Test Result ---
 
-The approved Qt6 Debug build configured, compiled, and linked successfully. The deployed TST executable exactly matches the build output at SHA-256 942D9FAED2B95D38D9CFBBD9790A1B8868215EF50A5ADAD260C7004DEB13189B. The Qt5/Qt6 text encoding probe, DDS decoder probe, and route regression harness all pass.
+The approved Qt6 Debug build configured, compiled, and linked successfully. The accepted v0.9 executable matched the verified build output at SHA-256 942D9FAED2B95D38D9CFBBD9790A1B8868215EF50A5ADAD260C7004DEB13189B. The Qt5/Qt6 text encoding probe, DDS decoder probe, and route regression harness all pass.
 
 
    --- Acknowledgments and Source Lineage ---

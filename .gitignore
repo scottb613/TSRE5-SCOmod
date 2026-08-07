@@ -16,17 +16,5 @@
 *.exe
 *.pdb
 
-# Generated migration reports
-/reports/
-
-# Imported source assets include Wavefront .obj files, so do not ignore *.obj.
-# Build products and local rollback snapshots remain outside the v0.9 history.
-/TSREvcWIP/build/
-/TSREvcWIP/dist/
-/TSREvcWIP/tmp/
-/TSREvcTST/*
-!/TSREvcTST/README.md
-
-# Local Gate 5 route copies and generated evidence remain machine-specific.
-/Gate5Sandbox/
-/Gate5Evidence/
+# Source assets include Wavefront .obj files, so do not ignore *.obj.
+/.route-regression-evidence/

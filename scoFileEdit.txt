@@ -13,203 +13,200 @@ v0.9 Qt6/CMake migration and parity release
 - vcpkg.json
   - Replaced the Qt5/qmake build path with Qt 6.11.1, CMake, matched MinGW, vcpkg dependencies, AUTOMOC/AUTOUIC/AUTORCC, focused probes, and controlled Windows presets.
 
-- scripts/Audit-Qt6.ps1
-- scripts/Compare-Gate5Route.ps1
+- scripts/Invoke-CMake.ps1
 - scripts/Invoke-RouteRegression.ps1
-- scripts/ui-tests/Get-TSREUiMap.ps1
-- scripts/ui-tests/Invoke-TSREPlacementPrototype.ps1
 - tests/DdsDecoderProbe.cpp
 - tests/RouteRegressionHarnessSelfTest.ps1
 - tests/TextStreamEncodingProbe.cpp
-  - Added repeatable Qt6 API auditing, byte-identical UTF-16 evidence, DDS DXT1/DXT3/DXT5 and 24/32-bit decoder coverage, full-route hash evidence, and deterministic UI placement support.
+  - Added byte-identical UTF-16 evidence, DDS DXT1/DXT3/DXT5 and 24/32-bit decoder coverage, full-route hash evidence, and repeatable CMake build support.
 
-- TSREvcWIP/AceLib.cpp
-- TSREvcWIP/AceLib.h
-- TSREvcWIP/ActionChooseDialog.cpp
-- TSREvcWIP/Activity.cpp
-- TSREvcWIP/ActivityBuilderWindow.cpp
-- TSREvcWIP/ActivityEventProperties.cpp
-- TSREvcWIP/ActivityTools.cpp
-- TSREvcWIP/ActivityTrackViewer.cpp
-- TSREvcWIP/ActivityTrackViewer.h
-- TSREvcWIP/ActivityTrafficProperties.cpp
-- TSREvcWIP/CameraFree.cpp
-- TSREvcWIP/CameraRot.cpp
-- TSREvcWIP/ConEditorWindow.cpp
-- TSREvcWIP/ConListWidget.cpp
-- TSREvcWIP/Consist.cpp
-- TSREvcWIP/Eng.cpp
-- TSREvcWIP/EngListWidget.cpp
-- TSREvcWIP/Game.cpp
-- TSREvcWIP/GuiFunct.cpp
-- TSREvcWIP/LoadWindow.cpp
-- TSREvcWIP/LoadWindow.h
-- TSREvcWIP/main.cpp
-- TSREvcWIP/MapDataOSM.cpp
-- TSREvcWIP/MapWindow.cpp
-- TSREvcWIP/MapWindow.h
-- TSREvcWIP/ObjTools.cpp
-- TSREvcWIP/PaintTexLib.cpp
-- TSREvcWIP/Path.cpp
-- TSREvcWIP/PlayActivitySelectWindow.cpp
-- TSREvcWIP/PropertiesAbstract.cpp
-- TSREvcWIP/PropertiesCarspawner.cpp
-- TSREvcWIP/PropertiesDyntrack.cpp
-- TSREvcWIP/PropertiesSignal.cpp
-- TSREvcWIP/PropertiesSoundRegion.cpp
-- TSREvcWIP/PropertiesSoundSource.cpp
-- TSREvcWIP/QuadTree.cpp
-- TSREvcWIP/RandomConsist.cpp
-- TSREvcWIP/Route.cpp
-- TSREvcWIP/RouteEditorClient.cpp
-- TSREvcWIP/RouteEditorGLWidget.cpp
-- TSREvcWIP/RouteEditorServer.cpp
-- TSREvcWIP/RouteEditorWindow.cpp
-- TSREvcWIP/RouteEditorWindow.h
-- TSREvcWIP/Service.cpp
-- TSREvcWIP/SettingsDialog.cpp
-- TSREvcWIP/SFileC.cpp
-- TSREvcWIP/ShapeHierarchyWindow.cpp
-- TSREvcWIP/ShapeViewerGLWidget.cpp
-- TSREvcWIP/ShapeViewerNavigatorWidget.cpp
-- TSREvcWIP/SignalWindow.cpp
-- TSREvcWIP/StatusWindow.cpp
-- TSREvcWIP/TDB.cpp
-- TSREvcWIP/TerrainTools.cpp
-- TSREvcWIP/TerrainWaterWindow2.cpp
-- TSREvcWIP/TFile.cpp
-- TSREvcWIP/Tile.cpp
-- TSREvcWIP/Traffic.cpp
-- TSREvcWIP/Trk.cpp
-- TSREvcWIP/TrkWindow.cpp
-- TSREvcWIP/TSectionDAT.cpp
-- TSREvcWIP/WindowManager.cpp
+- AceLib.cpp
+- AceLib.h
+- ActionChooseDialog.cpp
+- Activity.cpp
+- ActivityBuilderWindow.cpp
+- ActivityEventProperties.cpp
+- ActivityTools.cpp
+- ActivityTrackViewer.cpp
+- ActivityTrackViewer.h
+- ActivityTrafficProperties.cpp
+- CameraFree.cpp
+- CameraRot.cpp
+- ConEditorWindow.cpp
+- ConListWidget.cpp
+- Consist.cpp
+- Eng.cpp
+- EngListWidget.cpp
+- Game.cpp
+- GuiFunct.cpp
+- LoadWindow.cpp
+- LoadWindow.h
+- main.cpp
+- MapDataOSM.cpp
+- MapWindow.cpp
+- MapWindow.h
+- ObjTools.cpp
+- PaintTexLib.cpp
+- Path.cpp
+- PlayActivitySelectWindow.cpp
+- PropertiesAbstract.cpp
+- PropertiesCarspawner.cpp
+- PropertiesDyntrack.cpp
+- PropertiesSignal.cpp
+- PropertiesSoundRegion.cpp
+- PropertiesSoundSource.cpp
+- QuadTree.cpp
+- RandomConsist.cpp
+- Route.cpp
+- RouteEditorClient.cpp
+- RouteEditorGLWidget.cpp
+- RouteEditorServer.cpp
+- RouteEditorWindow.cpp
+- RouteEditorWindow.h
+- Service.cpp
+- SettingsDialog.cpp
+- SFileC.cpp
+- ShapeHierarchyWindow.cpp
+- ShapeViewerGLWidget.cpp
+- ShapeViewerNavigatorWidget.cpp
+- SignalWindow.cpp
+- StatusWindow.cpp
+- TDB.cpp
+- TerrainTools.cpp
+- TerrainWaterWindow2.cpp
+- TFile.cpp
+- Tile.cpp
+- Traffic.cpp
+- Trk.cpp
+- TrkWindow.cpp
+- TSectionDAT.cpp
+- WindowManager.cpp
   - Converted the removed Qt5 regular-expression, screen, stream, event, XML, font, layout, widget, container, and signal/slot APIs while preserving the complete GenX application and legacy renderer behavior.
   - Stabilized Windows captions and popup placement, corrected Camera Terrain Lock, preserved Main Load and editor lifecycle behavior, and restored complete UI-sound feedback.
 
-- TSREvcWIP/DdsDecoder.cpp
-- TSREvcWIP/DdsDecoder.h
-- TSREvcWIP/DdsLib.cpp
-- TSREvcWIP/DdsLib.h
-- TSREvcWIP/ImageLib.cpp
-- TSREvcWIP/TexLib.cpp
+- DdsDecoder.cpp
+- DdsDecoder.h
+- DdsLib.cpp
+- DdsLib.h
+- ImageLib.cpp
+- TexLib.cpp
   - Restored Qt6 DDS rolling-stock textures through bounded DXT1/DXT3/DXT5 and uncompressed 24/32-bit decoding, with clean invalid-image rejection and CPU RGBA upload through the existing GenX texture model.
 
-- TSREvcWIP/content/SCOclick.wav
+- content/SCOclick.wav
   - Restored the complete GenX interface-sound set and Activity Path Editor point-placement feedback.
 
 v0.8 Dynamic Track, JSON settings, and Activity Builder completion release
 
-- SCOmodWIP/RulerObj.cpp
-- SCOmodWIP/RulerObj.h
-- SCOmodWIP/TerrainWaterWindow2.cpp
-- SCOmodWIP/TerrainWaterWindow2.h
-- SCOmodWIP/PropertiesTerrain.cpp
-- SCOmodWIP/PropertiesTerrain.h
-- SCOmodWIP/RouteEditorGLWidget.cpp
-- SCOmodWIP/RouteEditorGLWidget.h
-- SCOmodWIP/RouteEditorWindow.cpp
-- SCOmodWIP/Route.cpp
-- SCOmodWIP/Route.h
-- SCOmodWIP/Terrain.cpp
-- SCOmodWIP/Terrain.h
-- SCOmodWIP/Undo.cpp
-- SCOmodWIP/Undo.h
+- RulerObj.cpp
+- RulerObj.h
+- TerrainWaterWindow2.cpp
+- TerrainWaterWindow2.h
+- PropertiesTerrain.cpp
+- PropertiesTerrain.h
+- RouteEditorGLWidget.cpp
+- RouteEditorGLWidget.h
+- RouteEditorWindow.cpp
+- Route.cpp
+- Route.h
+- Terrain.cpp
+- Terrain.h
+- Undo.cpp
+- Undo.h
   - Expanded Water Helper with one terrain-snapped multi-point watercourse ruler, bounded ruler-following terrain loading and shoreline scanning, nine-point patch tests, seam-matched tile-corner elevations, water-patch enabling, saved-ruler recovery, Undo/restart/removal controls, progress guidance, and memory-safety limits.
   - Added strict repeat-strip seam matching, long-ruler visibility, scaled status messages, standard action/completion sounds, and cleanup of the working ruler without removing generated water.
 
-- SCOmodWIP/GuiFunct.cpp
-- SCOmodWIP/GuiFunct.h
-- SCOmodWIP/ActivityTools.cpp
-- SCOmodWIP/ConEditorWindow.cpp
-- SCOmodWIP/ConListWidget.cpp
-- SCOmodWIP/GeoTools.cpp
-- SCOmodWIP/ObjTools.cpp
-- SCOmodWIP/PropertiesTerrain.cpp
-- SCOmodWIP/PropertiesTrackObj.cpp
-- SCOmodWIP/Route.cpp
-- SCOmodWIP/RouteEditorWindow.cpp
-- SCOmodWIP/SettingsDialog.cpp
-- SCOmodWIP/TerrainTools.cpp
-- SCOmodWIP/OverwriteDialog.cpp (removed)
-- SCOmodWIP/OverwriteDialog.h (removed)
-- SCOmodWIP/qt-*.pro
+- GuiFunct.cpp
+- GuiFunct.h
+- ActivityTools.cpp
+- ConEditorWindow.cpp
+- ConListWidget.cpp
+- GeoTools.cpp
+- ObjTools.cpp
+- PropertiesTerrain.cpp
+- PropertiesTrackObj.cpp
+- Route.cpp
+- RouteEditorWindow.cpp
+- SettingsDialog.cpp
+- TerrainTools.cpp
+- OverwriteDialog.cpp (removed)
+- OverwriteDialog.h (removed)
+- qt-*.pro
   - Replaced divergent destructive and overwrite prompts with one centered, UI-scale-aware GenX warning dialog and removed the obsolete OverwriteDialog implementation and project references.
 
-- SCOmodWIP/LoadWindow.cpp
-- SCOmodWIP/LoadWindow.h
-- SCOmodWIP/main.cpp
-- SCOmodWIP/ConEditorWindow.cpp
-- SCOmodWIP/ConEditorWindow.h
+- LoadWindow.cpp
+- LoadWindow.h
+- main.cpp
+- ConEditorWindow.cpp
+- ConEditorWindow.h
   - Added the Main Load Consist Editor action, return-to-loader behavior, retained root selection, clearer route labeling and shortcut filtering, professional role-accented launcher controls, and isolated child-process CE startup.
   - Preserved standalone CE behavior and independently persisted CE consist/shape view colors.
 
-- SCOmodWIP/Game.cpp
-- SCOmodWIP/SettingsDialog.cpp
-- SCOmodWIP/SettingsDialog.h
-- SCOmodWIP/TSRE5_resource.rc
+- Game.cpp
+- SettingsDialog.cpp
+- SettingsDialog.h
+- TSRE5_resource.rc
   - Replaced the legacy settings.txt location with per-user settings.json, atomic save/backup/recovery, defaults reset, terrain database height-bias settings, and v0.8 application metadata.
   - Kept restart-and-restore as the safe way to apply process-wide settings instead of re-invoking Game::Load in a live editor.
 
-- SCOmodWIP/RouteSaveTransaction.cpp
-- SCOmodWIP/RouteSaveTransaction.h
-- SCOmodWIP/Route.cpp
-- SCOmodWIP/Route.h
-- SCOmodWIP/RouteEditorGLWidget.cpp
-- SCOmodWIP/RouteEditorWindow.cpp
-- SCOmodWIP/TDB.cpp
-- SCOmodWIP/TDB.h
-- SCOmodWIP/tests/RouteSaveTransactionTest.cpp
-- SCOmodWIP/tests/RouteSaveTransactionTest.pro
-- SCOmodWIP/qt-*.pro
-- SCOmodWIP/nbproject/qt-*.pro
+- RouteSaveTransaction.cpp
+- RouteSaveTransaction.h
+- Route.cpp
+- Route.h
+- RouteEditorGLWidget.cpp
+- RouteEditorWindow.cpp
+- TDB.cpp
+- TDB.h
+- tests/RouteSaveTransactionTest.cpp
+- tests/RouteSaveTransactionTest.pro
+- qt-*.pro
+- nbproject/qt-*.pro
   - Added coordinated crash-safe saving for route TDB/TIT/TSECTION, RDB/RIT, and modified TRK files using same-directory atomic replacement with direct-write fallback disabled.
   - Added per-route AppData backup generations, manifests and hashes, five-generation retention, rollback on failure, and automatic recovery of interrupted commits before route load.
   - Added focused commit, path-containment, and interrupted-save recovery tests, plus truthful Saved/SAVE FAILED status reporting.
 
-- SCOmodWIP/DynTrackObj.cpp
-- SCOmodWIP/DynTrackObj.h
-- SCOmodWIP/Flex.cpp
-- SCOmodWIP/Flex.h
-- SCOmodWIP/ProceduralMstsDyntrack.cpp
-- SCOmodWIP/ProceduralShape.cpp
-- SCOmodWIP/PropertiesDyntrack.cpp
-- SCOmodWIP/PropertiesDyntrack.h
+- DynTrackObj.cpp
+- DynTrackObj.h
+- Flex.cpp
+- Flex.h
+- ProceduralMstsDyntrack.cpp
+- ProceduralShape.cpp
+- PropertiesDyntrack.cpp
+- PropertiesDyntrack.h
   - Hardened Dynamic Track materials, replaced the selection box with a track outline, standardized Grade controls, and rebuilt direction-neutral NextGen Flex candidate generation and validation.
   - Added transactional failure handling and exact endpoint, tangent, plane, internal-seam, non-backtracking, and two-connection requirements.
   - Applied the shared snapping, grade-plane, validation, and TDB path to both Classic S-C-S and NextGen S-C-S-C-S modes; removed the unreachable staged Flex implementation and its dead Route/keyboard wrapper.
 
-- SCOmodWIP/TDB.cpp
-- SCOmodWIP/TDB.h
-- SCOmodWIP/Route.cpp
-- SCOmodWIP/RouteEditorGLWidget.cpp
-- SCOmodWIP/TextObj.cpp
-- SCOmodWIP/Vector3f.cpp
+- TDB.cpp
+- TDB.h
+- Route.cpp
+- RouteEditorGLWidget.cpp
+- TextObj.cpp
+- Vector3f.cpp
   - Aligned Dynamic Track database geometry with the rendered mesh, corrected reverse graded frames, ignored deleted snap records, preferred fixed endpoints, and restored a continuous world-space yellow TrackDB overlay.
   - Cleaned compiler warnings exposed by the TDB changes and corrected TextObj render overload selection.
 
-- SCOmodWIP/ActivityBuilderWindow.cpp
-- SCOmodWIP/ActivityBuilderWindow.h
-- SCOmodWIP/ActivityTools.cpp
-- SCOmodWIP/ActivityTools.h
-- SCOmodWIP/ActivityTrackViewer.cpp
-- SCOmodWIP/ActivityTrackViewer.h
-- SCOmodWIP/Path.cpp
-- SCOmodWIP/Path.h
+- ActivityBuilderWindow.cpp
+- ActivityBuilderWindow.h
+- ActivityTools.cpp
+- ActivityTools.h
+- ActivityTrackViewer.cpp
+- ActivityTrackViewer.h
+- Path.cpp
+- Path.h
   - Completed explicit New/Edit/Clone sessions, active-session control locking, metadata editing, cancellation rollback, stable filenames, player-path flags, PAT validation/output, endpoint labels, reverse markers, service symbols, and selected-path presentation.
   - Added Advanced Shunting WP editing and PAT round-tripping for timed horn, front/rear uncoupling with car count and pause, join/split, and pass-red requests, plus decoded H/U/J/R/T/W map markers.
   - Strengthened path reconstruction and save checks for reverse legs, ordered wait/advanced points, live switch changes, passing-route reconnection, missing endpoints, and atomic output.
 
-- SCOmodWIP/GuiFunct.cpp
-- SCOmodWIP/GuiFunct.h
-- SCOmodWIP/ObjTools.cpp
-- SCOmodWIP/ObjTools.h
-- SCOmodWIP/PropertiesTrackObj.cpp
-- SCOmodWIP/RouteEditorWindow.cpp
-- SCOmodWIP/RouteEditorWindow.h
-- SCOmodWIP/StatusWindow.cpp
-- SCOmodWIP/StatusWindow.h
-- SCOmodWIP/TerrainTools.cpp
+- GuiFunct.cpp
+- GuiFunct.h
+- ObjTools.cpp
+- ObjTools.h
+- PropertiesTrackObj.cpp
+- RouteEditorWindow.cpp
+- RouteEditorWindow.h
+- StatusWindow.cpp
+- StatusWindow.h
+- TerrainTools.cpp
   - Added shared scale-aware Pin icons, equal Select/Place button sizing, distinct movement-state color, and consolidated clean application shutdown with helper windows open.
   - Revised Category Search with ALL defaults, mutually exclusive Tracks/Roads/Other filters, search inside the active category, Reset, bounded Recent Items, and cleaner Scale Rail family grouping.
 
@@ -940,4 +937,3 @@ v0.8 Eric 8.006m compatibility and route health reporting
 
 - TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
   - Corrected the legacy `listfiles` label and guidance: it now identifies the cleanup inventory required by Objects To Remove instead of promising obsolete exit-time report files.
-

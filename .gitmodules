@@ -1,8 +1,0 @@
-[submodule "refs/pgroenbaek-tsre5-qt6"]
-	path = refs/pgroenbaek-tsre5-qt6
-	url = https://github.com/pgroenbaek/tsre5-trainsimcom-fork-qt6.git
-	branch = cmake-and-qt6-upgrade
-[submodule "refs/eric-tsre5-qt6"]
-	path = refs/eric-tsre5-qt6
-	url = https://github.com/eric-from-trainsim/TSRE5-Trainsim.Com-Fork.git
-	branch = 8.006n-QT6-VSCode

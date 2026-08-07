@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.21)
 project(
     TSREvc
     VERSION 0.9.0
-    DESCRIPTION "Qt6/CMake migration of TSRE GenX"
+    DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )
 
@@ -19,23 +19,7 @@ set(CMAKE_AUTOUIC ON)
 option(TSRE_ENABLE_WARNINGS "Enable the project warning set" ON)
 option(TSRE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
-set(TSRE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/TSREvcWIP")
-
-# Keep the scaffold configurable before the frozen source is imported.
-if(NOT EXISTS "${TSRE_SOURCE_DIR}/main.cpp")
-    message(STATUS "TSRE source has not been imported yet.")
-    message(STATUS "Freeze GenX v0.8, record docs/00-baseline.md, then import it into TSREvcWIP/.")
-    add_custom_target(
-        tsre-source-not-imported
-        SOURCES
-            README.md
-            docs/00-baseline.md
-            docs/01-migration-plan.md
-            docs/02-qt6-port-audit.md
-            docs/03-test-matrix.md
-    )
-    return()
-endif()
+set(TSRE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
 find_package(
     Qt6 6.5 REQUIRED
@@ -54,8 +38,8 @@ find_package(GLUT REQUIRED)
 
 include(cmake/TSREWarnings.cmake)
 
-# Preserve the imported root-level source layout during the first migration.
-# Tests and rollback/build directories are intentionally outside this glob.
+# Keep the established public source layout at the repository root. Tests and
+# generated build directories are intentionally outside this glob.
 file(
     GLOB TSRE_SOURCES CONFIGURE_DEPENDS
     "${TSRE_SOURCE_DIR}/*.c"
@@ -139,8 +123,8 @@ if(BUILD_TESTING)
     add_executable(
         tsre_dds_decoder_probe
         tests/DdsDecoderProbe.cpp
-        TSREvcWIP/DdsDecoder.cpp
-        TSREvcWIP/DdsDecoder.h
+        DdsDecoder.cpp
+        DdsDecoder.h
     )
     target_include_directories(
         tsre_dds_decoder_probe

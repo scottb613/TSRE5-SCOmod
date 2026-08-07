@@ -7,14 +7,13 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Scenario,
 
-    [string]$RouteRoot =
-        "M:\ORTSmini_F\SCO_CLEAN\Train Simulator\routes\SCO_LHR",
+    [Parameter(Mandatory = $true)]
+    [string]$RouteRoot,
 
     [string]$EvidenceRoot =
-        (Join-Path $PSScriptRoot "..\Gate5Evidence\automated"),
+        (Join-Path $PSScriptRoot "..\.route-regression-evidence"),
 
-    [string]$LogDirectory =
-        (Join-Path $PSScriptRoot "..\TSREvcTST"),
+    [string]$LogDirectory = $EvidenceRoot,
 
     [ValidateSet(
         "NoMaterialChange", "UndoRestoresData", "AllowChanges",
