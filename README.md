@@ -12,7 +12,14 @@ TSRE GenX combines Piotr Gadecki's original TSRE5 foundation, Eric Olesen's cont
 
 - The version tags through `v0.8` preserve the earlier stable checkpoints.
 - `master` contains the source-only v0.9 Qt6/CMake line.
-- `tsre-scomod-wip` carries continuing community development; immutable tag `v0.12` is the latest completed source checkpoint.
+- `tsre-scomod-wip` contains the active v0.13 development line; immutable tag `v0.12` is the latest completed source checkpoint.
+
+## v0.13 development status
+
+v0.13 development is open on `tsre-scomod-wip`. No functional source change is
+included in the opening boundary commit; the verified v0.12 source remains
+available at immutable tag `v0.12`. See `RELEASE-NOTES-v0.13.md` for the running
+development record.
 
 ## v0.12 highlights
 
@@ -172,5 +179,4 @@ locally built copies remain under their respective upstream licenses.
 ## Status
 
 TSRE GenX v0.9 remains on `master`. TSRE GenX v0.12 is the latest immutable
-source checkpoint from `tsre-scomod-wip`; continuing development remains on
-that WIP branch.
+source checkpoint, and v0.13 development is active on `tsre-scomod-wip`.
