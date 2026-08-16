@@ -1,8 +1,10 @@
 # TSRE GenX
 
-TSRE GenX is a maintained development line of the TSRE5 route editor, focused on practical route-editor improvements for MSTS and Open Rails route building.
+TSRE GenX is a maintained open development line of the TSRE5 route editor, focused on practical improvements for MSTS and Open Rails route building.
 
 This branch is based on Eric's `TSRE8.006 baseline` from the `master` branch of `eric-from-trainsim/TSRE5-Trainsim.Com-Fork`.
+
+GenX has grown beyond its initial experimental and migration role and now continues as an open community test branch. Its aim is simply to keep improving the editor into the best practical and reliable tool its contributors and testers can make it. It is not being prepared solely for later inclusion elsewhere, although useful ideas and focused fixes can still move between related projects when their maintainers find that helpful.
 
 TSRE GenX combines Piotr Gadecki's original TSRE5 foundation, Eric Olesen's continuing TSRE 8.006 development as eric-from-trainsim, Peter Grønbæk Andersen's independent Qt6/CMake work, and the GenX route-building improvements described below.
 
@@ -10,27 +12,28 @@ TSRE GenX combines Piotr Gadecki's original TSRE5 foundation, Eric Olesen's cont
 
 - The version tags through `v0.8` preserve the earlier stable checkpoints.
 - `master` contains the source-only v0.9 Qt6/CMake line.
-- `tsre-scomod-wip` contains the active v0.11 community open-testing line.
+- `tsre-scomod-wip` carries continuing community development; immutable tag `v0.12` is the latest completed source checkpoint.
 
-## v0.11 highlights
+## v0.12 highlights
 
-- Updated the shared application, CMake, vcpkg, and Windows resource identity to v0.11.
-- Removed the final retained qmake project inputs and prerequisite check; CMake/CTest is now the only maintained build path.
-- Corrected Unicode-whitespace ENG/WAG parsing so affected Steam locomotives appear in Consist Editor.
-- Corrected NVIDIA-style 24-bit and 32-bit uncompressed DDS loading, ACE-to-DDS cache reuse, cached reload IDs, and short-lived decoder ownership.
-- Made NextGen S-C-S-C-S Auto-Flex the single Dynamic Track solver and editor-owned placement choice.
-- Added mutually exclusive `Ruler (water)`, `Ruler (vegetation)`, and two-point magenta `Ruler (grade)` workflows with movable terrain-snapped points and improved cube picking.
-- Added optional F12 Instance Protection while leaving Shape Viewer unrestricted.
-- Hardened New Route latitude/longitude entry for high-precision coordinates, valid geographic ranges, checked MSTS conversion, and safe failure feedback.
-- Protected encoded object-picking colors by bypassing solid-marker lighting during selection renders in all maintained Fog and Bloom shaders.
-- Added flat-face lighting to original 3D marker cubes, directional pyramids, and Sound Source posts while preserving exact selection colors.
-- Made the original shaded 3D markers the fresh-install default; existing New Symbols preferences remain respected.
-- Added guarded manual GitHub Actions for source tags, draft releases, approved-ZIP SHA-256 verification, and deliberate release publication.
-- Completed a compiler-warning audit that corrected actionable correctness, ownership, file-write, overload, deprecated-API, and control-flow findings without globally suppressing diagnostics.
+- Added a supported Visual Studio 2026/MSVC v143 CMake build lane alongside
+  the Qt 6.11.1 MinGW parity and release-package baseline.
+- Added the F6 PolyVeg Planter for deterministic, tile-clipped planting from SCO LIDEX contract-v2 polygons or a corridor/Area ruler.
+- Added style-aware Flood Fill, exclusions and database clearances, repeatable seeds, route-global orchard rows, and high-count planting optimizations.
+- Added loaded Raw/Baked/Tile status, cycling jump controls, Bake PolyVeg Tile, and bounded Bake PolyVeg LOD with safe generated-asset cleanup.
+- Preserved and rendered Static-object Matrix3x3 instance scale.
+- Hardened Reset All TERRTEX for canonical detailed/distant reset and safe generated-texture/saved-map cleanup.
+- Made F3 saved PNGs lazy-resident inside camera Tile LOD. Route sessions start with overlays Off; extended SCO_LHR travel stayed at or below about 1.5 GB.
+- Fixed optimized-MSVC terrain byte order and added display-only 512-sample/4 m terrain support.
+- Hardened NextGen Auto-Flex, corrected scaled-display Shape/Consist rotation, standardized message sounds, improved F1 markers, retired obsolete route-image loading, and removed PolyForest without shifting neighboring IDs.
 
-The v0.11 Release build completed successfully, and all four configured automated tests passed: text encoding, DDS decoding, Unicode-whitespace parsing, and the route-regression harness. Manual community checks remain outstanding for the new rulers, Auto-Flex, representative rolling-stock textures and cache memory, instance handling, New Route coordinates, shaded selection markers, settings defaults, and route save/reload; the detailed status is maintained in `TEST-MATRIX-v0.11.md` and `RELEASE-NOTES-v0.11.md`.
+The final clean MinGW and MSVC Release builds linked with zero errors on
+2026-08-16. The MinGW build matches TST at SHA-256
+`026D55414585F11BD54AE25A794363A23FA08AC1C2D89E8D3785536C7E0800DF`; the
+MSVC executable is `1448DA29E2F0D729BF5332573E78F713645585ECCDC2EF4185507292B15687E4`.
+Both post-build automated suites passed 7/7. The 4 m gate remains display-only.
 
-See `RELEASE-NOTES-v0.11.md` for the complete community-release summary.
+See `RELEASE-NOTES-v0.12.md` and `TEST-MATRIX-v0.12.md` for the complete community-release summary and evidence.
 
 ## v0.9 and earlier highlights
 
@@ -150,7 +153,7 @@ Piotr's original application and technical foundation, Eric's sustained TSRE
 
 ## Source and executable distribution
 
-v0.11 is prepared from the reviewed `tsre-scomod-wip` source line. Its
+v0.12 is prepared from the reviewed `tsre-scomod-wip` source line. Its
 immutable source tag and executable ZIP must identify the same source. The
 executable package is distributed through GitHub Releases rather than stored
 on a source branch.
@@ -163,11 +166,11 @@ locally built copies remain under their respective upstream licenses.
 - `scoWorkList.txt` contains the detailed change summary.
 - `scoFileEdit.txt` lists the code/project files touched during the work.
 - `THIRD-PARTY-NOTICES.txt` records upstream authorship, acknowledgements, and bundled runtime-library notices.
-- `RELEASE-NOTES-v0.11.md` summarizes the current community open-testing release.
+- `RELEASE-NOTES-v0.12.md` summarizes the completed source checkpoint.
 - `.github/RELEASE-WORKFLOW.md` documents the guarded manual tag, draft, asset-verification, and publication process.
 
 ## Status
 
-TSRE GenX v0.9 remains on `master`. TSRE GenX v0.11 is the active community
-open-testing line on `tsre-scomod-wip`; v0.10 remains an immutable source-only
-checkpoint.
+TSRE GenX v0.9 remains on `master`. TSRE GenX v0.12 is the latest immutable
+source checkpoint from `tsre-scomod-wip`; continuing development remains on
+that WIP branch.

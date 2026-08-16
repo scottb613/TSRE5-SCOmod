@@ -32,7 +32,9 @@ GeoTools::GeoTools(QString name)
     setFont(panelFont);
     int row = 0;
     
-    buttonTools["mapTileShowTool"] = new QPushButton("Show/Hide Map", this);
+    buttonTools["mapTileShowTool"] = new QPushButton("Tile Map Show/Hide", this);
+    QPushButton *routeMapShowButton = new QPushButton("Route Map Show/Hide", this);
+    routeMapShowButton->setToolTip("Show or hide every saved terrain_maps overlay across the route. Newly loaded tiles follow the same setting.");
     buttonTools["mapTileLoadTool"] = new QPushButton("Load Map", this);
     buttonTools["heightTileLoadTool"] = new QPushButton("Load Height", this);
     buttonTools["makeTileTextureTool"] = new QPushButton("Make Tile Texture from Map", this);
@@ -74,6 +76,7 @@ GeoTools::GeoTools(QString name)
     configureMapProvider->setToolTip("Select and configure optional satellite imagery. OSM Vector does not require an account or API key.");
     vbox->addWidget(configureMapProvider);
     vbox->addWidget(buttonTools["mapTileShowTool"]);
+    vbox->addWidget(routeMapShowButton);
     vbox->addWidget(buttonTools["mapTileLoadTool"]);
     vbox->addWidget(buttonTools["makeTileTextureTool"]);
     vbox->addWidget(buttonTools["removeTileTextureTool"]);
@@ -157,6 +160,8 @@ GeoTools::GeoTools(QString name)
     // signals
     QObject::connect(buttonTools["mapTileShowTool"], SIGNAL(toggled(bool)),
                       this, SLOT(mapTileShowToolEnabled(bool)));
+    QObject::connect(routeMapShowButton, &QPushButton::released,
+                     this, &GeoTools::toggleRouteMapOverlays);
     
     QObject::connect(buttonTools["mapTileLoadTool"], SIGNAL(toggled(bool)),
                       this, SLOT(mapTileLoadToolEnabled(bool)));

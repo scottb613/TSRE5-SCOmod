@@ -16,7 +16,7 @@
 #include <QMap>
 
 class ClientInfo;
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 
 class ClientUsersWindow : public QWidget {
     Q_OBJECT

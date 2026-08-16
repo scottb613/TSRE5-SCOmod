@@ -32,6 +32,27 @@
         "CMAKE_BUILD_TYPE": "Release",
         "TSRE_ENABLE_WARNINGS": "ON"
       }
+    },
+    {
+      "name": "msvc-base",
+      "hidden": true,
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "architecture": "x64",
+      "toolset": "v143",
+      "cacheVariables": {
+        "TSRE_ENABLE_WARNINGS": "ON"
+      }
+    },
+    {
+      "name": "windows-msvc-debug",
+      "displayName": "Windows Qt6 VS2026/MSVC Debug",
+      "inherits": "msvc-base"
+    },
+    {
+      "name": "windows-msvc-release",
+      "displayName": "Windows Qt6 VS2026/MSVC Release",
+      "inherits": "msvc-base"
     }
   ],
   "buildPresets": [
@@ -42,6 +63,16 @@
     {
       "name": "windows-release",
       "configurePreset": "windows-release"
+    },
+    {
+      "name": "windows-msvc-debug",
+      "configurePreset": "windows-msvc-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-msvc-release",
+      "configurePreset": "windows-msvc-release",
+      "configuration": "Release"
     }
   ]
 }

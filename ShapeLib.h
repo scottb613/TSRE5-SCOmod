@@ -18,6 +18,7 @@ public:
     void addRef(int texx);
     int addShape(QString path);
     int addShape(QString path, QString texPath);
+    bool reloadShapeIfCached(QString path);
     void refreshSeasonTextures();
 private:
 

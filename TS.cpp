@@ -272,7 +272,6 @@ std::unordered_map< int, const char* > TS::IdName = {
     { TrackObj ,"trackobj"},
     { DynTrack2 ,"dyntrack"},
     { Forest ,"forest"},
-    { PolyForest ,"polyforest"},    
     { CollideObject ,"collideobject"},
     { Signal ,"signal"},
     { Gantry2 ,"gantry"},
@@ -1468,4 +1467,4 @@ std::unordered_map< int, const char* > TS::IdName = {
     { TSRE_Requested_TD_File, "TSRE_Requested_TD_File"},
     { TSRE_Requested_TD_Lo_File, "TSRE_Requested_TD_Lo_File"},
     { Crossover, "crossover" }
-};       
+};

@@ -18,7 +18,7 @@
 #include <QVector3D>
 #include <QMouseEvent>
 
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 class GameObj;
 class GLUU;
 

@@ -18,15 +18,16 @@
 #include "ShapeLib.h"
 #include "Terrain.h"
 #include "ForestObj.h"
-#include "PolyForestObj.h"
 #include "TFile.h"
 #include "TerrainLib.h"
+#include "MapWindow.h"
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QFileInfo>
 #include <QElapsedTimer>
 #include <QFileSystemModel>
+#include <QDirIterator>
 #include <QSignalBlocker>
 #include <QSortFilterProxyModel>
 
@@ -184,9 +185,7 @@ public:
             moveToDefaultPosition();
             everShown = true;
         }
-        show();
-        raise();
-        activateWindow();
+        showExclusive();
     }
 
 protected:
@@ -1289,7 +1288,6 @@ void TerrainTools::setSeasonType(int val){
     if (Game::currentRoute != NULL)
         Game::currentRoute->reloadLoadedWorldObjects();
     ForestObj::InvalidateSeasonTextures();
-    PolyForestObj::InvalidateSeasonTextures();
 
     updateActiveTexturePreviewBorders();
     emit setPaintBrush(this->paintBrush);
@@ -1959,7 +1957,9 @@ void TerrainTools::resetRouteTerrtexPaint()
 
     QString routePath = Game::root + "/routes/" + Game::route;
     QString tilePath = routePath + "/tiles";
+    QString lowTilePath = routePath + "/lo_tiles";
     QString terrtexPath = routePath + "/terrtex";
+    QString terrainMapsPath = routePath + "/terrain_maps";
 
     QDir tileDir(tilePath);
     if (!tileDir.exists()) {
@@ -1968,13 +1968,17 @@ void TerrainTools::resetRouteTerrtexPaint()
     }
 
     QFileInfoList tileFiles = tileDir.entryInfoList(QStringList() << "*.t", QDir::Files, QDir::Name);
+    QDir lowTileDir(lowTilePath);
+    if (lowTileDir.exists())
+        tileFiles.append(lowTileDir.entryInfoList(QStringList() << "*.t", QDir::Files, QDir::Name));
     if (tileFiles.isEmpty()) {
         QMessageBox::warning(this, "Reset Route Terrtex Paint", "No terrain tile files were found.");
         return;
     }
 
-    QString warning = "This will reset every terrain tile patch in the current route to terrain.ace "
-            "and delete per-tile ACE/DDS files from terrtex whose names start with a tile name.\n\n"
+    QString warning = "This will reset every detailed and distant terrain tile patch in the current route "
+            "to terrain.ace, collapse each tile's material table, delete every generated per-tile file "
+            "files from all terrtex seasons, and permanently delete every saved map in terrain_maps.\n\n"
             "This cannot be undone from TSRE. Continue?";
     if (!GuiFunct::confirmDestructiveAction(
             this, "Reset Route TERRTEX Paint", warning))
@@ -1984,6 +1988,12 @@ void TerrainTools::resetRouteTerrtexPaint()
     int tilesReset = 0;
     int tilesInvalid = 0;
     int tilesSaveFailed = 0;
+    int materialsRemoved = 0;
+
+    if (Game::terrainLib != NULL)
+        Game::terrainLib->setRouteMapOverlayVisible(false);
+    MapWindow::clearMapOverlayState();
+    MapWindow::clearMapTileImages();
 
     QProgressDialog progress("Resetting route terrain paint...", QString(), 0, tileFiles.size(), this);
     progress.setWindowModality(Qt::ApplicationModal);
@@ -2005,13 +2015,9 @@ void TerrainTools::resetRouteTerrtexPaint()
             continue;
         }
 
-        int defaultMat = tfile.getMatByTexture("terrain.ace");
-        if (defaultMat < 0)
-            defaultMat = tfile.newMat();
-
         int patches = tfile.patchsetNpatches;
         for (int patch = 0; patch < patches * patches; patch++) {
-            tfile.tdata[patch * 13 + 6] = defaultMat;
+            tfile.tdata[patch * 13 + 6] = 0;
             tfile.tdata[patch * 13 + 7] = 0.001f;
             tfile.tdata[patch * 13 + 8] = 0.001f;
             tfile.tdata[patch * 13 + 9] = 0.062375f;
@@ -2020,10 +2026,13 @@ void TerrainTools::resetRouteTerrtexPaint()
             tfile.tdata[patch * 13 + 12] = 0.062375f;
         }
 
+        const int removed = tfile.resetMaterialsToDefault();
+
         if (!tfile.saveAtomic(tileInfo.absoluteFilePath())) {
             tilesSaveFailed++;
             continue;
         }
+        materialsRemoved += removed;
         tileNames.insert(tileName.toLower());
         tilesReset++;
     }
@@ -2033,9 +2042,11 @@ void TerrainTools::resetRouteTerrtexPaint()
     int filesFailed = 0;
     QDir terrtexDir(terrtexPath);
     if (terrtexDir.exists()) {
-        QFileInfoList texFiles = terrtexDir.entryInfoList(QStringList() << "*.ace" << "*.ACE" << "*.dds" << "*.DDS", QDir::Files, QDir::Name);
-        for (int i = 0; i < texFiles.size(); i++) {
-            QFileInfo texInfo = texFiles[i];
+        QDirIterator texFiles(terrtexPath,
+                QDir::Files | QDir::Hidden | QDir::System,
+                QDirIterator::Subdirectories);
+        while (texFiles.hasNext()) {
+            QFileInfo texInfo(texFiles.next());
             QString baseName = texInfo.completeBaseName().toLower();
             int split = baseName.indexOf('_');
             if (split < 0)
@@ -2052,17 +2063,35 @@ void TerrainTools::resetRouteTerrtexPaint()
         }
     }
 
+    int mapsDeleted = 0;
+    int mapsFailed = 0;
+    QDir terrainMapsDir(terrainMapsPath);
+    if (terrainMapsDir.exists()) {
+        QDirIterator mapFiles(terrainMapsPath, QDir::Files | QDir::Hidden | QDir::System,
+                              QDirIterator::Subdirectories);
+        while (mapFiles.hasNext()) {
+            const QString mapPath = mapFiles.next();
+            if (QFile::remove(mapPath))
+                mapsDeleted++;
+            else
+                mapsFailed++;
+        }
+    }
+
     int tilesReloaded = 0;
     if (Game::terrainLib != NULL)
         tilesReloaded = Game::terrainLib->reloadLoaded();
 
     QMessageBox::information(this, "Reset Route Terrtex Paint",
-            QString("Reset %1 tile(s).\nUnreadable/invalid tiles: %2\nFailed tile saves: %3\nDeleted %4 per-tile texture file(s).\nFailed deletes: %5\nReloaded %6 loaded tile(s).")
+            QString("Reset %1 detailed/distant tile(s).\nCollapsed %2 obsolete material-table entry/entries.\nUnreadable/invalid tiles: %3\nFailed tile saves: %4\nDeleted %5 per-tile texture file(s).\nFailed texture deletes: %6\nDeleted %7 saved map file(s).\nFailed map deletes: %8\nReloaded %9 loaded tile(s).")
             .arg(tilesReset)
+            .arg(materialsRemoved)
             .arg(tilesInvalid)
             .arg(tilesSaveFailed)
             .arg(filesDeleted)
             .arg(filesFailed)
+            .arg(mapsDeleted)
+            .arg(mapsFailed)
             .arg(tilesReloaded));
 }
 

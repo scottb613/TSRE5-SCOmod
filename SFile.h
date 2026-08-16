@@ -19,6 +19,7 @@
 #include <QMatrix4x4>
 #include <QString>
 #include <QVector>
+#include <QSet>
 
 class FileBuffer;
 class ShapeTextureInfo;
@@ -221,6 +222,8 @@ public:
     void reload();
     void refreshSeasonTextures();
     unsigned int newState();
+    void releaseState(unsigned int stateId);
+    void compactReleasedStates();
     void setAnimated(unsigned int stateId, bool animated);
     void setEnabledSubObjs(unsigned int stateId, unsigned int enabledSubObjs);
     void setCurrentDistanceLevel(unsigned int stateId, int level);
@@ -241,6 +244,7 @@ private:
         int distanceLevel = 0;
     };
     QVector<State> state;
+    QSet<unsigned int> releasedStateIds;
     
     void loadSd();
     QString resolveTexturePath(QString textureName) const;

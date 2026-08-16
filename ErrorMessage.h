@@ -14,7 +14,7 @@
 #include <QString>
 #include <QHash>
 
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 class GameObj;
 
 class ErrorMessage {

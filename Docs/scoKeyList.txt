@@ -1,4 +1,4 @@
-TSRE GenX v0.11 - ROUTE EDITOR - MENU SHORTCUTS
+TSRE GenX v0.12 - ROUTE EDITOR - MENU SHORTCUTS
 Shift+Ctrl+S  Save route
 Alt+F4        Exit/close route editor
 Ctrl+Z        Undo
@@ -9,6 +9,7 @@ F2            Show Terrain tools
 F3            Show Geo tools
 F4            Toggle full-screen Activity Builder
 F5            Toggle Properties window
+F6            Toggle PolyVeg Planter
 F7            Toggle Control Panel
 F8            Toggle Errors/Messages window
 F12           Toggle Settings window

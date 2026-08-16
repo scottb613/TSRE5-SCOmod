@@ -9,31 +9,14 @@
  */
 
 #include "TrkWindow.h"
-#include <QDebug>
 #include <QString>
-#include <QGraphicsScene>
-#include <QGraphicsView>
-#include <QGraphicsPixmapItem>
 #include "Trk.h"
 #include "GuiFunct.h"
-#include "TexLib.h"
-#include "Texture.h"
-#include "Game.h"
-#include <QImage>
 
 TrkWindow::TrkWindow() : QDialog(){
     GuiFunct::applyEditorPanelStyle(this);
     setWindowFlags(Qt::WindowStaysOnTopHint);
-    //QPushButton *loadButton = new QPushButton("Load", this);
-    //QImage myImage(800, 800, QImage::Format_RGB888);
-    //myImage->load("F:/2.png");
-    imageGraphic.setFixedSize(640,450);
-    imageLoad.setFixedSize(640,450);
-    //imageLabel->setContentsMargins(0,0,0,0);
-    //imageLabel->setPixmap(QPixmap::fromImage(myImage));
     QVBoxLayout *mainLayout = new QVBoxLayout;
-    QHBoxLayout *main2Layout = new QHBoxLayout;
-    mainLayout->addItem(main2Layout);
     mainLayout->addWidget(&description);
     
     QVBoxLayout *tab1 = new QVBoxLayout;
@@ -106,27 +89,9 @@ TrkWindow::TrkWindow() : QDialog(){
     row++;
     settings->addWidget(&envValue, row++, 1);
     tab1->addItem(settings);
-    QVBoxLayout *tab2 = new QVBoxLayout;
-    QHBoxLayout *ibuttons = new QHBoxLayout;
-    ibuttons->addWidget(&iList);
-    iList.setStyleSheet("combobox-popup: 0;");
-    iList.addItem("Load Image", 0);
-    iList.addItem("Details Image", 1);
-    iList.setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
-    ibuttons->addWidget(&iCopy);
-    iCopy.setText(" Copy ");
-    iPaste.setText(" Paste ");
-    ibuttons->addWidget(&iPaste);    
-    tab2->addItem(ibuttons);
-    tab2->addWidget(&imageLoad);
-    //settings->addWidget(GuiFunct::newTQLabel("Details Image"), row++, 0);
-    //tab2->addWidget(&imageGraphic);
-    main2Layout->addItem(tab1);
-    main2Layout->addItem(tab2);
+    mainLayout->addItem(tab1);
     description.setMinimumHeight(200);
-    //mainLayout->addWidget(loadButton);
-    //mainLayout->addWidget(imageLabel);
-    ibuttons = new QHBoxLayout;
+    QHBoxLayout *ibuttons = new QHBoxLayout;
     QPushButton *bok = new QPushButton("OK");
     QObject::connect(bok, SIGNAL(released()), this, SLOT(bokEnabled()));
     QPushButton *bcancel = new QPushButton("Cancel");
@@ -136,9 +101,6 @@ TrkWindow::TrkWindow() : QDialog(){
     mainLayout->addItem(ibuttons);
     mainLayout->setContentsMargins(1,1,1,1);
     this->setLayout(mainLayout);
-    
-    //QObject::connect(loadButton, SIGNAL(released()),
-    //                  this, SLOT(load()));
 }
 
 int TrkWindow::exec() {
@@ -178,21 +140,6 @@ int TrkWindow::exec() {
     for (auto it = trk->environment.begin(); it != trk->environment.end(); ++it)
         this->envName.addItem(QString::fromStdString((*it).first));
     this->envValue.setText(trk->environment[this->envName.itemText(0).toStdString()]);
-    
-    Texture * tex1 = NULL;
-    if(TexLib::mtex[trk->imageLoadId] != NULL)
-        if(TexLib::mtex[trk->imageLoadId]->loaded){
-            tex1 = TexLib::mtex[trk->imageLoadId];
-            unsigned char * out = tex1->getImageData(640,450);
-            if(tex1->bytesPerPixel == 3)
-                imageLoad.setPixmap(QPixmap::fromImage(QImage(out,640,450,QImage::Format_RGB888)));
-            if(tex1->bytesPerPixel == 4)
-                imageLoad.setPixmap(QPixmap::fromImage(QImage(out,640,450,QImage::Format_RGBA8888)));   
-            delete[] out;
-    }
-    //int imageLoadId = TexLib::addTex(Game::root+"/routes/"+idName+"/"+imageLoad);
-    
-    
     
     return QDialog::exec();
 } 

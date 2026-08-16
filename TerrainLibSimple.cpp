@@ -24,6 +24,7 @@
 #include "Route.h"
 #include "Environment.h"
 #include "TerrainInfo.h"
+#include "MapWindow.h"
 
 TerrainLibSimple::TerrainLibSimple() {
 }
@@ -74,6 +75,7 @@ bool TerrainLibSimple::load(int x, int z) {
     Terrain* tTile = terrain[x*10000 + z];
     if (tTile == NULL) {
         terrain[x*10000 + z] = new Terrain(x, z);
+        mapOverlayResidencyValid = false;
     }
     tTile = terrain[x*10000 + z];
     if (tTile == NULL)
@@ -114,6 +116,7 @@ bool TerrainLibSimple::reload(int x, int z) {
     Terrain* tTile;// = terrain[x*10000 + z];
     //if (tTile == NULL) {
     terrain[x*10000 + z] = new Terrain(x, z);
+    mapOverlayResidencyValid = false;
     //}
     tTile = terrain[x*10000 + z];
     if (tTile == NULL)
@@ -525,6 +528,37 @@ void TerrainLibSimple::setTileBlob(int x, int z, float* p){
     if (terr == NULL) return;
     if (terr->loaded == false) return;
     terr->setTileBlob();
+}
+
+void TerrainLibSimple::setRouteMapOverlayVisible(bool visible){
+    MapWindow::setRouteMapOverlaysVisible(visible);
+    mapOverlayResidencyValid = false;
+}
+
+void TerrainLibSimple::updateMapOverlayResidency(float *playerT){
+    const int centerX = (int)playerT[0];
+    const int centerZ = (int)playerT[1];
+    const int radius = qMax(0, Game::tileLod);
+    if(mapOverlayResidencyValid && centerX == mapOverlayCenterX
+            && centerZ == mapOverlayCenterZ && radius == mapOverlayRadius)
+        return;
+
+    for(auto &entry : terrain){
+        Terrain *terr = entry.second;
+        if(terr == NULL || !terr->loaded || terr->lowTile)
+            continue;
+        int tileX, tileZ;
+        terr->getLowCornerTileXY(tileX, tileZ);
+        const bool inRadius = qAbs(tileX-centerX) <= radius
+                && qAbs(tileZ-centerZ) <= radius;
+        terr->setMapOverlayVisible(inRadius
+                && MapWindow::mapOverlayVisibleForTile(tileX, tileZ));
+    }
+
+    mapOverlayCenterX = centerX;
+    mapOverlayCenterZ = centerZ;
+    mapOverlayRadius = radius;
+    mapOverlayResidencyValid = true;
 }
 
 void TerrainLibSimple::setWaterLevelGui(int x, int z, float* p){
@@ -943,6 +977,7 @@ void TerrainLibSimple::fillRaw(Terrain *cTerr, int mojex, int mojez) {
 
     if (tTile == NULL) {
         terrain[(mojex + 1)*10000 + mojez] = new Terrain(mojex + 1, mojez);
+        mapOverlayResidencyValid = false;
     }
     tTile = terrain[(mojex + 1)*10000 + mojez];
     if (tTile->loaded) {
@@ -958,6 +993,7 @@ void TerrainLibSimple::fillRaw(Terrain *cTerr, int mojex, int mojez) {
 
     if (tTile == NULL) {
         terrain[(mojex)*10000 + mojez + 1] = new Terrain(mojex, mojez + 1);
+        mapOverlayResidencyValid = false;
     }
     tTile = terrain[(mojex)*10000 + mojez + 1];
     if (tTile->loaded) {
@@ -973,6 +1009,7 @@ void TerrainLibSimple::fillRaw(Terrain *cTerr, int mojex, int mojez) {
 
     if (tTile == NULL) {
         terrain[(mojex + 1)*10000 + mojez + 1] = new Terrain(mojex + 1, mojez + 1);
+        mapOverlayResidencyValid = false;
     }
     tTile = terrain[(mojex + 1)*10000 + mojez + 1];
     if (tTile->loaded) {
@@ -983,6 +1020,7 @@ void TerrainLibSimple::fillRaw(Terrain *cTerr, int mojex, int mojez) {
 }
 
 void TerrainLibSimple::render(GLUU *gluu, float * playerT, float* playerW, float* target, float fov, int renderMode) {
+    updateMapOverlayResidency(playerT);
     int mintile = -Game::tileLod;
     int maxtile = Game::tileLod;
     
@@ -1010,6 +1048,7 @@ void TerrainLibSimple::render(GLUU *gluu, float * playerT, float* playerW, float
             
             if (tTile == NULL) {
                 terrain[((int)playerT[0] + i)*10000 + (int)playerT[1] + j] = new Terrain((int)playerT[0] + i, (int)playerT[1] + j);
+                mapOverlayResidencyValid = false;
             }
 
             tTile = terrain[((int)playerT[0] + i)*10000 + (int)playerT[1] + j];
@@ -1033,6 +1072,8 @@ void TerrainLibSimple::render(GLUU *gluu, float * playerT, float* playerW, float
             }
         }
     }
+
+    updateMapOverlayResidency(playerT);
     
     if(renderMode == gluu->RENDER_SELECTION)
         return;

@@ -40,6 +40,8 @@
 #include "PlatformObj.h"
 #include "CarSpawnerObj.h"
 #include "ForestObj.h"
+#include "ForestBakeManifest.h"
+#include "PolyVegObject.h"
 #include "Coords.h"
 #include "CoordsMkr.h"
 #include "CoordsKml.h"
@@ -1153,9 +1155,12 @@ void Route::preloadWFiles(bool gui){
     QProgressDialog *progress = NULL;
     if(gui){
         progress = new QProgressDialog("Loading All World Files ...", "", 0, dir.entryList().size());
+        progress->setWindowTitle(Game::AppName);
         progress->setWindowModality(Qt::WindowModal);
         progress->setCancelButton(NULL);
-        progress->setWindowFlags(Qt::CustomizeWindowHint);
+        progress->setMinimumDuration(0);
+        progress->setProperty("scoCenterOnScreen", true);
+        GuiFunct::styleEditorDialog(progress);
         progress->show();
     }
     
@@ -3210,6 +3215,53 @@ int Route::removeAllInteractives(bool gui) {
     return interactives.size();
 }
 
+int Route::deleteAllPolyVegBakes(bool gui) {
+    preloadWFiles(gui);
+
+    QVector<WorldObj*> bakes;
+    foreach(Tile *tTile, tile) {
+        if(tTile == NULL || tTile->loaded != 1)
+            continue;
+        for(auto it = tTile->obiekty.begin(); it != tTile->obiekty.end(); ++it) {
+            WorldObj *object = it->second;
+            if(object != NULL && object->loaded
+                    && object->typeID == WorldObj::sstatic
+                    && PolyVegObject::isBakeShape(object->fileName))
+                bakes.push_back(object);
+        }
+    }
+
+    if(bakes.isEmpty())
+        return 0;
+
+    QProgressDialog *progress = NULL;
+    if(gui) {
+        progress = new QProgressDialog(
+            "Deleting All PolyVeg Bakes ...", "", 0, bakes.size());
+        progress->setWindowTitle(Game::AppName);
+        progress->setWindowModality(Qt::WindowModal);
+        progress->setCancelButton(NULL);
+        progress->setMinimumDuration(0);
+        progress->setProperty("scoCenterOnScreen", true);
+        GuiFunct::styleEditorDialog(progress);
+        progress->show();
+    }
+
+    Undo::StateBegin();
+    for(int index = 0; index < bakes.size(); ++index) {
+        deleteObj(bakes[index]);
+        if(progress != NULL) {
+            progress->setValue(index + 1);
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        }
+    }
+    Undo::StateEnd();
+
+    delete progress;
+    emit sendMsg("unselect");
+    return bakes.size();
+}
+
 int Route::deleteAllInstances(WorldObj *selected, bool gui) {
     if(selected == NULL
     || (selected->typeID != WorldObj::sstatic
@@ -3354,6 +3406,25 @@ void Route::save() {
         }
         return;
     }
+
+    ForestBakePruneResult bakePrune;
+    QString bakePruneError;
+    if(!ForestBakeManifest::pruneUnreferenced(
+            activeRouteRoot(), bakePrune, bakePruneError)) {
+        qWarning() << "PolyVeg save cleanup failed:" << bakePruneError;
+        emit sendMsg("saveError");
+        if(Game::gui)
+            GuiFunct::showEditorStopped(NULL, QObject::tr("Route Save Failed"),
+                QObject::tr("The route was saved, but committed PolyVeg bake "
+                            "cleanup did not complete.\n\n%1")
+                    .arg(bakePruneError));
+        return;
+    }
+    if(bakePrune.removedBlocks > 0)
+        qDebug() << "Committed PolyVeg cleanup removed"
+                 << bakePrune.removedBlocks << "manifest block(s) and"
+                 << bakePrune.removedAssets << "generated asset(s);"
+                 << bakePrune.remainingBlocks << "block(s) remain";
 
     ActLib::SaveAll();
     

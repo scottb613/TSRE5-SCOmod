@@ -238,7 +238,7 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "cameraspeedstd") return "Normal camera movement speed.";
     if (k == "camerasticktoterrain") return "Keeps the camera from dropping underground. This can also be toggled with the slash key.";
     if (k == "lockcamera") return "Locks the camera's Y axis while moving. This is the same behavior toggled with the period key.";
-    if (k == "mousespeed") return "Controls mouse look and pan sensitivity. Lower values slow the mouse down; 0.1 is a comfortable GenX default.";
+    if (k == "mousespeed") return "Controls mouse look, pan, and Shape Viewer or Consist Editor rotation sensitivity. Lower values slow movement and rotation; 0.1 preserves the normal GenX speed.";
     if (k == "aasamples") return "Sets anti-aliasing sample count. Higher values can smooth edges but may reduce performance.";
     if (k == "allowobjlag") return "Allows object loading to spread over multiple frames to reduce stalls while moving through populated routes.";
     if (k == "imagesubstitution") return "Allows TSRE to substitute ACE or DDS textures when one version is missing.";

@@ -15,7 +15,7 @@
 #include <QMap>
 #include "ActivityEvent.h"
 
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 
 class ActivityEventProperties : public QWidget {
     Q_OBJECT

@@ -410,7 +410,12 @@ void PropertiesDyntrack::flexEnabled(){
 
 void PropertiesDyntrack::flexData(int x, int z, float* p){
     emit enableTool("");
-    if(dobj == NULL) return;
+    if(dobj == NULL || p == NULL){
+        qWarning() << "Auto-Flex rejected: no selected Dynamic Track or pointer position";
+        emit flexResult(false);
+        emit enableTool("selectTool");
+        return;
+    }
     
     if(Game::debugOutput) qDebug() << "flex1";
     
@@ -426,11 +431,12 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
     int sourceX = dobj->x;
     int sourceZ = dobj->y;
     float sourceQ[4] = {0, 0, 0, 1};
-    const bool hasSnappedSource = Game::trackDB != NULL
-            && Game::trackDB->findNearestTrackConnection(
+    const int sourceConnectionId = Game::trackDB != NULL
+            ? Game::trackDB->findNearestTrackConnection(
                     sourceX, sourceZ, p1, sourceQ,
-                    dobj->x, dobj->y, dobj->UiD) >= 0;
-    if(!hasSnappedSource){
+                    dobj->x, dobj->y, dobj->UiD)
+            : -1;
+    if(sourceConnectionId < 0){
         qWarning() << "Auto-Flex rejected: no external source connection";
         emit flexResult(false);
         emit enableTool("selectTool");
@@ -456,11 +462,20 @@ void PropertiesDyntrack::flexData(int x, int z, float* p){
     int destinationX = x;
     int destinationZ = z;
     float destinationQ[4] = {0, 0, 0, 1};
-    if(Game::trackDB == NULL
-            || Game::trackDB->findNearestTrackConnection(
+    const int destinationConnectionId = Game::trackDB != NULL
+            ? Game::trackDB->findNearestTrackConnection(
                     destinationX, destinationZ, p2, destinationQ,
-                    dobj->x, dobj->y, dobj->UiD) < 0){
+                    dobj->x, dobj->y, dobj->UiD)
+            : -1;
+    if(destinationConnectionId < 0){
         qWarning() << "Auto-Flex rejected: no destination track connection";
+        emit flexResult(false);
+        emit enableTool("selectTool");
+        return;
+    }
+    if(destinationConnectionId == sourceConnectionId){
+        qWarning() << "Auto-Flex rejected: source and destination belong"
+                << "to the same TrackDB vector" << sourceConnectionId;
         emit flexResult(false);
         emit enableTool("selectTool");
         return;

@@ -15,6 +15,7 @@
 #include <QString>
 #include <QTimer>
 #include <QWidget>
+#include <QPointer>
 
 class QLabel;
 class QLineEdit;
@@ -67,6 +68,7 @@ public:
     bool isPopupPositionPinned() const;
     void setPopupPinToolTips(const QString &unpinnedToolTip,
                             const QString &pinnedToolTip);
+    void showExclusive();
 
 protected:
     void moveEvent(QMoveEvent *event) override;
@@ -86,6 +88,7 @@ private:
     bool positionRestored = false;
     QString unpinnedPinToolTip = "Save this helper position between sessions.";
     QString pinnedPinToolTip = "This helper position is saved between sessions.";
+    static QPointer<EditorPopupWindow> activePopup;
 };
 
 #endif	/* GUIFUNCTIONS_H */

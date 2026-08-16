@@ -15,6 +15,7 @@
 #include "EditFileNameDialog.h"
 #include "Game.h"
 #include "GuiFunct.h"
+#include "PolyVegObject.h"
 
 PropertiesStatic::PropertiesStatic(){
     const QString detailLevelHelp = "Controls this placed object's StaticDetailLevel. Default uses the ESD_Detail_Level from the shape's .sd file; enable Custom to write an override into the world file. The value is limited by the route's TsreMaxStaticDetailLevel.";
@@ -270,7 +271,7 @@ void PropertiesStatic::showObj(GameObj* obj){
     }
     worldObj = (WorldObj*)obj;
     
-    this->infoLabel->setText("Object: Static Object");
+    this->infoLabel->setText("Object: " + PolyVegObject::labelForShape(worldObj->fileName));
     this->fileName.setText(worldObj->fileName);
     
     this->uid.setText(QString::number(worldObj->UiD, 10));

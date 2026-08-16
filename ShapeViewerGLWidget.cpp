@@ -341,7 +341,6 @@ void ShapeViewerGLWidget::keyReleaseEvent(QKeyEvent * event) {
 
 void ShapeViewerGLWidget::mousePressEvent(QMouseEvent *event) {
     m_lastPos = event->position().toPoint();
-    m_lastPos *= Game::PixelRatio;
     mousex = event->position().x()*Game::PixelRatio;
     mousey = event->position().y()*Game::PixelRatio;
     mousePressed = true;
@@ -371,15 +370,24 @@ void ShapeViewerGLWidget::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void ShapeViewerGLWidget::mouseMoveEvent(QMouseEvent *event) {
+    const QPoint currentPos = event->position().toPoint();
     mousex = event->position().x()*Game::PixelRatio;
     mousey = event->position().y()*Game::PixelRatio;
     
     if(mode == "rot"){
         if (mousePressed) {
+            // Qt mouse positions are logical coordinates. Keep both ends of
+            // the delta logical so display scaling cannot amplify rotation.
+            // Normalize against the established 0.1 default so existing
+            // users retain the intended speed while F12 can adjust it.
+            constexpr float defaultMouseSpeed = 0.1f;
+            const float rotationSpeedScale = Game::mouseSpeed / defaultMouseSpeed;
             if(mouseRPressed)
-                rotZ += (float) (m_lastPos.y() - event->position().y()) / 60*(camera->fov/45.0);
+                rotZ += static_cast<float>(m_lastPos.y() - currentPos.y())
+                        / 60.0f * (camera->fov / 45.0f) * rotationSpeedScale;
             if(mouseLPressed)
-                rotY += (float) (m_lastPos.x() - event->position().x()) / 60*(camera->fov/45.0);
+                rotY += static_cast<float>(m_lastPos.x() - currentPos.x())
+                        / 60.0f * (camera->fov / 45.0f) * rotationSpeedScale;
             if (rotZ > 1.57)
                 rotZ = (float) 1.57;
             if (rotZ < -1.57)
@@ -388,8 +396,7 @@ void ShapeViewerGLWidget::mouseMoveEvent(QMouseEvent *event) {
     } else {
         camera->MouseMove(event);
     }
-    m_lastPos = event->position().toPoint();
-    m_lastPos *= Game::PixelRatio;
+    m_lastPos = currentPos;
 }
 
 void ShapeViewerGLWidget::showContextMenu(const QPoint & point) {

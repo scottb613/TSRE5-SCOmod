@@ -46,8 +46,7 @@ public:
         soundsource = 17,
         soundregion = 18,
         groupobject = 19,
-        ruler = 20,
-        polyforest = 21
+        ruler = 20
     };
     TypeID typeID = this->undefined;
     enum ShadowType {
@@ -122,6 +121,8 @@ public:
     virtual void initTrItems(float *tpos);
     virtual void setQdirection(float* q);
     virtual void setNewQdirection();
+    void setUniformMatrixScale(float scale);
+    float getUniformMatrixScale() const;
     virtual void setMartix();
     virtual bool allowNew();
     virtual void deleteVBO();
@@ -184,7 +185,11 @@ protected:
     virtual void loadSnapablePoints();
     virtual bool getSimpleBorder(float* border);
     virtual bool getBoxPoints(QVector<float> &points);
+    void updateRotationAndScaleFromMatrix3x3();
+    bool hasNonUnitMatrixScale() const;
+    void writeMatrix3x3(QTextStream* out) const;
     float* matrix3x3 = NULL;
+    float matrixScale[3] = {1.0f, 1.0f, 1.0f};
     QString templateName = "DEFAULT";
     bool internalLodControl = false;
 

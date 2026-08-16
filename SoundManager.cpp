@@ -15,7 +15,6 @@
 #include <errno.h>
 #include <stdint.h>
 #include <inttypes.h>
-#include <unistd.h>
 #include <stdbool.h>
 #include "SoundSource.h"
 #include "MstsSoundDefinition.h"

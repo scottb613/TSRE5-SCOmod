@@ -132,6 +132,13 @@ void OglObj::init(float* punkty, int ptr, enum RenderItem::VertexAttr v, int typ
     loaded = true;
 }
 
+void OglObj::releaseTexture(){
+    if(materialType != TEXTURE || texId < 0)
+        return;
+    TexLib::releaseMapTexture(texId);
+    texId = -1;
+}
+
 void OglObj::initLitTriangles(const float* positions, int positionFloatCount) {
     if(positions == NULL || positionFloatCount < 9 || positionFloatCount % 9 != 0)
         return;

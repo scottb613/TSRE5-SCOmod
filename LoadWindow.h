@@ -13,7 +13,7 @@
 
 #include <QtWidgets>
 
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 class IghCoordinate;
 class LatitudeLongitudeCoordinate;
 class QProcess;

@@ -29,6 +29,7 @@ public:
     static void enableTexture(int id);
     static void disableTexture(int id);
     static void delRef(int texx);
+    static void releaseMapTexture(int texx);
     static void addRef(int texx);
     static int addTex(QString path, QString name, bool reload = false);
     static int addTex(QString pathid, bool reload = false);

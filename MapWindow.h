@@ -13,13 +13,14 @@
 
 #include <QtWidgets>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class QNetworkReply;
 class QImage;
 class IghCoordinate;
 class LatitudeLongitudeCoordinate;
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 class QPushButton;
 class MapData;
 
@@ -31,8 +32,19 @@ public:
     int tileSize;
     
     static std::unordered_map<int, QImage*> mapTileImages;
+    static std::unordered_set<int> diskLoadedMapTiles;
     static int isAlpha;
+    static bool routeMapOverlaysVisible;
+    static QHash<QString, bool> tileMapVisibilityOverrides;
     static bool LoadMapFromDisk(int x, int z);
+    static void releaseDiskMapFromMemory(int x, int z);
+    static void clearMapTileImages();
+    static void loadMapOverlayState();
+    static void unloadMapOverlayState();
+    static void clearMapOverlayState();
+    static bool mapOverlayVisibleForTile(int x, int z);
+    static void setTileMapOverlayVisible(int x, int z, bool visible);
+    static void setRouteMapOverlaysVisible(bool visible);
     explicit MapWindow(QWidget *parent = nullptr);
     virtual ~MapWindow();
     bool ok = false;

@@ -49,9 +49,7 @@ public:
             moveToDefaultPosition();
             everShown = true;
         }
-        show();
-        raise();
-        activateWindow();
+        showExclusive();
     }
 
 protected:
@@ -631,7 +629,7 @@ void ObjTools::routeLoaded(Route* a){
 
     Ref::RefItem vegetationRulerItem;
     vegetationRulerItem.filename.push_back("");
-    vegetationRulerItem.description = "Ruler (vegetation)";
+    vegetationRulerItem.description = "Ruler (polyveg)";
     vegetationRulerItem.clas = "tsre tools";
     vegetationRulerItem.type = "rulervegetation";
     route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(vegetationRulerItem);
@@ -653,8 +651,10 @@ void ObjTools::routeLoaded(Route* a){
     refOther.addItem("SpeedWarning");
     refOther.addItem("Milepost");
     refOther.addItem("Route/Shapes Directory");
-    refOther.addItem("NextGen Dynamic Track");
-    refOther.addItem("TSRE Tools");
+    refOther.addItem(QString::fromUtf8("•  NextGen Dynamic Track  •"),
+                     QString("nextgen dynamic track"));
+    refOther.addItem(QString::fromUtf8("•  TSRE Tools  •"),
+                     QString("tsre tools"));
     refOther.setMaxVisibleItems(35);
     
     /// EFO add un-indexed shapes
@@ -772,8 +772,11 @@ QString ObjTools::activeCategoryKey() const{
         return refTrack.currentData().toString();
     if(refRoad.currentText() != "ALL")
         return refRoad.currentData().toString();
-    if(refOther.currentText() != "ALL")
-        return QString("#TSRE#") + refOther.currentText().toLower();
+    if(refOther.currentText() != "ALL"){
+        const QString key = refOther.currentData().toString();
+        return QString("#TSRE#")
+                + (key.isEmpty() ? refOther.currentText().toLower() : key);
+    }
     if(refClass.currentIndex() >= 0){
         const QString key = refClass.currentData().toString();
         if(key == "__ALL_OBJECTS__")
@@ -839,8 +842,11 @@ void ObjTools::refOtherSelected(const QString & text){
     resetCategoryCombos(text == "ALL" ? NULL : &refOther);
     if(text == "ALL")
         refSearchSelected(searchBox.text());
-    else
-        populateObjectListForKey(QString("#TSRE#")+text.toLower(), searchBox.text());
+    else {
+        const QString key = refOther.currentData().toString();
+        populateObjectListForKey(QString("#TSRE#")
+                + (key.isEmpty() ? text.toLower() : key), searchBox.text());
+    }
 }
 
 void ObjTools::refListSelected(QListWidgetItem * item){

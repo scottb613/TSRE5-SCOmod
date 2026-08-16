@@ -27,6 +27,7 @@
 #include "Renderer.h"
 #include "TexLib.h"
 #include "TerrainTrackMath.h"
+#include "MapWindow.h"
 
 TerrainLibQt::TerrainLibQt() {
 }
@@ -68,6 +69,7 @@ Terrain* TerrainLibQt::getTerrainByXY(int x, int y, bool load) {
         currentQuadTree->fillTerrainInfo(x, -y, (*currentQt)[terrainNameId]);
         //qDebug() << terrainNameId;
         (*currentQt)[terrainNameId]->t = new Terrain((*currentQt)[terrainNameId]);
+        mapOverlayResidencyValid = false;
         return (*currentQt)[terrainNameId]->t;
     }
 
@@ -213,6 +215,7 @@ bool TerrainLibQt::reload(int x, int z) {
     (*currentQt)[terrainNameId] = new TerrainInfo();
     currentQuadTree->fillTerrainInfo(x, -z, (*currentQt)[terrainNameId]);
     (*currentQt)[terrainNameId]->t = new Terrain((*currentQt)[terrainNameId]);
+    mapOverlayResidencyValid = false;
     if ((*currentQt)[terrainNameId]->t->loaded)
         return true;
     return false;
@@ -251,6 +254,7 @@ int TerrainLibQt::reloadLoaded() {
         terrainQt[terrainNameId] = new TerrainInfo();
         quadTree->fillTerrainInfo(it->first, -it->second, terrainQt[terrainNameId]);
         terrainQt[terrainNameId]->t = new Terrain(terrainQt[terrainNameId]);
+        mapOverlayResidencyValid = false;
         if (terrainQt[terrainNameId]->t->loaded)
             reloaded++;
     }
@@ -747,6 +751,80 @@ void TerrainLibQt::setTileBlob(int x, int z, float* p) {
     if (terr == NULL) return;
     if (terr->loaded == false) return;
     terr->setTileBlob();
+}
+
+void TerrainLibQt::setRouteMapOverlayVisible(bool visible) {
+    MapWindow::setRouteMapOverlaysVisible(visible);
+    mapOverlayResidencyValid = false;
+    mapOverlayUnavailableTiles.clear();
+}
+
+void TerrainLibQt::updateMapOverlayResidency(float *playerT) {
+    const int centerX = (int)playerT[0];
+    const int centerZ = (int)playerT[1];
+    const int radius = qMax(0, Game::tileLod);
+    const bool viewChanged = centerX != mapOverlayCenterX
+            || centerZ != mapOverlayCenterZ || radius != mapOverlayRadius;
+    if(mapOverlayResidencyValid && centerX == mapOverlayCenterX
+            && centerZ == mapOverlayCenterZ && radius == mapOverlayRadius)
+        return;
+    if(viewChanged)
+        mapOverlayUnavailableTiles.clear();
+
+    struct OverlayCandidate {
+        Terrain *terrain = NULL;
+        int tileX = 0;
+        int tileZ = 0;
+        int distanceSquared = 0;
+    };
+    QVector<OverlayCandidate> candidates;
+
+    QHashIterator<unsigned int, TerrainInfo*> i(terrainQt);
+    while(i.hasNext()){
+        i.next();
+        TerrainInfo *info = i.value();
+        if(info == NULL || info->t == NULL)
+            continue;
+        Terrain *terrain = (Terrain*)info->t;
+        if(!terrain->loaded || terrain->lowTile)
+            continue;
+        int tileX, tileZ;
+        terrain->getLowCornerTileXY(tileX, tileZ);
+        const bool inRadius = qAbs(tileX-centerX) <= radius
+                && qAbs(tileZ-centerZ) <= radius;
+        const bool shouldShow = inRadius
+                && MapWindow::mapOverlayVisibleForTile(tileX, tileZ);
+        if(!shouldShow) {
+            terrain->setMapOverlayVisible(false);
+            continue;
+        }
+        const int hash = tileX*10000+tileZ;
+        if(!terrain->showBlob && !mapOverlayUnavailableTiles.contains(hash)) {
+            const int dx = tileX-centerX;
+            const int dz = tileZ-centerZ;
+            candidates.append({terrain, tileX, tileZ, dx*dx+dz*dz});
+        }
+    }
+
+    std::sort(candidates.begin(), candidates.end(),
+        [](const OverlayCandidate &a, const OverlayCandidate &b) {
+            return a.distanceSquared < b.distanceSquared;
+        });
+    constexpr int overlayLoadsPerPass = 1;
+    const int loadCount = std::min(
+        overlayLoadsPerPass, static_cast<int>(candidates.size()));
+    for(int index = 0; index < loadCount; ++index) {
+        OverlayCandidate &candidate = candidates[index];
+        candidate.terrain->setMapOverlayVisible(true);
+        if(!candidate.terrain->showBlob)
+            mapOverlayUnavailableTiles.insert(
+                candidate.tileX*10000+candidate.tileZ);
+    }
+
+    mapOverlayCenterX = centerX;
+    mapOverlayCenterZ = centerZ;
+    mapOverlayRadius = radius;
+    mapOverlayResidencyValid = candidates.size() <= overlayLoadsPerPass;
 }
 
 void TerrainLibQt::setWaterLevelGui(int x, int z, float* p) {
@@ -1440,6 +1518,7 @@ void TerrainLibQt::renderEmpty(GLUU *gluu, float * playerT, float* playerW, floa
 }
 
 void TerrainLibQt::pushRenderItems(float * playerT, float* playerW, float* target, float fov, int renderMode) {
+    updateMapOverlayResidency(playerT);
     int renderCount = (Game::tileLod * 2 + 1)*(Game::tileLod * 2 + 1);
     if (renderMode == Game::currentRenderer->RENDER_SELECTION)
         renderCount = 9;
@@ -1481,6 +1560,8 @@ void TerrainLibQt::pushRenderItems(float * playerT, float* playerW, float* targe
             Game::currentRenderer->mvPopMatrix();
         }
     }
+
+    updateMapOverlayResidency(playerT);
     
     if(renderMode == Game::currentRenderer->RENDER_SELECTION)
         return;
@@ -1501,6 +1582,7 @@ void TerrainLibQt::pushRenderItems(float * playerT, float* playerW, float* targe
 }
 
 void TerrainLibQt::render(GLUU *gluu, float * playerT, float* playerW, float* target, float fov, int renderMode) {
+    updateMapOverlayResidency(playerT);
     int renderCount = (Game::tileLod * 2 + 1)*(Game::tileLod * 2 + 1);
     if (renderMode == gluu->RENDER_SELECTION)
         renderCount = 9;
@@ -1542,6 +1624,8 @@ void TerrainLibQt::render(GLUU *gluu, float * playerT, float* playerW, float* ta
             gluu->mvPopMatrix();
         }
     }
+
+    updateMapOverlayResidency(playerT);
     
     if(renderMode == gluu->RENDER_SELECTION)
         return;

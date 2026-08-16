@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "polyVeg": [
+    {
+      "id": "sco-northeastern-mixed-woodland",
+      "name": "SCO Northeastern Mixed Woodland",
+      "description": "Mixed Appalachian and northeastern woodland using the SCO cruciform vegetation set.",
+      "defaults": {
+        "widthMetres": 100.0,
+        "densityPerSquareKilometre": 18000,
+        "terrainDepthMetres": 0.15,
+        "variationScale": 1.0,
+        "trackClearanceMetres": 8.0,
+        "roadClearanceMetres": 4.0,
+        "maximumTrees": 60000
+      },
+      "limits": {
+        "widthMetres": [10.0, 500.0],
+        "densityPerSquareKilometre": [2000, 60000],
+        "maximumTrees": [1000, 250000]
+      },
+      "distribution": {
+        "maximumSlopeDegrees": 38.0,
+        "edgeFeatherMetres": 4.0,
+        "minimumSeparationMetres": 0.5,
+        "preventFootprintOverlap": true
+      },
+      "osm": {
+        "priority": 100,
+        "categories": ["woodland"],
+        "matchAny": [
+          { "natural": ["wood"] },
+          { "landuse": ["forest"] }
+        ]
+      },
+      "vegetation": [
+        {
+          "id": "red-maple",
+          "name": "Red maple",
+          "shape": "SCOredMaple.s",
+          "stratum": "canopy",
+          "proportion": 18.0,
+          "yawDegrees": [0.0, 360.0],
+          "uniformScale": [0.75, 1.35],
+          "footprintRadiusMetres": 0.8
+        },
+        {
+          "id": "sugar-maple",
+          "name": "Sugar maple",
+          "shape": "SCOsugarMaple.s",
+          "stratum": "canopy",
+          "proportion": 14.0,
+          "yawDegrees": [0.0, 360.0],
+          "uniformScale": [0.8, 1.4],
+          "footprintRadiusMetres": 0.85
+        },
+        {
+          "id": "northern-red-oak",
+          "name": "Northern red oak",
+          "shape": "SCOnorthernRedOak.s",
+          "stratum": "canopy",
+          "proportion": 13.0,
+          "yawDegrees": [0.0, 360.0],
+          "uniformScale": [0.85, 1.5],
+          "footprintRadiusMetres": 0.95
+        },
+        {
+          "id": "white-oak",
+          "name": "White oak",
+          "shape": "SCOwhiteOak.s",
+          "stratum": "canopy",
+          "proportion": 9.0,
+          "yawDegrees": [0.0, 360.0],
+          "uniformScale": [0.85, 1.5],
+          "footprintRadiusMetres": 0.95
+        },
+        {
+          "id": "american-beech",
+          "name": "American beech",
+          "shape": "SCOamericanBeech.s",
+          "stratum": "canopy",
+          "proportion": 10.0,
+          "yawDegrees": [0.0, 360.0],
+          "uniformScale": [0.8, 1.4],
+          "footprintRadiusMetres": 0.9
+        },
+        {
+          "id": "eastern-white-pine",
+          "name": "Eastern white pine",
+          "shape": "SCOeasternWhitePine.s",
+          "stratum": "canopy",
+          "proportion": 12.0,
+          "yawDegrees": [0.0, 360.0],
+          "uniformScale": [0.65, 1.55],
+          "footprintRadiusMetres": 0.75
+        },
+        {
+          "id": "eastern-hemlock",
+          "name": "Eastern hemlock",
+          "shape": "SCOeasternHemlock.s",
+          "stratum": "canopy",
+          "proportion": 8.0,
+          "yawDegrees": [0.0, 360.0],
+          "uniformScale": [0.7, 1.4],
+          "footprintRadiusMetres": 0.75
+        },
+        {
+          "id": "black-cherry",
+          "name": "Black cherry",
+          "shape": "SCOblackCherry.s",
+          "stratum": "understory",
+          "proportion": 6.0,
+          "yawDegrees": [0.0, 360.0],
+          "uniformScale": [0.65, 1.15],
+          "footprintRadiusMetres": 0.65
+        },
+        {
+          "id": "witch-hazel",
+          "name": "Witch hazel",
+          "shape": "SCOwitchHazel.s",
+          "stratum": "understory",
+          "proportion": 5.0,
+          "yawDegrees": [0.0, 360.0],
+          "uniformScale": [0.55, 1.0],
+          "plantingDepthMetres": 0.1,
+          "footprintRadiusMetres": 0.5
+        },
+        {
+          "id": "mountain-laurel",
+          "name": "Mountain laurel",
+          "shape": "SCOmountainLaurel.s",
+          "stratum": "understory",
+          "proportion": 5.0,
+          "yawDegrees": [0.0, 360.0],
+          "uniformScale": [0.45, 0.9],
+          "plantingDepthMetres": 0.1,
+          "footprintRadiusMetres": 0.45
+        }
+      ]
+    }
+  ]
+}

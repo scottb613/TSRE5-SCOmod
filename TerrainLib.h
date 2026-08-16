@@ -65,6 +65,7 @@ public:
     virtual void setFixedTileHeight(Brush* brush, int x, int z, float* p);
     virtual void toggleDraw(int x, int z, float* p);
     virtual void setTileBlob(int x, int z, float* p);
+    virtual void setRouteMapOverlayVisible(bool visible);
     virtual void setTextureToTrackObj(Brush* brush, float* punkty, int length, int x, int z);
     virtual void setTerrainToTrackObj(Brush* brush, float* punkty, int length, int x, int z, float* matrix, float offsetY = 0);
     virtual void smoothTerrainToTrackObj(Brush* brush, float* punkty, int length, int x, int z, float* matrix);

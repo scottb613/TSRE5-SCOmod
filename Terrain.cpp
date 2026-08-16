@@ -9,6 +9,7 @@
  */
 
 #include "Terrain.h"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <QDebug>
@@ -357,6 +358,8 @@ void Terrain::load(){
         }
     
     loaded = true;
+    // Map overlays become resident only when the terrain library confirms
+    // that this tile is inside the camera's detailed-terrain radius.
     //save();
 }
 
@@ -530,8 +533,12 @@ void Terrain::loadFFile(FileBuffer *data){
 
 Terrain::~Terrain() {
     long timeNow1 = QDateTime::currentMSecsSinceEpoch();
+    setMapOverlayVisible(false);
     if (this->loaded) {
-        for (int i = 0; i < 257; i++) {
+        const int terrainRows = tfile != NULL && tfile->nsamples != NULL
+                ? *tfile->nsamples + 1
+                : 0;
+        for (int i = 0; i < terrainRows; i++) {
             delete[] terrainData[i];
             if (this->jestF)
                 delete[] fData[i];
@@ -928,10 +935,27 @@ void Terrain::scaleTexY(int idx, float val){
 }
 
 void Terrain::setTileBlob(){
-    if(this->showBlob){
-        this->showBlob = false;
+    int X, Y;
+    getLowCornerTileXY(X, Y);
+    setMapOverlayVisible(!showBlob);
+    MapWindow::setTileMapOverlayVisible(X, Y, showBlob);
+}
+
+void Terrain::setMapOverlayVisible(bool visible){
+    if(!visible || lowTile){
+        showBlob = false;
+        terrainBlob.releaseTexture();
+        if(!lowTile){
+            int X, Y;
+            getLowCornerTileXY(X, Y);
+            MapWindow::releaseDiskMapFromMemory(X, Y);
+        }
         return;
-    } 
+    }
+
+    if(showBlob)
+        return;
+
     int X, Y;
     getLowCornerTileXY(X, Y);
     int hash = (X*10000+Y);
@@ -2618,7 +2642,8 @@ void Terrain::renderWater(float lodx, float lodz, float tileX, float tileY, floa
 
 void Terrain::reloadLines() {
     // tile lines
-    float *punkty = new float[256 * 6 * 4];
+    const int samples = *tfile->nsamples;
+    float *punkty = new float[static_cast<size_t>(samples) * 6 * 4];
     int ptr = 0;
     int i = 0;
 
@@ -2628,7 +2653,6 @@ void Terrain::reloadLines() {
     // if(Game::debugOutput) qDebug() << "Game TerrWidth: " << Game::selectedTerrWidth;
     // if(Game::debugOutput) qDebug() << "local TerrWidth: " << terrWidth;    
     
-    int samples = *tfile->nsamples;
     int sampleSize = *tfile->sampleSize;
     int patches = tfile->patchsetNpatches;
     int patchSize = (samples*sampleSize)/patches;
@@ -2675,7 +2699,8 @@ void Terrain::reloadLines() {
     lines.init(punkty, ptr, RenderItem::V, GL_LINES);
     delete[] punkty;
     //s tile lines
-    punkty = new float[samples * 32 * 6];
+    const int sampleGridLineCount = (samples + 15) / 16;
+    punkty = new float[static_cast<size_t>(sampleGridLineCount) * samples * 12];
     ptr = 0;
     i = 0;
 
@@ -3001,13 +3026,18 @@ void Terrain::oglInit() {
 }*/
 
 void Terrain::oglInit() {
+    const int samples = *tfile->nsamples;
+    const int patches = tfile->patchsetNpatches;
+    const int patchRes = samples / patches;
+    const int patchFloatCount = patchRes * patchRes * 6 * 8;
+
     if(!VAO->isCreated()){
        VAO->create();
        VBO->create();
     }
     QOpenGLVertexArrayObject::Binder vaoBinder(VAO);
     VBO->bind();
-    VBO->allocate(256 * 16 * 16 * 6 * 8 * sizeof (GLfloat));
+    VBO->allocate(patches * patches * patchFloatCount * sizeof(GLfloat));
     QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
     f->glEnableVertexAttribArray(0);
     f->glEnableVertexAttribArray(1);
@@ -3018,16 +3048,18 @@ void Terrain::oglInit() {
     
     //int ilosc = 16 * 16;
     //int suma;
-    float * punkty = new float[16 * 16 * 48];
+    float *punkty = new float[patchFloatCount];
     //  var punkty = Terrain.punkty;
-    int samples = *tfile->nsamples;
-    int patches = tfile->patchsetNpatches;
-    int patchRes = samples/patches;
-    float texRes = 1.0;// (float)16.0/patchRes;
+    const float texRes = 16.0f / patchRes;
     
     for (int uu = 0; uu < patches; uu++) {
         for (int yy = 0; yy < patches; yy++) {
             int ptr = 0;
+            // Terrain-hole flags omit complete triangles, but rendering keeps a
+            // fixed vertex range for every patch. Clear the reusable scratch
+            // block so omitted triangles remain degenerate instead of uploading
+            // uninitialized heap data as enormous terrain vertices.
+            std::fill_n(punkty, patchFloatCount, 0.0f);
             bool fi0j0 = true, fi1j0 = true, fi0j1 = true, fi1j1 = true;
 
             for (int ii = 0; ii < patchRes; ii++) {
@@ -3189,7 +3221,8 @@ void Terrain::oglInit() {
             
             //VBO[0]->bind();
             //VBO[0]->
-            VBO->write((uu * patches + yy) * patchRes * patchRes * 6 * 8 * sizeof (GLfloat), punkty, patchRes * patchRes * 6 * 8 * sizeof (GLfloat));
+            VBO->write((uu * patches + yy) * patchFloatCount * sizeof(GLfloat),
+                       punkty, patchFloatCount * sizeof(GLfloat));
             //VBO[0]->allocate(punkty, 16 * 16 * 6 * 5 * sizeof (GLfloat));
             //f->glEnableVertexAttribArray(0);
             //f->glEnableVertexAttribArray(1);
@@ -3222,7 +3255,7 @@ void Terrain::initBlob(){
     int samples = *tfile->nsamples;
     int patches = tfile->patchsetNpatches;
     int patchRes = samples/patches;
-    float *punkty = new float[65536 * 54];
+    float *punkty = new float[static_cast<size_t>(samples) * samples * 54];
     int ptr = 0;
     float step = 1.0/samples;
     for (int jj = 0; jj < samples; jj++) {
@@ -3322,7 +3355,14 @@ void Terrain::readRAW(FileBuffer* data) {
             } else if (j == samples) {
                 terrainData[i][j] = terrainData[i][j - 1];
             } else {
-                terrainData[i][j] = tfile->floor + tfile->scale * (data->get() + 256 * data->get());
+                // RAW terrain samples are little-endian. Do not combine these
+                // state-changing reads in one arithmetic expression: operand
+                // evaluation order is not guaranteed, and optimized MSVC can
+                // read the high byte before the low byte.
+                const unsigned int lowByte = data->get();
+                const unsigned int highByte = data->get();
+                terrainData[i][j] = tfile->floor
+                        + tfile->scale * (lowByte + 256U * highByte);
                 //terrainData[i][j] = tfile->floor + tfile->scale * (data->data[u++] + 256*data->data[u++]);
             }
         }
@@ -3445,10 +3485,11 @@ void Terrain::saveRAWFloat(QDataStream &write){
 }
 
 void Terrain::newF(){
-    fData = new unsigned char*[257];
-    for (int j = 0; j < 257; j++) {
-        fData[j] = new unsigned char[257];
-        for (int i = 0; i < 257; i++) {
+    const int samples = *tfile->nsamples;
+    fData = new unsigned char*[samples + 1];
+    for (int j = 0; j < samples + 1; j++) {
+        fData[j] = new unsigned char[samples + 1];
+        for (int i = 0; i < samples + 1; i++) {
             fData[j][i] = 0;
         }
     }

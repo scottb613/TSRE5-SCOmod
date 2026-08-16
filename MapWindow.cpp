@@ -14,6 +14,9 @@
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QGraphicsPixmapItem>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSaveFile>
 #include "CoordsMkr.h"
 #include "GeoCoordinates.h"
 #include "OSMFeatures.h"
@@ -24,7 +27,43 @@
 #include "GuiFunct.h"
 
 std::unordered_map<int, QImage*> MapWindow::mapTileImages;
+std::unordered_set<int> MapWindow::diskLoadedMapTiles;
 int MapWindow::isAlpha = 0;
+bool MapWindow::routeMapOverlaysVisible = false;
+QHash<QString, bool> MapWindow::tileMapVisibilityOverrides;
+
+namespace {
+QString mapTileKey(int x, int z){
+    return QString::number(x)+","+QString::number(z);
+}
+
+QString mapOverlayStatePath(){
+    return Game::routeAppDataDir()+"/map_overlay_state.json";
+}
+
+bool saveMapOverlayState(){
+    QJsonObject overrides;
+    for(auto it = MapWindow::tileMapVisibilityOverrides.cbegin();
+            it != MapWindow::tileMapVisibilityOverrides.cend(); ++it)
+        overrides.insert(it.key(), it.value());
+
+    QJsonObject state;
+    state.insert("routeVisible", MapWindow::routeMapOverlaysVisible);
+    state.insert("tileOverrides", overrides);
+
+    QSaveFile file(mapOverlayStatePath());
+    if(!file.open(QIODevice::WriteOnly)){
+        qWarning() << "Unable to save map-overlay state:" << file.errorString();
+        return false;
+    }
+    file.write(QJsonDocument(state).toJson(QJsonDocument::Indented));
+    if(!file.commit()){
+        qWarning() << "Unable to commit map-overlay state:" << file.errorString();
+        return false;
+    }
+    return true;
+}
+}
 
 MapWindow::MapWindow(QWidget *parent) : QDialog(parent) {
     GuiFunct::applyEditorPanelStyle(this);
@@ -224,6 +263,7 @@ void MapWindow::reload(){
     if(MapWindow::mapTileImages[hash] != NULL)
         delete MapWindow::mapTileImages[hash];
     MapWindow::mapTileImages[hash] = myImage;
+    MapWindow::diskLoadedMapTiles.erase(hash);
 }
 
 void MapWindow::saveToDisk(){
@@ -262,7 +302,65 @@ bool MapWindow::LoadMapFromDisk(int x, int z){
         }
     }
     MapWindow::mapTileImages[hash] = img;
+    MapWindow::diskLoadedMapTiles.insert(hash);
     return true;
+}
+
+void MapWindow::releaseDiskMapFromMemory(int x, int z){
+    const int hash = x*10000+z;
+    if(diskLoadedMapTiles.erase(hash) == 0)
+        return;
+
+    auto image = mapTileImages.find(hash);
+    if(image == mapTileImages.end())
+        return;
+    delete image->second;
+    mapTileImages.erase(image);
+}
+
+void MapWindow::clearMapTileImages(){
+    for(auto &entry : mapTileImages)
+        delete entry.second;
+    mapTileImages.clear();
+    diskLoadedMapTiles.clear();
+}
+
+void MapWindow::loadMapOverlayState(){
+    // Route Editor always starts on normal terrain. Saved visibility from a
+    // previous session must never turn map overlays on during route restore;
+    // overlays become visible only after an explicit action in this session.
+    routeMapOverlaysVisible = false;
+    tileMapVisibilityOverrides.clear();
+}
+
+void MapWindow::unloadMapOverlayState(){
+    routeMapOverlaysVisible = false;
+    tileMapVisibilityOverrides.clear();
+}
+
+void MapWindow::clearMapOverlayState(){
+    unloadMapOverlayState();
+    if(!QFile::remove(mapOverlayStatePath()) && QFile::exists(mapOverlayStatePath()))
+        qWarning() << "Unable to remove map-overlay state:" << mapOverlayStatePath();
+}
+
+bool MapWindow::mapOverlayVisibleForTile(int x, int z){
+    return tileMapVisibilityOverrides.value(mapTileKey(x, z), routeMapOverlaysVisible);
+}
+
+void MapWindow::setTileMapOverlayVisible(int x, int z, bool visible){
+    const QString key = mapTileKey(x, z);
+    if(visible == routeMapOverlaysVisible)
+        tileMapVisibilityOverrides.remove(key);
+    else
+        tileMapVisibilityOverrides.insert(key, visible);
+    saveMapOverlayState();
+}
+
+void MapWindow::setRouteMapOverlaysVisible(bool visible){
+    routeMapOverlaysVisible = visible;
+    tileMapVisibilityOverrides.clear();
+    saveMapOverlayState();
 }
 
 MapWindow::~MapWindow() {

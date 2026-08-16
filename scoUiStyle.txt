@@ -138,6 +138,14 @@ F2 terrain texture layout:
   - Keep Texture Set, terrain-layer tools, previews, presets, brush, embankment, and advanced maintenance as distinct work groups.
   - Put uncommon conform-bias and route-reset operations in the pinnable Terrain Utilities helper rather than crowding the everyday F2 panel.
 
+F6 PolyVeg Planter layout:
+  - Replace the ordinary right tools column while active; do not create a second column or narrow the OpenGL viewport.
+  - Use the standard GenX title strip with no native QDockWidget caption.
+  - Keep Planting, Planting Tools, Bake, Jump, and Status as distinct groups.
+  - Pair each slider with an editable, UI-scaled numeric field and preserve direct select-all replacement behavior.
+  - Keep dependent row controls indented and visible only while Rows is enabled.
+  - Anchor Status at the bottom. Show Baked Tiles as the full-width summary above Raw Objects and Baked Blocks.
+
 
 TOOLTIPS
 --------

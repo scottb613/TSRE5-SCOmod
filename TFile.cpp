@@ -576,6 +576,22 @@ void TFile::removeMat(int id){
     materialsCount--;
 }
 
+int TFile::resetMaterialsToDefault(){
+    // Terrain patches store material-table indices. A reset must move every
+    // reference to the new default entry; F3 map textures can otherwise leave
+    // references to slots discarded by the collapsed table.
+    const int patchCount = patchsetNpatches * patchsetNpatches;
+    for(int patch = 0; patch < patchCount; patch++)
+        tdata[patch * 13 + 6] = 0;
+
+    const int removed = materialsCount > 0 ? materialsCount - 1 : 0;
+    materials.clear();
+    amaterials.clear();
+    materialsCount = 0;
+    newMat();
+    return removed;
+}
+
 int TFile::getMatByTexture(QString tname){
     for(int j = 0; j < materialsCount; j++)
         for(int i = 0; i < materials[j].count153; i++){

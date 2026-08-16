@@ -23,6 +23,7 @@ class MapLib : public QThread
 public:
     MapLib();
     Texture* texture;
+    void load();
 
 private:
     

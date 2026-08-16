@@ -16,7 +16,7 @@
 class QImage;
 class IghCoordinate;
 class LatitudeLongitudeCoordinate;
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 
 class TerrainTreeWindow : public QDialog {
     Q_OBJECT

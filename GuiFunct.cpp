@@ -15,10 +15,61 @@
 #ifdef Q_OS_WIN
 #include <cstring>
 #include <windows.h>
+#include <mmsystem.h>
 #endif
 
 namespace {
 void applyGenXWindowsCaption(QWidget *window);
+
+void playGenXDialogSound(){
+    if(!Game::scoSoundEnabled)
+        return;
+#ifdef Q_OS_WIN
+    const QString soundPath = QCoreApplication::applicationDirPath()
+        + "/content/SCOpluck.wav";
+    if(QFile::exists(soundPath)){
+        ::PlaySoundW(NULL, NULL, 0);
+        ::PlaySoundW(reinterpret_cast<const wchar_t*>(soundPath.utf16()), NULL,
+                     SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+    }
+#endif
+}
+
+void replaceNativeMessageBoxIcon(QMessageBox *messageBox){
+    if(messageBox == NULL
+    || messageBox->property("scoNativeMessageSoundSuppressed").toBool())
+        return;
+
+    messageBox->setProperty("scoNativeMessageSoundSuppressed", true);
+    QStyle::StandardPixmap standardPixmap;
+    switch(messageBox->icon()){
+        case QMessageBox::Information:
+            standardPixmap = QStyle::SP_MessageBoxInformation;
+            break;
+        case QMessageBox::Warning:
+            standardPixmap = QStyle::SP_MessageBoxWarning;
+            break;
+        case QMessageBox::Critical:
+            standardPixmap = QStyle::SP_MessageBoxCritical;
+            break;
+        case QMessageBox::Question:
+            standardPixmap = QStyle::SP_MessageBoxQuestion;
+            break;
+        case QMessageBox::NoIcon:
+        default:
+            return;
+    }
+
+    const int iconSize = messageBox->style()->pixelMetric(
+        QStyle::PM_MessageBoxIconSize, NULL, messageBox);
+    const QPixmap pixmap = messageBox->style()->standardIcon(
+        standardPixmap, NULL, messageBox).pixmap(iconSize, iconSize);
+    if(!pixmap.isNull())
+        // A custom pixmap retains the expected visible icon while changing
+        // QMessageBox::icon() to NoIcon, preventing Qt/Windows from selecting
+        // a native information, warning, critical, or question sound.
+        messageBox->setIconPixmap(pixmap);
+}
 
 class ImportantDialogCenteringFilter : public QObject {
 public:
@@ -29,8 +80,20 @@ public:
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override {
         QWidget *dialog = qobject_cast<QWidget*>(watched);
+        QMessageBox *messageBox = qobject_cast<QMessageBox*>(dialog);
+        if(messageBox != NULL
+        && (event->type() == QEvent::Polish
+            || event->type() == QEvent::Show))
+            replaceNativeMessageBoxIcon(messageBox);
+
         if(dialog == NULL || event->type() != QEvent::Show)
             return QObject::eventFilter(watched, event);
+
+        if(messageBox != NULL
+        && !messageBox->property("scoDialogSoundPlayed").toBool()){
+            messageBox->setProperty("scoDialogSoundPlayed", true);
+            playGenXDialogSound();
+        }
 
         // Qt implements combo-box lists and menus as temporary top-level
         // popup widgets.  Calling winId() on those while they are being shown
@@ -800,6 +863,8 @@ bool GuiFunct::confirmDestructiveAction(QWidget *parent, const QString &heading,
     return warning.exec() == QMessageBox::Yes;
 }
 
+QPointer<EditorPopupWindow> EditorPopupWindow::activePopup;
+
 EditorPopupWindow::EditorPopupWindow(QWidget *owner, const QString &title,
                                      const QString &pinnedPositionKey, int baseWidth)
     : QWidget(owner == NULL ? NULL : owner->window(), Qt::Tool),
@@ -861,6 +926,15 @@ EditorPopupWindow::EditorPopupWindow(QWidget *owner, const QString &title,
     QObject::connect(pinButton, &QToolButton::clicked, this, [this](){
         popupPinClicked();
     });
+}
+
+void EditorPopupWindow::showExclusive(){
+    if(!activePopup.isNull() && activePopup != this)
+        activePopup->close();
+    activePopup = this;
+    show();
+    raise();
+    activateWindow();
 }
 
 QVBoxLayout *EditorPopupWindow::popupLayout() const {

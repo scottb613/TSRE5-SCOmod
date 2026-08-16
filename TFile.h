@@ -74,6 +74,7 @@ public:
     int cloneMat(int id);
     int getMatByTexture(QString tname);
     void removeMat(int id);
+    int resetMaterialsToDefault();
     void setBufferNames(QString name);
     void initNew(QString name, int samples, int sampleS, int patches);
     

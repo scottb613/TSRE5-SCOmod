@@ -61,6 +61,7 @@ signals:
     void requestMainFocus();
     void resetRouteTerrtexRequested();
     void disableRouteWaterRequested();
+    void deleteAllPolyVegBakesRequested();
     
 private:
     friend class HacksWindow;

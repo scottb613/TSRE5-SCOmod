@@ -77,8 +77,8 @@
 #include "RouteEditorClient.h"
 #include "Route.h"
 #include "TexLib.h"
-#include "PropertiesPolyForest.h"
 #include "PropertiesHazard.h"
+#include "PolyVegHelper.h"
 
 static int scaledUiSize(int base){
     return qRound(base * qMax(1.0f, Game::uiScale));
@@ -167,6 +167,37 @@ RouteEditorWindow::RouteEditorWindow() {
     activityBuilderWindow = new ActivityBuilderWindow(activityTools, this);
     //naviBox = new NaviBox();
     glWidget = new RouteEditorGLWidget(this);
+    polyVegHelper = new PolyVegHelper(this);
+    QObject::connect(polyVegHelper, &PolyVegHelper::settingsChanged,
+                     glWidget, &RouteEditorGLWidget::setPolyVegSettings);
+    QObject::connect(polyVegHelper, &PolyVegHelper::bakeRequested,
+                     glWidget, &RouteEditorGLWidget::bakeVegetationCurrentTile);
+    QObject::connect(polyVegHelper, &PolyVegHelper::bakeAllRequested,
+                     glWidget, &RouteEditorGLWidget::bakeAllVegetation);
+    QObject::connect(polyVegHelper, &PolyVegHelper::countsRequested,
+                     glWidget, &RouteEditorGLWidget::refreshPolyVegTileCounts);
+    QObject::connect(polyVegHelper, &PolyVegHelper::placeRulerRequested,
+                     glWidget, &RouteEditorGLWidget::placePolyVegRuler);
+    QObject::connect(polyVegHelper, &PolyVegHelper::removeRulerRequested,
+                     glWidget, &RouteEditorGLWidget::removePolyVegRuler);
+    QObject::connect(polyVegHelper, &PolyVegHelper::rulerAreaChanged,
+                     glWidget, &RouteEditorGLWidget::setPolyVegRulerArea);
+    QObject::connect(polyVegHelper, &PolyVegHelper::rulerWidthChanged,
+                     glWidget, &RouteEditorGLWidget::setPolyVegRulerWidth);
+    QObject::connect(polyVegHelper, &PolyVegHelper::plantRulerRequested,
+                     glWidget, &RouteEditorGLWidget::plantPolyVegRuler);
+    QObject::connect(polyVegHelper, &PolyVegHelper::jumpRawRequested,
+                     glWidget, &RouteEditorGLWidget::jumpNextPolyVegRawTile);
+    QObject::connect(polyVegHelper, &PolyVegHelper::resetRawJumpRequested,
+                     glWidget, &RouteEditorGLWidget::resetPolyVegRawJump);
+    QObject::connect(polyVegHelper, &PolyVegHelper::jumpBakeRequested,
+                     glWidget, &RouteEditorGLWidget::jumpNextPolyVegBakeTile);
+    QObject::connect(polyVegHelper, &PolyVegHelper::resetBakeJumpRequested,
+                     glWidget, &RouteEditorGLWidget::resetPolyVegBakeJump);
+    QObject::connect(glWidget, &RouteEditorGLWidget::polyVegHelperRequested,
+                     this, [this](){ showPolyVegHelper(true); });
+    QObject::connect(glWidget, &RouteEditorGLWidget::polyVegTileCounts,
+                     polyVegHelper, &PolyVegHelper::setTileCounts);
     
     shapeViewWindow = new ShapeViewWindow(this);
     aboutWindow = new AboutWindow(this);
@@ -297,6 +328,9 @@ RouteEditorWindow::RouteEditorWindow() {
         QObject::connect(trackProperties,
                          &PropertiesTrackObj::disableRouteWaterRequested,
                          terrainTools, &TerrainTools::disableRouteWaterTiles);
+        QObject::connect(trackProperties,
+                         &PropertiesTrackObj::deleteAllPolyVegBakesRequested,
+                         glWidget, &RouteEditorGLWidget::deleteAllPolyVegBakes);
     }
     
     //mainLayout3->addWidget(terrainTools);
@@ -318,6 +352,44 @@ RouteEditorWindow::RouteEditorWindow() {
     mainLayout->setContentsMargins(0,0,0,0);
     
     this->setCentralWidget(remain);
+    polyVegDock = new QDockWidget(tr("POLYVEG PLANTER"), this);
+    polyVegDock->setObjectName("polyVegDock");
+    polyVegDock->setAllowedAreas(Qt::RightDockWidgetArea);
+    polyVegDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    QWidget *polyVegDockTitle = new QWidget(polyVegDock);
+    polyVegDockTitle->setFixedHeight(0);
+    polyVegDock->setTitleBarWidget(polyVegDockTitle);
+    polyVegDock->setMinimumWidth(scaledUiSize(350));
+    QScrollArea *polyVegScroll = new QScrollArea(polyVegDock);
+    polyVegScroll->setObjectName("polyVegScroll");
+    polyVegScroll->setWidgetResizable(true);
+    polyVegScroll->setFrameShape(QFrame::NoFrame);
+    polyVegHelper->setParent(polyVegScroll, Qt::Widget);
+    polyVegScroll->setWidget(polyVegHelper);
+    polyVegDock->setWidget(polyVegScroll);
+    addDockWidget(Qt::RightDockWidgetArea, polyVegDock);
+    polyVegDock->hide();
+    QObject::connect(polyVegDock, &QDockWidget::visibilityChanged,
+                     glWidget, &RouteEditorGLWidget::setPolyVegHelperVisible);
+    QObject::connect(polyVegDock, &QDockWidget::visibilityChanged,
+                     this, [this](bool visible){
+        if(visible){
+            polyVegToolsPanelWasVisible = box != NULL && box->isVisible();
+            if(box != NULL)
+                box->hide();
+        } else if(polyVegToolsPanelWasVisible && box != NULL) {
+            box->show();
+            polyVegToolsPanelWasVisible = false;
+        }
+        if(polyVegHelperAction != NULL){
+            const QSignalBlocker blocker(polyVegHelperAction);
+            polyVegHelperAction->setChecked(visible);
+        }
+        if(!visible) {
+            polyVegHelper->clearPlacementTools();
+            glWidget->removePolyVegRuler();
+        }
+    });
     setWindowTitle(Game::AppName+" "+Game::AppVersion+" Route Editor");
     QFont menuFont = menuBar()->font();
     if(menuFont.pointSizeF() > 0)
@@ -515,6 +587,26 @@ RouteEditorWindow::RouteEditorWindow() {
     geoAction->setShortcut(QKeySequence("F3"));
     toolsMenu->addAction(geoAction);
     QObject::connect(geoAction, SIGNAL(triggered(bool)), this, SLOT(showToolsGeo(bool)));
+    QMenu *polyVegMenu = toolsMenu->addMenu(tr("PolyVeg"));
+    QAction *plantPolyVegAction = polyVegMenu->addAction(tr("Plant PolyVeg"));
+    QObject::connect(plantPolyVegAction, &QAction::triggered,
+                     glWidget, &RouteEditorGLWidget::plantConfiguredPolyVeg);
+    QAction *bakePolyVegAction = polyVegMenu->addAction(tr("Bake PolyVeg Tile"));
+    QObject::connect(bakePolyVegAction, &QAction::triggered,
+                     glWidget, &RouteEditorGLWidget::bakeVegetationPointerTile);
+    QAction *bakeAllPolyVegAction = polyVegMenu->addAction(tr("Bake PolyVeg LOD"));
+    QObject::connect(bakeAllPolyVegAction, &QAction::triggered,
+                     glWidget, &RouteEditorGLWidget::bakeAllVegetation);
+    polyVegHelperAction = polyVegMenu->addAction(tr("PolyVeg Planter"));
+    polyVegHelperAction->setCheckable(true);
+    polyVegHelperAction->setShortcut(QKeySequence("F6"));
+    QObject::connect(polyVegHelperAction, &QAction::toggled,
+                     this, [this](bool visible){
+        if(visible)
+            glWidget->requestPolyVegHelper();
+        else
+            showPolyVegHelper(false);
+    });
     activityAction = GuiFunct::newMenuCheckAction(tr("&Activity"), this); 
     activityAction->setChecked(false);    
     activityAction->setShortcut(QKeySequence("F4"));
@@ -640,6 +732,9 @@ RouteEditorWindow::RouteEditorWindow() {
     
     QObject::connect(geoTools, SIGNAL(createNewLoTiles(QMap<int, QPair<int, int>*>)),
                       glWidget, SLOT(createNewLoTiles(QMap<int, QPair<int, int>*>)));
+
+    QObject::connect(geoTools, SIGNAL(toggleRouteMapOverlays()),
+                      glWidget, SLOT(toggleRouteMapOverlays()));
     
     QObject::connect(glWidget, SIGNAL(routeLoaded(Route*)),
                       objTools, SLOT(routeLoaded(Route*)));
@@ -731,6 +826,7 @@ RouteEditorWindow::RouteEditorWindow() {
     restoreEditorFocusAfterButtons(geoTools, glWidget);
     restoreEditorFocusAfterButtons(box2, glWidget);
     restoreEditorFocusAfterButtons(statusWindow, glWidget);
+    restoreEditorFocusAfterButtons(polyVegHelper, glWidget);
     restoreEditorFocusAfterToolButtons(objTools, glWidget);
     restoreEditorFocusAfterToolButtons(statusWindow, glWidget);
 
@@ -740,6 +836,7 @@ RouteEditorWindow::RouteEditorWindow() {
     addUserClickSoundToButtons(terrainTools, glWidget);
     addUserClickSoundToButtons(geoTools, glWidget);
     addUserClickSoundToButtons(activityBuilderWindow, glWidget);
+    addUserClickSoundToButtons(polyVegHelper, glWidget);
     addUserClickSoundToToolButtons(objTools, glWidget);
     addUserClickSoundToToolButtons(statusWindow, glWidget);
     
@@ -857,6 +954,8 @@ void RouteEditorWindow::exitToLoadWindow(){
 }
 
 void RouteEditorWindow::hideRouteSessionWindows(){
+    if(polyVegDock != NULL)
+        polyVegDock->hide();
     const QWidgetList windows = QApplication::topLevelWidgets();
     for(QWidget *window : windows){
         if(window == NULL || window == this)
@@ -900,7 +999,6 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
     }
    
     UnsavedDialog unsavedDialog;   /// EFO need to add the stwqc here when terrain and world are split
-    unsavedDialog.setWindowTitle("Save changes?");
     unsavedDialog.setMsg("Save changes in route?");
     for(int i = 0; i < unsavedItems.size(); i++){
         unsavedDialog.items.addItem(unsavedItems[i]);
@@ -1411,6 +1509,18 @@ void RouteEditorWindow::hideAllTools(){
     box->setFixedWidth(scaledUiSize(250));
 }
 
+void RouteEditorWindow::showPolyVegHelper(bool show){
+    if(polyVegDock == NULL || polyVegHelper == NULL)
+        return;
+    if(!show){
+        polyVegDock->hide();
+        return;
+    }
+    polyVegHelper->openForCurrentRoute();
+    polyVegDock->show();
+    polyVegDock->raise();
+}
+
 void RouteEditorWindow::showProperties(GameObj* obj){
     // hide all
     //for (std::vector<PropertiesAbstract*>::iterator it = objProperties.begin(); it != objProperties.end(); ++it) {
@@ -1509,7 +1619,11 @@ void RouteEditorWindow::hideShowSettingsDialog(bool show){
 
 
 void RouteEditorWindow::hideShowToolWidget(bool show){
-    if(show) { box->show();     }
+    if(show) {
+        if(polyVegDock != NULL && polyVegDock->isVisible())
+            polyVegDock->hide();
+        box->show();
+    }
     else     { box->hide();    }
 }
 

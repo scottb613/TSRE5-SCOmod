@@ -24,7 +24,7 @@ public:
     Texture(int x, int y, int bpp, Brush* brush = NULL);
     virtual ~Texture();
 
-    unsigned char* imageData;
+    unsigned char* imageData = NULL;
     int bpp;
     int imageSize;
     int bytesPerPixel;
@@ -34,7 +34,7 @@ public:
     int texID;
     int type;
     int typk;
-    unsigned int* tex;
+    unsigned int* tex = NULL;
     QString pathid;
     QVector<QString> hashid;
     bool loaded = false;

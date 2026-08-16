@@ -30,6 +30,7 @@ public:
     virtual void render();
     virtual void render(int selectionColor, float lod = 0);
     void deleteVBO();
+    void releaseTexture();
     void setMaterial(float r, float g, float b);
     void setMaterial(const QString &path);
     void setMaterial(QString* path);

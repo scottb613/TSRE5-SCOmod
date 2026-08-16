@@ -1,0 +1,135 @@
+# TSRE GenX v0.12
+
+TSRE GenX v0.12 is the current Qt6/CMake community open-testing release after
+the immutable v0.11 checkpoint. The active source belongs on
+`tsre-scomod-wip`.
+
+## Highlights
+
+- Added a supported Visual Studio 2026/MSVC v143 CMake build lane using Qt's
+  `msvc2022_64` package and the `x64-windows-v143` vcpkg overlay. MinGW remains
+  the parity and release-package baseline.
+- Added the **F6 PolyVeg Planter** for deterministic planting from SCO LIDEX
+  contract-v2 polygons or a tile-locked corridor/Area ruler.
+- Added style-aware Flood Fill, permanent exclusions, TDB/RDB clearance, slope
+  and footprint protection, repeatable seeds, and route-global orchard rows.
+- Added high-count planting optimizations, concise timing/progress feedback,
+  loaded-world Raw/Baked/Tile status, and cycling jump controls.
+- Kept the last completed viewport frame visible during high-count generation
+  and placement, repainting once afterward. Successful plant and bake operations
+  queue one final `SCOsuccess.wav`; partial LOD bakes report the successful and
+  attempted tile counts without a success cue.
+- Added **Bake PolyVeg Tile** and bounded **Bake PolyVeg LOD** with verified
+  4x4 block creation, tile-local raw-instance purge, and safe asset cleanup.
+- Preserved and rendered Static-object `Matrix3x3` instance scale.
+- Hardened **Reset All TERRTEX** for canonical detailed/distant material reset
+  and safe generated-texture/saved-map cleanup.
+- Made F3 PNG overlays lazy-resident inside camera Tile LOD. Route sessions
+  start with overlays Off until explicitly enabled.
+- Fixed optimized-MSVC RAW terrain byte order and added display-only support
+  for experimental 512-sample, 4 m terrain.
+- Hardened NextGen Auto-Flex, corrected scaled-display Shape/Consist rotation,
+  standardized dialog sounds, improved F1 markers, and removed PolyForest.
+
+## PolyVeg Planter
+
+The full-height `POLYVEG PLANTER` panel replaces the normal right tools column
+while open. It reads route-owned `OpenRails/polyveg.json` definitions plus SCO
+LIDEX `osm_data/polyveg-polygons.geojson` and `polyveg-exclusions.geojson` data.
+GeoJSON is cached by path, size, and modification time.
+
+Pointer planting never crosses the pointer world tile. Flood Fill extends an
+operation only to polygons on that tile with the same category and fill style.
+The ruler supports a centerline corridor or closed Area; Unrestricted permits
+planting outside mapped PolyVeg while keeping permanent water, transport,
+building, developed-land, TDB, and RDB exclusions.
+
+One deterministic generator applies density or route-global Rows, operation
+Cap, seed, weighted shapes, yaw/scale variation, edge feathering, slope,
+clearance, minimum separation, and scaled-footprint overlap prevention. The
+high-count path avoids per-object world scans and reports generation/placement
+times.
+
+The panel reports loaded-world Raw Objects, Baked Blocks, and Baked Tiles. Bake
+PolyVeg Tile handles one loaded tile; Bake PolyVeg LOD handles only loaded
+pending tiles inside camera Tile LOD. Bake first writes and places every block,
+then clears Undo and purges only that tile's raw instances. Generated files are
+tracked in `OpenRails/forest-bakes.json` for safe save-time cleanup.
+
+## Terrain and maps
+
+Reset All TERRTEX rebuilds each successfully reset detailed and distant tile
+with one canonical material at index 0, redirects every patch to it, removes
+matching generated TERRTEX and saved maps, and preserves unrelated textures.
+
+F3 retains Tile Map and Route Map Show/Hide controls, but each route session
+starts with overlays Off. Saved PNGs decode incrementally only inside camera
+Tile LOD and release their resources after leaving it. Extended SCO_LHR travel
+across 545 maps remained at or below about 1.5 GB.
+
+The RAW decoder now reads low and high bytes in explicit order. Renderer
+buffers, map UV scale, and terrain height/flag lifetime derive from metadata,
+allowing experimental 512-sample/4 m display. Editing, seams, save behavior,
+and simulator compatibility remain outside this display-only gate.
+
+Obsolete eager `load.ace`/`details.ace` requests and their unused preview were
+removed; the TRK `LoadingScreen` field remains compatible.
+
+## Objects, track, and editor behavior
+
+Static objects separate rotation from `Matrix3x3` scale, use the scale for
+rendering/culling, preserve untouched source matrices, and reconstruct a scaled
+matrix after editor rotation. Ordinary `QDirection` objects retain their path.
+
+NextGen Auto-Flex validates geometry, length, tile relationship, and connection
+state before mutation. Shape/Consist viewers use logical mouse coordinates and
+F12 Mouse Speed. Message boxes follow GenX sounds without the native Windows
+sound. PolyForest was removed without renumbering neighboring IDs; standard
+Forest remains.
+
+## Verification status
+
+v0.12 supports both the Qt 6.11.1 MinGW 13.1 and Visual Studio 2026/MSVC v143
+build lanes. MinGW remains the parity and packaged-runtime baseline.
+
+The final clean Qt 6.11.1 MinGW 13.1 and Visual Studio 2026/MSVC v143 Release
+builds linked with zero errors on 2026-08-16. The MinGW build and active TST
+copy match at SHA-256
+`026D55414585F11BD54AE25A794363A23FA08AC1C2D89E8D3785536C7E0800DF`.
+The MSVC executable SHA-256 is
+`1448DA29E2F0D729BF5332573E78F713645585ECCDC2EF4185507292B15687E4`.
+
+Both post-build automated runs passed 7/7 on 2026-08-16: text encoding, DDS,
+Unicode whitespace, PolyVeg definition/generator, bake-manifest cleanup,
+PolyVeg OSM cache, and route-regression harness. MinGW completed in 1.39 seconds
+and MSVC in 1.38 seconds.
+
+Manual evidence covers the optimized terrain fix, scaled-viewer rotation, F1
+markers, standard Forest after PolyForest removal, 4 m terrain/map display,
+bounded map memory, Static scale display, dense PolyVeg planting, and a
+6,000-object PolyVeg save/reload. Remaining checks are consolidated in
+`TEST-MATRIX-v0.12.md`.
+
+## Acknowledgments and source lineage
+
+Piotr Gadecki, known as GokuMK, is the original author of TSRE5. He created the
+core editor, MSTS/Open Rails file handling, texture, terrain, activity, consist,
+and rendering systems on which GenX is built and shared that invaluable body of
+work with the community. His later TSRE5vc Qt6 and native compressed-texture
+work also supplied an essential independent reference for DXT color,
+transparency, alpha, and future GPU texture work.
+
+Eric Olesen, known as eric-from-trainsim, carried TSRE forward through the TSRE
+8.006 line that directly precedes GenX. His continuing editor, compatibility,
+imagery, rolling-stock, route-reporting, and dedicated 8.006n Qt6 work provided
+the primary source/API reference for preserving the behavior of the immediate
+GenX parent line.
+
+Peter Grønbæk Andersen produced the independent Eric-line Qt6/CMake port used
+as the primary build-structure and dependency-management reference. His CMake,
+vcpkg, deployment, and DDS-loading work supplied proven solutions that were
+reviewed and narrowly adapted to the GenX source rather than copied wholesale.
+
+TSRE GenX continues because these three bodies of work complement one another:
+Piotr's original application and technical foundation, Eric's sustained TSRE
+8.x development, and Peter's independent modern build and Qt6 migration work.

@@ -31,13 +31,15 @@ class SettingsDialog;
 class ShapeViewWindow;
 class PropertiesAbstract;
 class GameObj;
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 class ActivityEventWindow;
 class ActivityServiceWindow;
 class ActivityTrafficWindow;
 class ActivityTimetableWindow;
 class ErrorMessagesWindow;
 class ClientUsersWindow;
+class PolyVegHelper;
+class QDockWidget;
 
 class RouteEditorWindow : public QMainWindow
 {
@@ -93,6 +95,7 @@ public slots:
     void showToolsTerrain(bool show);
     void showToolsGeo(bool show);
     void showToolsActivity(bool show);
+    void showPolyVegHelper(bool show = true);
     
     void showTerrainTreeEditr();
     void showWorldObjPivotPointsEnabled(bool show);
@@ -212,6 +215,10 @@ private:
     ActivityTrafficWindow* activityTrafficWindow;
     ActivityTimetableWindow* activityTimetableWindow;
     ShapeViewWindow* shapeViewWindow;
+    PolyVegHelper* polyVegHelper = nullptr;
+    QDockWidget* polyVegDock = nullptr;
+    QAction* polyVegHelperAction = nullptr;
+    bool polyVegToolsPanelWasVisible = false;
     QTimer pinPositionTimer;
     bool applyingWindowPosition = false;
 };

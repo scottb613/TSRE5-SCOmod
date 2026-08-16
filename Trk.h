@@ -55,8 +55,6 @@ public:
     float timetableTollerance;
     float forestClearDistance = 0;
     float derailScale;
-    int imageLoadId;
-    int imageDetailsId;
     double *tsreProjection = NULL;
     int tsreMaxStaticDetailLevel = 10;
     bool isModified();

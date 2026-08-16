@@ -54,6 +54,12 @@ public:
     void appendWaterPoint(int x, int z, float *p);
     bool isVegetationRuler() const;
     void setVegetationRuler(bool enabled);
+    bool isVegetationArea() const;
+    void setVegetationArea(bool enabled);
+    bool acceptsVegetationTile(int x, int z) const;
+    bool hasValidVegetationArea() const;
+    float getVegetationWidth() const;
+    void setVegetationWidth(float metres);
     void appendVegetationPoint(int x, int z, float *p);
     bool isGradeRuler() const;
     void setGradeRuler(bool enabled);
@@ -67,7 +73,6 @@ public:
     void render(GLUU* gluu, float lod, float posx, float posz, float* playerW, float* target, float fov, int selectionColor, int renderMode);
 
 private:
-    static constexpr float VegetationHalfWidth = 50.0f;
     static constexpr float VegetationPostHeight = 50.0f;
     static constexpr float VegetationHandleGap = 5.0f;
     static constexpr float VegetationHandleSize = 4.0f;
@@ -96,6 +101,8 @@ private:
     float geoLength = 0;
     bool waterRuler = false;
     bool vegetationRuler = false;
+    bool vegetationArea = false;
+    float vegetationWidth = 100.0f;
     bool gradeRuler = false;
     bool specialPointMoved = false;
     

@@ -13,6 +13,7 @@
 #include "ShapeLib.h"
 #include "GLMatrix.h"
 #include <math.h>
+#include <algorithm>
 #include "ParserX.h"
 #include "TS.h"
 #include "TrackItemObj.h"
@@ -22,6 +23,7 @@
 #include "ErrorMessagesLib.h"
 #include "ErrorMessage.h"
 #include "Renderer.h"
+#include "PolyVegObject.h"
 
 StaticObj::StaticObj() {
     this->shape = -1;
@@ -196,7 +198,8 @@ void StaticObj::pushRenderItems(float lod, float posx, float posz, float* player
         }
     } else {
         if (Game::currentShapeLib->shape[shape]->loaded){
-            size = Game::currentShapeLib->shape[shape]->size;
+            size = Game::currentShapeLib->shape[shape]->size
+                    * std::max(matrixScale[0], std::max(matrixScale[1], matrixScale[2]));
             loadSnapablePoints();
         }
     }
@@ -262,7 +265,8 @@ void StaticObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos
         }
     } else {
         if (Game::currentShapeLib->shape[shape]->loaded){
-            size = Game::currentShapeLib->shape[shape]->size;
+            size = Game::currentShapeLib->shape[shape]->size
+                    * std::max(matrixScale[0], std::max(matrixScale[1], matrixScale[2]));
             loadSnapablePoints();
         }
     }
@@ -412,6 +416,10 @@ bool StaticObj::getBoxPoints(QVector<float>& points){
     return shapePointer->getBoxPoints(points);
 }
 
+QString StaticObj::getName(){
+    return PolyVegObject::labelForShape(fileName);
+}
+
 QString StaticObj::getShapePath(){
     if (!loaded) return "";
     if (shapePointer == 0) return "";
@@ -497,7 +505,10 @@ if(this->collideFunction > 0 )
 if(this->staticFlags != 0)
 *(out) << "		StaticFlags ( "<<ParserX::MakeFlagsString(this->staticFlags)<<" )\n";
 *(out) << "		Position ( "<<this->position[0]<<" "<<this->position[1]<<" "<<-this->position[2]<<" )\n";
-*(out) << "		QDirection ( "<<this->qDirection[0]<<" "<<this->qDirection[1]<<" "<<-this->qDirection[2]<<" "<<this->qDirection[3]<<" )\n";
+if(matrix3x3 != NULL || hasNonUnitMatrixScale())
+    writeMatrix3x3(out);
+else
+    *(out) << "		QDirection ( "<<this->qDirection[0]<<" "<<this->qDirection[1]<<" "<<-this->qDirection[2]<<" "<<this->qDirection[3]<<" )\n";
 if(Game::legacySupport)   *(out) << "		VDbId ( " << this->vDbId << " )\n";  // EFO 
 if(this->staticDetailLevel > -1)
 *(out) << "		StaticDetailLevel ( "<<this->staticDetailLevel<<" )\n";

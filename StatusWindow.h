@@ -15,7 +15,7 @@
 #include <QMap>
 
 class Coords;
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 class IghCoordinate;
 class LatitudeLongitudeCoordinate;
 

@@ -277,7 +277,6 @@ public:
         TrackObj = 305,
         DynTrack2 = 306,
         Forest = 308,
-        PolyForest = 309,
         CollideObject = 311,
         Signal = 317,
         Gantry2 = 356,

@@ -150,9 +150,7 @@ public:
             moveToDefaultPosition();
             everShown = true;
         }
-        show();
-        raise();
-        activateWindow();
+        showExclusive();
         targetGrade.setFocus();
         targetGrade.selectAll();
     }
@@ -394,6 +392,13 @@ public:
             "Turns off every water patch in every terrain tile across the route.");
         layout->addWidget(waterTilesOff);
 
+        QPushButton *deletePolyVegBakes =
+            new QPushButton("Delete All PolyVeg Bakes");
+        deletePolyVegBakes->setToolTip(
+            "Loads every world tile and deletes every PolyVeg bake object. "
+            "The deletion remains Undo-friendly until the route is saved.");
+        layout->addWidget(deletePolyVegBakes);
+
         QObject::connect(fixJNodePosn, &QPushButton::clicked, owner, [this](){
             this->owner->userButtonPressed();
             this->owner->fixJNodePosnEnabled();
@@ -434,6 +439,11 @@ public:
             emit this->owner->disableRouteWaterRequested();
             this->owner->requestMainFocus();
         });
+        QObject::connect(deletePolyVegBakes, &QPushButton::clicked, owner, [this](){
+            this->owner->userButtonPressed();
+            emit this->owner->deleteAllPolyVegBakesRequested();
+            this->owner->requestMainFocus();
+        });
 
         syncSelection();
         finalizePopup();
@@ -445,9 +455,7 @@ public:
             moveToDefaultPosition();
             everShown = true;
         }
-        show();
-        raise();
-        activateWindow();
+        showExclusive();
     }
 
     void refreshSelection(){

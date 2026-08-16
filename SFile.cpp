@@ -876,8 +876,32 @@ void SFile::refreshSeasonTextures() {
 }
 
 unsigned int SFile::newState(){
+    if(!releasedStateIds.isEmpty()) {
+        const auto released = releasedStateIds.constBegin();
+        const unsigned int stateId = *released;
+        releasedStateIds.erase(released);
+        state[static_cast<int>(stateId)] = State();
+        return stateId;
+    }
     state.push_back(State());
     return state.size() - 1;
+}
+
+void SFile::releaseState(unsigned int stateId){
+    if(stateId == 0 || stateId >= static_cast<unsigned int>(state.size()))
+        return;
+    state[static_cast<int>(stateId)] = State();
+    releasedStateIds.insert(stateId);
+}
+
+void SFile::compactReleasedStates(){
+    while(state.size() > 1) {
+        const unsigned int last = static_cast<unsigned int>(state.size()-1);
+        if(!releasedStateIds.remove(last))
+            break;
+        state.removeLast();
+    }
+    state.squeeze();
 }
 
 void SFile::setAnimated(unsigned int stateId, bool animated){

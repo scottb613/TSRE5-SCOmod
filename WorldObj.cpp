@@ -14,11 +14,11 @@
 #include "ParserX.h"
 #include "GLMatrix.h"
 #include <math.h>
+#include <cmath>
 #include <QString>
 #include "StaticObj.h"
 #include "DynTrackObj.h"
 #include "ForestObj.h"
-#include "PolyForestObj.h"
 #include "TransferObj.h"
 #include "TrackObj.h"
 #include "SpeedpostObj.h"
@@ -133,10 +133,6 @@ WorldObj* WorldObj::createObj(int sh) {
         nowy = (WorldObj*) (new ForestObj());
         (nowy)->resPath = Game::root + "/routes/" + Game::route + "/textures";
         (nowy)->typeID = (nowy)->forest;
-    } else if (sh == TS::PolyForest) {
-        nowy = (WorldObj*) (new PolyForestObj());
-        (nowy)->resPath = Game::root + "/routes/" + Game::route + "/textures";
-        (nowy)->typeID = (nowy)->polyforest;
     } else if (sh == TS::Transfer || sh == TS::Transfer2) {
         nowy = (WorldObj*) (new TransferObj());
         (nowy)->resPath = Game::root + "/routes/" + Game::route + "/textures";
@@ -220,10 +216,6 @@ WorldObj* WorldObj::createObj(QString sh) {
         nowy = (WorldObj*) (new ForestObj());
         (nowy)->resPath = Game::root + "/routes/" + Game::route + "/textures";
         (nowy)->typeID = (nowy)->forest;
-    } else if (sh == "polyforest") {
-        nowy = (WorldObj*) (new PolyForestObj());
-        (nowy)->resPath = Game::root + "/routes/" + Game::route + "/textures";
-        (nowy)->typeID = (nowy)->polyforest;
     } else if (sh == "transfer") {
         nowy = (WorldObj*) (new TransferObj());
         (nowy)->resPath = Game::root + "/routes/" + Game::route + "/textures";
@@ -345,6 +337,7 @@ WorldObj::WorldObj(const WorldObj& o) {
         matrix3x3 = new float[9];
         memcpy(matrix3x3, o.matrix3x3, sizeof(float)*9);
     }
+    Vec3::copy(matrixScale, (float*)o.matrixScale);
         
 }
 
@@ -459,6 +452,9 @@ void WorldObj::set(int sh, FileBuffer* data) {
     }
     if (sh == TS::QDirection) {
         data->off++;
+        delete[] matrix3x3;
+        matrix3x3 = NULL;
+        Vec3::set(matrixScale, 1.0f, 1.0f, 1.0f);
         qDirection[0] = data->getFloat();
         qDirection[1] = data->getFloat();
         qDirection[2] = data->getFloat();
@@ -469,6 +465,7 @@ void WorldObj::set(int sh, FileBuffer* data) {
     }
     if (sh == TS::Matrix3x3) {
         data->off++;
+        delete[] matrix3x3;
         matrix3x3 = new float[9];
         matrix3x3[0] = data->getFloat();
         matrix3x3[1] = data->getFloat();
@@ -479,9 +476,7 @@ void WorldObj::set(int sh, FileBuffer* data) {
         matrix3x3[6] = data->getFloat();
         matrix3x3[7] = data->getFloat();
         matrix3x3[8] = data->getFloat();
-        Quat::fromMat3((float*)&qDirection, matrix3x3);
-        Vec4::normalize((float*)&qDirection,(float*)&qDirection);
-        //Vec4::normalize((float*)&qDirection,(float*)&qDirection);
+        updateRotationAndScaleFromMatrix3x3();
         jestPQ++;
         return;
     }
@@ -531,6 +526,9 @@ void WorldObj::set(QString sh, FileBuffer* data) {
         return;
     }
     if (sh == ("qdirection")) {
+        delete[] matrix3x3;
+        matrix3x3 = NULL;
+        Vec3::set(matrixScale, 1.0f, 1.0f, 1.0f);
         qDirection[0] = ParserX::GetNumber(data);
         qDirection[1] = ParserX::GetNumber(data);
         qDirection[2] = ParserX::GetNumber(data);
@@ -540,6 +538,7 @@ void WorldObj::set(QString sh, FileBuffer* data) {
         return;
     }
     if (sh == ("matrix3x3")) {
+        delete[] matrix3x3;
         matrix3x3 = new float[9];
         matrix3x3[0] = ParserX::GetNumber(data);
         matrix3x3[1] = ParserX::GetNumber(data);
@@ -550,9 +549,7 @@ void WorldObj::set(QString sh, FileBuffer* data) {
         matrix3x3[6] = ParserX::GetNumber(data);
         matrix3x3[7] = ParserX::GetNumber(data);
         matrix3x3[8] = ParserX::GetNumber(data);
-        Quat::fromMat3((float*)&qDirection, matrix3x3);
-        Vec4::normalize((float*)&qDirection,(float*)&qDirection);
-        //Vec4::normalize((float*)&qDirection,(float*)&qDirection);
+        updateRotationAndScaleFromMatrix3x3();
         jestPQ++;
         return;
     }
@@ -626,9 +623,81 @@ void WorldObj::loadSnapablePoints(){
     
 }
 
+void WorldObj::updateRotationAndScaleFromMatrix3x3(){
+    float rotation[9];
+    for (int column = 0; column < 3; ++column) {
+        const int offset = column * 3;
+        const float x = matrix3x3[offset];
+        const float y = matrix3x3[offset + 1];
+        const float z = matrix3x3[offset + 2];
+        const float scale = std::sqrt(x*x + y*y + z*z);
+
+        if (!std::isfinite(scale) || scale <= 0.000001f) {
+            matrixScale[column] = 1.0f;
+            rotation[offset] = column == 0 ? 1.0f : 0.0f;
+            rotation[offset + 1] = column == 1 ? 1.0f : 0.0f;
+            rotation[offset + 2] = column == 2 ? 1.0f : 0.0f;
+            continue;
+        }
+
+        matrixScale[column] = scale;
+        rotation[offset] = x / scale;
+        rotation[offset + 1] = y / scale;
+        rotation[offset + 2] = z / scale;
+    }
+
+    Quat::fromMat3(qDirection, rotation);
+    Vec4::normalize(qDirection, qDirection);
+}
+
+bool WorldObj::hasNonUnitMatrixScale() const {
+    return std::fabs(matrixScale[0] - 1.0f) > 0.000001f
+            || std::fabs(matrixScale[1] - 1.0f) > 0.000001f
+            || std::fabs(matrixScale[2] - 1.0f) > 0.000001f;
+}
+
+void WorldObj::setUniformMatrixScale(float scale) {
+    if(!std::isfinite(scale) || scale <= 0.000001f)
+        return;
+    delete[] matrix3x3;
+    matrix3x3 = NULL;
+    Vec3::set(matrixScale, scale, scale, scale);
+    setModified();
+    setMartix();
+}
+
+float WorldObj::getUniformMatrixScale() const {
+    return (matrixScale[0] + matrixScale[1] + matrixScale[2]) / 3.0f;
+}
+
+void WorldObj::writeMatrix3x3(QTextStream* out) const {
+    if (matrix3x3 != NULL) {
+        *(out) << "\t\tMatrix3x3 ( "
+                << matrix3x3[0] << " " << matrix3x3[1] << " " << matrix3x3[2] << " "
+                << matrix3x3[3] << " " << matrix3x3[4] << " " << matrix3x3[5] << " "
+                << matrix3x3[6] << " " << matrix3x3[7] << " " << matrix3x3[8] << " )\n";
+        return;
+    }
+
+    float externalQuaternion[4] = {
+        qDirection[0], qDirection[1], -qDirection[2], qDirection[3]
+    };
+    float rotation[16];
+    Mat4::fromQuat(rotation, externalQuaternion);
+    *(out) << "\t\tMatrix3x3 ( "
+            << rotation[0] * matrixScale[0] << " " << rotation[1] * matrixScale[0] << " " << rotation[2] * matrixScale[0] << " "
+            << rotation[4] * matrixScale[1] << " " << rotation[5] * matrixScale[1] << " " << rotation[6] * matrixScale[1] << " "
+            << rotation[8] * matrixScale[2] << " " << rotation[9] * matrixScale[2] << " " << rotation[10] * matrixScale[2] << " )\n";
+}
+
 void WorldObj::setMartix(){
     Mat4::fromRotationTranslation(this->matrix, qDirection, position);
     Mat4::rotate(this->matrix, this->matrix, M_PI, 0, -1, 0);
+    for (int row = 0; row < 3; ++row) {
+        this->matrix[row] *= matrixScale[0];
+        this->matrix[4 + row] *= matrixScale[1];
+        this->matrix[8 + row] *= matrixScale[2];
+    }
 }
 
 void WorldObj::flip(bool flipShape){
@@ -681,7 +750,8 @@ void WorldObj::randomTransform(Ref::RandomTransformation * transformation){
         this->position[2] += translation;
         this->placedAtPosition[2] = this->position[2];
     }
-    if(matrix3x3 != NULL) matrix3x3 = NULL;
+    delete[] matrix3x3;
+    matrix3x3 = NULL;
     setModified();
     setMartix();
 }
@@ -689,7 +759,8 @@ void WorldObj::randomTransform(Ref::RandomTransformation * transformation){
 void WorldObj::rotate(float x, float y, float z){
     this->tRotation[0] += x;
     this->tRotation[1] += y;
-    if(matrix3x3 != NULL) matrix3x3 = NULL;
+    delete[] matrix3x3;
+    matrix3x3 = NULL;
 
     if(x!=0) Quat::rotateX(this->qDirection, this->qDirection, x);
     if(y!=0) Quat::rotateY(this->qDirection, this->qDirection, y);
@@ -951,7 +1022,8 @@ void WorldObj::adjustRotationToTerrain(){
     Game::terrainLib->getRotation((float*)&rot, x, y, position[0], position[2]);
     this->tRotation[0] += rot[0];
     this->tRotation[1] += rot[1];
-    if(matrix3x3 != NULL) matrix3x3 = NULL;
+    delete[] matrix3x3;
+    matrix3x3 = NULL;
     float *q = Quat::create();
     
     float vect[3];

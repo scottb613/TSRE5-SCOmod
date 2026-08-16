@@ -690,7 +690,6 @@ void ActivityTools::actSaveEnabled(){
     }
     
     UnsavedDialog unsavedDialog("SC");
-    unsavedDialog.setWindowTitle("Save changes?");
     unsavedDialog.setMsg("Save changes in activities?");
     for(int i = 0; i < unsavedItems.size(); i++){
         unsavedDialog.items.addItem(unsavedItems[i]);

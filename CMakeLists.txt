@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
     TSREvc
-    VERSION 0.11.0
+    VERSION 0.12.0
     DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )
@@ -59,6 +59,14 @@ list(
 )
 
 add_executable(TSRE5 WIN32 ${TSRE_SOURCES})
+
+if(MSVC)
+    set_property(
+        TARGET TSRE5
+        PROPERTY VS_DEBUGGER_ENVIRONMENT
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;%PATH%"
+    )
+endif()
 
 target_include_directories(
     TSRE5
@@ -117,7 +125,7 @@ if(BUILD_TESTING)
             "${CMAKE_COMMAND}"
             -E env
             "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
-            tsre_text_encoding_probe
+            "$<TARGET_FILE:tsre_text_encoding_probe>"
             "${CMAKE_CURRENT_BINARY_DIR}/qt6-text-encoding-probe.txt"
     )
 
@@ -139,7 +147,7 @@ if(BUILD_TESTING)
             "${CMAKE_COMMAND}"
             -E env
             "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
-            tsre_dds_decoder_probe
+            "$<TARGET_FILE:tsre_dds_decoder_probe>"
     )
 
     add_executable(
@@ -161,7 +169,101 @@ if(BUILD_TESTING)
             "${CMAKE_COMMAND}"
             -E env
             "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
-            tsre_parser_unicode_whitespace_probe
+            "$<TARGET_FILE:tsre_parser_unicode_whitespace_probe>"
+    )
+
+    add_executable(
+        tsre_forest_definition_probe
+        tests/ForestDefinitionProbe.cpp
+        ForestDefinition.cpp
+        ForestDefinition.h
+        ForestGenerator.cpp
+        ForestGenerator.h
+    )
+    target_include_directories(
+        tsre_forest_definition_probe
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    target_link_libraries(tsre_forest_definition_probe PRIVATE Qt6::Core)
+    add_test(
+        NAME tsre_forest_definition_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_forest_definition_probe>"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/forest.v1.example.json"
+    )
+
+    add_executable(
+        tsre_forest_osm_cache_probe
+        tests/ForestOsmCacheProbe.cpp
+        ForestOsmCache.cpp
+        ForestOsmCache.h
+    )
+
+    add_executable(
+        tsre_forest_patch_baker_probe
+        tests/ForestPatchBakerProbe.cpp
+        ForestPatchBaker.cpp
+        ForestPatchBaker.h
+    )
+
+    add_executable(
+        tsre_forest_bake_manifest_probe
+        tests/ForestBakeManifestProbe.cpp
+        ForestBakeManifest.cpp
+        ForestBakeManifest.h
+    )
+    target_include_directories(
+        tsre_forest_bake_manifest_probe
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    target_link_libraries(tsre_forest_bake_manifest_probe PRIVATE Qt6::Core Qt6::Gui)
+    add_test(
+        NAME tsre_forest_bake_manifest_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_forest_bake_manifest_probe>"
+    )
+    target_include_directories(
+        tsre_forest_patch_baker_probe
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    target_link_libraries(tsre_forest_patch_baker_probe PRIVATE Qt6::Core Qt6::Gui)
+
+    add_executable(
+        tsre_bake_forest_patch
+        tools/BakeForestPatch.cpp
+        ForestBakeManifest.cpp
+        ForestBakeManifest.h
+        ForestPatchBaker.cpp
+        ForestPatchBaker.h
+    )
+    target_include_directories(
+        tsre_bake_forest_patch
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    target_link_libraries(tsre_bake_forest_patch PRIVATE Qt6::Core Qt6::Gui)
+    target_include_directories(
+        tsre_forest_osm_cache_probe
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    target_link_libraries(tsre_forest_osm_cache_probe PRIVATE Qt6::Core)
+    add_test(
+        NAME tsre_forest_osm_cache_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_forest_osm_cache_probe>"
     )
 
     if(WIN32)

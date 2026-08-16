@@ -50,6 +50,7 @@ public:
     void setFixedTileHeight(Brush* brush, int x, int z, float* p);
     void toggleDraw(int x, int z, float* p);
     void setTileBlob(int x, int z, float* p);
+    void setRouteMapOverlayVisible(bool visible);
     void setTextureToTrackObj(Brush* brush, float* punkty, int length, int x, int z);
     void setTerrainToTrackObj(Brush* brush, float* punkty, int length, int x, int z, float* matrix, float offsetY = 0);
     void smoothTerrainToTrackObj(Brush* brush, float* punkty, int length, int x, int z, float* matrix);
@@ -71,6 +72,11 @@ public:
 private:
     QuadTree* quadTree = NULL;
     std::unordered_map<int, Terrain*> terrain;
+    bool mapOverlayResidencyValid = false;
+    int mapOverlayCenterX = 0;
+    int mapOverlayCenterZ = 0;
+    int mapOverlayRadius = 0;
+    void updateMapOverlayResidency(float *playerT);
 };
 
 #endif	/* TERRAINLIBSIMPLE_H */

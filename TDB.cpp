@@ -1282,7 +1282,13 @@ int TDB::newJunction(int x, int z, float* p, float* qe, int r, int uid, int end)
 }
 
 int TDB::joinTracks(int iendp) {
-    TRnode* endp = trackNodes[iendp];
+    auto endpointIt = trackNodes.find(iendp);
+    if(iendp <= 0 || endpointIt == trackNodes.end()
+            || endpointIt->second == NULL){
+        qWarning() << "Track join rejected: endpoint does not exist" << iendp;
+        return -1;
+    }
+    TRnode* endp = endpointIt->second;
 
     if(endp->typ == 0){
         for (int j = 1; j <= iTRnodes; j++) {
@@ -1295,8 +1301,20 @@ int TDB::joinTracks(int iendp) {
                     //if(Game::debugOutput) qDebug() << "connected " << iendp << " " << j;
                     //if(Game::debugOutput) qDebug() << n->TrPinS[0] << " " << n->TrPinK[0];
                     //if(Game::debugOutput) qDebug() << endp->TrPinS[0] << " " << endp->TrPinK[0];
-                    joinVectorSections(endp->TrPinS[0], n->TrPinS[0]);
-                    return 0;
+                    const int firstVector = endp->TrPinS[0];
+                    const int secondVector = n->TrPinS[0];
+                    auto firstIt = trackNodes.find(firstVector);
+                    auto secondIt = trackNodes.find(secondVector);
+                    if(firstVector <= 0 || secondVector <= 0
+                            || firstIt == trackNodes.end()
+                            || secondIt == trackNodes.end()
+                            || firstIt->second == NULL
+                            || secondIt->second == NULL){
+                        qWarning() << "Track join rejected: endpoint has an"
+                                << "invalid vector link" << iendp << j;
+                        return -1;
+                    }
+                    return joinVectorSections(firstVector, secondVector);
                 }
             }
         }

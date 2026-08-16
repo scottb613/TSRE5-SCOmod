@@ -32,9 +32,6 @@ public slots:
     void envNameEnabled(QString item);
     
 private:
-    QLabel imageGraphic;
-    QLabel imageLoad;
-    
     QLineEdit idName;
     QLineEdit displayName;
     QPlainTextEdit description;
@@ -53,9 +50,6 @@ private:
     QDoubleSpinBox tempRestrictedSpeed;
     QComboBox envName;
     QLineEdit envValue;
-    QComboBox iList;
-    QPushButton iCopy;
-    QPushButton iPaste;
 };
 
 #endif	/* TRKWINDOW_H */

@@ -203,6 +203,10 @@ void TerrainLib::setTileBlob(int x, int z, float* p){
 
 }
 
+void TerrainLib::setRouteMapOverlayVisible(bool visible){
+
+}
+
 void TerrainLib::setWaterLevelGui(int x, int z, float* p){
 
 }

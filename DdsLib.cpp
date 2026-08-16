@@ -15,7 +15,12 @@
 
 #include <cstring>
 
-bool DdsLib::IsThread = true;
+// Texture is a legacy shared object whose decode fields are consumed and
+// released by Texture::GLTextures() on the OpenGL thread.  Publishing those
+// raw fields from a worker can race the upload/free path and corrupt the heap.
+// Keep native DDS decode synchronous until Texture has an owned, queued
+// decode-result handoff.
+bool DdsLib::IsThread = false;
 
 DdsLib::DdsLib() {
 }

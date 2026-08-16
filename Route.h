@@ -105,6 +105,7 @@ public:
     void deleteObj(WorldObj* obj);
     int removeAllInteractives(bool gui = true);
     int deleteAllInstances(WorldObj *selected, bool gui = true);
+    int deleteAllPolyVegBakes(bool gui = true);
     void undoPlaceObj(int x, int y, int UiD);
     void removeTrackFromTDB(WorldObj* obj);
     void fillWorldObjectsByTrackItemId(QVector<WorldObj*> &objects, int tdbId, int id);

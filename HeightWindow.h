@@ -20,7 +20,7 @@ class QNetworkReply;
 class QImage;
 class IghCoordinate;
 class LatitudeLongitudeCoordinate;
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 class GeoTerrainFile;
 
 class HeightWindow : public QDialog {

@@ -33,7 +33,7 @@ class Eng;
 class GLUU;
 class Route;
 class Brush;
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 class Coords;
 class MapWindow;
 class ShapeLib;
@@ -45,6 +45,8 @@ class QFrame;
 class QLabel;
 class RulerObj;
 class Terrain;
+class TrackItemObj;
+class OglObj;
 
 QT_FORWARD_DECLARE_CLASS(QOpenGLShaderProgram)
 
@@ -70,6 +72,7 @@ public:
 public slots:
     void cleanup();
     void enableTool(QString name);
+    void toggleRouteMapOverlays();
     void userPlacementSound();
     void userPanelToggleSound();
     void userModeChangeSound();
@@ -134,6 +137,30 @@ public slots:
     void paintToolTileRoad();
     void paintToolWaterEdges();
     void paintToolResetTile();
+    void plantNearestOsmForest();
+    void setPolyVegSettings(QString recipeId, double density, int maximumTrees,
+                            quint64 seed, bool floodFill,
+                            bool disablePlantReport, bool rowsEnabled,
+                            double rowWidthMetres,
+                            double rowSpacingMetres,
+                            double rowDirectionDegrees);
+    void plantConfiguredPolyVeg();
+    void refreshPolyVegTileCounts();
+    void requestPolyVegHelper();
+    void placePolyVegRuler(double widthMetres, bool closedShape);
+    void setPolyVegRulerWidth(double widthMetres);
+    void setPolyVegRulerArea(bool closedShape);
+    void plantPolyVegRuler(bool overrideForestCoverage);
+    void removePolyVegRuler();
+    void jumpNextPolyVegRawTile();
+    void resetPolyVegRawJump();
+    void jumpNextPolyVegBakeTile();
+    void resetPolyVegBakeJump();
+    void setPolyVegHelperVisible(bool visible);
+    void bakeVegetationCurrentTile();
+    void bakeVegetationPointerTile();
+    void bakeAllVegetation();
+    void deleteAllPolyVegBakes();
     void setTerrainToObj();
     void smoothTerrainToObj();
     void setTerrainToNearestDbTile();
@@ -184,6 +211,8 @@ signals:
     void resetGradeHelperRequested();
     void waterHelperProgress(int value, int maximum, QString text);
     void waterHelperStatus(QString text);
+    void polyVegHelperRequested();
+    void polyVegTileCounts(int rawCount, int bakedCount, int bakedTileCount);
 
     
 protected:
@@ -209,6 +238,7 @@ private:
     bool validatePlacement(WorldObj* obj, Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);
     bool pointerNearPlacementDb(Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);
     void playPlacementSound(QString fileName);
+    void queuePolyVegSuccessSound();
     float trackGradePercent(GameObj *obj) const;
     bool applyGradeLockToPlacedTrack(bool previousTrackValid, int previousX, int previousY,
                                      unsigned int previousUid, float previousGrade, bool &gradeAchieved);
@@ -219,6 +249,39 @@ private:
     void runWaterRulerScan(float heightAboveBed, int tileRadius);
     void showWaterMessage(const QString &text, int visibleMilliseconds = 4500);
     void positionWaterMessage();
+    void renderPolyVegBakeMarkers();
+    bool bakeVegetationTile(bool usePointerTile);
+    bool preparePolyVegMapOverlays();
+    QString polyVegRecipeId;
+    double polyVegDensity = -1.0;
+    int polyVegMaximumTrees = -1;
+    quint64 polyVegSeed = 1;
+    bool polyVegFloodFill = false;
+    bool polyVegDisablePlantReport = false;
+    bool polyVegRowsEnabled = false;
+    double polyVegRowWidthMetres = 10.0;
+    double polyVegRowSpacingMetres = 10.0;
+    double polyVegRowDirectionDegrees = 0.0;
+    OglObj *polyVegBakeMarker = nullptr;
+    double polyVegRulerWidth = 100.0;
+    bool polyVegRulerArea = false;
+
+    bool tileHasPolyVegBake(int tileX, int tileZ);
+    void pushPolyVegBakeMarkers();
+    void selectPolyVegBakeTile(int tileX, int tileZ);
+    QVector<QPair<int, int>> polyVegTiles(bool baked) const;
+    void jumpNextPolyVegTile(bool baked);
+    QVector<QPair<int, int>> polyVegRawJumpTiles;
+    QVector<QPair<int, int>> polyVegBakeJumpTiles;
+    int polyVegRawJumpIndex = -1;
+    int polyVegBakeJumpIndex = -1;
+    bool polyVegHelperVisible = false;
+    bool polyVegHelperEnabledMapOverlays = false;
+    bool polyVegBatchBake = false;
+    int polyVegBatchTileX = 0;
+    int polyVegBatchTileZ = 0;
+    int polyVegBatchSourceCount = 0;
+    int polyVegBatchBlockCount = 0;
     QBasicTimer timer;
     unsigned long long int lastTime = 0;
     unsigned long long int timeNow = 0;

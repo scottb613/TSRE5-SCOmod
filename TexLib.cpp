@@ -19,6 +19,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QOpenGLContext>
+#include <QOpenGLFunctions>
 #include "Game.h"
 #include "Route.h"
 
@@ -86,6 +88,32 @@ void TexLib::delRef(int texx) {
     } catch (const std::out_of_range& oor) {
             
     }
+}
+
+void TexLib::releaseMapTexture(int texx) {
+    auto entry = mtex.find(texx);
+    if(entry == mtex.end() || entry->second == NULL)
+        return;
+
+    Texture *texture = entry->second;
+    if(!texture->pathid.endsWith(":maptex", Qt::CaseInsensitive))
+        return;
+
+    texture->ref--;
+    if(texture->ref > 0)
+        return;
+
+    if(texture->glLoaded && texture->tex != NULL){
+        QOpenGLContext *context = QOpenGLContext::currentContext();
+        if(context != NULL)
+            context->functions()->glDeleteTextures(1, texture->tex);
+    }
+    delete[] texture->tex;
+    texture->tex = NULL;
+    delete[] texture->imageData;
+    texture->imageData = NULL;
+    mtex.erase(entry);
+    delete texture;
 }
 
 void TexLib::addRef(int texx) {
@@ -286,8 +314,10 @@ int TexLib::addTex(QString pathid, bool reload) {
     } else if(tType == ":maptex"){
         MapLib* t = new MapLib();
         t->texture = newFile;
-        QObject::connect(t, &QThread::finished, t, &QObject::deleteLater);
-        t->start();
+        // Overlay residency can change on the next camera tile. Load the map
+        // synchronously so eviction cannot race a detached MapLib thread.
+        t->load();
+        delete t;
     }
     //AceLib::LoadACE(newFile);
     //tConcurrent::run();

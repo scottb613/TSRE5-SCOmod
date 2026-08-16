@@ -1,59 +1,130 @@
-# TSRE GenX v0.11
+# TSRE GenX v0.12
 
-TSRE GenX v0.11 advances the Qt6/CMake development line from the immutable
-v0.10 source checkpoint and packages the complete post-v0.10 work for community
-open testing. The reviewed source belongs on `tsre-scomod-wip`; the release is
-not an official TSRE release and does not replace Eric Olesen's continuing TSRE
-work.
+TSRE GenX v0.12 is the current Qt6/CMake community open-testing release after
+the immutable v0.11 checkpoint. The active source belongs on
+`tsre-scomod-wip`.
 
 ## Highlights
 
-- Updated the shared application, CMake, vcpkg, Windows resource, launcher, and document identity to v0.11.
-- Removed the final retained qmake application projects, qmake-only test project, obsolete qmake prerequisite, and `.qmake.stash` rule. CMake is the only maintained build path.
-- Corrected ENG/WAG token parsing for Unicode whitespace found in community Steam locomotive files, allowing affected rolling stock to appear in Consist Editor while preserving normal MSTS and Open Rails parsing.
-- Corrected NVIDIA-style uncompressed DDS loading for rolling stock such as SCO_MEC282 and SCO_RUT282. `DDSD_LINEARSIZE` is no longer mistaken for row pitch, with support retained for 24-bit RGB and 32-bit RGBA textures as well as DXT1, DXT3, and DXT5.
-- Fixed excessive memory growth when repeated ACE references resolve to DDS. Resolved textures now retain both names and reuse one decoded cache entry without overriding Image Upgrade, Image Substitution, direct DDS behavior, or route TERRTEX exclusions.
-- Corrected cached-texture reload bookkeeping so terrain reloads retain the intended texture ID instead of falling back to texture 0, and release short-lived decoder worker objects after loading.
-- Retired Classic Flex and made NextGen S-C-S-C-S Auto-Flex the only Dynamic Track solver. Object Selection supplies one editor-owned `NextGen Dynamic Track` category containing `Dynamic Track (Auto-Flex)`; route and addon REF-file `dyntrack` entries are ignored.
-- Unified `Ruler (water)` and `Ruler (vegetation)` as terrain-snapped special rulers with fifty-meter posts, highway-cone-orange cube handles, Select-mode point movement, terrain snap on release, and Undo.
-- Retained the forest-green vegetation planning ruler with its terrain-following magenta influence corridor fifty meters to each side, bounded mitered joins, and perpendicular end caps for future foliage-spline work.
-- Added a magenta two-endpoint `Ruler (grade)`. Its Properties panel reports `Average Grade` as per-mille, 1-in-X, angle, and percent using endpoint rise over horizontal run.
-- Made the water, vegetation, and grade rulers mutually exclusive. Starting any one removes the existing special ruler while leaving the ordinary measurement Ruler independent.
-- Improved special-ruler endpoint selection with a seven-meter invisible pick volume around each visible four-meter cube. The clicked encoded point is honored directly, with terrain proximity used only for genuine index collisions above sixteen points.
-- Added F12 `Instance Protection`, allowing multiple Route Editor instances when disabled while leaving Shape Viewer unrestricted. A blocked launch uses the standard stopped-action presentation and sound.
-- Hardened New Route latitude/longitude entry for up to twelve decimal places, valid geographic ranges, checked MSTS projection and tile conversion, and stopped-action feedback instead of a crash.
-- Protected encoded object-picking colors by bypassing solid-marker lighting during selection renders in every maintained Fog and Bloom shader.
-- Added flat-face lighting to original 3D marker cubes, directional pyramids, and Sound Source posts while preserving exact selection colors and the newer 2D-symbol option.
-- Made the original shaded 3D markers the fresh-install default by changing F12 `New Symbols` to Off; existing saved choices remain respected.
-- Added guarded manual GitHub Actions for immutable source tags, draft releases, approved-ZIP SHA-256 verification, and deliberate publication.
-- Completed a production-readiness compiler-warning audit without globally suppressing diagnostics. The pass corrected correctness, ownership, file-write, overload, deprecated-API, and control-flow issues and removed dead local allocations while preserving required interface parameters and parser reads with side effects.
+- Added a supported Visual Studio 2026/MSVC v143 CMake build lane using Qt's
+  `msvc2022_64` package and the `x64-windows-v143` vcpkg overlay. MinGW remains
+  the parity and release-package baseline.
+- Added the **F6 PolyVeg Planter** for deterministic planting from SCO LIDEX
+  contract-v2 polygons or a tile-locked corridor/Area ruler.
+- Added style-aware Flood Fill, permanent exclusions, TDB/RDB clearance, slope
+  and footprint protection, repeatable seeds, and route-global orchard rows.
+- Added high-count planting optimizations, concise timing/progress feedback,
+  loaded-world Raw/Baked/Tile status, and cycling jump controls.
+- Kept the last completed viewport frame visible during high-count generation
+  and placement, repainting once afterward. Successful plant and bake operations
+  queue one final `SCOsuccess.wav`; partial LOD bakes report the successful and
+  attempted tile counts without a success cue.
+- Added **Bake PolyVeg Tile** and bounded **Bake PolyVeg LOD** with verified
+  4x4 block creation, tile-local raw-instance purge, and safe asset cleanup.
+- Preserved and rendered Static-object `Matrix3x3` instance scale.
+- Hardened **Reset All TERRTEX** for canonical detailed/distant material reset
+  and safe generated-texture/saved-map cleanup.
+- Made F3 PNG overlays lazy-resident inside camera Tile LOD. Route sessions
+  start with overlays Off until explicitly enabled.
+- Fixed optimized-MSVC RAW terrain byte order and added display-only support
+  for experimental 512-sample, 4 m terrain.
+- Hardened NextGen Auto-Flex, corrected scaled-display Shape/Consist rotation,
+  standardized dialog sounds, improved F1 markers, and removed PolyForest.
+
+## PolyVeg Planter
+
+The full-height `POLYVEG PLANTER` panel replaces the normal right tools column
+while open. It reads route-owned `OpenRails/polyveg.json` definitions plus SCO
+LIDEX `osm_data/polyveg-polygons.geojson` and `polyveg-exclusions.geojson` data.
+GeoJSON is cached by path, size, and modification time.
+
+Pointer planting never crosses the pointer world tile. Flood Fill extends an
+operation only to polygons on that tile with the same category and fill style.
+The ruler supports a centerline corridor or closed Area; Unrestricted permits
+planting outside mapped PolyVeg while keeping permanent water, transport,
+building, developed-land, TDB, and RDB exclusions.
+
+One deterministic generator applies density or route-global Rows, operation
+Cap, seed, weighted shapes, yaw/scale variation, edge feathering, slope,
+clearance, minimum separation, and scaled-footprint overlap prevention. The
+high-count path avoids per-object world scans and reports generation/placement
+times.
+
+The panel reports loaded-world Raw Objects, Baked Blocks, and Baked Tiles. Bake
+PolyVeg Tile handles one loaded tile; Bake PolyVeg LOD handles only loaded
+pending tiles inside camera Tile LOD. Bake first writes and places every block,
+then clears Undo and purges only that tile's raw instances. Generated files are
+tracked in `OpenRails/forest-bakes.json` for safe save-time cleanup.
+
+## Terrain and maps
+
+Reset All TERRTEX rebuilds each successfully reset detailed and distant tile
+with one canonical material at index 0, redirects every patch to it, removes
+matching generated TERRTEX and saved maps, and preserves unrelated textures.
+
+F3 retains Tile Map and Route Map Show/Hide controls, but each route session
+starts with overlays Off. Saved PNGs decode incrementally only inside camera
+Tile LOD and release their resources after leaving it. Extended SCO_LHR travel
+across 545 maps remained at or below about 1.5 GB.
+
+The RAW decoder now reads low and high bytes in explicit order. Renderer
+buffers, map UV scale, and terrain height/flag lifetime derive from metadata,
+allowing experimental 512-sample/4 m display. Editing, seams, save behavior,
+and simulator compatibility remain outside this display-only gate.
+
+Obsolete eager `load.ace`/`details.ace` requests and their unused preview were
+removed; the TRK `LoadingScreen` field remains compatible.
+
+## Objects, track, and editor behavior
+
+Static objects separate rotation from `Matrix3x3` scale, use the scale for
+rendering/culling, preserve untouched source matrices, and reconstruct a scaled
+matrix after editor rotation. Ordinary `QDirection` objects retain their path.
+
+NextGen Auto-Flex validates geometry, length, tile relationship, and connection
+state before mutation. Shape/Consist viewers use logical mouse coordinates and
+F12 Mouse Speed. Message boxes follow GenX sounds without the native Windows
+sound. PolyForest was removed without renumbering neighboring IDs; standard
+Forest remains.
 
 ## Verification status
 
-The complete v0.11 Release build configured, compiled, and linked successfully. Its clean-build diagnostic count was reduced from 1,272 to 744 before the final low-risk cleanup; the final incremental changed-file pass completed with six warnings, all required but unused `TerrainLibQt` interface parameters, and no actionable warning in the rebuilt files.
+v0.12 supports both the Qt 6.11.1 MinGW 13.1 and Visual Studio 2026/MSVC v143
+build lanes. MinGW remains the parity and packaged-runtime baseline.
 
-All four configured automated tests passed in 2.28 seconds: MSTS/Open Rails text-encoding compatibility, DDS decoding (including NVIDIA-style 24-bit RGB and 32-bit RGBA linear-size headers), Unicode-whitespace parser handling, and the route-regression harness self-test. The maintained Fog and Bloom shaders also passed Khronos glslang validation.
+The final clean Qt 6.11.1 MinGW 13.1 and Visual Studio 2026/MSVC v143 Release
+builds linked with zero errors on 2026-08-16. The MinGW build and active TST
+copy match at SHA-256
+`026D55414585F11BD54AE25A794363A23FA08AC1C2D89E8D3785536C7E0800DF`.
+The MSVC executable SHA-256 is
+`1448DA29E2F0D729BF5332573E78F713645585ECCDC2EF4185507292B15687E4`.
 
-Community manual testing is still required for the new water, vegetation, and grade ruler placement/edit/save workflows; special-ruler picking from difficult camera angles; Dynamic Track Auto-Flex placement and Open Rails operation; SCO_MEC282/SCO_RUT282 Consist Editor appearance; ACE-to-DDS cache reuse and VSL peak memory; Instance Protection and unrestricted Shape Viewer launches; high-precision and invalid New Route coordinates; shaded marker appearance and exact selection; New Symbols defaults; and representative route save/reload behavior. These items remain explicitly marked pending in `TEST-MATRIX-v0.11.md` and are not claimed as passed.
+Both post-build automated runs passed 7/7 on 2026-08-16: text encoding, DDS,
+Unicode whitespace, PolyVeg definition/generator, bake-manifest cleanup,
+PolyVeg OSM cache, and route-regression harness. MinGW completed in 1.39 seconds
+and MSVC in 1.38 seconds.
+
+Manual evidence covers the optimized terrain fix, scaled-viewer rotation, F1
+markers, standard Forest after PolyForest removal, 4 m terrain/map display,
+bounded map memory, Static scale display, dense PolyVeg planting, and a
+6,000-object PolyVeg save/reload. Remaining checks are consolidated in
+`TEST-MATRIX-v0.12.md`.
 
 ## Download and installation
 
-Download `tsre-scomod-v0.11.zip` from the GitHub Releases page and extract it to
-a separate folder. Do not install it over another TSRE copy. Run
+Download `tsre-scomod-v0.12.zip` and its `.sha256` companion. Extract the ZIP
+to a separate folder; do not install it over another TSRE copy. Run
 `AddShortcutDesktop.cmd` if a desktop shortcut is wanted.
 
-The ZIP includes the executable, required runtime libraries and plugins,
-runtime content and assets, `LICENSE.md`, `THIRD-PARTY-NOTICES.txt`, and the
-public v0.11 documents. User settings, logs, build files, debug symbols, and
-source files are not included in the executable package.
+The ZIP contains one compiler-matched MinGW runtime, application assets, and
+the frozen public v0.12 documents. It excludes source, debug symbols, build
+output, logs, caches, user settings, and alternate-compiler runtime folders.
 
 ## Release status
 
-v0.11 is a work-in-progress community open-testing release for Windows 10
-version 1809 or later and Windows 11. The immutable source tag and packaged ZIP
-must identify the same reviewed source. Problems should be reported with the
-affected route or rolling stock, the operation performed, and the relevant TSRE
-log where available.
+v0.12 is a community open-testing release for 64-bit Windows 10 version 1809
+or later and Windows 11. Report problems with the affected route or rolling
+stock, the operation performed, and the relevant TSRE log when available.
 
 ## Acknowledgments and source lineage
 

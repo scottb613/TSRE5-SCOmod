@@ -1,47 +1,40 @@
-TSRE GenX v0.11 Community Open-Testing Work List
+TSRE GenX v0.12 Community Open-Testing Work List
 
 ======================================================================================================
 
 SCOPE
 
-TSRE GenX is a maintained development line of the TSRE route editor for MSTS and Open Rails route building. v0.9 delivered the Qt6/CMake modernization on master, v0.10 preserved the initial post-migration source checkpoint, and v0.11 carries the complete subsequent work into a community open-testing release on `tsre-scomod-wip`.
+TSRE GenX is a maintained development line of the TSRE route editor for MSTS and Open Rails route building. v0.9 delivered the Qt6/CMake modernization on master, v0.10 and v0.11 preserved subsequent source checkpoints, and immutable tag v0.12 records the completed code-only checkpoint from `tsre-scomod-wip`.
 
 TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Grønbæk Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.
 
 ======================================================================================================
 
-CURRENT RELEASE: V0.11 COMMUNITY OPEN TESTING
+COMPLETED SOURCE CHECKPOINT: V0.12
 
-Identity and release handling
+Build systems
 
-- Aligned the application, CMake, vcpkg, Windows resource, development-launcher, and public-document identity with v0.11.
-- Removed the eight retained legacy qmake project files, the obsolete qmake prerequisite check, and the `.qmake.stash` ignore rule; CMake/CTest is now the only maintained build path.
-- Preserved the immutable v0.10 source tag and document snapshot while preparing v0.11 as a new matching source tag and executable package on `tsre-scomod-wip`.
-- Added guarded manual GitHub Actions for immutable source tags, optional draft releases, approved-ZIP SHA-256 verification, and deliberate publication.
-- Completed a compiler-warning audit without global suppression, correcting actionable correctness, ownership, file-write, overload, deprecated-API, and control-flow findings while retaining required interface parameters and state-advancing parser reads.
+- Added a supported Visual Studio 2026/MSVC v143 CMake lane using Qt 6.11.1 msvc2022_64 and the x64-windows-v143 vcpkg overlay. The Qt 6.11.1 MinGW 13.1 lane remains the parity and release-package baseline.
 
-Dynamic Track and rolling-stock compatibility
+PolyVeg
 
-- Retired Classic Flex and made NextGen S-C-S-C-S Auto-Flex the only Dynamic Track solver and editor-owned placement choice.
-- Corrected Unicode-whitespace ENG/WAG token parsing so affected community Steam locomotives appear in Consist Editor.
-- Corrected NVIDIA-style 24-bit RGB and 32-bit RGBA uncompressed DDS loading while retaining DXT1, DXT3, and DXT5 support.
+- Added the F6 POLYVEG PLANTER for deterministic vegetation planting from SCO LIDEX contract-v2 polygons or a tile-locked corridor/Area ruler.
+- Pointer planting is always tile-clipped. Flood Fill is category/fill-style scoped; Unrestricted ruler planting retains permanent terrain-use, TDB, and RDB exclusions.
+- Density or route-global Rows, Cap, Seed, slope, edge, scale/yaw, clearance, minimum-separation, and footprint rules feed one shared deterministic generator.
+- High-count placement avoids growing world rescans, uses spatial neighbor lookup, throttles UI work, and reports generation/placement timing.
+- The visible viewport stays on its last completed frame during PolyVeg generation/placement progress updates and repaints once afterward. Successful plant, single-tile bake, and fully successful LOD bake operations queue one final SCOsuccess.wav; partial LOD results report successful/attempted tiles without a success cue.
+- The panel provides loaded-world Raw/Baked/Tile status and cycling jump controls.
+- Bake PolyVeg Tile and bounded Bake PolyVeg LOD create verified 4x4 block shapes before clearing Undo and purging only each baked tile's raw instances. A manifest supports safe save-time cleanup of unreferenced generated assets.
 
-Rulers and editor controls
+Terrain, maps, objects, and editor behavior
 
-- Unified `Ruler (water)` and `Ruler (vegetation)` with terrain-snapped movable points, fifty-meter posts, highway-cone-orange cube handles, terrain snap on release, and Undo.
-- Added a magenta two-endpoint `Ruler (grade)` whose Properties panel reports Average Grade as per-mille, 1-in-X, angle, and percent.
-- Made water, vegetation, and grade mutually exclusive while leaving the ordinary measurement Ruler independent; enlarged the invisible cube pick volume and honored the clicked encoded point directly.
-- Added F12 Instance Protection, defaulting to False, while keeping Shape Viewer unrestricted.
-- Hardened New Route latitude/longitude entry for up to twelve decimal places, strict geographic ranges, checked MSTS coordinate conversion, and standard stopped-action feedback instead of a crash.
+- Reset All TERRTEX returns detailed/distant tiles to one canonical material and safely removes generated tile textures and saved maps.
+- F3 saved PNGs are lazy-resident only inside camera Tile LOD. Route sessions start with overlays Off; extended 545-map travel remained at or below about 1.5 GB.
+- Fixed optimized-MSVC RAW terrain byte order and added display-only support for experimental 512-sample, 4 m terrain.
+- Preserved and rendered Static-object Matrix3x3 instance scale.
+- Hardened NextGen Auto-Flex/TrackDB rejection paths, corrected scaled-display Shape/Consist rotation, standardized dialog sounds, improved F1 markers, removed obsolete route-image loading, and removed PolyForest without shifting neighboring IDs.
 
-Memory, selection, and marker presentation
-
-- Fixed excessive memory growth from repeated ACE references resolving to DDS by reusing one decoded texture while preserving the image-upgrade, substitution, direct-DDS, and TERRTEX rules.
-- Corrected cached-texture reload IDs so terrain reloads retain the intended texture instead of falling back to texture 0, and release short-lived decoder worker objects after loading.
-- Fixed the selection-pick regression by bypassing solid-marker lighting during pick rendering in all maintained Fog and Bloom shaders.
-- Restored flat-face shading for original 3D cubes, directional pyramids, and Sound Source posts while leaving the newer 2D symbols unchanged; New Symbols now defaults to Off for fresh settings.
-
-v0.11 is designated for community open testing and remains separate from official TSRE development.
+The final clean MinGW and Visual Studio 2026/MSVC v143 Release builds linked with zero errors on 2026-08-16. MinGW matches TST at SHA-256 026D55414585F11BD54AE25A794363A23FA08AC1C2D89E8D3785536C7E0800DF; the MSVC executable is 1448DA29E2F0D729BF5332573E78F713645585ECCDC2EF4185507292B15687E4. Both post-build automated suites passed 7/7. Manual evidence and remaining focused checks are listed in TEST-MATRIX-v0.12.md.
 
 ======================================================================================================
 
@@ -125,14 +118,39 @@ TSRE GenX source repository:
 
 https://github.com/scottb613/TSRE5-SCOmod
 
-The immutable v0.10 source tag remains at its initial checkpoint. v0.11 is the next `tsre-scomod-wip` source and executable release candidate; its source tag and ZIP must identify the same reviewed source.
+The immutable v0.12 source tag is the latest completed checkpoint. Continuing development remains on `tsre-scomod-wip`; no runtime package or GitHub Release was replaced or published for this code-only cap.
 
 ======================================================================================================
 
 WORK DETAIL
 
-CURRENT RELEASE - v0.11 COMMUNITY OPEN TESTING
+CURRENT RELEASE - v0.12 COMMUNITY OPEN TESTING
 ==============================================
+
+   --- v0.12 PolyVeg Planter ---
+F6 opens the full-height POLYVEG PLANTER in the right tools column. It consumes route-owned OpenRails/polyveg.json definitions and SCO LIDEX contract-v2 planting/exclusion GeoJSON. Pointer planting is tile-clipped; Flood Fill is limited to the same category and fill style. The tile-locked ruler supports a corridor or closed Area, and Unrestricted retains permanent exclusion and database-clearance rules.
+
+One deterministic generator applies density or route-global rows, Cap, Seed, weighted shapes, yaw/scale variation, edge feather, slope, TDB/RDB clearance, minimum separation, and scaled-footprint overlap prevention. High-count operations use spatial lookup, cached baked-tile state, reusable placement references, and elapsed-time UI throttling. The panel reports loaded Raw Objects, Baked Blocks, and Baked Tiles and provides cycling jump controls.
+
+Bake PolyVeg Tile processes one loaded tile; Bake PolyVeg LOD processes only loaded pending tiles inside camera Tile LOD. Every block is written and placed before the raw sources are destroyed. A successful bake clears Undo and physically purges only that tile's raw instances. OpenRails/forest-bakes.json supports safe cleanup of generated shapes after saved bake deletion.
+
+   --- v0.12 Terrain, Maps, and Static Scale ---
+Reset All TERRTEX returns detailed and distant tiles to one canonical material at index 0, removes matching generated TERRTEX and saved maps, clears resident overlay resources, and preserves unrelated source textures.
+
+F3 saved PNGs load incrementally only for detailed terrain inside camera Tile LOD and release resources after leaving it. Each route session starts with overlays Off. Extended travel across SCO_LHR's 545 maps remained at or below about 1.5 GB. Obsolete eager load.ace/details.ace requests and their unused preview were removed while TRK LoadingScreen serialization remains unchanged.
+
+The RAW terrain decoder now reads low/high bytes in explicit order. Renderer storage, UV scale, and terrain-array lifetime derive from metadata, permitting display of experimental 512-sample/4 m terrain and maps. Editing, seams, saving, and simulator compatibility are not claimed for that format.
+
+Static objects preserve Matrix3x3 axis scale, apply it to rendering/culling, retain untouched source matrices, and reconstruct scaled matrices after editor rotation. Ordinary QDirection objects retain their established path.
+
+   --- v0.12 Track, UI, and Cleanup ---
+NextGen Auto-Flex and TrackDB joining reject invalid geometry, collapsed or overlength connections, unsupported cross-tile joins, and already-connected endpoints before mutation. Shape/Consist rotation uses logical mouse coordinates and F12 Mouse Speed. Message boxes follow GenX sounds without the native Windows sound. F1 markers and the unsaved-change caption were corrected. The unfinished PolyForest object was removed without changing neighboring numeric IDs; standard Forest remains.
+
+   --- v0.12 Verification ---
+The final clean MinGW and Visual Studio 2026/MSVC v143 Release builds linked with zero errors on 2026-08-16. MinGW matches TST at SHA-256 026D55414585F11BD54AE25A794363A23FA08AC1C2D89E8D3785536C7E0800DF; the MSVC executable is 1448DA29E2F0D729BF5332573E78F713645585ECCDC2EF4185507292B15687E4. Their post-build CTest runs passed 7/7 in 1.39 and 1.38 seconds respectively. Confirmed manual evidence and the single consolidated list of remaining checks are maintained in TEST-MATRIX-v0.12.md.
+
+EARLIER COMMUNITY RELEASE - v0.11
+================================
 
    --- v0.11 Version Identity and Release Line ---
 The application, CMake project, vcpkg manifest, Windows resource, development launchers, and public documents share the v0.11 identity. The existing v0.10 source tag and document snapshot remain immutable. v0.11 carries all completed post-v0.10 work into a new `tsre-scomod-wip` source tag and matching community executable package. CMake is the only maintained build path after removal of the retained qmake application and test projects, qmake prerequisite, and obsolete `.qmake.stash` rule.

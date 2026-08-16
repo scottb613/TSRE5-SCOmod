@@ -31,6 +31,7 @@ public:
     void set(QString sh, FileBuffer* data);
     void save(QTextStream* out);
     QString getShapePath();
+    QString getName() override;
     int getDefaultDetailLevel();
     int getCollisionType();
     void setCollisionType(int val);

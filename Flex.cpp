@@ -539,6 +539,60 @@ bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
         float preferredMinCurveRadius, const float *sourceQ,
         const float *destinationQ, float *resolvedSourceYaw){
     TDB* tdb = Game::trackDB;
+    visualElev = 0.0f;
+    averageElev = 0.0f;
+    if(dyntrackSections == NULL || p1 == NULL || p2 == NULL){
+        qWarning() << "Auto-Flex rejected: missing connection geometry";
+        return false;
+    }
+    std::fill(dyntrackSections, dyntrackSections + 10, 0.0f);
+
+    auto finiteValues = [](const float *values, int count) {
+        if(values == NULL)
+            return false;
+        for(int i = 0; i < count; ++i){
+            if(!std::isfinite(values[i]))
+                return false;
+        }
+        return true;
+    };
+    if(!finiteValues(p1, 3) || !finiteValues(p2, 3)
+            || (sourceQ != NULL && !finiteValues(sourceQ, 4))
+            || (destinationQ != NULL && !finiteValues(destinationQ, 4))){
+        qWarning() << "Auto-Flex rejected: non-finite connection geometry";
+        return false;
+    }
+    if(tdb == NULL && (sourceQ == NULL || destinationQ == NULL)){
+        qWarning() << "Auto-Flex rejected: track database is unavailable";
+        return false;
+    }
+
+    const double tileDeltaX = static_cast<double>(x2)
+            - static_cast<double>(x1);
+    const double tileDeltaZ = static_cast<double>(z2)
+            - static_cast<double>(z1);
+    const double worldDx = tileDeltaX * 2048.0
+            + static_cast<double>(p2[0]) - p1[0];
+    const double worldDy = static_cast<double>(p2[1]) - p1[1];
+    const double worldDz = tileDeltaZ * 2048.0
+            + static_cast<double>(p2[2]) - p1[2];
+    const double chordLength = std::sqrt(worldDx * worldDx
+            + worldDy * worldDy + worldDz * worldDz);
+    const double minimumConnectionLength = std::max(
+            0.001, static_cast<double>(Game::trackGap));
+    constexpr double maximumConnectionLength = 2048.0;
+    if(!std::isfinite(chordLength)
+            || chordLength < minimumConnectionLength){
+        qWarning() << "Auto-Flex rejected: source and destination"
+                << "collapse into the same track connection";
+        return false;
+    }
+    if(chordLength > maximumConnectionLength + 0.001){
+        qWarning() << "Auto-Flex rejected: connection exceeds the"
+                << "2048 metre dynamic-track limit";
+        return false;
+    }
+
     qDebug() <<"flex "<< x1 << " " << z1 << " " << p1[0] << " " << p1[1] << " " << p1[2];
     qDebug() <<"flex "<< x2 << " " << z2 << " " << p2[0] << " " << p2[1] << " " << p2[2];
 
@@ -565,9 +619,9 @@ bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
     }
 
     float destinationWorld[3] = {
-        p2[0] + 2048.0f * (x2 - x1),
+        static_cast<float>(p2[0] + 2048.0 * tileDeltaX),
         p2[1],
-        p2[2] + 2048.0f * (z2 - z1)
+        static_cast<float>(p2[2] + 2048.0 * tileDeltaZ)
     };
     const float rise = destinationWorld[1] - p1[1];
     const float deltaX = destinationWorld[0] - p1[0];
@@ -606,9 +660,11 @@ bool Flex::AutoFlex(int x1, int z1, float* p1, int x2, int z2, float* p2,
         const float adjustedDeltaZ = rightZ * lateralDistance
                 + forwardZ * unpitchedForward;
         float adjustedP2[3] = {
-            p1[0] + adjustedDeltaX - 2048.0f * (x2 - x1),
+            static_cast<float>(p1[0] + adjustedDeltaX
+                    - 2048.0 * tileDeltaX),
             p2[1],
-            -(-p1[2] + adjustedDeltaZ) - 2048.0f * (z2 - z1)
+            static_cast<float>(-(-p1[2] + adjustedDeltaZ)
+                    - 2048.0 * tileDeltaZ)
         };
 
         for(int destinationDirection = 0;

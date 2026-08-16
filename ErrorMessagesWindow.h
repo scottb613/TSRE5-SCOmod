@@ -16,7 +16,7 @@
 #include <QMap>
 
 class ErrorMessageProperties;
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 class GameObj;
 
 class ErrorMessagesWindow : public QWidget {

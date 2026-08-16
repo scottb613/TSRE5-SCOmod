@@ -9,6 +9,7 @@
  */
 
 #include "ShapeLib.h"
+#include <QDir>
 #include "Game.h"
 #include <QDebug>
 #include "SFile.h"
@@ -72,6 +73,27 @@ int ShapeLib::addShape(QString path, QString texPath) {
    
     
     return jestshape++;      
+}
+
+bool ShapeLib::reloadShapeIfCached(QString path) {
+    path = QDir::cleanPath(path);
+    path.replace("\\", "/");
+
+    for(auto it = shape.begin(); it != shape.end(); ++it) {
+        SFile *cachedShape = it->second;
+        if(cachedShape == NULL)
+            continue;
+
+        QString cachedPath = QDir::cleanPath(cachedShape->pathid);
+        cachedPath.replace("\\", "/");
+        if(cachedPath.compare(path, Qt::CaseInsensitive) != 0)
+            continue;
+
+        if(cachedShape->loaded == 1)
+            cachedShape->reload();
+        return true;
+    }
+    return false;
 }
 
 void ShapeLib::refreshSeasonTextures() {

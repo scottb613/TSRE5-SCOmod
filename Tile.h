@@ -61,6 +61,7 @@ public:
     WorldObj* getObj(int id);
     WorldObj* findNearestObj(float *pos);
     void deleteObject(WorldObj* obj);
+    int purgeObjects(const QVector<WorldObj*> &objects);
     WorldObj* placeObject(WorldObj* obj);
     WorldObj* placeObject(float* p, Ref::RefItem* itemData);
     WorldObj* placeObject(float* p, float* q, Ref::RefItem* itemData, float* tpos = NULL);

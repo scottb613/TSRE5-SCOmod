@@ -19,6 +19,10 @@
 MapLib::MapLib() {
 }
 
+void MapLib::load(){
+    run();
+}
+
 void MapLib::run(){
     qDebug() << texture->pathid;
     QString hashName = texture->pathid.split(".")[0];

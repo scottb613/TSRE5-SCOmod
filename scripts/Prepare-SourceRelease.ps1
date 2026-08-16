@@ -49,7 +49,7 @@ if ($LASTEXITCODE -ne 0 -or $status.Count -ne 0) {
 }
 
 $versionNumber = $Version.Substring(1) + '.0'
-$releaseCopy = Join-Path $repoRoot "masterDocs\ReleaseCopies\$Version"
+$releaseCopy = Join-Path $repoRoot "docsMaster\ReleaseCopies\$Version"
 $sourceRoot = Join-Path $repoRoot 'TSREvcWIP'
 
 foreach ($required in @(
@@ -127,17 +127,25 @@ $publicCMake = $publicCMake.Replace(
 )
 $scaffoldPattern = '(?ms)\r?\n# Keep the scaffold configurable before the frozen source is imported\..*?^endif\(\)\r?\n'
 $publicCMake = [regex]::Replace($publicCMake, $scaffoldPattern, "`r`n")
-$publicCMake = $publicCMake.Replace('TSREvcWIP/DdsDecoder', 'DdsDecoder')
-$publicCMake = $publicCMake.Replace('TSREvcWIP/ParserX', 'ParserX')
-$publicCMake = $publicCMake.Replace('TSREvcWIP/FileBuffer', 'FileBuffer')
+$publicCMake = $publicCMake.Replace('TSREvcWIP/', '')
+$publicCMake = $publicCMake.Replace(
+    '${CMAKE_CURRENT_SOURCE_DIR}/docsInternal/proposals/forest.v1.example.json',
+    '${CMAKE_CURRENT_SOURCE_DIR}/tests/data/forest.v1.example.json'
+)
 $publicCMake = $publicCMake.Replace(
     '# Preserve the imported root-level source layout during the first migration.',
     '# Keep the established public source layout at the repository root.'
 )
-if ($publicCMake.Contains('TSREvcWIP') -or $publicCMake.Contains('docs/00-baseline.md')) {
+if ($publicCMake.Contains('TSREvcWIP') -or $publicCMake.Contains('docsInternal/')) {
     throw 'Public CMake transformation left a development-layout path behind.'
 }
 [IO.File]::WriteAllText($publicCMakePath, $publicCMake, [Text.UTF8Encoding]::new($false))
+
+$testsDataDestination = Join-Path $destinationPath 'tests\data'
+New-Item -ItemType Directory -Force -Path $testsDataDestination | Out-Null
+Copy-Item -Force -LiteralPath (
+    Join-Path $repoRoot 'docsInternal\proposals\forest.v1.example.json'
+) -Destination (Join-Path $testsDataDestination 'forest.v1.example.json')
 
 $publicVcpkgPath = Join-Path $destinationPath 'vcpkg.json'
 $publicVcpkg = [IO.File]::ReadAllText($publicVcpkgPath).Replace(
@@ -149,7 +157,7 @@ $publicVcpkg = [IO.File]::ReadAllText($publicVcpkgPath).Replace(
 $testsReadmePath = Join-Path $destinationPath 'tests\README.md'
 if (Test-Path -LiteralPath $testsReadmePath -PathType Leaf) {
     $testsReadme = [IO.File]::ReadAllText($testsReadmePath).Replace(
-        '`docs/03-test-matrix.md`',
+        '`docsInternal/03-test-matrix.md`',
         ('`Docs/TEST-MATRIX-' + $Version + '.md`')
     )
     [IO.File]::WriteAllText($testsReadmePath, $testsReadme, [Text.UTF8Encoding]::new($false))

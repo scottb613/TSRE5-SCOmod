@@ -17,7 +17,6 @@
 #include "ParserX.h"
 #include "ReadFile.h"
 #include "FileBuffer.h"
-#include "TexLib.h"
 
 Trk::Trk() {
     graphic = "graphic.ace";
@@ -296,8 +295,6 @@ void Trk::loadUtf16Data(FileBuffer* data){
         ParserX::SkipToken(data);
     }
 
-    imageLoadId = TexLib::addTex(Game::root+"/routes/"+idName+"/load.ace");
-    imageDetailsId = TexLib::addTex(Game::root+"/routes/"+idName+"/details.ace");
     modified = false;
 }
 

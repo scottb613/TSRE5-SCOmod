@@ -14,6 +14,7 @@
 #include "ParserX.h"
 #include "ReadFile.h"
 #include "WorldObj.h"
+#include "SFile.h"
 #include "StaticObj.h"
 #include "DynTrackObj.h"
 #include "ForestObj.h"
@@ -629,6 +630,67 @@ void Tile::deleteObject(WorldObj* obj){
             return;
         }
     }
+}
+
+int Tile::purgeObjects(const QVector<WorldObj*> &objects){
+    if(objects.isEmpty())
+        return 0;
+
+    QSet<WorldObj*> purgeSet;
+    purgeSet.reserve(objects.size());
+    for(WorldObj *object : objects)
+        if(object != NULL)
+            purgeSet.insert(object);
+
+    QSet<SFile*> releasedShapes;
+    std::unordered_map<int, WorldObj*> retained;
+    const int retainedCapacity = qMax(
+        0, jestObiektow-static_cast<int>(purgeSet.size()));
+    retained.reserve(static_cast<size_t>(retainedCapacity));
+    int retainedCount = 0;
+    int purgedCount = 0;
+    int retainedHidden = 0;
+    int retainedMaxUiD = 0;
+    int retainedMaxUiDWS = 100000;
+
+    for(int index = 0; index < jestObiektow; ++index) {
+        WorldObj *object = obiekty[index];
+        if(object == NULL)
+            continue;
+        if(purgeSet.contains(object)) {
+            object->unselect();
+            if(object->shapePointer != NULL && object->shapeState > 0) {
+                object->shapePointer->releaseState(object->shapeState);
+                releasedShapes.insert(object->shapePointer);
+                object->shapePointer = NULL;
+                object->shapeState = 0;
+            }
+            delete object;
+            ++purgedCount;
+            continue;
+        }
+
+        retained[retainedCount++] = object;
+        if(!object->loaded)
+            ++retainedHidden;
+        if(object->isSoundItem())
+            retainedMaxUiDWS = qMax(retainedMaxUiDWS,
+                                     static_cast<int>(object->UiD));
+        else
+            retainedMaxUiD = qMax(retainedMaxUiD,
+                                  static_cast<int>(object->UiD));
+    }
+
+    for(SFile *shape : releasedShapes)
+        shape->compactReleasedStates();
+    obiekty.swap(retained);
+    jestObiektow = retainedCount;
+    jestHiddenObj = retainedHidden;
+    maxUiD = retainedMaxUiD;
+    maxUiDWS = retainedMaxUiDWS;
+    if(purgedCount > 0)
+        modified = true;
+    return purgedCount;
 }
 
 WorldObj* Tile::placeObject(WorldObj* obj){

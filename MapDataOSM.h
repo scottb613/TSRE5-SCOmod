@@ -18,7 +18,7 @@
 
 class IghCoordinate;
 class LatitudeLongitudeCoordinate;
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 class QImage;
 class QColor;
 class QPen;

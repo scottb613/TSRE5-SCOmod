@@ -4,6 +4,72 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.12 community open-testing release
+
+- ForestDefinition.cpp / ForestDefinition.h
+- ForestGenerator.cpp / ForestGenerator.h
+- ForestOsmCache.cpp / ForestOsmCache.h
+- ForestPatchBaker.cpp / ForestPatchBaker.h
+- ForestBakeManifest.cpp / ForestBakeManifest.h
+- PolyVegHelper.cpp / PolyVegHelper.h
+- PolyVegObject.cpp / PolyVegObject.h
+- RouteEditorGLWidget.cpp / RouteEditorGLWidget.h
+- RouteEditorWindow.cpp / RouteEditorWindow.h
+- RulerObj.cpp / RulerObj.h
+- Route.cpp / Route.h
+- Tile.cpp / Tile.h
+- SFile.cpp / SFile.h
+- ShapeLib.cpp / ShapeLib.h
+  - Added the F6 PolyVeg Planter, contract-v2 definition/geodata loading, deterministic polygon/ruler/Area/row generation, high-count placement, status/jump tools, hard-commit tile/LOD baking, tile-local instance purge, generated-shape cache refresh, and manifest-backed save cleanup.
+
+- StaticObj.cpp / StaticObj.h
+- WorldObj.cpp / WorldObj.h
+  - Preserved, rendered, culled, and serialized per-instance Static Matrix3x3 scale while retaining the ordinary QDirection path.
+
+- Terrain.cpp / Terrain.h
+- TerrainLibQt.cpp / TerrainLibQt.h
+- TerrainLibSimple.cpp / TerrainLibSimple.h
+- TerrainTools.cpp
+- MapWindow.cpp / MapWindow.h
+- MapLib.cpp / MapLib.h
+- TexLib.cpp / TexLib.h
+- Texture.cpp / Texture.h
+  - Hardened full TERRTEX reset, made saved PNG overlays camera-LOD resident, started each route with overlays Off, corrected 4 m display buffers/UVs/lifetime, and removed obsolete eager route-image requests.
+
+- TFile.cpp / TFile.h
+  - Made little-endian RAW terrain byte order explicit for optimized compilers.
+
+- Flex.cpp / Flex.h
+- TDB.cpp
+  - Rejected invalid, collapsed, overlength, cross-tile, and already-connected NextGen Auto-Flex/TrackDB requests before mutation.
+
+- GuiFunct.cpp / GuiFunct.h
+- main.cpp
+- ShapeViewerGLWidget.cpp
+- ShapeViewerWindow.cpp
+- ConEditorWindow.cpp
+- Consist.cpp / Consist.h
+- ObjTools.cpp
+  - Corrected logical-coordinate viewer rotation and Mouse Speed, standardized QMessageBox sounds, updated F1 category markers, and completed related UI cleanup.
+
+- PolyForestObj.cpp / PolyForestObj.h (removed)
+- PropertiesPolyForest.cpp / PropertiesPolyForest.h (removed)
+- ParserX.cpp
+- PropertiesAbstract.cpp
+  - Removed unfinished nonstandard PolyForest factories, parser/editor hooks, properties, and seasonal invalidation without renumbering neighboring IDs.
+
+- CMakeLists.txt
+- CMakePresets.json
+- vcpkg.json
+- scripts/Check-Prerequisites.ps1
+- scripts/Invoke-CMake.ps1
+- AAA_Compile.ps1
+- tests/ForestDefinitionProbe.cpp
+- tests/ForestOsmCacheProbe.cpp
+- tests/ForestPatchBakerProbe.cpp
+- tests/ForestBakeManifestProbe.cpp
+  - Added the maintained MinGW/VS2026 build lanes and focused PolyVeg validation, generator, geodata, bake, and cleanup coverage.
+
 v0.11 community open-testing release
 
 - CMakeLists.txt

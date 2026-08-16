@@ -136,6 +136,7 @@ public:
     void getWTileIds(QSet<int> &ids);
     void setErrorBias(float val);
     void setTileBlob();
+    void setMapOverlayVisible(bool visible);
     void makeTextureFromMap();
     void removeTextureFromMap();
     void fillHeightMap(float *data);

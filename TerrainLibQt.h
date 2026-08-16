@@ -11,6 +11,7 @@
 #define	TERRAINLIBQT_H
 
 #include "TerrainLib.h"
+#include <QSet>
 
 class FileBuffer;
 class QTextStream;
@@ -58,6 +59,7 @@ public:
     void setFixedTileHeight(Brush* brush, int x, int z, float* p);
     void toggleDraw(int x, int z, float* p);
     void setTileBlob(int x, int z, float* p);
+    void setRouteMapOverlayVisible(bool visible);
     void setTextureToTrackObj(Brush* brush, float* punkty, int length, int x, int z);
     void setTerrainToTrackObj(Brush* brush, float* punkty, int length, int x, int z, float* matrix, float offsetY = 0);
     void smoothTerrainToTrackObj(Brush* brush, float* punkty, int length, int x, int z, float* matrix);
@@ -86,8 +88,14 @@ protected:
     QHash<unsigned int, TerrainInfo*> terrainQt;
     QHash<unsigned int, TerrainInfo*> terrainQtLo;
     QHash<unsigned int, TerrainInfo*> *currentQt = NULL;
+    bool mapOverlayResidencyValid = false;
+    int mapOverlayCenterX = 0;
+    int mapOverlayCenterZ = 0;
+    int mapOverlayRadius = 0;
+    QSet<int> mapOverlayUnavailableTiles;
     
     void spiralLoop(int n, int &x, int &y);
+    void updateMapOverlayResidency(float *playerT);
 };
 
 #endif	/* TERRAINLIBQT_H */

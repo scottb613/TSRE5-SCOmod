@@ -18,7 +18,7 @@ class Route;
 class GameObj;
 class Activity;
 class ActivityServiceDefinition;
-class PreciseTileCoordinate;
+struct PreciseTileCoordinate;
 class Path;
 
 class ActivityTools : public QWidget{
