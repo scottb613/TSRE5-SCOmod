@@ -16,23 +16,36 @@
 #include "SigCfg.h"
 #include "SignalShape.h"
 #include "ParserX.h"
-#include "Game.h"
-#include "TextEditDialog.h"
 #include "GLMatrix.h"
-#include <QGuiApplication>
-#include <QScreen>
+#include "GuiFunct.h"
 
 PropertiesSignal::PropertiesSignal() {
+    GuiFunct::applyEditorPanelStyle(this);
     signalWindow = new SignalWindow(this);
     
     QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    const int panelMargin = qRound(4.0f * qBound(0.75f, Game::uiScale, 1.25f));
+    const int cardMargin = qRound(6.0f * qBound(0.75f, Game::uiScale, 1.25f));
+    vbox->setSpacing(3);
+    vbox->setContentsMargins(panelMargin,panelMargin,panelMargin,panelMargin);
+    auto addSubtitle = [this, vbox](const QString &text){
+        QLabel *label = new QLabel(QString(QChar(0x2022)) + ' ' + text, this);
+        GuiFunct::styleEditorSubtitle(label);
+        vbox->addWidget(label);
+    };
+    auto makeCard = [this, cardMargin](){
+        QFrame *card = new QFrame(this);
+        GuiFunct::styleEditorPanelCard(card);
+        QVBoxLayout *layout = new QVBoxLayout(card);
+        layout->setContentsMargins(cardMargin,cardMargin,cardMargin,cardMargin);
+        layout->setSpacing(3);
+        return qMakePair(card, layout);
+    };
     
     infoLabel = new QLabel("Signal:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    infoLabel->setContentsMargins(3,0,0,0);
+    GuiFunct::styleEditorSubtitle(infoLabel);
     vbox->addWidget(infoLabel);
+    auto identityCard = makeCard();
     QFormLayout *vlist = new QFormLayout;
     vlist->setSpacing(2);
     vlist->setContentsMargins(3,0,3,0);
@@ -42,37 +55,45 @@ PropertiesSignal::PropertiesSignal() {
     vlist->addRow("UiD:",&this->uid);
     vlist->addRow("Tile X:",&this->tX);
     vlist->addRow("Tile Z:",&this->tY);
-    vbox->addItem(vlist);
-    QLabel* label = new QLabel("Name:");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    vbox->addWidget(&name);
-    label = new QLabel("Description:");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    vbox->addWidget(&description);
+    GuiFunct::alignEditorForm(vlist);
+    identityCard.second->addLayout(vlist);
+    vbox->addWidget(identityCard.first);
+    auto shapeCard = makeCard();
+    QFormLayout *shapeForm = new QFormLayout;
+    shapeForm->setContentsMargins(0,0,0,0);
+    shapeForm->addRow("Shape:", &name);
+    shapeForm->addRow("Desc:", &description);
+    GuiFunct::alignEditorForm(shapeForm);
+    shapeCard.second->addLayout(shapeForm);
+    subObjectsButton = new QPushButton("Subobjects...", this);
+    subObjectsButton->setCheckable(true);
+    subObjectsButton->setFocusPolicy(Qt::NoFocus);
+    subObjectsButton->setProperty("editorPopupKey", "signalSubObjects");
+    GuiFunct::styleEditorActionButton(subObjectsButton);
+    shapeCard.second->addWidget(subObjectsButton);
+    connect(subObjectsButton, &QPushButton::clicked, this, [this](){
+        emit userButtonPressed();
+    });
+    connect(subObjectsButton, &QPushButton::toggled,
+            this, &PropertiesSignal::showSubObjList);
+    vbox->addWidget(shapeCard.first);
     /// EFO shift signal by negative signal offset
-    QPushButton *button = new QPushButton("Shift", this);
-    vbox->addWidget(button);    
+    addSubtitle("Signal Actions");
+    auto signalActionsCard = makeCard();
+    QPushButton *button = new QPushButton("Shift -Offset", this);
+    GuiFunct::styleEditorActionButton(button);
+    signalActionsCard.second->addWidget(button);
     connect(button, SIGNAL(released()), this, SLOT(shiftSignal()));    
-    button = new QPushButton("Flip", this);
-    vbox->addWidget(button);
+    button = new QPushButton("Shift +Offset", this);
+    GuiFunct::styleEditorActionButton(button);
+    signalActionsCard.second->addWidget(button);
     connect(button, SIGNAL(released()), this, SLOT(flipSignal()));
     chFlipShape.setText("Flip Shape");
     chFlipShape.setChecked(true);
-    vbox->addWidget(&chFlipShape);
-    label = new QLabel("SubObjects:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    button = new QPushButton("Show list", this);
-    vbox->addWidget(button);
-    connect(button, SIGNAL(released()), this, SLOT(showSubObjList()));
-    
-    label = new QLabel("Position & Rotation:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    signalActionsCard.second->addWidget(&chFlipShape);
+    vbox->addWidget(signalActionsCard.first);
+    addSubtitle("Position & Rotation");
+    auto positionCard = makeCard();
     vlist = new QFormLayout;
     vlist->setSpacing(2);
     vlist->setContentsMargins(3,0,3,0);
@@ -90,38 +111,46 @@ PropertiesSignal::PropertiesSignal() {
     this->quat.setDisabled(true);
     this->quat.setAlignment(Qt::AlignCenter);
     vlist->addRow("Rot:",&this->quat);
-    vbox->addItem(vlist);
+    GuiFunct::alignEditorForm(vlist);
+    positionCard.second->addLayout(vlist);
     QGridLayout *posRotList = new QGridLayout;
     posRotList->setSpacing(2);
     posRotList->setContentsMargins(0,0,0,0);    
 
     QPushButton *copyPos = new QPushButton("Copy Pos", this);
+    GuiFunct::styleEditorActionButton(copyPos);
     QObject::connect(copyPos, SIGNAL(released()),
                       this, SLOT(copyPEnabled()));
     QPushButton *pastePos = new QPushButton("Paste", this);
+    GuiFunct::styleEditorActionButton(pastePos);
     QObject::connect(pastePos, SIGNAL(released()),
                       this, SLOT(pastePEnabled()));
     QPushButton *copyQrot = new QPushButton("Copy Rot", this);
+    GuiFunct::styleEditorActionButton(copyQrot);
     QObject::connect(copyQrot, SIGNAL(released()),
                       this, SLOT(copyREnabled()));
     QPushButton *pasteQrot = new QPushButton("Paste", this);
+    GuiFunct::styleEditorActionButton(pasteQrot);
     QObject::connect(pasteQrot, SIGNAL(released()),
                       this, SLOT(pasteREnabled()));
     QPushButton *copyPosRot = new QPushButton("Copy Pos+Rot", this);
+    GuiFunct::styleEditorActionButton(copyPosRot);
     QObject::connect(copyPosRot, SIGNAL(released()),
                       this, SLOT(copyPREnabled()));
     QPushButton *pastePosRot = new QPushButton("Paste", this);
+    GuiFunct::styleEditorActionButton(pastePosRot);
     QObject::connect(pastePosRot, SIGNAL(released()),
                       this, SLOT(pastePREnabled()));
     QPushButton *resetQrot = new QPushButton("Reset Rot", this);
+    GuiFunct::styleEditorActionButton(resetQrot);
     QObject::connect(resetQrot, SIGNAL(released()),
                       this, SLOT(resetRotEnabled()));
     QPushButton *qRot90 = new QPushButton("Rot Y 90°", this);
+    GuiFunct::styleEditorActionButton(qRot90);
     QObject::connect(qRot90, SIGNAL(released()),
                       this, SLOT(rotYEnabled()));
-    QPushButton *transform = new QPushButton("Transform ...", this);
-    QObject::connect(transform, SIGNAL(released()),
-                      this, SLOT(transformEnabled()));
+    QPushButton *transform = new QPushButton("Transform...", this);
+    configureTransformButton(transform);
     
     posRotList->addWidget(copyPos, 0, 0);
     posRotList->addWidget(pastePos, 0, 1);
@@ -132,14 +161,13 @@ PropertiesSignal::PropertiesSignal() {
     posRotList->addWidget(resetQrot, 3, 0);
     posRotList->addWidget(qRot90, 3, 1);
     posRotList->addWidget(transform, 4, 0, 1, 2);
-    vbox->addItem(posRotList);
+    positionCard.second->addLayout(posRotList);
+    vbox->addWidget(positionCard.first);
     
     // EFO adding StaticDetailLevel to Signals
     
-    label = new QLabel("Detail Level:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    addSubtitle("Detail Level");
+    auto detailCard = makeCard();
     this->defaultDetailLevel.setDisabled(true);
     this->defaultDetailLevel.setAlignment(Qt::AlignCenter);
     this->enableCustomDetailLevel.setText("Custom");
@@ -159,35 +187,36 @@ PropertiesSignal::PropertiesSignal() {
     detailLevelView->addWidget(&defaultDetailLevel, 0, 1);
     detailLevelView->addWidget(&enableCustomDetailLevel, 1, 0);
     detailLevelView->addWidget(&customDetailLevel, 1, 1);
-    vbox->addItem(detailLevelView);
+    detailCard.second->addLayout(detailLevelView);
+    vbox->addWidget(detailCard.first);
     
     /// EFO End adding StaticDetailLevel to Signal
     
-    label = new QLabel("Flags:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    addSubtitle("Rendering & Flags");
+    auto flagsCard = makeCard();
     this->flags.setDisabled(true);
     this->flags.setAlignment(Qt::AlignCenter);
-    vbox->addWidget(&this->flags);
+    flagsCard.second->addWidget(&this->flags);
     QGridLayout *flagslView = new QGridLayout;
     flagslView->setSpacing(2);
     flagslView->setContentsMargins(0,0,0,0);    
     QPushButton *copyFlags = new QPushButton("Copy Flags", this);
+    GuiFunct::styleEditorActionButton(copyFlags);
     QObject::connect(copyFlags, SIGNAL(released()),
                       this, SLOT(copyFEnabled()));
     QPushButton *pasteFlags = new QPushButton("Paste", this);
+    GuiFunct::styleEditorActionButton(pasteFlags);
     QObject::connect(pasteFlags, SIGNAL(released()),
                       this, SLOT(pasteFEnabled()));
     flagslView->addWidget(copyFlags,0,0);
     flagslView->addWidget(pasteFlags,0,1);
-    vbox->addItem(flagslView);
+    flagsCard.second->addLayout(flagslView);
     checkboxAnim.setText("Animate Object");
     checkboxTerrain.setText("Terrain Object");
-    vbox->addWidget(&checkboxAnim);
+    flagsCard.second->addWidget(&checkboxAnim);
     QObject::connect(&checkboxAnim, SIGNAL(stateChanged(int)),
                       this, SLOT(checkboxAnimEdited(int)));
-    vbox->addWidget(&checkboxTerrain);
+    flagsCard.second->addWidget(&checkboxTerrain);
     QObject::connect(&checkboxTerrain, SIGNAL(stateChanged(int)),
                       this, SLOT(checkboxTerrainEdited(int)));
     cShadowType.addItem("No Shadow");
@@ -196,27 +225,35 @@ PropertiesSignal::PropertiesSignal() {
     cShadowType.addItem("Treeline Shadow");
     cShadowType.addItem("Dynamic Shadow");
     cShadowType.setStyleSheet("combobox-popup: 0;");
-    vbox->addWidget(&cShadowType);
+    flagsCard.second->addWidget(&cShadowType);
+    vbox->addWidget(flagsCard.first);
     QObject::connect(&cShadowType, SIGNAL(currentIndexChanged(int)),
                       this, SLOT(cShadowTypeEdited(int)));
     
-    label = new QLabel("Advanced:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    QPushButton *hacks = new QPushButton("Hacks", this);
-    QObject::connect(hacks, SIGNAL(released()),
-                      this, SLOT(hacksButtonEnabled()));
-    vbox->addWidget(hacks);
+    addSubtitle("Advanced");
+    auto advancedCard = makeCard();
+    hacks.setText("HACKS...");
+    hacks.setCheckable(true);
+    hacks.setFocusPolicy(Qt::NoFocus);
+    hacks.setProperty("editorPopupKey", "hacksHelper");
+    hacks.setToolTip("Open context-sensitive repair and cleanup tools for the selected signal and route.");
+    GuiFunct::styleEditorActionButton(&hacks);
+    QObject::connect(&hacks, &QPushButton::clicked, this, [this](){
+        emit userButtonPressed();
+    });
+    QObject::connect(&hacks, &QPushButton::toggled, this, [this](bool checked){
+        GuiFunct::setEditorPopupButtonActive(&hacks, checked);
+        emit hacksToggled(sobj, &hacks, checked);
+    });
+    advancedCard.second->addWidget(&hacks);
+    vbox->addWidget(advancedCard.first);
     
     QObject::connect(signalWindow, SIGNAL(sendMsg(QString,QString)),
-        this, SLOT(msg(QString,QString)));   
-
-
-    label = new QLabel("To link signals: click \"Link\" followed by \"Set Head\" before clicking on the track vector to protect");
-    label->setContentsMargins(3,20,0,0);
-    label->setWordWrap(true);
-    vbox->addWidget(label);
+        this, SLOT(msg(QString,QString)));
+    QObject::connect(signalWindow, &SignalWindow::helperClosed,
+                     this, &PropertiesSignal::subObjectsWindowClosed);
+    QObject::connect(signalWindow, &SignalWindow::userButtonPressed,
+                     this, &PropertiesSignal::userButtonPressed);
 
     
     vbox->addStretch(1);
@@ -224,6 +261,8 @@ PropertiesSignal::PropertiesSignal() {
 }
 
 PropertiesSignal::~PropertiesSignal() {
+    delete signalWindow;
+    signalWindow = NULL;
 }
 
 void PropertiesSignal::msg(QString name, QString val){
@@ -275,11 +314,10 @@ void PropertiesSignal::showObj(GameObj* obj){
     
     this->name.setText(sobj->fileName);
     this->description.setText(signalShape->desc);
+    this->name.setToolTip(this->name.text());
+    this->description.setToolTip(this->description.text());
 
     signalWindow->showObj(sobj);
-    
-    const QRect rec = QGuiApplication::primaryScreen()->geometry();
-    signalWindow->move(rec.width()/2-signalWindow->width()/2 ,rec.height()/2-signalWindow->height()/2);
     
     this->flags.setText(ParserX::MakeFlagsString(sobj->staticFlags));
     this->checkboxAnim.blockSignals(true);
@@ -387,8 +425,23 @@ void PropertiesSignal::flipSignal(){
     Undo::StateEnd();
 }
 
-void PropertiesSignal::showSubObjList(){
-    this->signalWindow->show();
+void PropertiesSignal::showSubObjList(bool checked){
+    GuiFunct::setEditorPopupButtonActive(subObjectsButton, checked);
+    if(checked)
+        signalWindow->showForOwner();
+    else
+        signalWindow->close();
+}
+
+QPushButton *PropertiesSignal::hacksButton(){
+    return &hacks;
+}
+
+void PropertiesSignal::subObjectsWindowClosed(){
+    subObjectsButton->blockSignals(true);
+    subObjectsButton->setChecked(false);
+    subObjectsButton->blockSignals(false);
+    GuiFunct::setEditorPopupButtonActive(subObjectsButton, false);
 }
 
 bool PropertiesSignal::support(GameObj* obj){
@@ -432,59 +485,6 @@ void PropertiesSignal::cShadowTypeEdited(int val){
     worldObj->setShadowType((WorldObj::ShadowType)val);
     this->flags.setText(ParserX::MakeFlagsString(worldObj->staticFlags));
 }
-
-void PropertiesSignal::hacksButtonEnabled(){
-    if(sobj == NULL){
-        return;
-    }
-    
-    QDialog d;
-    d.setMinimumWidth(400);
-    d.setWindowTitle("SignalObj Hacks");
-    QVBoxLayout *vbox = new QVBoxLayout;
-    QLabel *label = new QLabel("Use only if you know what you are doing.");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    label->setWordWrap(true);
-    QPushButton *haxRemoveTDBVector = new QPushButton("Fix TrSignalType Flags", this);
-    QObject::connect(haxRemoveTDBVector, SIGNAL(released()),
-                      this, SLOT(haxFixFlagsEnabled()));
-    vbox->addWidget(haxRemoveTDBVector);
-    
-    /*QPushButton *haxRemoveTDBTree = new QPushButton("Remove TDB Tree ( remove TrItems first; max 1000 nodes )", this);
-    QObject::connect(haxRemoveTDBTree, SIGNAL(released()),
-                      this, SLOT(haxRemoveTDBTreeEnabled()));
-    vbox->addWidget(haxRemoveTDBTree);*/
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(3,3,3,3);
-    vbox->addStretch(1);
-    d.setLayout(vbox);
-    d.exec();
-}
-
-void PropertiesSignal::haxFixFlagsEnabled(){
-    if(sobj == NULL){
-        return;
-    }
-    QStringList list;
-
-    sobj->checkFlags(list);
-    TextEditDialog dialog;
-    QString txt;
-    txt += "___old_____new___\n";
-    for(int i = 0; i < list.size(); i++)
-        txt += list[i]+"\n";
-    dialog.textBox.setPlainText(txt);
-    dialog.setWindowTitle("Signal Flags");
-    dialog.exec();
-    if(dialog.changed == 1){
-        sobj->fixFlags();
-    }
-
-}
-
-
-
 
 //// SDL for Signals EFO
 

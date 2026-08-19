@@ -50,6 +50,7 @@ private:
     float minVal = 999;
     float maxVal = -999;
     float yOffset = 0;
+    int terrainDataResolution = 0;
     
     IghCoordinate* igh = NULL;
     LatitudeLongitudeCoordinate* mLatlon = NULL;

@@ -52,6 +52,7 @@
 #include "Brush.h"
 #include "GeoCoordinates.h"
 #include "MapWindow.h"
+#include "TexLib.h"
 #include "TerrainTreeWindow.h"
 #include "ShapeLib.h"
 #include "EngLib.h"
@@ -70,10 +71,6 @@
 #include "Path.h"
 #include "GuiFunct.h"
 #include "GuiGlCompass.h"
-#include "ActLib.h"
-#include "Activity.h"
-#include "PlayActivitySelectWindow.h"
-#include "SoundManager.h"
 #include "Skydome.h"
 #include "OpenGL3Renderer.h"
 #include <QDebug>
@@ -415,7 +412,12 @@ void RouteEditorGLWidget::cleanup() {
     doneCurrent();
 }
 
-void RouteEditorGLWidget::timerEvent(QTimerEvent * event) {
+void RouteEditorGLWidget::timerEvent(QTimerEvent *) {
+    // The OpenGL widget and its timer persist at Main Load. During a restored
+    // route load, progress processing can dispatch this timer after the Route
+    // pointer is assigned but before loading and camera initialization finish.
+    if(route == NULL || !route->loaded || camera == NULL)
+        return;
     Game::currentShapeLib = currentShapeLib;
     timeNow = QDateTime::currentMSecsSinceEpoch();
     if (timeNow - lastTime < 1)
@@ -538,18 +540,7 @@ void RouteEditorGLWidget::timerEvent(QTimerEvent * event) {
     }
 
 
-    if(Game::soundEnabled){
-        if (timeNow % 200 < lastTime % 200) {
-            SoundManager::UpdateListenerPos((int)camera->pozT[0], (int)camera->pozT[1], camera->getPos(), camera->getTarget(), camera->getUp());
-            SoundManager::UpdateAll();
-        }
-
-        if (timeNow % 50 < lastTime % 50) {
-            SoundManager::UpdateAll();
-        }
-    }
-
-    route->updateSim(camera->pozT, (float) (timeNow - lastTime) / 1000.0);
+    route->updateAnimatedWorld(camera->pozT, (float) (timeNow - lastTime) / 1000.0);
 
     lastTime = timeNow;
 
@@ -596,37 +587,6 @@ bool RouteEditorGLWidget::initRoute(){
     return false;
 }
 
-void RouteEditorGLWidget::clearRouteSession(){
-    MapWindow::unloadMapOverlayState();
-    MapWindow::clearMapTileImages();
-    if(selectedObj != NULL)
-        selectedObj->unselect();
-    setSelectedObj(NULL);
-    lastSelectedObj = NULL;
-    StartObject = NULL;
-    EndObject = NULL;
-    CamObj = NULL;
-    copyPasteObj = NULL;
-    activeWaterRuler = NULL;
-    activeVegetationRuler = NULL;
-    activeGradeRuler = NULL;
-    waterScanUndoAvailable = false;
-    waterScanPending = false;
-    mouseLPressed = false;
-    mouseRPressed = false;
-    mouseClick = false;
-    if(groupObj != NULL){
-        groupObj->unselect();
-        groupObj->objects.clear();
-    }
-    if(copyPasteGroupObj != NULL)
-        copyPasteGroupObj->objects.clear();
-    Undo::Clear();
-    if(route != NULL)
-        route->clearMkrList();
-    emit mkrList(QMap<QString, Coords*>());
-}
-
 void RouteEditorGLWidget::initRoute2(){
     QObject::connect(route, SIGNAL(objectSelected(GameObj*)), this, SLOT(objectSelected(GameObj*)));
     QObject::connect(route, SIGNAL(objectSelected(QVector<GameObj*>)), this, SLOT(objectSelected(QVector<GameObj*>)));
@@ -635,10 +595,6 @@ void RouteEditorGLWidget::initRoute2(){
     // Init Camera
     cameraInit();
 
-    // Play?
-    if(Game::ActivityToPlay.length() > 0){
-        playInit();
-    }
     // The OpenGL widget persists when the editor returns to Main Load, so
     // initializeGL() runs only for the first route. Refresh marker controls
     // here for every route session, including routes opened after returning.
@@ -650,23 +606,6 @@ void RouteEditorGLWidget::initRoute2(){
     QTimer::singleShot(100, this, [this](){ emit preloadTexturesSignal(); });
 
     return;
-}
-
-void RouteEditorGLWidget::playInit(){
-        int actId = ActLib::GetAct(Game::root + "/routes/" + Game::route + "/activities", Game::ActivityToPlay );
-        if(Game::debugOutput) qDebug() << "======== actId" << actId << Game::ActivityToPlay;
-        if(actId < 0){
-            PlayActivitySelectWindow actWindow;
-            actWindow.setRoute(route);
-            actWindow.exec();
-            actId = actWindow.actId;
-        }
-        if(actId >= 0){
-            ActLib::Act[actId]->initToPlay();
-            route->activitySelected(ActLib::Act[actId]);
-            setSelectedObj((GameObj*)route->getActivityConsist(0));
-            camera->setCameraObject((GameObj*)route->getActivityConsist(0));
-        }
 }
 
 void RouteEditorGLWidget::cameraInit(){
@@ -715,9 +654,6 @@ QJsonObject RouteEditorGLWidget::getSessionCameraState() const{
 
 void RouteEditorGLWidget::initializeGL() {
 
-    if(Game::soundEnabled)
-        SoundManager::InitAl();
-
     gluu = GLUU::get();
     connect(context(), &QOpenGLContext::aboutToBeDestroyed, this, &RouteEditorGLWidget::cleanup);
     if(Game::debugOutput) qDebug() << "# InitializeOpenGLFunctions";
@@ -752,12 +688,6 @@ void RouteEditorGLWidget::initializeGL() {
     //qDebug() << "route = new Route();";
 
 
-    /*PlayActivitySelectWindow *actWindow = new PlayActivitySelectWindow();
-    actWindow->setRoute(route);
-    qDebug() << "=1a";
-    actWindow->exec();
-     qDebug() << "=1b";*/
-
     lastTime = QDateTime::currentMSecsSinceEpoch();
 
 
@@ -790,9 +720,6 @@ void RouteEditorGLWidget::initializeGL() {
     defaultPaintBrush = new Brush();
     mapWindow = new MapWindow(this);
     Quat::fill(this->placeRot);
-
-    SoundManager::listenerX = camera->pozT[0];
-    SoundManager::listenerZ = camera->pozT[1];
 
     gluu->makeShadowFramebuffer(FramebufferName1, depthTexture1, Game::shadowMapSize, GL_TEXTURE2);
     gluu->makeShadowFramebuffer(FramebufferName2, depthTexture2, Game::shadowLowMapSize, GL_TEXTURE3);
@@ -901,17 +828,17 @@ void RouteEditorGLWidget::paintGL(){
 
     if (stickPointerToTerrain && Game::viewTerrainShape)
 
-        if (!selection && !Game::playerMode) pushRenderPointer();
+        if (!selection) pushRenderPointer();
 
     route->pushRenderItems(camera->pozT, camera->getPos(), camera->getTarget(), camera->getRotX(), 3.14f / 3, renderMode);
-    if(!selection && !Game::playerMode)
+    if(!selection)
         pushPolyVegBakeMarkers();
     //if (!selection)
     //for(int i = 0; i < route->env->waterCount; i++)
     //    Game::terrainLib->renderWater(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode, i);
 
     //if (!stickPointerToTerrain || !Game::viewTerrainShape)
-    //    if (!selection && !Game::playerMode) pushRenderPointer();
+    //    if (!selection) pushRenderPointer();
 
     // render compass
     /*if (!selection && Game::viewCompass){
@@ -925,21 +852,6 @@ void RouteEditorGLWidget::paintGL(){
         compassPointer->pushRenderItem();
     }*/
 
-
-    // HUD
-    /*if(Game::hudEnabled){
-        int shadowsState = Game::shadowsEnabled;
-        Game::shadowsEnabled = 0;
-        float hudScale = Game::hudScale;
-        Mat4::identity(gluu->mvMatrix);
-        Mat4::ortho(gluu->pMatrix, -1.0, -1.0+2.0*hudScale, 1.0 - 2*(float(this->height()) / this->width())*hudScale, 1.0, 0.0, 1.0);
-        Mat4::identity(gluu->objStrMatrix);
-        gluu->setMatrixUniforms();
-        gluu->currentShader->setUniformValue(gluu->currentShader->lod, 0.0f);
-        camera->renderHud(gluu);
-        Game::shadowsEnabled = shadowsState;
-        gluu->currentShader->release();
-    }*/
 
     Game::currentRenderer->renderFrame();
     // Handle Selection
@@ -1020,18 +932,17 @@ void RouteEditorGLWidget::paintGL2() {
     gluu->setMatrixUniforms();
 
     if (stickPointerToTerrain && Game::viewTerrainShape)
-        if (!selection && !Game::playerMode) drawPointer();
+        if (!selection) drawPointer();
 
     route->render(gluu, camera->pozT, camera->getPos(), camera->getTarget(), camera->getRotX(), 3.14f / 3, renderMode);
-    if(!Game::playerMode)
-        renderPolyVegBakeMarkers();
+    renderPolyVegBakeMarkers();
 
     //if (!selection)
     for(int i = 0; i < route->env->waterCount; i++)
         Game::terrainLib->renderWater(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode, i);
 
     if (!stickPointerToTerrain || !Game::viewTerrainShape)
-        if (!selection && !Game::playerMode) drawPointer();
+        if (!selection) drawPointer();
 
     // render compass
     if (!selection && Game::viewCompass){
@@ -1046,20 +957,6 @@ void RouteEditorGLWidget::paintGL2() {
     }
 
 
-    // HUD
-    if(Game::hudEnabled){
-        int shadowsState = Game::shadowsEnabled;
-        Game::shadowsEnabled = 0;
-        float hudScale = Game::hudScale;
-        Mat4::identity(gluu->mvMatrix);
-        Mat4::ortho(gluu->pMatrix, -1.0, -1.0+2.0*hudScale, 1.0 - 2*(float(this->height()) / this->width())*hudScale, 1.0, 0.0, 1.0);
-        Mat4::identity(gluu->objStrMatrix);
-        gluu->setMatrixUniforms();
-        gluu->currentShader->setUniformValue(gluu->currentShader->lod, 0.0f);
-        camera->renderHud(gluu);
-        Game::shadowsEnabled = shadowsState;
-        gluu->currentShader->release();
-    }
     // Handle Selection
     handleSelection();
 
@@ -1565,7 +1462,7 @@ bool RouteEditorGLWidget::applyGradeLockToPlacedTrack(bool previousTrackValid, i
 }
 
 void RouteEditorGLWidget::showPlacementSuccess() {
-    playPlacementSound("SCOclick.wav");
+    playPlacementSound("SCOpluck.wav");
 }
 
 void RouteEditorGLWidget::showModeChange() {
@@ -3848,23 +3745,7 @@ void RouteEditorGLWidget::plantConfiguredPolyVeg() {
 }
 
 void RouteEditorGLWidget::requestPolyVegHelper() {
-    if(!preparePolyVegMapOverlays())
-        return;
     emit polyVegHelperRequested();
-}
-
-bool RouteEditorGLWidget::preparePolyVegMapOverlays() {
-    if(Game::terrainLib == NULL)
-        return false;
-
-    if(!MapWindow::routeMapOverlaysVisible) {
-        Game::terrainLib->setRouteMapOverlayVisible(true);
-        polyVegHelperEnabledMapOverlays = true;
-    } else {
-        polyVegHelperEnabledMapOverlays = false;
-    }
-    update();
-    return true;
 }
 
 bool RouteEditorGLWidget::tileHasPolyVegBake(int tileX, int tileZ) {
@@ -4546,11 +4427,6 @@ void RouteEditorGLWidget::setPolyVegHelperVisible(bool visible) {
     if(visible) {
         QTimer::singleShot(0, this,
             &RouteEditorGLWidget::refreshPolyVegTileCounts);
-    }
-    if(!visible && polyVegHelperEnabledMapOverlays) {
-        if(Game::terrainLib != NULL)
-            Game::terrainLib->setRouteMapOverlayVisible(false);
-        polyVegHelperEnabledMapOverlays = false;
     }
     update();
 }

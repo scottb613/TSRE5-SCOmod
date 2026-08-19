@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
     TSREvc
-    VERSION 0.12.0
+    VERSION 0.13.0
     DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )
@@ -34,7 +34,6 @@ find_package(
         Widgets
 )
 find_package(OpenGL REQUIRED)
-find_package(OpenAL REQUIRED)
 find_package(GLUT REQUIRED)
 
 include(cmake/TSREWarnings.cmake)
@@ -105,7 +104,6 @@ target_link_libraries(
         Qt6::Widgets
         OpenGL::GL
         OpenGL::GLU
-        OpenAL::OpenAL
         GLUT::GLUT
 )
 
@@ -285,7 +283,7 @@ endif()
 
 install(TARGETS TSRE5 RUNTIME DESTINATION .)
 
-foreach(runtime_dir IN ITEMS AL content icons tsre_appdata tsre_assets)
+foreach(runtime_dir IN ITEMS content icons tsre_appdata tsre_assets)
     if(EXISTS "${TSRE_SOURCE_DIR}/${runtime_dir}")
         install(DIRECTORY "${TSRE_SOURCE_DIR}/${runtime_dir}" DESTINATION .)
     endif()

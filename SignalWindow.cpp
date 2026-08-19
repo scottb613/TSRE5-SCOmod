@@ -19,28 +19,45 @@
 #include "Undo.h"
 #include "GuiFunct.h"
 
-SignalWindow::SignalWindow(QWidget *parent) : QWidget(parent) {
-    GuiFunct::applyEditorPanelStyle(this);
-    this->setWindowFlags(Qt::WindowType::Tool);
-    //this->setWindowFlags(Qt::WindowStaysOnTopHint);
-    this->setFixedWidth(400);
+SignalWindow::SignalWindow(QWidget *parent)
+    : EditorPopupWindow(parent, "SUBOBJECTS", "signalSubObjects", 300),
+      sobj(NULL) {
+    QVBoxLayout *vbox = popupLayout();
+    setPopupPinToolTips(
+        "Save the current Subobjects position between sessions.",
+        "The Subobjects position is saved between sessions. Click to return to default placement.");
 
-
-    QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(0, 1, 1, 1);
+    addPopupSubtitle(QString::fromUtf8("• Signal Parts"));
+    QFrame *partsCard = new QFrame;
+    GuiFunct::styleEditorPanelCard(partsCard);
+    QVBoxLayout *partsLayout = new QVBoxLayout(partsCard);
+    partsLayout->setContentsMargins(4,3,4,3);
+    partsLayout->setSpacing(2);
+    QScrollArea *partsScroll = new QScrollArea;
+    partsScroll->setWidgetResizable(true);
+    partsScroll->setFrameShape(QFrame::NoFrame);
+    partsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    partsScroll->setFixedHeight(qRound(210.0f * qBound(0.75f, Game::uiScale, 1.25f)));
+    QWidget *partsContent = new QWidget;
+    QVBoxLayout *partsRows = new QVBoxLayout(partsContent);
+    partsRows->setContentsMargins(0,0,0,0);
+    partsRows->setSpacing(2);
 
     for (int i = 0; i < maxSubObj; i++) {
+        wSub[i] = new QWidget(partsContent);
+        vSub[i] = new QGridLayout(wSub[i]);
         this->chSub[i].setText("");
-        vSub[i].setSpacing(2);
-        vSub[i].setContentsMargins(3, 0, 1, 0);
+        vSub[i]->setSpacing(2);
+        vSub[i]->setContentsMargins(3, 0, 1, 0);
         dSub[i].setEnabled(false);
-        vSub[i].addWidget(&this->chSub[i], 0, 0);
-        vSub[i].addWidget(&this->bSub[i], 0, 2);
-        vSub[i].addWidget(&this->dSub[i], 0, 1);
-        wSub[i].setLayout(&vSub[i]);
-        vbox->addWidget(&wSub[i]);
-        //wSub[i].hide();
+        dSub[i].setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        GuiFunct::styleEditorActionButton(&bSub[i]);
+        vSub[i]->addWidget(&this->chSub[i], 0, 0);
+        vSub[i]->addWidget(&this->bSub[i], 0, 2);
+        vSub[i]->addWidget(&this->dSub[i], 0, 1);
+        vSub[i]->setColumnStretch(1, 1);
+        partsRows->addWidget(wSub[i]);
+        wSub[i]->hide();
 
         signalsChSect.setMapping(&chSub[i], i);
         connect(&chSub[i], SIGNAL(clicked()), &signalsChSect, SLOT(map()));
@@ -49,37 +66,70 @@ SignalWindow::SignalWindow(QWidget *parent) : QWidget(parent) {
         connect(&bSub[i], SIGNAL(clicked()), &signalsLinkButton, SLOT(map()));
 
     }
+    partsRows->addStretch(1);
+    partsScroll->setWidget(partsContent);
+    partsLayout->addWidget(partsScroll);
+    vbox->addWidget(partsCard);
 
     connect(&signalsChSect, SIGNAL(mappedInt(int)), this, SLOT(chSubEnabled(int)));
     connect(&signalsLinkButton, SIGNAL(mappedInt(int)), this, SLOT(bLinkEnabled(int)));
-    QPushButton* closeButton = new QPushButton("Close");
-    connect(closeButton, SIGNAL(released()), this, SLOT(close()));
-    //vbox->setAlignment(setLinkButton, Qt::AlignBottom);
-    vbox->addWidget(closeButton);
-    QLabel *label = new QLabel("SubObj Link Info (press Link button above to show):");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    
+
+    addPopupSubtitle(QString::fromUtf8("• Link"));
+    QFrame *linkCard = new QFrame;
+    GuiFunct::styleEditorPanelCard(linkCard);
+    QVBoxLayout *linkLayout = new QVBoxLayout(linkCard);
+    linkLayout->setContentsMargins(4,3,4,3);
+    linkLayout->setSpacing(2);
+    QLabel *label = new QLabel("Select a Link button above to view its junction.");
+    label->setWordWrap(true);
+    linkLayout->addWidget(label);
     QGridLayout *vlist = new QGridLayout;
     vlist->setSpacing(2);
-    vlist->setContentsMargins(3,0,1,0);    
+    vlist->setContentsMargins(0,0,0,0);
     setLinkButton = new QPushButton("Set Link");
+    GuiFunct::styleEditorActionButton(setLinkButton);
     connect(setLinkButton, SIGNAL(released()), this, SLOT(setLink()));
-    label = new QLabel("From - To: ");
+    connect(setLinkButton, &QPushButton::clicked,
+            this, &SignalWindow::userButtonPressed);
+    label = new QLabel("From:");
     vlist->addWidget(label,0,0);
     vlist->addWidget(&eLink1,0,1);
     eLink1.setDisabled(true);
-    vlist->addWidget(&eLink2,0,2);
+    vlist->addWidget(new QLabel("To:"),0,2);
+    vlist->addWidget(&eLink2,0,3);
     eLink2.setDisabled(true);
-    vlist->addWidget(&eLink3,0,3);
+    vlist->addWidget(&eLink3,1,1,1,3);
     eLink3.setDisabled(true);
-    vlist->addWidget(setLinkButton,0,4);
-    vbox->addItem(vlist);
+    vlist->addWidget(setLinkButton,2,0,1,4);
+    linkLayout->addLayout(vlist);
+    vbox->addWidget(linkCard);
 
-    vbox->setContentsMargins(1, 1, 1, 1);
-    vbox->addStretch(1);
-    this->setLayout(vbox);
+    QFrame *actionCard = new QFrame;
+    GuiFunct::styleEditorPanelCard(actionCard);
+    QHBoxLayout *actions = new QHBoxLayout(actionCard);
+    actions->setContentsMargins(4,3,4,3);
+    actions->addStretch(1);
+    QPushButton* closeButton = new QPushButton("Close");
+    GuiFunct::styleEditorActionButton(closeButton);
+    connect(closeButton, SIGNAL(released()), this, SLOT(close()));
+    connect(closeButton, &QPushButton::clicked,
+            this, &SignalWindow::userButtonPressed);
+    actions->addWidget(closeButton);
+    vbox->addWidget(actionCard);
+    finalizePopup();
+}
+
+void SignalWindow::showForOwner(){
+    showExclusive();
+}
+
+void SignalWindow::closeEvent(QCloseEvent *event){
+    QWidget::closeEvent(event);
+    emit helperClosed();
+}
+
+void SignalWindow::popupPinClicked(){
+    emit userButtonPressed();
 }
 
 void SignalWindow::chSubEnabled(int i) {
@@ -152,7 +202,7 @@ void SignalWindow::setLink(){
 void SignalWindow::showObj(SignalObj* obj) {
     this->sobj = obj;
     for (int i = 0; i < maxSubObj; i++) {
-        this->wSub[i].hide();
+        this->wSub[i]->hide();
         this->chSub[i].setChecked(false);
         this->bSub[i].hide();
         this->bSub[i].setEnabled(false);
@@ -165,11 +215,12 @@ void SignalWindow::showObj(SignalObj* obj) {
     if (iSubObj > maxSubObj) iSubObj = maxSubObj;
     QString backFace = "[B] ";
     for (int i = 0; i < iSubObj; i++) {
-        this->wSub[i].show();
+        this->wSub[i]->show();
         if(signalShape->subObj[i].backFacing)
             this->dSub[i].setText(backFace+signalShape->subObj[i].desc);
         else
             this->dSub[i].setText(signalShape->subObj[i].desc);
+        this->dSub[i].setToolTip(this->dSub[i].text());
         if (sobj->isSubObjEnabled(i))
             this->chSub[i].setChecked(true);
         if (!signalShape->subObj[i].optional)
@@ -202,7 +253,6 @@ void SignalWindow::showObj(SignalObj* obj) {
             }
         }
     }
-    this->resize(this->width(), this->minimumHeight());
     bLinkEnabled(-1);
 }
 

@@ -19,6 +19,7 @@
 
 PropertiesDyntrack::PropertiesDyntrack() {
     buttonTools["FlexTool"] = new QPushButton("Auto-Flex", this);
+    GuiFunct::styleEditorActionButton(buttonTools["FlexTool"]);
     QMapIterator<QString, QPushButton*> i(buttonTools);
     while (i.hasNext()) {
         i.next();
@@ -26,17 +27,37 @@ PropertiesDyntrack::PropertiesDyntrack() {
     }
     
     QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    const qreal panelScale = qBound(0.75f, Game::uiScale, 1.25f);
+    const int panelMargin = qRound(4.0f * panelScale);
+    const int cardMargin = qRound(6.0f * panelScale);
+    const int panelSpacing = qRound(4.0f * panelScale);
+    const int fieldLabelWidth = qRound(66.0f * panelScale);
+    auto alignFormFields = [fieldLabelWidth, panelSpacing](QFormLayout *form) {
+        form->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+        form->setRowWrapPolicy(QFormLayout::DontWrapRows);
+        form->setHorizontalSpacing(panelSpacing);
+        for(int row = 0; row < form->rowCount(); row++){
+            QLayoutItem *labelItem = form->itemAt(row, QFormLayout::LabelRole);
+            if(labelItem != NULL && labelItem->widget() != NULL)
+                labelItem->widget()->setMinimumWidth(fieldLabelWidth);
+        }
+    };
+    vbox->setSpacing(panelSpacing);
+    vbox->setContentsMargins(panelMargin, panelMargin,
+                            panelMargin, panelMargin);
     GuiFunct::applyEditorPanelStyle(this);
 
-    infoLabel = new QLabel("Object: Dynamic Track");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    infoLabel->setContentsMargins(3,0,0,0);
+    infoLabel = new QLabel("DYNAMIC TRACK");
+    GuiFunct::styleEditorTitle(infoLabel);
     vbox->addWidget(infoLabel);
-    QFormLayout *vlist = new QFormLayout;
+
+    QFrame *objectCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(objectCard);
+    QFormLayout *vlist = new QFormLayout(objectCard);
     vlist->setSpacing(2);
-    vlist->setContentsMargins(3,0,3,0);
+    vlist->setContentsMargins(cardMargin, cardMargin,
+                              cardMargin, cardMargin);
     this->uid.setDisabled(true);
     this->tX.setDisabled(true);
     this->tY.setDisabled(true);
@@ -49,23 +70,22 @@ PropertiesDyntrack::PropertiesDyntrack() {
     vlist->addRow("Index:",&this->eSectionIdx);
     vlist->addRow("Length:",&this->eLength);
     vlist->addRow("Curves:",&this->eCurveCount);
-    vbox->addItem(vlist);
+    alignFormFields(vlist);
+    vbox->addWidget(objectCard);
 
-    auto addRule = [vbox]() {
-        vbox->addSpacing(qRound(5.0f * qMax(1.0f, Game::uiScale)));
-    };
-    addRule();
-
-    QLabel *flexModeLabel = new QLabel("Flex Mode:");
-    flexModeLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    flexModeLabel->setContentsMargins(3,0,0,0);
+    QLabel *flexModeLabel = new QLabel("FLEX MODE");
+    GuiFunct::styleEditorSubtitle(flexModeLabel);
     vbox->addWidget(flexModeLabel);
-    QLabel *nextGenFlexLabel = new QLabel("NextGen Flex S-C-S-C-S");
-    nextGenFlexLabel->setContentsMargins(6,0,0,0);
+    QFrame *flexCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(flexCard);
+    QVBoxLayout *flexCardLayout = new QVBoxLayout(flexCard);
+    flexCardLayout->setContentsMargins(cardMargin, cardMargin,
+                                       cardMargin, cardMargin);
+    flexCardLayout->setSpacing(panelSpacing);
+    QLabel *nextGenFlexLabel = new QLabel("NextGen Flex S-C-S-C-S", flexCard);
     nextGenFlexLabel->setToolTip("Allows the solver to use up to two curve sections for compound and S-curve connections.");
-    vbox->addWidget(nextGenFlexLabel);
-    vbox->addSpacing(3);
-    QWidget *flexButtonRow = new QWidget;
+    flexCardLayout->addWidget(nextGenFlexLabel);
+    QWidget *flexButtonRow = new QWidget(flexCard);
     QHBoxLayout *flexButtonLayout = new QHBoxLayout(flexButtonRow);
     flexButtonLayout->setSpacing(0);
     flexButtonLayout->setContentsMargins(0,0,0,0);
@@ -73,77 +93,88 @@ PropertiesDyntrack::PropertiesDyntrack() {
     buttonTools["FlexTool"]->setMinimumWidth(125);
     flexButtonLayout->addWidget(buttonTools["FlexTool"]);
     flexButtonLayout->addStretch(1);
-    vbox->addWidget(flexButtonRow);
-    vbox->addSpacing(4);
-    addRule();
+    flexCardLayout->addWidget(flexButtonRow);
+    vbox->addWidget(flexCard);
 
-    QLabel * label2 = new QLabel("Sections:");
-    label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label2->setContentsMargins(3,0,0,0);
+    QLabel * label2 = new QLabel("SECTIONS");
+    GuiFunct::styleEditorSubtitle(label2);
     vbox->addWidget(label2);
+    QFrame *sectionsCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(sectionsCard);
+    QVBoxLayout *sectionsLayout = new QVBoxLayout(sectionsCard);
+    sectionsLayout->setContentsMargins(cardMargin, cardMargin,
+                                       cardMargin, cardMargin);
+    sectionsLayout->setSpacing(2);
     
     
     this->chSect[0].setText("First Straight:");
     this->chSect[0].setChecked(true);
     //this->chSect[0].setEnabled(false);// .setCheckable(false);
-    vbox->addWidget(&chSect[0]);
+    sectionsLayout->addWidget(&chSect[0]);
     vSect[0].setSpacing(2);
     vSect[0].setContentsMargins(3,0,3,0);
     vSect[0].addRow("Length:",&this->sSectA[0]);
+    alignFormFields(&vSect[0]);
     wSect[0].setLayout(&vSect[0]);
-    vbox->addWidget(&wSect[0]);
+    sectionsLayout->addWidget(&wSect[0]);
     
     this->chSect[1].setText("First Curve:");
-    vbox->addWidget(&chSect[1]);
+    sectionsLayout->addWidget(&chSect[1]);
     vSect[1].setSpacing(2);
     vSect[1].setContentsMargins(3,0,3,0);
     vSect[1].addRow("Angle:",&this->sSectA[1]);
     vSect[1].addRow("Radius:",&this->sSectR[1]);
+    alignFormFields(&vSect[1]);
     wSect[1].setLayout(&vSect[1]);
-    vbox->addWidget(&wSect[1]);
+    sectionsLayout->addWidget(&wSect[1]);
     
     
     this->chSect[2].setText("Second Straight:");
-    vbox->addWidget(&chSect[2]);
+    sectionsLayout->addWidget(&chSect[2]);
     vSect[2].setSpacing(2);
     vSect[2].setContentsMargins(3,0,3,0);
     vSect[2].addRow("Length:",&this->sSectA[2]);
+    alignFormFields(&vSect[2]);
     wSect[2].setLayout(&vSect[2]);
-    vbox->addWidget(&wSect[2]);
+    sectionsLayout->addWidget(&wSect[2]);
     
     this->chSect[3].setText("Second Curve:");
-    vbox->addWidget(&chSect[3]);
+    sectionsLayout->addWidget(&chSect[3]);
     vSect[3].setSpacing(2);
     vSect[3].setContentsMargins(3,0,3,0);
     vSect[3].addRow("Angle:",&this->sSectA[3]);
     vSect[3].addRow("Radius:",&this->sSectR[3]);
+    alignFormFields(&vSect[3]);
     wSect[3].setLayout(&vSect[3]);
-    vbox->addWidget(&wSect[3]);
+    sectionsLayout->addWidget(&wSect[3]);
     
     
     this->chSect[4].setText("Third Straight:");
-    vbox->addWidget(&chSect[4]);
+    sectionsLayout->addWidget(&chSect[4]);
     vSect[4].setSpacing(2);
     vSect[4].setContentsMargins(3,0,3,0);
     vSect[4].addRow("Length:",&this->sSectA[4]);
+    alignFormFields(&vSect[4]);
     wSect[4].setLayout(&vSect[4]);
-    vbox->addWidget(&wSect[4]);
+    sectionsLayout->addWidget(&wSect[4]);
+    vbox->addWidget(sectionsCard);
     
-    addRule();
-    QLabel *label = new QLabel("Grade:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    QLabel *label = new QLabel("GRADE");
+    GuiFunct::styleEditorSubtitle(label);
     vbox->addWidget(label);
-    vlist = new QFormLayout;
-    vlist->setSpacing(qRound(3.0f * qMax(1.0f, Game::uiScale)));
-    vlist->setContentsMargins(0,0,0,0);
+    QFrame *gradeCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(gradeCard);
+    vlist = new QFormLayout(gradeCard);
+    vlist->setSpacing(qRound(3.0f * qBound(0.75f, Game::uiScale, 1.25f)));
+    vlist->setContentsMargins(cardMargin, cardMargin,
+                              cardMargin, cardMargin);
     QDoubleValidator* doubleValidator = new QDoubleValidator(-10000, 10000, 6, this); 
     doubleValidator->setNotation(QDoubleValidator::StandardNotation);
     QDoubleValidator* doubleValidator1 = new QDoubleValidator(-1000, 1000, 6, this); 
     doubleValidator1->setNotation(QDoubleValidator::StandardNotation);
     
     //‰
-    const int gradeFieldHeight = qRound(22.0f * qMax(1.0f, Game::uiScale));
+    const int gradeFieldHeight = qRound(22.0f * qBound(0.75f, Game::uiScale, 1.25f));
     elevType.setMinimumHeight(gradeFieldHeight);
     elevProm.setMinimumHeight(gradeFieldHeight);
     elev1inXm.setMinimumHeight(gradeFieldHeight);
@@ -177,11 +208,12 @@ PropertiesDyntrack::PropertiesDyntrack() {
     elevValueStack.addWidget(&elevProg);
     elevValueStack.setContentsMargins(0,0,0,0);
     vlist->addRow(&elevValueLabel, &elevValueStack);
+    alignFormFields(vlist);
     elevStep.setValidator(doubleValidator);
     QObject::connect(&elevStep, SIGNAL(textEdited(QString)), this, SLOT(elevStepEnabled(QString)));
     elevType.setCurrentIndex(Game::DefaultElevationBox);
     showElevBox(elevType.currentText());
-    vbox->addItem(vlist);
+    vbox->addWidget(gradeCard);
     
     vbox->addStretch(1);
     this->setLayout(vbox);
@@ -260,7 +292,7 @@ void PropertiesDyntrack::showObj(GameObj* obj){
     }
     worldObj = (WorldObj*)obj;
     dobj = (DynTrackObj*)obj;
-    this->infoLabel->setText("Object: Dynamic Track");
+    this->infoLabel->setText("DYNAMIC TRACK");
     
     this->uid.setText(QString::number(dobj->UiD, 10));
     this->tX.setText(QString::number(dobj->x, 10));

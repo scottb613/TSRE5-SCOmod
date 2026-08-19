@@ -4,6 +4,65 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.13 community source checkpoint
+
+- GuiFunct.cpp / GuiFunct.h
+- PropertiesAbstract.cpp / PropertiesAbstract.h
+- Properties*.cpp / Properties*.h
+- TransformWorldObjDialog.cpp / TransformWorldObjDialog.h
+- HeightWindow.cpp / HeightWindow.h
+- SignalWindow.cpp / SignalWindow.h
+- ErrorMessagesWindow.cpp / ErrorMessagesWindow.h
+- StatusWindow.cpp / StatusWindow.h
+  - Unified property fields, helper windows, popup ownership, latching controls, pins, snapping, copy feedback, diagnostics, and the PolyVeg-derived GenX style.
+
+- RouteEditorWindow.cpp / RouteEditorWindow.h
+- RouteEditorGLWidget.cpp / RouteEditorGLWidget.h
+- ActivityBuilderWindow.cpp
+- ActivityTools.cpp / ActivityTools.h
+- ActivityTrackViewer.cpp
+  - Added the F1-F7/F11/F12 workflow, clean Main Load restart, centered route title, map-first F5 panels, compact path controls, and user-owned Map Tiles state.
+
+- Terrain.cpp / Terrain.h
+- TerrainLib.cpp / TerrainLib.h
+- TerrainLibQt.cpp / TerrainLibQt.h
+- TerrainLibSimple.cpp / TerrainLibSimple.h
+- TerrainTools.cpp / TerrainTools.h
+- TFile.cpp / TFile.h
+- MapLib.cpp / MapLib.h
+- MapWindow.cpp / MapWindow.h
+- MapDataUrlImage.cpp
+  - Completed native-resolution 4 m terrain editing and native 2048/4096 overlay drawing, bounded residency, and cleanup.
+
+- PolyVegHelper.cpp / PolyVegHelper.h
+- PolyVegObject.cpp / PolyVegObject.h
+- ForestGenerator.cpp / ForestGenerator.h
+- ForestOsmCache.cpp / ForestOsmCache.h
+- ForestPatchBaker.cpp / ForestPatchBaker.h
+  - Refined PolyVeg controls while retaining deterministic generation, exclusions, rows, status, and hard-commit baking.
+
+- ConEditorWindow.cpp
+- ConListWidget.cpp
+- Consist.cpp / Consist.h
+  - Corrected long-consist and unresolved-card image selection.
+
+- PlayActivitySelectWindow.cpp / PlayActivitySelectWindow.h (removed)
+- SimpleHud.cpp / SimpleHud.h (removed)
+- SoundManager.cpp / SoundManager.h (removed)
+- SoundSource.cpp / SoundSource.h (removed)
+- SoundVariables.cpp / SoundVariables.h (removed)
+- MstsSoundDefinition.cpp / MstsSoundDefinition.h (removed)
+- AL headers (removed)
+  - Removed the unfinished activity simulator and unused OpenAL path.
+
+- CMakeLists.txt
+- TSRE5_resource.rc
+- README.md
+- RELEASE-NOTES-v0.13.md
+- TEST-MATRIX-v0.13.md
+- scoUiStyle.txt
+  - Aligned v0.13 identity, release evidence, public documentation, and canonical interface rules.
+
 v0.12 community open-testing release
 
 - ForestDefinition.cpp / ForestDefinition.h

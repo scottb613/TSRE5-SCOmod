@@ -68,9 +68,8 @@ PropertiesGroup::PropertiesGroup() {
     QPushButton *qRot90 = new QPushButton("Rot Y 90°", this);
     QObject::connect(qRot90, SIGNAL(released()),
                       this, SLOT(rotYEnabled()));
-    QPushButton *transform = new QPushButton("Transform ...", this);
-    QObject::connect(transform, SIGNAL(released()),
-                      this, SLOT(transformEnabled()));
+    QPushButton *transform = new QPushButton("Transform...", this);
+    configureTransformButton(transform);
     QPushButton *rtransform = new QPushButton("Random Transform ...", this);
     QObject::connect(rtransform, SIGNAL(released()),
                       this, SLOT(rtransformEnabled()));

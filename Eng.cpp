@@ -23,12 +23,6 @@
 #include "GLMatrix.h"
 #include "TDB.h"
 #include "Ruch.h"
-#include "MstsSoundDefinition.h"
-#include "SoundManager.h"
-#include "SoundSource.h"
-#include "SoundVariables.h"
-#include "TrainNetworkEng.h"
-#include "GeoCoordinates.h"
 #include "ContentHierarchyInfo.h"
 #include <QStringList>
 #include <QString>
@@ -888,104 +882,6 @@ void Eng::drawBorder3d(){
     borderObj3d->render();
 };
 
-void Eng::updateSim(float deltaTime){
-    static float acceleration = 0;
-    static float lastSpeed = 0;
-    // Use True for fake acceleration sound
-    static bool fakesound = true;
-    
-    if(!Game::useNetworkEng || fakesound){
-    // Local Sound Speed test:
-        static SoundDefinitionGroup::Stream::Curve curve1("SpeedControlled");
-        static SoundDefinitionGroup::Stream::Curve curve2("SpeedControlled");
-        static SoundDefinitionGroup::Stream::Curve *curve = &curve1;
-        if(curve1.points.size() == 0){
-            curve1.points.push_back(Vector2f(-1.0, 0.1));
-            curve1.points.push_back(Vector2f(2.0, 0.5));
-            curve1.points.push_back(Vector2f(25.0, 1.0));
-            curve1.points.push_back(Vector2f(56.0, 0.0));
-        }
-        if(curve2.points.size() == 0){
-            curve2.points.push_back(Vector2f(-1.0, -0.1));
-            curve2.points.push_back(Vector2f(2.0, -0.5));
-            curve2.points.push_back(Vector2f(25.0, -1.0));
-            curve2.points.push_back(Vector2f(56.0, 0.0));
-        }
-
-        if(currentSpeed > 55 && curve == &curve1){
-            curve = &curve2;
-        }
-        if(currentSpeed < 0.1 && curve == &curve2){
-            curve = &curve1;
-        }
-
-        if(soundVariables != NULL)
-            acceleration = curve->getValue(soundVariables);
-
-        currentSpeed += acceleration*deltaTime;
-
-        // Static speed
-        currentSpeed = 40;
-    
-    // Network Speed
-    }
-    if(Game::useNetworkEng) {
-        static IghCoordinate* igh = new IghCoordinate();
-        static LatitudeLongitudeCoordinate* latlon = new LatitudeLongitudeCoordinate();
-        static PreciseTileCoordinate* coords = new PreciseTileCoordinate();
-        if(networkEng == NULL){
-            networkEng = new TrainNetworkEng();
-        }
-        currentSpeed = networkEng->getSpeed();
-        
-        float data[4];
-        data[0] = getCurrentElevation();
-        if(isBroken())
-            data[0] = 666;
-        data[1] = getTotalDistanceDownPath();
-        float cpos[8];
-        getCameraPosition((float*)cpos);
-        coords->setTWxyz(cpos[0], -cpos[1], cpos[2], cpos[3], cpos[4]);
-        Game::GeoCoordConverter->ConvertToInternal(coords, igh);
-        Game::GeoCoordConverter->ConvertToLatLon(igh, latlon);
-        data[2] = latlon->Latitude;
-        data[3] = latlon->Longitude;
-        networkEng->writeData(data);
-    } 
-    
-    if(currentSpeed != lastSpeed && !fakesound){
-        acceleration = (currentSpeed - lastSpeed) / (deltaTime);
-    }
-    
-    //qDebug() << acceleration << currentSpeed << lastSpeed;
-    if(soundVariables != NULL){
-        // vectron
-        //soundVariables->value[SoundVariables::VARIABLE2] = currentSpeed * 100 / 55.0;
-        soundVariables->value[SoundVariables::VARIABLE2] = acceleration * 100;
-        soundVariables->value[SoundVariables::SPEED] = currentSpeed;
-        // acela
-        //soundVariables->value[SoundVariables::VARIABLE2] = currentSpeed * 3.0;
-    }
-    
-    if(Game::soundEnabled){
-        if(ruch1->onJunction > 0){
-            if(Game::debugOutput) qDebug() << "--------------";
-            int soundSourceId = SoundManager::AddSoundSource(path, "j1.wav");
-            float *pos = ruch1->getCurrentPosition();
-            pos[2] = -pos[2];
-            SoundManager::Sources[soundSourceId]->setPosition(pos[5], -pos[6], pos);
-            //SoundManager::Sources[camSoundSourceId]->setRelative(true);
-            ruch1->onJunction = 0;
-        }
-    }
-    
-    lastSpeed = currentSpeed;
-}
-
-float Eng::getCurrentSpeed(){
-    return currentSpeed;
-}
-
 void Eng::render(int selectionColor) {
     render(0, 0, selectionColor);
 }
@@ -1089,38 +985,12 @@ void Eng::reload(){
     }
 }
 
-bool Eng::isBroken(){
-    QString name = ruch1->getLastItemName();
-    if(name == "E_STOP"){
-        return true;
-    }
-    return false;
-}
-
 float *Eng::getCurrentPositionOnTrack(){
     if (loaded != 1) return NULL;
     return ruch1->getCurrentPosition();
 }
 
 void Eng::getCameraPosition(float* out){
-    if(Game::soundEnabled){
-        if(camSoundSourceId == -1){
-            QString spath = path+"/sound";
-            int sid = MstsSoundDefinition::AddDefinition(spath, souncCabFile);
-
-            if(sid != -1){
-                if(MstsSoundDefinition::Definitions[sid]->group.size() > 0){
-                    camSoundSourceId = SoundManager::AddSoundSource(MstsSoundDefinition::Definitions[sid]->group.first());
-                    SoundManager::Sources[camSoundSourceId]->setRelative(true);
-                    soundVariables = new SoundVariables();
-                    SoundManager::Sources[camSoundSourceId]->variables = soundVariables;
-                }
-            } else {
-                camSoundSourceId = -2;
-            }
-        }
-    }
-    
     if(out == NULL)
         return;
     //qDebug() << "get position";
@@ -1260,27 +1130,6 @@ void Eng::move(float m){
         ruch1->next(m);
     if(ruch2 != NULL)
         ruch2->next(m);
-}
-
-float Eng::getCurrentElevation(){
-    if(ruch1 == NULL)
-        return 0;
-    if(ruch2 == NULL)
-        return 0;
-    
-    float *drawPosition1 = ruch1->getCurrentPosition();
-    float *drawPosition2 = ruch2->getCurrentPosition();
-    drawPosition2[0] += 2048*(drawPosition2[5]-drawPosition1[5]);
-    drawPosition2[2] += 2048*(drawPosition2[6]-drawPosition1[6]);
-    float d = Vec3::distance(drawPosition1, drawPosition2);
-    float h = drawPosition1[1] - drawPosition2[1];
-    return (h/d)*1000.0;
-}
-
-float Eng::getTotalDistanceDownPath(){
-    if(ruch1 == NULL)
-        return 0;
-    return ruch1->getDistanceDownPath();
 }
 
 void Eng::initOnTrack(float *tpos, int direction, QMap<int, int>* junctionDirections){

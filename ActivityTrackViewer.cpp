@@ -853,7 +853,7 @@ void ActivityTrackViewer::editPathMetadata(){
     QVBoxLayout *layout = new QVBoxLayout(&dialog);
     GuiFunct::styleEditorDialog(&dialog);
     GuiFunct::addEditorDialogHeader(&dialog, tr("Path Meta Data"));
-    dialog.setMinimumWidth(qRound(440 * qMax(1.0f, Game::uiScale)));
+    dialog.setMinimumWidth(qRound(440 * qBound(0.75f, Game::uiScale, 1.25f)));
 
     QLabel *explanation = new QLabel(
         tr("These values are written into the PAT file and used by Open Rails. "

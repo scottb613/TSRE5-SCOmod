@@ -235,14 +235,14 @@ void Service::save(){
 }
 
 void Service::render(GLUU* gluu, float* playerT, int selectionColor){
-    initToPlay();
+    prepareEditorPreview();
     
     pathPointer->render(gluu, playerT, selectionColor);
     
     conPointer->renderOnTrack(gluu, playerT, selectionColor);
 }
 
-void Service::initToPlay(){
+void Service::prepareEditorPreview(){
     if(pathPointer == NULL){
         QDir dir(Game::root + "/routes/" + Game::route + "/paths");
         int pathPointerId;
@@ -261,13 +261,6 @@ void Service::initToPlay(){
 Consist *Service::getConsistPointer(){
     return conPointer;
 }
-void Service::updateSim(float* playerT, float deltaTime){
-    if(pathPointer == NULL || conPointer == NULL){
-        return;
-    }
-    conPointer->updateSim(deltaTime);
-}
-
 bool Service::isModified(){
     return modified;
 }

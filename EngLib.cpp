@@ -25,6 +25,10 @@ EngLib::EngLib() {
 }
 
 EngLib::~EngLib() {
+    for(auto entry = eng.begin(); entry != eng.end(); ++entry)
+        delete entry->second;
+    eng.clear();
+    jesteng = 0;
 }
 
 int EngLib::getEngByPointer(Eng* pointer){

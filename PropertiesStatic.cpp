@@ -18,6 +18,7 @@
 #include "PolyVegObject.h"
 
 PropertiesStatic::PropertiesStatic(){
+    const int alignedLabelWidth = qRound(66.0f * qBound(0.75f, Game::uiScale, 1.25f));
     const QString detailLevelHelp = "Controls this placed object's StaticDetailLevel. Default uses the ESD_Detail_Level from the shape's .sd file; enable Custom to write an override into the world file. The value is limited by the route's TsreMaxStaticDetailLevel.";
     const QString flagsHelp = "Read-only MSTS StaticFlags from the world file. These hexadecimal bit flags control properties including animation, terrain-object behavior, and shadow type. Use the controls below or Copy/Paste Flags instead of editing the value directly.";
     const QString collisionHelp = "MSTS CollideFlags and collision function for this object. Disabled turns collision off; Immovable creates a solid collision object; Buffer uses the buffer collision function. Remove Collisions converts a collision object back to a normal static object.";
@@ -25,7 +26,7 @@ PropertiesStatic::PropertiesStatic(){
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     auto addRule = [vbox]() {
-        vbox->addSpacing(qRound(5.0f * qMax(1.0f, Game::uiScale)));
+        vbox->addSpacing(qRound(5.0f * qBound(0.75f, Game::uiScale, 1.25f)));
     };
     infoLabel = new QLabel("Object: Static Object");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
@@ -40,31 +41,40 @@ PropertiesStatic::PropertiesStatic(){
     vlist->addRow("UiD:",&this->uid);
     vlist->addRow("Tile X:",&this->tX);
     vlist->addRow("Tile Z:",&this->tY);
+    vlist->labelForField(&uid)->setMinimumWidth(alignedLabelWidth);
     vbox->addItem(vlist);
     addRule();
     QLabel * label;
-    label = new QLabel("FileName:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    label = new QLabel("Shape");
+    GuiFunct::styleEditorSubtitle(label);
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->fileName.setDisabled(true);
     this->fileName.setAlignment(Qt::AlignCenter);
-    vbox->addWidget(&this->fileName);
-    QGridLayout *filenameList = new QGridLayout;
+    QFormLayout *shapeForm = new QFormLayout;
+    shapeForm->setContentsMargins(3,0,3,0);
+    shapeForm->addRow("File:", &this->fileName);
+    shapeForm->labelForField(&this->fileName)->setMinimumWidth(alignedLabelWidth);
+    vbox->addLayout(shapeForm);
+    QFrame *filenameActionsCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(filenameActionsCard);
+    QGridLayout *filenameList = new QGridLayout(filenameActionsCard);
     filenameList->setSpacing(2);
-    filenameList->setContentsMargins(0,0,0,0);    
+    filenameList->setContentsMargins(4,3,4,3);
     QPushButton *copyF = new QPushButton("Copy", this);
+    GuiFunct::styleEditorActionButton(copyF);
     QObject::connect(copyF, SIGNAL(released()),
                       this, SLOT(copyFileNameEnabled()));
     QPushButton *editF = new QPushButton("Edit", this);
+    GuiFunct::styleEditorActionButton(editF);
     QObject::connect(editF, SIGNAL(released()),
                       this, SLOT(editFileNameEnabled()));
     filenameList->addWidget(copyF, 0, 0);
     filenameList->addWidget(editF, 0, 1);
-    vbox->addItem(filenameList);
+    vbox->addWidget(filenameActionsCard);
     
-    label = new QLabel("Position & Rotation:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    label = new QLabel("Position & Rotation");
+    GuiFunct::styleEditorSubtitle(label);
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
@@ -83,39 +93,49 @@ PropertiesStatic::PropertiesStatic(){
     QObject::connect(&this->posZ, SIGNAL(textEdited(QString)), this, SLOT(editPositionEnabled(QString)));
     this->quat.setDisabled(true);
     this->quat.setAlignment(Qt::AlignCenter);
-    vlist->addRow("Rot:",&this->quat);
+    vlist->addRow("Rotation:",&this->quat);
+    vlist->labelForField(&this->posX)->setMinimumWidth(alignedLabelWidth);
     vbox->addItem(vlist);
-    QGridLayout *posRotList = new QGridLayout;
+    QFrame *positionActionsCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(positionActionsCard);
+    QGridLayout *posRotList = new QGridLayout(positionActionsCard);
     posRotList->setSpacing(2);
-    posRotList->setContentsMargins(0,0,0,0);    
+    posRotList->setContentsMargins(4,3,4,3);
 
-    QPushButton *copyPos = new QPushButton("Copy Pos", this);
+    QPushButton *copyPos = new QPushButton("Copy Pos", positionActionsCard);
+    GuiFunct::styleEditorActionButton(copyPos);
     QObject::connect(copyPos, SIGNAL(released()),
                       this, SLOT(copyPEnabled()));
-    QPushButton *pastePos = new QPushButton("Paste", this);
+    QPushButton *pastePos = new QPushButton("Paste Pos", positionActionsCard);
+    GuiFunct::styleEditorActionButton(pastePos);
     QObject::connect(pastePos, SIGNAL(released()),
                       this, SLOT(pastePEnabled()));
-    QPushButton *copyQrot = new QPushButton("Copy Rot", this);
+    QPushButton *copyQrot = new QPushButton("Copy Rot", positionActionsCard);
+    GuiFunct::styleEditorActionButton(copyQrot);
     QObject::connect(copyQrot, SIGNAL(released()),
                       this, SLOT(copyREnabled()));
-    QPushButton *pasteQrot = new QPushButton("Paste", this);
+    QPushButton *pasteQrot = new QPushButton("Paste Rot", positionActionsCard);
+    GuiFunct::styleEditorActionButton(pasteQrot);
     QObject::connect(pasteQrot, SIGNAL(released()),
                       this, SLOT(pasteREnabled()));
-    QPushButton *copyPosRot = new QPushButton("Copy Pos+Rot", this);
+    QPushButton *copyPosRot = new QPushButton("Copy Both", positionActionsCard);
+    GuiFunct::styleEditorActionButton(copyPosRot);
     QObject::connect(copyPosRot, SIGNAL(released()),
                       this, SLOT(copyPREnabled()));
-    QPushButton *pastePosRot = new QPushButton("Paste", this);
+    QPushButton *pastePosRot = new QPushButton("Paste Both", positionActionsCard);
+    GuiFunct::styleEditorActionButton(pastePosRot);
     QObject::connect(pastePosRot, SIGNAL(released()),
                       this, SLOT(pastePREnabled()));
-    QPushButton *resetQrot = new QPushButton("Reset Rot", this);
+    QPushButton *resetQrot = new QPushButton("Reset Rot", positionActionsCard);
+    GuiFunct::styleEditorActionButton(resetQrot);
     QObject::connect(resetQrot, SIGNAL(released()),
                       this, SLOT(resetRotEnabled()));
-    QPushButton *qRot90 = new QPushButton("Rot Y 90°", this);
+    QPushButton *qRot90 = new QPushButton("Rot Y 90°", positionActionsCard);
+    GuiFunct::styleEditorActionButton(qRot90);
     QObject::connect(qRot90, SIGNAL(released()),
                       this, SLOT(rotYEnabled()));
-    QPushButton *transform = new QPushButton("Transform ...", this);
-    QObject::connect(transform, SIGNAL(released()),
-                      this, SLOT(transformEnabled()));
+    QPushButton *transform = new QPushButton("Transform...", positionActionsCard);
+    configureTransformButton(transform);
     
     posRotList->addWidget(copyPos, 0, 0);
     posRotList->addWidget(pastePos, 0, 1);
@@ -126,12 +146,12 @@ PropertiesStatic::PropertiesStatic(){
     posRotList->addWidget(resetQrot, 3, 0);
     posRotList->addWidget(qRot90, 3, 1);
     posRotList->addWidget(transform, 4, 0, 1, 2);
-    vbox->addItem(posRotList);
+    vbox->addWidget(positionActionsCard);
     addRule();
     
-    label = new QLabel("Detail Level:");
+    label = new QLabel("Detail Level");
     label->setToolTip(detailLevelHelp);
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    GuiFunct::styleEditorSubtitle(label);
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     this->defaultDetailLevel.setDisabled(true);
@@ -152,7 +172,8 @@ PropertiesStatic::PropertiesStatic(){
                       this, SLOT(customDetailLevelEdited(QString)));
     QGridLayout *detailLevelView = new QGridLayout;
     detailLevelView->setSpacing(2);
-    detailLevelView->setContentsMargins(0,0,0,0);    
+    detailLevelView->setContentsMargins(3,0,3,0);
+    detailLevelView->setColumnMinimumWidth(0, alignedLabelWidth);
     detailLevelView->addWidget(defaultDetailLevelLabel, 0, 0);
     detailLevelView->addWidget(&defaultDetailLevel, 0, 1);
     detailLevelView->addWidget(&enableCustomDetailLevel, 1, 0);
@@ -160,36 +181,25 @@ PropertiesStatic::PropertiesStatic(){
     vbox->addItem(detailLevelView);
     addRule();
     
-    label = new QLabel("Flags:");
-    label->setToolTip(flagsHelp);
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+    label = new QLabel("Rendering");
+    GuiFunct::styleEditorSubtitle(label);
     vbox->addWidget(label);
-    this->flags.setDisabled(true);
-    this->flags.setToolTip(flagsHelp);
-    this->flags.setAlignment(Qt::AlignCenter);
-    vbox->addWidget(&this->flags);
-    QGridLayout *flagslView = new QGridLayout;
-    flagslView->setSpacing(2);
-    flagslView->setContentsMargins(0,0,0,0);    
-    QPushButton *copyFlags = new QPushButton("Copy Flags", this);
-    copyFlags->setToolTip(flagsHelp);
-    QObject::connect(copyFlags, SIGNAL(released()),
-                      this, SLOT(copyFEnabled()));
-    QPushButton *pasteFlags = new QPushButton("Paste", this);
-    pasteFlags->setToolTip(flagsHelp);
-    QObject::connect(pasteFlags, SIGNAL(released()),
-                      this, SLOT(pasteFEnabled()));
-    flagslView->addWidget(copyFlags,0,0);
-    flagslView->addWidget(pasteFlags,0,1);
-    vbox->addItem(flagslView);
-    addRule();
     checkboxAnim.setText("Animate Object");
     checkboxTerrain.setText("Terrain Object");
-    vbox->addWidget(&checkboxAnim);
+    QFrame *animateCell = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(animateCell);
+    QHBoxLayout *animateCellLayout = new QHBoxLayout(animateCell);
+    animateCellLayout->setContentsMargins(4,2,4,2);
+    animateCellLayout->addWidget(&checkboxAnim);
+    vbox->addWidget(animateCell);
     QObject::connect(&checkboxAnim, SIGNAL(stateChanged(int)),
                       this, SLOT(checkboxAnimEdited(int)));
-    vbox->addWidget(&checkboxTerrain);
+    QFrame *terrainCell = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(terrainCell);
+    QHBoxLayout *terrainCellLayout = new QHBoxLayout(terrainCell);
+    terrainCellLayout->setContentsMargins(4,2,4,2);
+    terrainCellLayout->addWidget(&checkboxTerrain);
+    vbox->addWidget(terrainCell);
     QObject::connect(&checkboxTerrain, SIGNAL(stateChanged(int)),
                       this, SLOT(checkboxTerrainEdited(int)));
     cShadowType.addItem("No Shadow");
@@ -198,17 +208,24 @@ PropertiesStatic::PropertiesStatic(){
     cShadowType.addItem("Treeline Shadow");
     cShadowType.addItem("Dynamic Shadow");
     cShadowType.setStyleSheet("combobox-popup: 0;");
-    vbox->addWidget(&cShadowType);
+    QGridLayout *shadowGrid = new QGridLayout;
+    shadowGrid->setContentsMargins(3,0,3,0);
+    shadowGrid->setSpacing(2);
+    shadowGrid->setColumnMinimumWidth(0, alignedLabelWidth);
+    shadowGrid->setColumnStretch(1, 1);
+    shadowGrid->addWidget(new QLabel("Shadow:"), 0, 0);
+    shadowGrid->addWidget(&cShadowType, 0, 1);
+    vbox->addLayout(shadowGrid);
     QObject::connect(&cShadowType, SIGNAL(currentIndexChanged(int)),
                       this, SLOT(cShadowTypeEdited(int)));
 
     addRule();
-    label = new QLabel("MSTS Collision:");
+    label = new QLabel("Collision");
     label->setToolTip(collisionHelp);
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    GuiFunct::styleEditorSubtitle(label);
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
-    vbox->addWidget(&eCollisionFlags);
+
     eCollisionFlags.setToolTip(collisionHelp);
     eCollisionFlags.setDisabled(true);
     eCollisionFlags.setAlignment(Qt::AlignCenter);
@@ -217,31 +234,56 @@ PropertiesStatic::PropertiesStatic(){
     cCollisionType.addItem("Buffer");
     cCollisionType.setStyleSheet("combobox-popup: 0;");
     cCollisionType.setToolTip(collisionHelp);
-    vbox->addWidget(&cCollisionType);
+    QGridLayout *collisionGrid = new QGridLayout;
+    collisionGrid->setContentsMargins(3,0,3,0);
+    collisionGrid->setSpacing(2);
+    collisionGrid->setColumnMinimumWidth(0, alignedLabelWidth);
+    collisionGrid->setColumnStretch(1, 1);
+    collisionGrid->addWidget(new QLabel("Type:"), 0, 0);
+    collisionGrid->addWidget(&cCollisionType, 0, 1);
+    vbox->addLayout(collisionGrid);
     QObject::connect(&cCollisionType, SIGNAL(currentIndexChanged(int)),
                       this, SLOT(cCollisionTypeEdited(int)));
-    QPushButton *resetFlags = new QPushButton("Remove Collisions", this);
+    QFrame *collisionActionCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(collisionActionCard);
+    QVBoxLayout *collisionActionLayout = new QVBoxLayout(collisionActionCard);
+    collisionActionLayout->setContentsMargins(4,3,4,3);
+    QPushButton *resetFlags = new QPushButton("Remove Collisions", collisionActionCard);
+    GuiFunct::styleEditorActionButton(resetFlags);
     resetFlags->setToolTip(collisionHelp);
     QObject::connect(resetFlags, SIGNAL(released()),
                       this, SLOT(removeCollisionsEnabled()));
-    vbox->addWidget(resetFlags);
+    collisionActionLayout->addWidget(resetFlags);
+    vbox->addWidget(collisionActionCard);
     addRule();
-    label = new QLabel("Actions:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    label = new QLabel("Actions");
+    GuiFunct::styleEditorSubtitle(label);
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
-    QPushButton *reload = new QPushButton("Reload", this);
+    QFrame *reloadActionCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(reloadActionCard);
+    QVBoxLayout *reloadActionLayout = new QVBoxLayout(reloadActionCard);
+    reloadActionLayout->setContentsMargins(4,3,4,3);
+    QPushButton *reload = new QPushButton("Reload Shape", reloadActionCard);
+    GuiFunct::styleEditorActionButton(reload);
     QObject::connect(reload, SIGNAL(released()),
                       this, SLOT(reloadEnabled()));
-    vbox->addWidget(reload);
+    reloadActionLayout->addWidget(reload);
+    vbox->addWidget(reloadActionCard);
 
     addRule();
     QLabel *advancedLabel =
         new QLabel(QString(QChar(0x2022)) + " Advanced");
     GuiFunct::styleEditorSubtitle(advancedLabel);
     vbox->addWidget(advancedLabel);
+    QFrame *advancedActionCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(advancedActionCard);
+    QVBoxLayout *advancedActionLayout = new QVBoxLayout(advancedActionCard);
+    advancedActionLayout->setContentsMargins(4,3,4,3);
     hacks.setText("Hacks...");
     hacks.setCheckable(true);
+    hacks.setProperty("editorPopupKey", "hacksHelper");
+    GuiFunct::styleEditorActionButton(&hacks);
     hacks.setFocusPolicy(Qt::NoFocus);
     hacks.setToolTip("Open specialized repair and full-route cleanup tools.");
     QObject::connect(&hacks, &QPushButton::clicked, this, [this](){
@@ -251,7 +293,8 @@ PropertiesStatic::PropertiesStatic(){
         GuiFunct::setEditorPopupButtonActive(&hacks, checked);
         emit hacksToggled(worldObj, &hacks, checked);
     });
-    vbox->addWidget(&hacks);
+    advancedActionLayout->addWidget(&hacks);
+    vbox->addWidget(advancedActionCard);
     vbox->addStretch(1);
     this->setLayout(vbox);
     

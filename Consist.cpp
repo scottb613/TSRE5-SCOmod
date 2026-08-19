@@ -27,7 +27,6 @@
 #include "ImageLib.h"
 #include "TDB.h"
 #include "TerrainLib.h"
-#include "SimpleHud.h"
 #include "ContentHierarchyInfo.h"
 #include <QFont>
 #include <QFontMetrics>
@@ -878,42 +877,6 @@ void Consist::setTrainSpeed(float val){
 
 float Consist::getTrainSpeed(){
     return trainSpeed;
-}
-
-float Consist::getTrainDistanceTravelled(){
-    return trainTotalDistance;
-}
-    
-void Consist::updateSim(float deltaTime){
-    if (loaded != 1) 
-        return;
-    if(!isOnTrack) 
-        return;
-    
-    if(engItems.size() < 1)
-        return;
-    if(engItems[0].engPointer == NULL)
-        return;
-    engItems[0].engPointer->updateSim(deltaTime);
-
-    
-    trainSpeed = engItems[0].engPointer->getCurrentSpeed();
-    float deltaMove = trainSpeed*deltaTime;
-    trainTotalDistance = engItems[0].engPointer->getTotalDistanceDownPath();
-    
-    for(int i = 0; i < engItems.size(); i++){
-        //engItems[i].engPointer->move(-55.5*deltaTime);
-        engItems[i].engPointer->move(deltaMove);
-    }
-    
-}
-
-void Consist::renderHud(){
-    if(hud == NULL)
-        hud = new SimpleHud();
-    hud->setAttribute("speed", trainSpeed);
-    hud->setAttribute("dist", trainTotalDistance);
-    hud->render();
 }
 
 void Consist::getCameraPosition(float *out){

@@ -318,6 +318,17 @@ void MapWindow::releaseDiskMapFromMemory(int x, int z){
     mapTileImages.erase(image);
 }
 
+void MapWindow::releaseAllDiskMapsFromMemory(){
+    for(const int hash : diskLoadedMapTiles){
+        auto image = mapTileImages.find(hash);
+        if(image == mapTileImages.end())
+            continue;
+        delete image->second;
+        mapTileImages.erase(image);
+    }
+    diskLoadedMapTiles.clear();
+}
+
 void MapWindow::clearMapTileImages(){
     for(auto &entry : mapTileImages)
         delete entry.second;

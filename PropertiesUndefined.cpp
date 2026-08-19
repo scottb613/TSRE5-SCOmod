@@ -12,16 +12,22 @@
 #include "PropertiesUndefined.h"
 #include "WorldObj.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 PropertiesUndefined::PropertiesUndefined(){
-    
+    GuiFunct::applyEditorPanelStyle(this);
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    vbox->setContentsMargins(4,4,4,4);
     infoLabel = new QLabel("Select to see properties.");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
-    vbox->addWidget(infoLabel); 
+    QFrame *messageCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(messageCard);
+    QVBoxLayout *messageLayout = new QVBoxLayout(messageCard);
+    messageLayout->setContentsMargins(6,4,6,4);
+    messageLayout->addWidget(infoLabel);
+    vbox->addWidget(messageCard);
     
     
     vbox->addStretch(1);

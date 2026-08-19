@@ -148,8 +148,10 @@ void writePolyVegHelperSettings(const QJsonObject &settings) {
 PolyVegHelper::PolyVegHelper(QWidget *parent)
     : QWidget(parent) {
     GuiFunct::applyEditorPanelStyle(this);
-    const qreal panelScale = qMax(1.0f, Game::uiScale);
-    const int numericFieldWidth = qRound(82.0 * panelScale);
+    const qreal panelScale = qBound(0.75f, Game::uiScale, 1.25f);
+    const int numericFieldWidth = qRound(96.0 * panelScale);
+    const int cardHorizontalPadding = qRound(6.0 * panelScale);
+    const int cardVerticalPadding = qRound(5.0 * panelScale);
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(5);
@@ -164,70 +166,139 @@ PolyVegHelper::PolyVegHelper(QWidget *parent)
     layout->addWidget(heading);
 
     addSubtitle("Planting");
-    QGridLayout *planting = new QGridLayout;
-    planting->setColumnStretch(1, 1);
-    planting->setColumnStretch(3, 1);
-    definition = new QComboBox(this);
-    density = new SelectAllDoubleSpinBox(this);
+    QFrame *plantingCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(plantingCard);
+    QVBoxLayout *plantingCardLayout = new QVBoxLayout(plantingCard);
+    plantingCardLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    plantingCardLayout->setSpacing(cardVerticalPadding);
+    QVBoxLayout *planting = new QVBoxLayout;
+    planting->setContentsMargins(0, 0, 0, 0);
+    planting->setSpacing(cardVerticalPadding);
+    definition = new QComboBox(plantingCard);
+    density = new SelectAllDoubleSpinBox(plantingCard);
     density->setDecimals(0);
     density->setSingleStep(1000.0);
     density->setGroupSeparatorShown(true);
-    density->setSuffix(" trees/km2");
-    densitySlider = new QSlider(Qt::Horizontal, this);
-    maximumTrees = new SelectAllSpinBox(this);
+    density->setFixedWidth(numericFieldWidth);
+    densitySlider = new QSlider(Qt::Horizontal, plantingCard);
+    maximumTrees = new SelectAllSpinBox(plantingCard);
     maximumTrees->setGroupSeparatorShown(true);
-    maximumTrees->setSuffix(" trees");
-    maximumTreesSlider = new QSlider(Qt::Horizontal, this);
-    seed = new QComboBox(this);
+    maximumTrees->setFixedWidth(numericFieldWidth);
+    maximumTreesSlider = new QSlider(Qt::Horizontal, plantingCard);
+    seed = new QComboBox(plantingCard);
     for(int value = 1; value <= 20; ++value)
         seed->addItem(QString::number(value), value);
-    seed->setFixedWidth(80);
+    seed->setFixedWidth(qRound(80.0 * panelScale));
     seed->setToolTip(
         "The seed selects a repeatable random tree layout. Use the same seed "
         "to reproduce a layout, or choose another seed to rearrange the trees.");
-    planting->addWidget(new QLabel("Definition:", this), 0, 0);
-    planting->addWidget(definition, 0, 1, 1, 3);
-    densityLabel = new QLabel("Density:", this);
-    planting->addWidget(densityLabel, 1, 0);
-    planting->addWidget(density, 1, 1);
-    planting->addWidget(new QLabel("Cap:", this), 1, 2);
-    planting->addWidget(maximumTrees, 1, 3);
-    planting->addWidget(densitySlider, 2, 0, 1, 2);
-    planting->addWidget(maximumTreesSlider, 2, 2, 1, 2);
-    planting->addWidget(new QLabel("Seed:", this), 3, 0);
-    planting->addWidget(seed, 3, 1, Qt::AlignLeft);
-    layout->addLayout(planting);
+    QHBoxLayout *schemaHeading = new QHBoxLayout;
+    schemaHeading->setContentsMargins(0, 0, 0, 0);
+    schemaHeading->addWidget(new QLabel("Schema:", plantingCard));
+    schemaHeading->addWidget(definition, 1);
+    planting->addLayout(schemaHeading);
 
-    floodFill = new QCheckBox("Flood Fill", this);
+    QHBoxLayout *schemaActions = new QHBoxLayout;
+    schemaActions->setContentsMargins(0, 0, 0, 0);
+    schemaActions->setSpacing(cardHorizontalPadding);
+    QPushButton *mapTiles = new QPushButton("MAP TILES", plantingCard);
+    mapTiles->setProperty("scoSoundOnPress", true);
+    mapTiles->setToolTip(
+        "Shows or hides the saved map overlays across the route using the same "
+        "direct toggle as the F4 map controls.");
+    QPushButton *editSchema = new QPushButton("EDIT SCHEMA", plantingCard);
+    editSchema->setToolTip(
+        "Reserved for the forthcoming PolyVeg schema editor.");
+    GuiFunct::styleEditorActionButton(mapTiles);
+    GuiFunct::styleEditorActionButton(editSchema);
+    schemaActions->addWidget(mapTiles, 1);
+    schemaActions->addWidget(editSchema, 1);
+    planting->addLayout(schemaActions);
+
+    QHBoxLayout *densityHeading = new QHBoxLayout;
+    densityHeading->setContentsMargins(0, 0, 0, 0);
+    densityLabel = new QLabel("Density (km2):", plantingCard);
+    densityHeading->addWidget(densityLabel);
+    densityHeading->addStretch(1);
+    densityHeading->addWidget(density);
+    planting->addLayout(densityHeading);
+    planting->addWidget(densitySlider);
+
+    QHBoxLayout *capHeading = new QHBoxLayout;
+    capHeading->setContentsMargins(0, 0, 0, 0);
+    capHeading->addWidget(new QLabel("Cap:", plantingCard));
+    capHeading->addStretch(1);
+    capHeading->addWidget(maximumTrees);
+    planting->addLayout(capHeading);
+    planting->addWidget(maximumTreesSlider);
+
+    QHBoxLayout *seedHeading = new QHBoxLayout;
+    seedHeading->setContentsMargins(0, 0, 0, 0);
+    seedHeading->addWidget(new QLabel("Seed:", plantingCard));
+    seedHeading->addStretch(1);
+    seedHeading->addWidget(seed);
+    planting->addLayout(seedHeading);
+    plantingCardLayout->addLayout(planting);
+    layout->addWidget(plantingCard);
+
+    QWidget *plantingOptionsRow = new QWidget(this);
+    QHBoxLayout *plantOptions = new QHBoxLayout(plantingOptionsRow);
+    plantOptions->setContentsMargins(0, 0, 0, 0);
+    plantOptions->setSpacing(cardHorizontalPadding);
+    QFrame *floodFillCell = new QFrame(plantingOptionsRow);
+    GuiFunct::styleEditorPanelCard(floodFillCell);
+    QHBoxLayout *floodFillLayout = new QHBoxLayout(floodFillCell);
+    floodFillLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    floodFill = new QCheckBox("Flood Fill", floodFillCell);
     floodFill->setToolTip(
         "Off plants only the polygon beneath the pointer, clipped to the "
         "pointer tile. On plants every polygon on that tile with the same "
         "LIDEX category and fill color.");
-    disablePlantReport = new QCheckBox("Disable Plant Report", this);
+    floodFillLayout->addWidget(floodFill);
+
+    QFrame *disableReportCell = new QFrame(plantingOptionsRow);
+    GuiFunct::styleEditorPanelCard(disableReportCell);
+    QHBoxLayout *disableReportLayout = new QHBoxLayout(disableReportCell);
+    disableReportLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    disablePlantReport = new QCheckBox("Disable Report", disableReportCell);
     disablePlantReport->setToolTip(
         "Suppresses the successful post-plant report. Successful planting still "
         "plays SCOsuccess.wav when UI Sounds is enabled.");
-    rows = new QCheckBox("Rows", this);
+    disableReportLayout->addWidget(disablePlantReport);
+    plantOptions->addWidget(floodFillCell, 1);
+    plantOptions->addWidget(disableReportCell, 1);
+    layout->addWidget(plantingOptionsRow);
+
+    QFrame *rowsCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(rowsCard);
+    QVBoxLayout *rowsCardLayout = new QVBoxLayout(rowsCard);
+    rowsCardLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    rowsCardLayout->setSpacing(cardVerticalPadding);
+    rows = new QCheckBox("Enable Rows", rowsCard);
     rows->setToolTip(
         "Aligns planting positions into continuous parallel rows. Row Width "
         "sets the spacing between rows and Direction rotates the row pattern.");
-    QVBoxLayout *plantOptions = new QVBoxLayout;
-    plantOptions->setContentsMargins(18, 0, 0, 0);
-    plantOptions->addWidget(floodFill);
-    plantOptions->addWidget(disablePlantReport);
-    plantOptions->addWidget(rows);
+    rowsCardLayout->addWidget(rows);
 
-    rowControls = new QWidget(this);
+    rowControls = new QWidget(rowsCard);
     QVBoxLayout *rowLayout = new QVBoxLayout(rowControls);
-    rowLayout->setContentsMargins(18, 0, 0, 0);
-    rowLayout->setSpacing(3);
+    rowLayout->setContentsMargins(cardHorizontalPadding, cardVerticalPadding,
+                                  0, 0);
+    rowLayout->setSpacing(cardVerticalPadding);
     QHBoxLayout *rowWidthHeading = new QHBoxLayout;
-    rowWidthHeading->addWidget(new QLabel("Row Width:", rowControls));
+    rowWidthHeading->addWidget(new QLabel("Row Width (m):", rowControls));
     rowWidthHeading->addStretch(1);
     rowWidthValue = new SelectAllSpinBox(rowControls);
     rowWidthValue->setRange(0, 500);
     rowWidthValue->setSingleStep(1);
-    rowWidthValue->setSuffix(" m");
     rowWidthValue->setSpecialValueText("Auto");
     rowWidthValue->setValue(10);
     rowWidthValue->setFixedWidth(numericFieldWidth);
@@ -244,12 +315,11 @@ PolyVegHelper::PolyVegHelper(QWidget *parent)
     rowLayout->addWidget(rowWidth);
 
     QHBoxLayout *rowSpacingHeading = new QHBoxLayout;
-    rowSpacingHeading->addWidget(new QLabel("Spacing:", rowControls));
+    rowSpacingHeading->addWidget(new QLabel("Spacing (m):", rowControls));
     rowSpacingHeading->addStretch(1);
     rowSpacingValue = new SelectAllSpinBox(rowControls);
     rowSpacingValue->setRange(0, 500);
     rowSpacingValue->setSingleStep(1);
-    rowSpacingValue->setSuffix(" m");
     rowSpacingValue->setSpecialValueText("Auto");
     rowSpacingValue->setValue(10);
     rowSpacingValue->setFixedWidth(numericFieldWidth);
@@ -287,93 +357,134 @@ PolyVegHelper::PolyVegHelper(QWidget *parent)
     rowDirectionValue->setToolTip(rowDirection->toolTip());
     rowLayout->addWidget(rowDirection);
     rowControls->setVisible(false);
-    plantOptions->addWidget(rowControls);
-    layout->addLayout(plantOptions);
+    rowsCardLayout->addWidget(rowControls);
+    layout->addWidget(rowsCard);
 
     addSubtitle("Planting Tools");
+    QFrame *plantingToolsCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(plantingToolsCard);
+    QVBoxLayout *plantingToolsLayout = new QVBoxLayout(plantingToolsCard);
+    plantingToolsLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    plantingToolsLayout->setSpacing(cardVerticalPadding);
     QHBoxLayout *widthHeading = new QHBoxLayout;
-    widthHeading->addWidget(new QLabel("Ruler Width:", this));
+    widthHeading->setContentsMargins(0, 0, 0, 0);
+    widthHeading->addWidget(new QLabel("Ruler Width (m):", plantingToolsCard));
     widthHeading->addStretch(1);
-    rulerWidthValue = new SelectAllSpinBox(this);
+    rulerWidthValue = new SelectAllSpinBox(plantingToolsCard);
     rulerWidthValue->setRange(0, 1000);
     rulerWidthValue->setSingleStep(10);
-    rulerWidthValue->setSuffix(" m");
     rulerWidthValue->setValue(100);
     rulerWidthValue->setFixedWidth(numericFieldWidth);
     widthHeading->addWidget(rulerWidthValue);
-    layout->addLayout(widthHeading);
-    rulerWidth = new QSlider(Qt::Horizontal, this);
+    plantingToolsLayout->addLayout(widthHeading);
+    rulerWidth = new QSlider(Qt::Horizontal, plantingToolsCard);
     rulerWidth->setRange(0, 1000);
     rulerWidth->setSingleStep(10);
     rulerWidth->setPageStep(100);
     rulerWidth->setValue(100);
     rulerWidth->setToolTip("Range - 0-1000 m");
     rulerWidthValue->setToolTip(rulerWidth->toolTip());
-    layout->addWidget(rulerWidth);
+    plantingToolsLayout->addWidget(rulerWidth);
 
-    QHBoxLayout *rulerButtons = new QHBoxLayout;
-    placeRuler = new QPushButton("Ruler (PolyVeg)", this);
+    QVBoxLayout *rulerButtons = new QVBoxLayout;
+    rulerButtons->setContentsMargins(0, 0, 0, 0);
+    rulerButtons->setSpacing(cardHorizontalPadding);
+    placeRuler = new QPushButton("New Ruler (PolyVeg)", plantingToolsCard);
     placeRuler->setCheckable(true);
     placeRuler->setToolTip(
         "Click once to place a PolyVeg ruler. Click the orange button again "
         "to remove it. The first point locks the ruler to one tile.");
-    QPushButton *plantRuler = new QPushButton("Plant PolyVeg Ruler", this);
+    QPushButton *plantRuler = new QPushButton("Plant Ruler (PolyVeg)",
+                                              plantingToolsCard);
+    GuiFunct::styleEditorActionButton(placeRuler);
+    GuiFunct::styleEditorActionButton(plantRuler);
     rulerButtons->addWidget(placeRuler);
     rulerButtons->addWidget(plantRuler);
-    layout->addLayout(rulerButtons);
+    plantingToolsLayout->addLayout(rulerButtons);
 
-    rulerArea = new QCheckBox("Area", this);
+    QFrame *rulerAreaCell = new QFrame(plantingToolsCard);
+    GuiFunct::styleEditorPanelCard(rulerAreaCell);
+    QHBoxLayout *rulerAreaLayout = new QHBoxLayout(rulerAreaCell);
+    rulerAreaLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    rulerArea = new QCheckBox("Area", rulerAreaCell);
     rulerArea->setToolTip(
         "Off creates a corridor ruler. On keeps the clicked polygon interior "
         "filled and applies Width as an exterior buffer.");
+    rulerAreaLayout->addWidget(rulerArea);
 
-    rulerOverride = new QRadioButton("Unrestricted", this);
+    QFrame *rulerOverrideCell = new QFrame(plantingToolsCard);
+    GuiFunct::styleEditorPanelCard(rulerOverrideCell);
+    QHBoxLayout *rulerOverrideLayout = new QHBoxLayout(rulerOverrideCell);
+    rulerOverrideLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    rulerOverride = new QRadioButton("Unrestricted", rulerOverrideCell);
     rulerOverride->setAutoExclusive(false);
     rulerOverride->setToolTip(
         "Allows the ruler to plant anywhere while retaining the normal water, "
         "road, track, building, and developed-land exclusions.");
-    QVBoxLayout *rulerOptions = new QVBoxLayout;
-    rulerOptions->setContentsMargins(18, 0, 0, 0);
-    rulerOptions->addWidget(rulerArea);
-    rulerOptions->addWidget(rulerOverride);
-    layout->addLayout(rulerOptions);
+    rulerOverrideLayout->addWidget(rulerOverride);
+    QHBoxLayout *rulerOptions = new QHBoxLayout;
+    rulerOptions->setContentsMargins(0, 0, 0, 0);
+    rulerOptions->setSpacing(cardHorizontalPadding);
+    rulerOptions->addWidget(rulerAreaCell, 1);
+    rulerOptions->addWidget(rulerOverrideCell, 1);
+    plantingToolsLayout->addLayout(rulerOptions);
+    layout->addWidget(plantingToolsCard);
 
     addSubtitle("Bake");
-    QHBoxLayout *bakeButtons = new QHBoxLayout;
-    QPushButton *bake = new QPushButton("Bake PolyVeg Tile", this);
-    QPushButton *bakeAll = new QPushButton("Bake PolyVeg LOD", this);
+    QFrame *bakeActionCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(bakeActionCard);
+    QVBoxLayout *bakeButtons = new QVBoxLayout(bakeActionCard);
+    bakeButtons->setContentsMargins(cardHorizontalPadding, cardVerticalPadding,
+                                    cardHorizontalPadding, cardVerticalPadding);
+    bakeButtons->setSpacing(cardHorizontalPadding);
+    QPushButton *bake = new QPushButton("Bake PolyVeg Tile", bakeActionCard);
+    QPushButton *bakeAll = new QPushButton("Bake PolyVeg Area", bakeActionCard);
     bakeAll->setToolTip(
         "Bakes loaded tiles inside the current camera tile LOD that contain "
         "unbaked PolyVeg. It never loads the rest of the route.");
+    GuiFunct::styleEditorActionButton(bake);
+    GuiFunct::styleEditorActionButton(bakeAll);
     bakeButtons->addWidget(bake);
     bakeButtons->addWidget(bakeAll);
-    layout->addLayout(bakeButtons);
+    layout->addWidget(bakeActionCard);
 
     addSubtitle("Jump");
+    QFrame *jumpActionCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(jumpActionCard);
     CyclingJumpButton *jumpRaw = new CyclingJumpButton(
-        "PolyVeg Raw", this,
+        "PolyVeg Raw", jumpActionCard,
         [this]() { emit jumpRawRequested(); },
         [this]() { emit resetRawJumpRequested(); });
     CyclingJumpButton *jumpBake = new CyclingJumpButton(
-        "PolyVeg Bake", this,
+        "PolyVeg Bake", jumpActionCard,
         [this]() { emit jumpBakeRequested(); },
         [this]() { emit resetBakeJumpRequested(); });
-    QHBoxLayout *jumpButtons = new QHBoxLayout;
+    GuiFunct::styleEditorActionButton(jumpRaw);
+    GuiFunct::styleEditorActionButton(jumpBake);
+    QHBoxLayout *jumpButtons = new QHBoxLayout(jumpActionCard);
+    jumpButtons->setContentsMargins(cardHorizontalPadding, cardVerticalPadding,
+                                    cardHorizontalPadding, cardVerticalPadding);
+    jumpButtons->setSpacing(cardHorizontalPadding);
     jumpButtons->addWidget(jumpRaw);
     jumpButtons->addWidget(jumpBake);
-    layout->addLayout(jumpButtons);
+    layout->addWidget(jumpActionCard);
     layout->addStretch(1);
 
     addSubtitle("Status");
     QFrame *statusCard = new QFrame(this);
     statusCard->setObjectName("polyVegStatusCard");
+    GuiFunct::styleEditorPanelCard(statusCard);
     statusCard->setStyleSheet(QString(
-        "QFrame#polyVegStatusCard { background-color: #252525; "
-        "border: 1px solid #454545; border-radius: 3px; }"
-        "QLabel[polyVegStatusValue=\"true\"] { color: %1; "
-        "font-weight: bold; border: none; }"
-        "QLabel[polyVegStatusCaption=\"true\"] { color: #c7c7c7; "
-        "border: none; }").arg(Game::StyleMainLabel));
+        "QLabel[polyVegStatusValue=\"true\"] { color: %1;"
+        " font-weight: bold; border: none; }"
+        "QLabel[polyVegStatusCaption=\"true\"] { color: #c7c7c7;"
+        " border: none; }").arg(Game::StyleMainLabel));
     statusCard->setToolTip(
         "Loaded-world totals: individual Raw objects, generated Baked block "
         "objects, and loaded tiles containing at least one baked block.");
@@ -521,6 +632,8 @@ PolyVegHelper::PolyVegHelper(QWidget *parent)
     connect(plantRuler, &QPushButton::clicked, this, [this](){
         emit plantRulerRequested(rulerOverride->isChecked());
     });
+    connect(mapTiles, &QPushButton::clicked,
+            this, &PolyVegHelper::toggleMapTilesRequested);
 }
 
 void PolyVegHelper::openForCurrentRoute() {

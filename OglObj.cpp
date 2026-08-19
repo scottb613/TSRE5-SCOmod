@@ -18,7 +18,30 @@
 #include <QVector>
 #include <cmath>
 
-OglObj::OglObj() {
+namespace {
+Texture *resolveCachedTexture(int &texId, QString *resource) {
+    if(texId == -2 || resource == NULL)
+        return NULL;
+
+    auto texture = TexLib::mtex.find(texId);
+    const bool cachedTextureMatches = texture != TexLib::mtex.end()
+            && texture->second != NULL
+            && texture->second->pathid.compare(
+                   *resource, Qt::CaseInsensitive) == 0;
+    if(texId == -1 || !cachedTextureMatches) {
+        texId = TexLib::addTex(*resource);
+        if(texId < 0)
+            return NULL;
+        texture = TexLib::mtex.find(texId);
+    }
+
+    if(texture == TexLib::mtex.end())
+        return NULL;
+    return texture->second;
+}
+}
+
+OglObj::OglObj() : IBO(QOpenGLBuffer::IndexBuffer) {
     loaded = false;
     texId = -1;
     materialType = NONE;
@@ -27,7 +50,7 @@ OglObj::OglObj() {
         bound[i] = 0;   
 }
 
-OglObj::OglObj(const OglObj& orig) {
+OglObj::OglObj(const OglObj& orig) : IBO(QOpenGLBuffer::IndexBuffer) {
 }
 
 OglObj::~OglObj() {
@@ -67,10 +90,13 @@ void OglObj::setMaterial(const QString &path) {
 
 void OglObj::deleteVBO(){
     if(loaded){
+        IBO.destroy();
         VBO.destroy();
         VAO.destroy();
     }
     loaded = false;
+    indexed = false;
+    indexLength = 0;
 }
 
 float* OglObj::mapBuffer(){
@@ -129,6 +155,66 @@ void OglObj::init(float* punkty, int ptr, enum RenderItem::VertexAttr v, int typ
     
     VBO.release();
     length = ptr / v;
+    indexed = false;
+    indexLength = 0;
+    loaded = true;
+}
+
+void OglObj::initIndexed(const float* punkty, int ptr,
+        enum RenderItem::VertexAttr v, int type,
+        const unsigned int* indices, int indexCount) {
+    if(punkty == NULL || ptr <= 0 || indices == NULL || indexCount <= 0)
+        return;
+
+    QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
+    shapeType = type;
+    vAttribures = v;
+    if(!VAO.isCreated()){
+        VAO.create();
+        VBO.create();
+    }
+    if(!IBO.isCreated())
+        IBO.create();
+
+    QOpenGLVertexArrayObject::Binder vaoBinder(&VAO);
+    VBO.bind();
+    VBO.allocate(punkty, ptr * sizeof(GLfloat));
+
+    if(v == RenderItem::V){
+        f->glEnableVertexAttribArray(0);
+        f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+                3 * sizeof(GLfloat), 0);
+    } else if(v == RenderItem::VT){
+        f->glEnableVertexAttribArray(0);
+        f->glEnableVertexAttribArray(1);
+        f->glEnableVertexAttribArray(3);
+        f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+                6 * sizeof(GLfloat), 0);
+        f->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE,
+                6 * sizeof(GLfloat), reinterpret_cast<void *>(3 * sizeof(GLfloat)));
+        f->glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE,
+                6 * sizeof(GLfloat), reinterpret_cast<void *>(5 * sizeof(GLfloat)));
+    } else if(v == RenderItem::VNTA){
+        f->glEnableVertexAttribArray(0);
+        f->glEnableVertexAttribArray(1);
+        f->glEnableVertexAttribArray(2);
+        f->glEnableVertexAttribArray(3);
+        f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+                9 * sizeof(GLfloat), 0);
+        f->glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE,
+                9 * sizeof(GLfloat), reinterpret_cast<void *>(3 * sizeof(GLfloat)));
+        f->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE,
+                9 * sizeof(GLfloat), reinterpret_cast<void *>(6 * sizeof(GLfloat)));
+        f->glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE,
+                9 * sizeof(GLfloat), reinterpret_cast<void *>(8 * sizeof(GLfloat)));
+    }
+
+    IBO.bind();
+    IBO.allocate(indices, indexCount * sizeof(unsigned int));
+    VBO.release();
+    length = ptr / v;
+    indexLength = indexCount;
+    indexed = true;
     loaded = true;
 }
 
@@ -194,8 +280,6 @@ void OglObj::pushRenderItem(int selectionColor, float lod){
         return;
     if(vAttribures == RenderItem::NO_ATTR)
         return;
-    if (texId == -2)
-        return;
     if(materialType == NONE)
         return;
     
@@ -207,13 +291,11 @@ void OglObj::pushRenderItem(int selectionColor, float lod){
     if(selectionColor != 0){
         r->disableTextures(selectionColor);
     } else if(materialType == TEXTURE){
-        if (texId == -1) {
-            texId = TexLib::addTex(*res);
-        }
-        if (TexLib::mtex[texId]->loaded) {
-            if (!TexLib::mtex[texId]->glLoaded)
-                TexLib::mtex[texId]->GLTextures();
-            r->enableTextures(TexLib::mtex[texId]->tex[0]);
+        Texture *texture = resolveCachedTexture(texId, res);
+        if (texture != NULL && texture->loaded) {
+            if (!texture->glLoaded)
+                texture->GLTextures();
+            r->enableTextures(texture->tex[0]);
         } else {
             r->enableTextures(0);
         }
@@ -256,20 +338,14 @@ void OglObj::render(int selectionColor, float lod) {
         gluu->disableTextures(selectionColor);
     } else if(materialType == TEXTURE){
         gluu->enableTextures();
-        if (texId == -2) {
+        Texture *texture = resolveCachedTexture(texId, res);
+        if (texture == NULL) {
             return;
-        } else {
-            if (texId == -1) {
-                texId = TexLib::addTex(*res);
-                //qDebug() << texId << " "<< *res;
-            }
-            if (TexLib::mtex[texId]->loaded) {
-                if (!TexLib::mtex[texId]->glLoaded)
-                    TexLib::mtex[texId]->GLTextures();
-                gluu->bindTexture(f, TexLib::mtex[texId]->tex[0]);
-                //f->glBindTexture(GL_TEXTURE_2D, TexLib::mtex[texId]->tex[0]);
-            } else {
-            }
+        }
+        if (texture->loaded) {
+            if (!texture->glLoaded)
+                texture->GLTextures();
+            gluu->bindTexture(f, texture->tex[0]);
         }
     } else if(materialType == COLOR){
         gluu->disableTextures(color);
@@ -282,7 +358,10 @@ void OglObj::render(int selectionColor, float lod) {
     gluu->currentShader->setUniformValue(gluu->currentShader->msMatrixUniform, *reinterpret_cast<float(*)[4][4]>(gluu->objStrMatrix));
     gluu->currentMsMatrinxHash = 0;//gluu->getMatrixHash(gluu->objStrMatrix);
     QOpenGLVertexArrayObject::Binder vaoBinder(&VAO);
-    f->glDrawArrays(shapeType, 0, length); /**/
+    if(indexed)
+        f->glDrawElements(shapeType, indexLength, GL_UNSIGNED_INT, nullptr);
+    else
+        f->glDrawArrays(shapeType, 0, length); /**/
     
     if(lineWidth > 0 && lineWidth != Game::oglDefaultLineWidth)
         f->glLineWidth(Game::oglDefaultLineWidth);

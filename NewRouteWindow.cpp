@@ -18,7 +18,7 @@ NewRouteWindow::NewRouteWindow() : QDialog(){
     GuiFunct::applyEditorPanelStyle(this);
     GuiFunct::setEditorToolWindowTitle(this);
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
-    setFixedWidth(qRound(320.0f * qMax(1.0f, Game::uiScale)));
+    setFixedWidth(qRound(320.0f * qBound(0.75f, Game::uiScale, 1.25f)));
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setSpacing(4);

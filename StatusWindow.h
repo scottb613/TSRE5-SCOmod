@@ -49,7 +49,6 @@ public slots:
     void savePinnedPosition();
     void clearGuardError();
     void jumpTileSelected();
-    void naviInfo(int all, int hidden);
     void pointerInfo(float* coords);
     void posInfo(PreciseTileCoordinate* coords);
     void reloadMkrLists();
@@ -107,7 +106,9 @@ private:
     QTimer snapTimer;
     QTimer pinSaveTimer;
     QTimer guardErrorTimer;
+    QTimer copiedStatusTimer;
     QToolButton pinPositionButton;
+    QLabel *positionLabel = NULL;
     bool positionPinned = false;
     bool positionPersistenceSuspended = false;
     QComboBox markerFiles;
@@ -123,7 +124,6 @@ private:
     QLineEdit pyBox;
     QLineEdit pyBoxx;
     QLineEdit pzBox;
-    QLabel tileInfo;
     int lastTX = 0;
     int lastTZ = 0;
     float lastX = 0;
@@ -134,8 +134,6 @@ private:
     float lastPZ = 0;
     bool pointerInfoValid = false;
     bool posInfoValid = false;
-    int objCount = 0;
-    int objHidden = 0;
     IghCoordinate* igh = NULL;
     LatitudeLongitudeCoordinate* latlon = NULL;
     PreciseTileCoordinate* aCoords = NULL;

@@ -633,12 +633,6 @@ void ActivityServiceDefinition::render(GLUU* gluu, float* playerT, int renderMod
 
 }
 
-void ActivityServiceDefinition::updateSim(float *playerT, float deltaTime){
-    if(servicePointer == NULL)
-        return;
-    servicePointer->updateSim(playerT, deltaTime);
-}
-
 /// Reads activity header
 void Activity::ActivityHeader::load(FileBuffer* data) {
     QString sh;
@@ -813,10 +807,14 @@ bool Activity::isNew(){
     return nowe;
 }
 
-void Activity::initToPlay(){
-    playerServiceDefinition->servicePointer = ActLib::GetServiceByName(playerServiceDefinition->name);
+void Activity::prepareEditorPreview(){
+    if(playerServiceDefinition == NULL)
+        return;
+
+    playerServiceDefinition->servicePointer =
+            ActLib::GetServiceByName(playerServiceDefinition->name);
     if(playerServiceDefinition->servicePointer != NULL)
-        playerServiceDefinition->servicePointer->initToPlay();
+        playerServiceDefinition->servicePointer->prepareEditorPreview();
 }
 
 bool Activity::isUnSaved(){
@@ -919,12 +917,6 @@ void Activity::setWeather(int val){
     modified = true;
 }
     
-void Activity::updateSim(float* playerT, float deltaTime){
-    if(playerServiceDefinition != NULL ){
-        playerServiceDefinition->updateSim(playerT, deltaTime);
-    }
-}
-
 void Activity::render(GLUU* gluu, float * playerT, float playerRot, int renderMode){
     for (int i = 0; i < activityObjects.size(); i++){
         activityObjects[i]->render(gluu, playerT, renderMode, i);

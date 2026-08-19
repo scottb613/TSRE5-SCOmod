@@ -35,7 +35,7 @@ void MapLib::run(){
     }else{
         img = MapWindow::mapTileImages[hash];
     }
-    
+
     texture->width = img->width();
     texture->height = img->height();
     if(img->format() == QImage::Format_RGBA8888){

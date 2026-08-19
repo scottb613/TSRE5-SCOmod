@@ -621,6 +621,33 @@ Route::Route(const Route& orig) {
 
 Route::~Route() {
     clearMkrList();
+
+    for(auto entry = tile.begin(); entry != tile.end(); ++entry)
+        delete entry.value();
+    tile.clear();
+    // Path objects are shared with and owned by the process-scoped
+    // ActLib::Paths registry; Route only maintains a non-owning view.
+    path.clear();
+
+    if(Game::terrainLib == terrainLib)
+        Game::terrainLib = NULL;
+    delete terrainLib;
+    terrainLib = NULL;
+
+    if(Game::trackDB == trackDB)
+        Game::trackDB = NULL;
+    if(Game::roadDB == roadDB)
+        Game::roadDB = NULL;
+    if(Game::soundList == soundList)
+        Game::soundList = NULL;
+    delete trackDB;
+    delete roadDB;
+    delete soundList;
+    delete tsection;
+    delete ref;
+    delete env;
+    delete skydome;
+    delete trk;
 }
 
 void Route::loadAddons(){
@@ -654,8 +681,6 @@ bool Route::checkTrackSectionDatabase(){
         return true;
     
     qDebug() << "tsection out of sync !!!";
-    if(Game::playerMode)
-        return true;
     if(!Game::writeEnabled)
         return true;
     if(!Game::writeTDB)
@@ -723,6 +748,8 @@ bool Route::checkTrackSectionDatabase(){
 
 void Route::activitySelected(Activity* selected){
     currentActivity = selected;
+    if(currentActivity != NULL)
+        currentActivity->prepareEditorPreview();
 }
 
 Trk *Route::getTrk(){
@@ -966,7 +993,7 @@ void Route::transalteObj(int x, int z, float px, float py, float pz, int uid) {
 
 }
 
-void Route::updateSim(float *playerT, float deltaTime){
+void Route::updateAnimatedWorld(float *playerT, float deltaTime){
     if(!loaded) return;
     
     int mintile = -Game::tileLod;
@@ -984,9 +1011,6 @@ void Route::updateSim(float *playerT, float deltaTime){
         }
     }
     
-    if(currentActivity != NULL){
-        currentActivity->updateSim(playerT, deltaTime);
-    }
 }
 
 WorldObj* Route::updateWorldObjData(FileBuffer *data){

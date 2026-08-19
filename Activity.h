@@ -45,7 +45,6 @@ public:
     bool isModified();
     void calculateTimetable();
     void setTimetableEfficiency(int id, float val);
-    void updateSim(float *playerT, float deltaTime);
     void render(GLUU *gluu, float* playerT, int renderMode);
     QMap<int, QString> getStationStopNameList();
 private:
@@ -118,7 +117,6 @@ public:
     void save();
     bool isInitActivityObjects = false;
     //void initActivityObjects();
-    void updateSim(float *playerT, float deltaTime);
     void render(GLUU* gluu, float * playerT, float playerRot, int renderMode);
 
     QString editorConListSelected;
@@ -127,7 +125,7 @@ public:
     //void setRouteContent(QVector<Path*>* p, QVector<Service*>* s, QVector<Traffic*>* t);
     //Traffic *getTrafficByName(QString name);
     bool isNew();
-    void initToPlay();
+    void prepareEditorPreview();
     bool isUnSaved();
     void setFileName(QString val);
     void setDisplayName(QString val);

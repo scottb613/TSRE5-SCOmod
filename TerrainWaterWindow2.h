@@ -51,7 +51,6 @@ private:
     QLineEdit eSE;
     QLineEdit eNE;
     QLineEdit eNW;
-    QLineEdit tileIdentifier;
     QDoubleSpinBox waterHeight;
     QSpinBox searchDistance;
     QPushButton *placeRulerButton = NULL;

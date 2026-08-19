@@ -92,6 +92,11 @@ Tile::Tile(const Tile& orig) {
 }
 
 Tile::~Tile() {
+    for(auto entry = obiekty.begin(); entry != obiekty.end(); ++entry)
+        delete entry->second;
+    obiekty.clear();
+    delete viewDbSphereRaw;
+    viewDbSphereRaw = NULL;
 }
 
 QString Tile::getNameXY(int e) {

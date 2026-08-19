@@ -38,6 +38,7 @@ public:
     static QHash<QString, bool> tileMapVisibilityOverrides;
     static bool LoadMapFromDisk(int x, int z);
     static void releaseDiskMapFromMemory(int x, int z);
+    static void releaseAllDiskMapsFromMemory();
     static void clearMapTileImages();
     static void loadMapOverlayState();
     static void unloadMapOverlayState();

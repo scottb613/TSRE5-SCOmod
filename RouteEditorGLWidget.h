@@ -62,11 +62,8 @@ public:
     QSize sizeHint() const Q_DECL_OVERRIDE;
     
     bool initRoute();
-    void clearRouteSession();
     void cameraInit();
     QJsonObject getSessionCameraState() const;
-    void playInit();
-    
     void getUnsavedInfo(QVector<QString> &items);
 
 public slots:
@@ -251,7 +248,6 @@ private:
     void positionWaterMessage();
     void renderPolyVegBakeMarkers();
     bool bakeVegetationTile(bool usePointerTile);
-    bool preparePolyVegMapOverlays();
     QString polyVegRecipeId;
     double polyVegDensity = -1.0;
     int polyVegMaximumTrees = -1;
@@ -276,7 +272,6 @@ private:
     int polyVegRawJumpIndex = -1;
     int polyVegBakeJumpIndex = -1;
     bool polyVegHelperVisible = false;
-    bool polyVegHelperEnabledMapOverlays = false;
     bool polyVegBatchBake = false;
     int polyVegBatchTileX = 0;
     int polyVegBatchTileZ = 0;

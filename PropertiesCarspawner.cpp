@@ -12,11 +12,13 @@
 #include "WorldObj.h"
 #include "CarSpawnerObj.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 PropertiesCarspawner::PropertiesCarspawner() {
+    GuiFunct::applyEditorPanelStyle(this);
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    vbox->setContentsMargins(4,4,4,4);
     
     infoLabel = new QLabel("Carspawner:");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
@@ -33,30 +35,40 @@ PropertiesCarspawner::PropertiesCarspawner() {
     vlist->addRow("Tile X:",&this->tX);
     vlist->addRow("Tile Z:",&this->tY);
     vlist->addRow("Length:",&this->lengthPlatform);
-    vbox->addItem(vlist);
-    // names
-    QLabel * label = new QLabel("Car Number:");
-    label->setContentsMargins(3,0,0,0);
+    GuiFunct::alignEditorForm(vlist);
+    QFrame *identityCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(identityCard);
+    QVBoxLayout *identityLayout = new QVBoxLayout(identityCard);
+    identityLayout->setContentsMargins(6,4,6,4);
+    identityLayout->addLayout(vlist);
+    vbox->addWidget(identityCard);
+    QLabel *label = new QLabel(QString::fromUtf8("• Traffic"));
+    GuiFunct::styleEditorSubtitle(label);
     vbox->addWidget(label);
-    vbox->addWidget(&this->carNumber);
-    label = new QLabel("Car speed:");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    vbox->addWidget(&this->carSpeed);
+    QFrame *trafficCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(trafficCard);
+    QFormLayout *trafficForm = new QFormLayout(trafficCard);
+    trafficForm->setContentsMargins(6,4,6,4);
+    trafficForm->addRow("Cars:", &carNumber);
+    trafficForm->addRow("Speed:", &carSpeed);
     //vbox->addWidget(&this->useCustomList);
     //useCustomList.setText("Use custom car list.");
-    label = new QLabel("Car List:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    vbox->addWidget(&this->carspawnList);
+    trafficForm->addRow("List:", &carspawnList);
+    GuiFunct::alignEditorForm(trafficForm);
+    vbox->addWidget(trafficCard);
     carspawnList.setStyleSheet("combobox-popup: 0;");
     label = new QLabel("Track Items:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     QPushButton *bExpandSelected = new QPushButton("Expand");
-    vbox->addWidget(bExpandSelected);
+    GuiFunct::styleEditorActionButton(bExpandSelected);
+    QFrame *actionCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(actionCard);
+    QVBoxLayout *actionLayout = new QVBoxLayout(actionCard);
+    actionLayout->setContentsMargins(4,3,4,3);
+    actionLayout->addWidget(bExpandSelected);
+    vbox->addWidget(actionCard);
     QObject::connect(bExpandSelected, SIGNAL(released()),
                       this, SLOT(bExpandEnabled()));
     vbox->addStretch(1);

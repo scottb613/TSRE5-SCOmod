@@ -110,6 +110,8 @@ public:
     void setDraw();
     void hideWaterDraw();
     void hideDraw();
+    bool selectedPatchesWaterVisible() const;
+    bool selectedPatchesDrawVisible() const;
     void toggleDraw();
     void toggleWaterDraw();
     void setDrawAdjacent();

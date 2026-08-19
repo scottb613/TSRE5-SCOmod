@@ -683,11 +683,15 @@ void Terrain::refresh() {
 void Terrain::toggleGaps(int x, int z, float posx, float posz, float direction){
     if(!jestF)
         newF();
-    int tx = (posz + 1024) / 8;
-    int tz = (posx + 1024) / 8;
-    if(tx > 256 || tx < 0)
+    const int samples = getSampleCount();
+    const int sampleSize = getSampleSize();
+    if(samples <= 0 || sampleSize <= 0)
         return;
-    if(tz > 256 || tz < 0)
+    int tx = (posz + 1024) / sampleSize;
+    int tz = (posx + 1024) / sampleSize;
+    if(tx > samples || tx < 0)
+        return;
+    if(tz > samples || tz < 0)
         return;
     if(direction == 0)
         fData[tx][tz] ^= 0x04;
@@ -696,10 +700,10 @@ void Terrain::toggleGaps(int x, int z, float posx, float posz, float direction){
     if(direction == -1){
         for(int j = -1; j <= 1; j++)
             for(int i = -1; i <= 1; i++){
-                if(tx+j > 256 || tx+j < 0)
-                    return;
-                if(tz+i > 256 || tz+i < 0)
-                    return;
+                if(tx+j > samples || tx+j < 0)
+                    continue;
+                if(tz+i > samples || tz+i < 0)
+                    continue;
                 fData[tx+j][tz+i] &= ~0x04;
             }
     }
@@ -945,6 +949,7 @@ void Terrain::setMapOverlayVisible(bool visible){
     if(!visible || lowTile){
         showBlob = false;
         terrainBlob.releaseTexture();
+        terrainBlob.deleteVBO();
         if(!lowTile){
             int X, Y;
             getLowCornerTileXY(X, Y);
@@ -960,7 +965,8 @@ void Terrain::setMapOverlayVisible(bool visible){
     getLowCornerTileXY(X, Y);
     int hash = (X*10000+Y);
     if(Game::debugOutput) qDebug() << hash;
-    if(MapWindow::mapTileImages[hash] != NULL)
+    const auto mapImage = MapWindow::mapTileImages.find(hash);
+    if(mapImage != MapWindow::mapTileImages.end() && mapImage->second != NULL)
         this->showBlob = true;
     else {
         if(MapWindow::LoadMapFromDisk(X, Y)){
@@ -968,6 +974,13 @@ void Terrain::setMapOverlayVisible(bool visible){
         } else {
             if(Game::debugOutput) qDebug() << "load map first!";
         }
+    }
+
+    if(showBlob){
+        terrainBlob.setMaterial(
+            QString::number((int)(X)*10000+(int)(Y))+".:maptex");
+        if(!terrainBlob.loaded)
+            refresh();
     }
 }
 
@@ -1068,6 +1081,21 @@ void Terrain::hideWaterDraw() {
         }
     }
     updateTFile();
+}
+
+bool Terrain::selectedPatchesWaterVisible() const {
+    if(tfile == NULL)
+        return false;
+    const int patchCount = tfile->patchsetNpatches * tfile->patchsetNpatches;
+    bool foundSelection = false;
+    for(int idx = 0; idx < patchCount; ++idx){
+        if(!selectedPatchs[idx])
+            continue;
+        foundSelection = true;
+        if((tfile->flags[idx] & 0x10000c0) != 0x10000c0)
+            return false;
+    }
+    return foundSelection;
 }
 
 void Terrain::updateTFile(){
@@ -1281,15 +1309,21 @@ void Terrain::setPatchTexTransform(QString val, int u){
 void Terrain::removeAllGaps(){
     if(!jestF)
         return;
+    const int samples = getSampleCount();
     int patches = tfile->patchsetNpatches;
+    if(samples <= 0 || patches <= 0)
+        return;
     for (int uu = 0; uu < patches*patches; uu++) {
         if(selectedPatchs[uu]){
             int u = uu / patches;
             int y = uu - u*patches;
-            // to do qt
-            for(int i = 0; i < 16; i++)
-                for(int j = 0; j < 16; j++)
-                    fData[u*16+i][y*16+j] &= ~(0x04);
+            const int rowStart = u * samples / patches;
+            const int rowEnd = (u + 1) * samples / patches;
+            const int columnStart = y * samples / patches;
+            const int columnEnd = (y + 1) * samples / patches;
+            for(int i = rowStart; i < rowEnd; i++)
+                for(int j = columnStart; j < columnEnd; j++)
+                    fData[i][j] &= ~(0x04);
             modifiedF = true;
             modified = true;
         }
@@ -1327,6 +1361,21 @@ void Terrain::hideDraw() {
         }
     }
     updateTFile();
+}
+
+bool Terrain::selectedPatchesDrawVisible() const {
+    if(tfile == NULL)
+        return false;
+    const int patchCount = tfile->patchsetNpatches * tfile->patchsetNpatches;
+    bool foundSelection = false;
+    for(int idx = 0; idx < patchCount; ++idx){
+        if(!selectedPatchs[idx])
+            continue;
+        foundSelection = true;
+        if((tfile->flags[idx] & 0x1) != 0)
+            return false;
+    }
+    return foundSelection;
 }
 
 void Terrain::toggleDraw(int x, int z, float posx, float posz) {
@@ -2482,7 +2531,7 @@ void Terrain::render(float lodx, float lodz, int tileX, int tileY, float* player
         gluu->mvPopMatrix();
         glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
     }
-    
+
     if(showBlob && selectionColor == 0){
         if(MapWindow::isAlpha == 0){
             gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
@@ -2655,6 +2704,7 @@ void Terrain::reloadLines() {
     
     int sampleSize = *tfile->sampleSize;
     int patches = tfile->patchsetNpatches;
+    int patchRes = samples/patches;
     int patchSize = (samples*sampleSize)/patches;
     int min = 0;
     int max = sampleSize * samples;
@@ -2699,12 +2749,12 @@ void Terrain::reloadLines() {
     lines.init(punkty, ptr, RenderItem::V, GL_LINES);
     delete[] punkty;
     //s tile lines
-    const int sampleGridLineCount = (samples + 15) / 16;
+    const int sampleGridLineCount = (samples + patchRes - 1) / patchRes;
     punkty = new float[static_cast<size_t>(sampleGridLineCount) * samples * 12];
     ptr = 0;
     i = 0;
 
-    for (int j = 0; j < samples; j += 16) {
+    for (int j = 0; j < samples; j += patchRes) {
         for (i = 0; i < samples; i++) {
             punkty[ptr++] = min + j *sampleSize;
             punkty[ptr++] = 0.9 + terrainData[i][j];
@@ -2730,48 +2780,48 @@ void Terrain::reloadLines() {
     //////////////////////
     
     int ui = 0;
-    for (int uu = 0; uu < 16; uu++)
-        for (int yy = 0; yy < 16; yy++)
-            if(this->uniqueTex[uu*16+yy]) ui++;
+    for (int uu = 0; uu < patches; uu++)
+        for (int yy = 0; yy < patches; yy++)
+            if(this->uniqueTex[uu*patches+yy]) ui++;
     
-    punkty = new float[samples * 128 * 6];
+    punkty = new float[static_cast<size_t>(patches) * patches * patchRes * 24];
     ptr = 0;
     i = 0;
     
-    for (int uu = 0; uu < 16; uu++)
-        for (int yy = 0; yy < 16; yy++){
-            if(!this->uniqueTex[yy*16+uu]) continue;
+    for (int uu = 0; uu < patches; uu++)
+        for (int yy = 0; yy < patches; yy++){
+            if(!this->uniqueTex[yy*patches+uu]) continue;
             
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize;
-                 punkty[ptr++] = 0.95 + terrainData[yy*16+i][uu*16+0];
+                 punkty[ptr++] = 0.95 + terrainData[yy*patchRes+i][uu*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize;
                  punkty[ptr++] = min + uu*patchSize;
-                 punkty[ptr++] = 0.95 + terrainData[yy*16+ i + 1][uu*16+0];
+                 punkty[ptr++] = 0.95 + terrainData[yy*patchRes+i+1][uu*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize +sampleSize;
             }
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize;
-                 punkty[ptr++] = 0.95 + terrainData[yy*16+0][uu*16+i];
+                 punkty[ptr++] = 0.95 + terrainData[yy*patchRes][uu*patchRes+i];
                  punkty[ptr++] = min + yy*patchSize;
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize +sampleSize;
-                 punkty[ptr++] = 0.95 + terrainData[yy*16+0][uu*16+i + 1];
+                 punkty[ptr++] = 0.95 + terrainData[yy*patchRes][uu*patchRes+i+1];
                  punkty[ptr++] = min + yy*patchSize;
             }
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize+patchSize;
-                 punkty[ptr++] = 0.95 + terrainData[yy*16+i][uu*16+16];
+                 punkty[ptr++] = 0.95 + terrainData[yy*patchRes+i][(uu+1)*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize;
                  punkty[ptr++] = min + uu*patchSize+patchSize;
-                 punkty[ptr++] = 0.95 + terrainData[yy*16+ i + 1][uu*16+16];
+                 punkty[ptr++] = 0.95 + terrainData[yy*patchRes+i+1][(uu+1)*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize +sampleSize;
             }
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize;
-                 punkty[ptr++] = 0.95 + terrainData[yy*16+16][uu*16+i];
+                 punkty[ptr++] = 0.95 + terrainData[(yy+1)*patchRes][uu*patchRes+i];
                  punkty[ptr++] = min + yy*patchSize+patchSize;
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize +sampleSize;
-                 punkty[ptr++] = 0.95 + terrainData[yy*16+16][uu*16+i + 1];
+                 punkty[ptr++] = 0.95 + terrainData[(yy+1)*patchRes][uu*patchRes+i+1];
                  punkty[ptr++] = min + yy*patchSize+patchSize;
             }
         }
@@ -2783,48 +2833,48 @@ void Terrain::reloadLines() {
     //////////////////////
     
     ui = 0;
-    for (int uu = 0; uu < 16; uu++)
-        for (int yy = 0; yy < 16; yy++)
-            if(this->texLocked[uu*16+yy]) ui++;
+    for (int uu = 0; uu < patches; uu++)
+        for (int yy = 0; yy < patches; yy++)
+            if(this->texLocked[uu*patches+yy]) ui++;
     
-    punkty = new float[samples * 128 * 6];
+    punkty = new float[static_cast<size_t>(patches) * patches * patchRes * 24];
     ptr = 0;
     i = 0;
     
-    for (int uu = 0; uu < 16; uu++)
-        for (int yy = 0; yy < 16; yy++){
-            if(!this->texLocked[yy*16+uu]) continue;
+    for (int uu = 0; uu < patches; uu++)
+        for (int yy = 0; yy < patches; yy++){
+            if(!this->texLocked[yy*patches+uu]) continue;
             
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+i][uu*16+0];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes+i][uu*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize;
                  punkty[ptr++] = min + uu*patchSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+ i + 1][uu*16+0];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes+i+1][uu*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize +sampleSize;
             }
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+0][uu*16+i];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes][uu*patchRes+i];
                  punkty[ptr++] = min + yy*patchSize;
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize +sampleSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+0][uu*16+i + 1];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes][uu*patchRes+i+1];
                  punkty[ptr++] = min + yy*patchSize;
             }
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize+patchSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+i][uu*16+16];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes+i][(uu+1)*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize;
                  punkty[ptr++] = min + uu*patchSize+patchSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+ i + 1][uu*16+16];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes+i+1][(uu+1)*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize +sampleSize;
             }
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+16][uu*16+i];
+                 punkty[ptr++] = 0.99 + terrainData[(yy+1)*patchRes][uu*patchRes+i];
                  punkty[ptr++] = min + yy*patchSize+patchSize;
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize +sampleSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+16][uu*16+i + 1];
+                 punkty[ptr++] = 0.99 + terrainData[(yy+1)*patchRes][uu*patchRes+i+1];
                  punkty[ptr++] = min + yy*patchSize+patchSize;
             }
         }
@@ -2836,48 +2886,48 @@ void Terrain::reloadLines() {
     //////////////////////
     
     ui = 0;
-    for (int uu = 0; uu < 16; uu++)
-        for (int yy = 0; yy < 16; yy++)
-            if(this->selectedPatchs[uu*16+yy]) ui++;
+    for (int uu = 0; uu < patches; uu++)
+        for (int yy = 0; yy < patches; yy++)
+            if(this->selectedPatchs[uu*patches+yy]) ui++;
     
-    punkty = new float[samples * 128 * 6];
+    punkty = new float[static_cast<size_t>(patches) * patches * patchRes * 24];
     ptr = 0;
     i = 0;
     
-    for (int uu = 0; uu < 16; uu++)
-        for (int yy = 0; yy < 16; yy++){
-            if(!this->selectedPatchs[yy*16+uu]) continue;
+    for (int uu = 0; uu < patches; uu++)
+        for (int yy = 0; yy < patches; yy++){
+            if(!this->selectedPatchs[yy*patches+uu]) continue;
             
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+i][uu*16+0];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes+i][uu*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize;
                  punkty[ptr++] = min + uu*patchSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+ i + 1][uu*16+0];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes+i+1][uu*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize +sampleSize;
             }
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+0][uu*16+i];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes][uu*patchRes+i];
                  punkty[ptr++] = min + yy*patchSize;
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize +sampleSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+0][uu*16+i + 1];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes][uu*patchRes+i+1];
                  punkty[ptr++] = min + yy*patchSize;
             }
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize+patchSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+i][uu*16+16];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes+i][(uu+1)*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize;
                  punkty[ptr++] = min + uu*patchSize+patchSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+ i + 1][uu*16+16];
+                 punkty[ptr++] = 0.99 + terrainData[yy*patchRes+i+1][(uu+1)*patchRes];
                  punkty[ptr++] = min + yy*patchSize + i *sampleSize +sampleSize;
             }
-            for (i = 0; i < 16; i++) {
+            for (i = 0; i < patchRes; i++) {
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+16][uu*16+i];
+                 punkty[ptr++] = 0.99 + terrainData[(yy+1)*patchRes][uu*patchRes+i];
                  punkty[ptr++] = min + yy*patchSize+patchSize;
                  punkty[ptr++] = min + uu*patchSize + i *sampleSize +sampleSize;
-                 punkty[ptr++] = 0.99 + terrainData[yy*16+16][uu*16+i + 1];
+                 punkty[ptr++] = 0.99 + terrainData[(yy+1)*patchRes][uu*patchRes+i+1];
                  punkty[ptr++] = min + yy*patchSize+patchSize;
             }
         }
@@ -3016,7 +3066,13 @@ void Terrain::oglInit() {
     VBO->release();
     delete[] punkty;
 
-    initBlob();
+    if(showBlob)
+    if(showBlob)
+        initBlob();
+    else
+        terrainBlob.deleteVBO();
+    else
+        terrainBlob.deleteVBO();
     //for (int i = 0; i < 257; i++)
     //    delete normalData[i];
     //delete normalData;
@@ -3235,7 +3291,10 @@ void Terrain::oglInit() {
     VBO->release();
     delete[] punkty;
 
-    initBlob();
+    if(showBlob)
+        initBlob();
+    else
+        terrainBlob.deleteVBO();
     //for (int i = 0; i < 257; i++)
     //    delete normalData[i];
     //delete normalData;
@@ -3249,17 +3308,18 @@ void Terrain::oglInit() {
 }
 
 void Terrain::initBlob(){
-    
-    GLUU* gluu = GLUU::get();
-    float alpha = -0.01;
-    int samples = *tfile->nsamples;
-    int patches = tfile->patchsetNpatches;
-    int patchRes = samples/patches;
-    float *punkty = new float[static_cast<size_t>(samples) * samples * 54];
+    const float alpha = -0.01f;
+    const int samples = *tfile->nsamples;
+    const int rowWidth = samples + 1;
+    const size_t vertexCount = static_cast<size_t>(rowWidth) * rowWidth;
+    const size_t indexCount = static_cast<size_t>(samples) * samples * 6;
+    float *punkty = new float[vertexCount * RenderItem::VNTA];
+    unsigned int *indices = new unsigned int[indexCount];
     int ptr = 0;
-    float step = 1.0/samples;
-    for (int jj = 0; jj < samples; jj++) {
-        for (int ii = 0; ii < samples; ii++) {
+    int indexPtr = 0;
+    const float step = 1.0f / samples;
+    for(int jj = 0; jj <= samples; ++jj){
+        for(int ii = 0; ii <= samples; ++ii){
             punkty[ptr++] = vertexData[jj][ii].x;
             punkty[ptr++] = vertexData[jj][ii].y+0.00;
             punkty[ptr++] = vertexData[jj][ii].z;
@@ -3267,62 +3327,32 @@ void Terrain::initBlob(){
             punkty[ptr++] = normalData[jj][ii].y;
             punkty[ptr++] = normalData[jj][ii].z;
             punkty[ptr++] = (jj)*step;
-            punkty[ptr++] = (ii)*step;
-            punkty[ptr++] = alpha;
-            punkty[ptr++] = vertexData[jj][ii+1].x;
-            punkty[ptr++] = vertexData[jj][ii+1].y+0.00;
-            punkty[ptr++] = vertexData[jj][ii+1].z;
-            punkty[ptr++] = normalData[jj][ii+1].x;
-            punkty[ptr++] = normalData[jj][ii+1].y;
-            punkty[ptr++] = normalData[jj][ii+1].z;
-            punkty[ptr++] = (jj)*step;
-            punkty[ptr++] = (ii+1)*step;
-            punkty[ptr++] = alpha;
-            punkty[ptr++] = vertexData[jj+1][ii+1].x;
-            punkty[ptr++] = vertexData[jj+1][ii+1].y+0.00;
-            punkty[ptr++] = vertexData[jj+1][ii+1].z;
-            punkty[ptr++] = normalData[jj+1][ii+1].x;
-            punkty[ptr++] = normalData[jj+1][ii+1].y;
-            punkty[ptr++] = normalData[jj+1][ii+1].z;
-            punkty[ptr++] = (jj+1)*step;
-            punkty[ptr++] = (ii+1)*step;
-            punkty[ptr++] = alpha;
-            punkty[ptr++] = vertexData[jj][ii].x;
-            punkty[ptr++] = vertexData[jj][ii].y+0.00;
-            punkty[ptr++] = vertexData[jj][ii].z;
-            punkty[ptr++] = normalData[jj][ii].x;
-            punkty[ptr++] = normalData[jj][ii].y;
-            punkty[ptr++] = normalData[jj][ii].z;
-            punkty[ptr++] = (jj)*step;
-            punkty[ptr++] = (ii)*step;
-            punkty[ptr++] = alpha;
-            punkty[ptr++] = vertexData[jj+1][ii+1].x;
-            punkty[ptr++] = vertexData[jj+1][ii+1].y+0.00;
-            punkty[ptr++] = vertexData[jj+1][ii+1].z;
-            punkty[ptr++] = normalData[jj+1][ii+1].x;
-            punkty[ptr++] = normalData[jj+1][ii+1].y;
-            punkty[ptr++] = normalData[jj+1][ii+1].z;
-            punkty[ptr++] = (jj+1)*step;
-            punkty[ptr++] = (ii+1)*step;
-            punkty[ptr++] = alpha;
-            punkty[ptr++] = vertexData[jj+1][ii].x;
-            punkty[ptr++] = vertexData[jj+1][ii].y+0.00;
-            punkty[ptr++] = vertexData[jj+1][ii].z;
-            punkty[ptr++] = normalData[jj+1][ii].x;
-            punkty[ptr++] = normalData[jj+1][ii].y;
-            punkty[ptr++] = normalData[jj+1][ii].z;
-            punkty[ptr++] = (jj+1)*step;
             punkty[ptr++] = (ii)*step;
             punkty[ptr++] = alpha;
         }
     }
-    QString* path = new QString;
+
+    for(int jj = 0; jj < samples; ++jj){
+        for(int ii = 0; ii < samples; ++ii){
+            const unsigned int topLeft = jj*rowWidth + ii;
+            const unsigned int topRight = topLeft + 1;
+            const unsigned int bottomLeft = topLeft + rowWidth;
+            const unsigned int bottomRight = bottomLeft + 1;
+            indices[indexPtr++] = topLeft;
+            indices[indexPtr++] = topRight;
+            indices[indexPtr++] = bottomRight;
+            indices[indexPtr++] = topLeft;
+            indices[indexPtr++] = bottomRight;
+            indices[indexPtr++] = bottomLeft;
+        }
+    }
     int X, Y;
     this->getLowCornerTileXY(X, Y);
-    *path += QString::number((int)(X)*10000+(int)(Y))+".:maptex";
-    //qDebug() << *path;
-    terrainBlob.setMaterial(path);
-    terrainBlob.init(punkty, ptr, RenderItem::VNTA, GL_TRIANGLES);
+    terrainBlob.setMaterial(
+        QString::number((int)(X)*10000+(int)(Y))+".:maptex");
+    terrainBlob.initIndexed(punkty, ptr, RenderItem::VNTA, GL_TRIANGLES,
+            indices, indexPtr);
+    delete[] indices;
     delete[] punkty;
 }
 

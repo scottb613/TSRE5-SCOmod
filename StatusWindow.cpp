@@ -18,9 +18,10 @@
 #include "ShapeLib.h"
 #include "Coords.h"
 #include "GuiFunct.h"
+#include <functional>
 
 static int scaledUiSize(int base){
-    return qRound(base * qMax(1.0f, Game::uiScale));
+    return qRound(base * qBound(0.75f, Game::uiScale, 1.25f));
 }
 
 static QString statusButtonStyle(const QString& background, const QString& hoverBackground,
@@ -46,10 +47,64 @@ static QString statusReadoutStyle(const QString& background, const QString& text
     ).arg(textColor, background, border);
 }
 
+class PairedCoordinateReadouts : public QObject {
+public:
+    PairedCoordinateReadouts(QLineEdit *first, QLineEdit *second,
+                             const std::function<void()> &copiedCallback,
+                             QObject *parent)
+        : QObject(parent), first(first), second(second),
+          copiedCallback(copiedCallback) {
+        if(first != NULL)
+            first->installEventFilter(this);
+        if(second != NULL)
+            second->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override {
+        if(watched != first && watched != second)
+            return QObject::eventFilter(watched, event);
+
+        if(event->type() == QEvent::Enter)
+            setPairHovered(true);
+        else if(event->type() == QEvent::Leave)
+            setPairHovered(false);
+        else if(event->type() == QEvent::MouseButtonRelease){
+            QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+            if(mouseEvent->button() == Qt::LeftButton
+            && first != NULL && second != NULL){
+                QApplication::clipboard()->setText(
+                    first->text() + '\t' + second->text(),
+                    QClipboard::Clipboard);
+                if(copiedCallback)
+                    copiedCallback();
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    void setPairHovered(bool hovered){
+        const QList<QLineEdit*> fields = { first, second };
+        for(QLineEdit *field : fields){
+            if(field == NULL)
+                continue;
+            field->setProperty("coordinatePairHover", hovered);
+            field->style()->unpolish(field);
+            field->style()->polish(field);
+            field->update();
+        }
+    }
+
+    QLineEdit *first = NULL;
+    QLineEdit *second = NULL;
+    std::function<void()> copiedCallback;
+};
+
 StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     this->setWindowFlags(Qt::WindowType::Tool);
     this->setFixedWidth(scaledUiSize(300));
-    this->setFixedHeight(scaledUiSize(463));
+    this->setFixedHeight(scaledUiSize(442));
     GuiFunct::setEditorToolWindowTitle(this);
     const bool defaultPositionRequested = Game::pinnedWindowPosition("controlPanelUseDefault", NULL);
     QStringList winPos = Game::statusPos.split(",");
@@ -142,81 +197,143 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
 
     v->addSpacing(scaledUiSize(5));
 
-    QLabel *markerFileLabel = new QLabel("• Marker File");
-    markerFileLabel->setContentsMargins(12,0,0,0);
-    markerFileLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    QLabel *markerLocationLabel = new QLabel("• Marker Location");
-    markerLocationLabel->setContentsMargins(12,0,0,0);
-    markerLocationLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    QLabel *positionLabel = new QLabel("• Position");
-    positionLabel->setContentsMargins(12,0,0,0);
-    positionLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    v->addWidget(markerFileLabel);
-    v->addWidget(&markerFiles);
-    v->addWidget(markerLocationLabel);
-    v->addWidget(&markerList);
-    v->addWidget(positionLabel);
+    const int cardHorizontalPadding = scaledUiSize(5);
+    const int cardVerticalPadding = scaledUiSize(3);
+    positionLabel = new QLabel(QString(QChar(0x2022)) + " Position");
+    QLabel *jumpLabel = new QLabel(QString(QChar(0x2022)) + " Jump");
+    GuiFunct::styleEditorSubtitle(positionLabel);
+    GuiFunct::styleEditorSubtitle(jumpLabel);
+    positionLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    jumpLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
     markerFiles.setStyleSheet("combobox-popup: 0;");
     markerList.setStyleSheet("combobox-popup: 0;");
     markerFiles.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     markerList.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-    QLabel *cameraPosLabel = new QLabel("Camera:");
-    QLabel *pointerPosLabel = new QLabel("Pointer:");
     QGridLayout *positionGrid = new QGridLayout;
     positionGrid->setSpacing(2);
     positionGrid->setContentsMargins(3,0,1,0);
-    positionGrid->addWidget(pointerPosLabel,0,0);
-    positionGrid->addWidget(new QLabel("x"),0,1);
-    positionGrid->addWidget(&pxBox,0,2);
-    positionGrid->addWidget(new QLabel("y"),0,3);
-    positionGrid->addWidget(&pyBox,0,4);
-    positionGrid->addWidget(new QLabel("z"),0,5);
-    positionGrid->addWidget(&pzBox,0,6);
+    positionGrid->setColumnStretch(1,1);
+    positionGrid->setColumnStretch(3,1);
+    positionGrid->addWidget(new QLabel("Cam X:"),0,0);
+    positionGrid->addWidget(&txBox,0,1);
+    positionGrid->addWidget(new QLabel("Cam Y:"),0,2);
+    positionGrid->addWidget(&tyBox,0,3);
+    positionGrid->addWidget(new QLabel("Cam Lat:"),1,0);
+    positionGrid->addWidget(&latBox,1,1);
+    positionGrid->addWidget(new QLabel("Cam Lon:"),1,2);
+    positionGrid->addWidget(&lonBox,1,3);
+    positionGrid->addWidget(new QLabel("Pnt X:"),2,0);
+    positionGrid->addWidget(&pxBox,2,1);
+    positionGrid->addWidget(new QLabel("Pnt Y:"),2,2);
+    positionGrid->addWidget(&pyBox,2,3);
+    positionGrid->addWidget(new QLabel("Pnt Elev:"),3,0);
+    positionGrid->addWidget(&pyBoxx,3,1);
+    positionGrid->addWidget(new QLabel("Pnt Z:"),3,2);
+    positionGrid->addWidget(&pzBox,3,3);
     pxBox.setReadOnly(true);
     pyBox.setReadOnly(true);
     pzBox.setReadOnly(true);
+    txBox.setReadOnly(true);
+    tyBox.setReadOnly(true);
+    latBox.setReadOnly(true);
+    lonBox.setReadOnly(true);
+    txBox.setFocusPolicy(Qt::NoFocus);
+    tyBox.setFocusPolicy(Qt::NoFocus);
+    latBox.setFocusPolicy(Qt::NoFocus);
+    lonBox.setFocusPolicy(Qt::NoFocus);
     if(Game::convertUnitD != 'm'){
         pyBoxx.setReadOnly(true);
-        positionGrid->addWidget(&pyBoxx,0,7);
     }
-    positionGrid->addWidget(cameraPosLabel,1,0);
-    positionGrid->addWidget(new QLabel("x"),1,1);
-    positionGrid->addWidget(&xBox,1,2);
-    positionGrid->addWidget(new QLabel("y"),1,3);
-    positionGrid->addWidget(&yBox,1,4);
-    positionGrid->addWidget(new QLabel("z"),1,5);
-    positionGrid->addWidget(&zBox,1,6);
-    v->addItem(positionGrid);
+    const QList<QLineEdit*> numericFields = {
+        &pxBox, &pyBox, &pzBox, &pyBoxx,
+        &txBox, &tyBox, &latBox, &lonBox
+    };
+    const QString readOnlyStatusStyle =
+        "QLineEdit { background-color: #252525; border: 1px solid #444444;"
+        " color: #f0f0f0; padding: 1px 4px; selection-background-color: #555555;"
+        " selection-color: #ffffff; }"
+        "QLineEdit:focus { border: 1px solid #444444; }"
+        "QLineEdit[coordinatePairHover=\"true\"] {"
+        " background-color: #303438; border: 1px solid #f08200;"
+        " color: #ffffff; }";
+    for(QLineEdit *field : numericFields){
+        field->setAlignment(Qt::AlignRight);
+        field->setStyleSheet(readOnlyStatusStyle);
+    }
+    copiedStatusTimer.setSingleShot(true);
+    QObject::connect(&copiedStatusTimer, &QTimer::timeout, this, [this](){
+        if(positionLabel == NULL)
+            return;
+        positionLabel->setText(QString(QChar(0x2022)) + " Position");
+        positionLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        GuiFunct::styleEditorSubtitle(positionLabel);
+    });
+    const std::function<void()> showCopiedStatus = [this](){
+        if(positionLabel == NULL)
+            return;
+        positionLabel->setText(QString(QChar(0x2022)) + " COPIED "
+                               + QString(QChar(0x2022)));
+        positionLabel->setAlignment(Qt::AlignCenter);
+        positionLabel->setStyleSheet(
+            GuiFunct::editorSubtitleStyle()
+            + " QLabel { color: #f08200; }");
+        copiedStatusTimer.start(2000);
+    };
+    new PairedCoordinateReadouts(&txBox, &tyBox, showCopiedStatus, this);
+    new PairedCoordinateReadouts(&latBox, &lonBox, showCopiedStatus, this);
 
-    QGridLayout *coordinateGrid = new QGridLayout;
-    coordinateGrid->setSpacing(2);
-    coordinateGrid->setContentsMargins(3,0,1,0);
-    coordinateGrid->addWidget(new QLabel("X"),0,0);
-    coordinateGrid->addWidget(&txBox,0,1);
-    coordinateGrid->addWidget(new QLabel("Y"),0,2);
-    coordinateGrid->addWidget(&tyBox,0,3);
-    coordinateGrid->addWidget(new QLabel("lat"),1,0);
-    coordinateGrid->addWidget(&latBox,1,1);
-    coordinateGrid->addWidget(new QLabel("lon"),1,2);
-    coordinateGrid->addWidget(&lonBox,1,3);
-    v->addItem(coordinateGrid);
-    v->addWidget(&tileInfo);
-    QPushButton *jumpButton = new QPushButton("Jump", this);
+    QFrame *positionCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(positionCard);
+    positionCard->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    QVBoxLayout *positionCardLayout = new QVBoxLayout(positionCard);
+    positionCardLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    positionCardLayout->setSpacing(scaledUiSize(2));
+    positionCardLayout->addLayout(positionGrid);
+    v->addWidget(positionLabel);
+    v->addWidget(positionCard);
+
+    QPushButton *jumpButton = new QPushButton("Engage", this);
     jumpButton->setFocusPolicy(Qt::NoFocus);
-    jumpButton->setMinimumHeight(scaledUiSize(21));
-    v->addWidget(jumpButton);
+    GuiFunct::styleEditorActionButton(jumpButton);
+    QFrame *engageCell = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(engageCell);
+    QVBoxLayout *engageLayout = new QVBoxLayout(engageCell);
+    engageLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    engageLayout->addWidget(jumpButton);
+
+    QFrame *jumpCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(jumpCard);
+    jumpCard->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    QGridLayout *jumpLayout = new QGridLayout(jumpCard);
+    jumpLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    jumpLayout->setHorizontalSpacing(scaledUiSize(4));
+    jumpLayout->setVerticalSpacing(scaledUiSize(3));
+    QLabel *markerFileFieldLabel = new QLabel("Marker File:");
+    QLabel *markerLocationFieldLabel = new QLabel("Location:");
+    jumpLayout->addWidget(markerFileFieldLabel, 0, 0);
+    jumpLayout->addWidget(&markerFiles, 0, 1);
+    jumpLayout->addWidget(markerLocationFieldLabel, 1, 0);
+    jumpLayout->addWidget(&markerList, 1, 1);
+    jumpLayout->addWidget(engageCell, 2, 0, 1, 2);
+    jumpLayout->setColumnStretch(1, 1);
+    v->addWidget(jumpLabel);
+    v->addWidget(jumpCard);
 
 
     /// EFO end
 
     this->setLayout(v);
-    this->setStyleSheet(GuiFunct::scoPanelStyle());
+    this->setStyleSheet(GuiFunct::scoEditorPanelStyle());
+    GuiFunct::styleEditorActionButton(jumpButton);
     updatePositionPinAppearance();
-    markerFileLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    markerLocationLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    positionLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
 
     statS = statusButtonStyle("#26292c", "#303438", "#e7eaec", "#383d41", "#191b1d");
     statG = statusButtonStyle(Game::StyleGreenButton, Game::StyleGreenButtonHover,
@@ -261,7 +378,6 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     QObject::connect(&zBox, SIGNAL(textEdited(QString)), this, SLOT(xyChanged(QString)));
     QObject::connect(&latBox, SIGNAL(textEdited(QString)), this, SLOT(latLonChanged(QString)));
     QObject::connect(&lonBox, SIGNAL(textEdited(QString)), this, SLOT(latLonChanged(QString)));
-    tileInfo.setText(" ");
 }
 
 
@@ -486,14 +602,6 @@ void StatusWindow::jumpTileSelected(){
         emit jumpSoundRequested();
         emit requestMainFocus();
     }
-}
-
-void StatusWindow::naviInfo(int all, int hidden){
-    if(all == objCount && hidden == objHidden)
-        return;
-    objCount = all;
-    objHidden = hidden;
-    tileInfo.setText("Objects: " + QString::number(all) + " (including " + QString::number(hidden) + " hidden)");
 }
 
 void StatusWindow::pointerInfo(float* coords){

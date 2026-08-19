@@ -17,8 +17,13 @@
 #include "GeoCoordinates.h"
 #include "GuiFunct.h"
 
+static int scaledUiSize(int base){
+    return qRound(base * qBound(0.75f, Game::uiScale, 1.25f));
+}
+
 ErrorMessagesWindow::ErrorMessagesWindow(QWidget* parent) : QWidget(parent) {
     GuiFunct::applyEditorPanelStyle(this);
+    GuiFunct::setEditorToolWindowTitle(this);
     brushes[(int)ErrorMessage::Type_Error] = QBrush(QColor(Game::StyleRedText));
     brushes[(int)ErrorMessage::Type_Warning] = QBrush(QColor(200,200,0));
     brushes[(int)ErrorMessage::Type_Info] = QBrush(QColor(Game::StyleGreenText));
@@ -26,22 +31,33 @@ ErrorMessagesWindow::ErrorMessagesWindow(QWidget* parent) : QWidget(parent) {
     brushes[1000] = QBrush(QColor(Game::StyleMainLabel));
     this->setWindowFlags(Qt::WindowType::Tool);
     //this->setFixedWidth(350);
-    this->setMinimumWidth(730);
-    this->setFixedHeight(400);
-    this->setWindowTitle(tr("Errors & Messages"));
+    this->setMinimumWidth(scaledUiSize(730));
+    this->setFixedHeight(scaledUiSize(430));
     
     properties = new ErrorMessageProperties(this);
     
     QVBoxLayout *errorListLayout = new QVBoxLayout;
-    errorListLayout->setContentsMargins(0,0,0,0);
-    errorListLayout->setSpacing(0);
+    errorListLayout->setContentsMargins(4,4,4,4);
+    errorListLayout->setSpacing(4);
+    QLabel *title = new QLabel(tr("ERRORS & MESSAGES"), this);
+    GuiFunct::styleEditorTitle(title);
+    errorListLayout->addWidget(title);
+    QLabel *logHeading = new QLabel(
+        QString(QChar(0x2022)) + tr(" Message Log"), this);
+    GuiFunct::styleEditorSubtitle(logHeading);
+    errorListLayout->addWidget(logHeading);
+    QFrame *listCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(listCard);
+    QVBoxLayout *listCardLayout = new QVBoxLayout(listCard);
+    listCardLayout->setContentsMargins(4,4,4,4);
     /*QPushButton *bNewActionEvent = new QPushButton("New Service");
     QObject::connect(bNewActionEvent, SIGNAL(released()),
                       this, SLOT(bNewServiceSelected()));
     QPushButton *bDeleteActionEvent = new QPushButton("Delete");
     QObject::connect(bDeleteActionEvent, SIGNAL(released()),
                       this, SLOT(bDeleteServiceSelected()));*/
-    errorListLayout->addWidget(&errorList);
+    listCardLayout->addWidget(&errorList);
+    errorListLayout->addWidget(listCard, 1);
     errorListLayout->addWidget(properties);
     //errorListLayout->addWidget(bNewActionEvent);
     //errorListLayout->addWidget(bDeleteActionEvent);
@@ -54,7 +70,7 @@ ErrorMessagesWindow::ErrorMessagesWindow(QWidget* parent) : QWidget(parent) {
     //list.append("Any:");
     //errorList.setFixedWidth(250);
     errorList.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    errorList.setColumnCount(3);
+    errorList.setColumnCount(5);
     errorList.setHeaderLabels(list);
     errorList.setRootIsDecorated(false);
     errorList.header()->resizeSection(0,30);    
@@ -75,6 +91,8 @@ ErrorMessagesWindow::ErrorMessagesWindow(QWidget* parent) : QWidget(parent) {
                       this, SLOT(jumpRequestReceived(PreciseTileCoordinate*)));
     QObject::connect(properties, SIGNAL(selectObject(GameObj*)),
                       this, SLOT(selectRequestReceived(GameObj*)));
+    QObject::connect(properties, SIGNAL(messageUpdated()),
+                      this, SLOT(refreshErrorList()));
     refreshErrorList();
 }
 

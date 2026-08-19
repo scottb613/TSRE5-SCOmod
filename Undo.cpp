@@ -94,8 +94,30 @@ void Undo::UndoLast(){
     while (i.hasNext()) {
         i.next();
         UndoState::TerrainData* tdata = i.value();
-        if(tdata != NULL)
-            Game::terrainLib->fillHeightMap(tdata->x, tdata->z, tdata->data);
+        if(tdata == NULL)
+            continue;
+
+        Terrain *terrain = Game::terrainLib->getTerrainByXY(tdata->x, tdata->z, false);
+        if(terrain == NULL || !terrain->loaded){
+            qWarning() << "Terrain undo skipped: tile is not loaded"
+                       << tdata->x << tdata->z;
+            continue;
+        }
+
+        const qsizetype rows = static_cast<qsizetype>(tdata->samples) + 1;
+        const qsizetype expectedValues = rows * rows;
+        if(tdata->samples <= 0
+                || terrain->getSampleCount() != tdata->samples
+                || tdata->data.size() != expectedValues){
+            qWarning() << "Terrain undo skipped: snapshot dimensions do not match tile"
+                       << tdata->x << tdata->z
+                       << "snapshot samples" << tdata->samples
+                       << "tile samples" << terrain->getSampleCount()
+                       << "stored values" << tdata->data.size();
+            continue;
+        }
+
+        terrain->fillHeightMap(tdata->data.data());
     }
     QMapIterator<int, unsigned char *> i1(state->texData);
     while (i1.hasNext()) {
@@ -213,19 +235,22 @@ void Undo::StateEnd(){
 }
 
 void Undo::PushTerrainHeightMap(int x, int z, float** data, int samples){
-    if(currentState == NULL)
+    if(currentState == NULL || data == NULL || samples <= 0)
         return;
-    
-    samples += 1;
+
     UndoState::TerrainData * tdata = currentState->terrainData[x*10000+z];
     if(tdata == NULL){
         currentState->terrainData[x*10000+z] = new UndoState::TerrainData();
         tdata = currentState->terrainData[x*10000+z];
         tdata->x = x;
         tdata->z = z;
-        for (int i = 0; i < samples; i++)
-            for (int j = 0; j < samples; j++) {
-                    tdata->data[i*samples+j] = data[i][j];
+        tdata->samples = samples;
+
+        const qsizetype rows = static_cast<qsizetype>(samples) + 1;
+        tdata->data.resize(rows * rows);
+        for (int i = 0; i <= samples; i++)
+            for (int j = 0; j <= samples; j++) {
+                    tdata->data[static_cast<qsizetype>(i) * rows + j] = data[i][j];
             }
         currentState->modified = true;
     }

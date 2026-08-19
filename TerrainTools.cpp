@@ -52,7 +52,7 @@ protected:
 };
 
 static int scaledUiSize(int base){
-    return qRound(base * qMax(1.0f, Game::uiScale));
+    return qRound(base * qBound(0.75f, Game::uiScale, 1.25f));
 }
 
 static bool textureReadyForPreview(Texture *texture){
@@ -145,12 +145,10 @@ public:
         rdbHeightBias.setAlignment(Qt::AlignRight);
         tdbHeightBias.setToolTip(biasToolTip);
         rdbHeightBias.setToolTip(biasToolTip);
-        conformLayout->addWidget(new QLabel("TDB Height Bias:"), 0, 0);
+        conformLayout->addWidget(new QLabel("TDB Height Bias (m):"), 0, 0);
         conformLayout->addWidget(&tdbHeightBias, 0, 1);
-        conformLayout->addWidget(new QLabel("m"), 0, 2);
-        conformLayout->addWidget(new QLabel("RDB Height Bias:"), 1, 0);
+        conformLayout->addWidget(new QLabel("RDB Height Bias (m):"), 1, 0);
         conformLayout->addWidget(&rdbHeightBias, 1, 1);
-        conformLayout->addWidget(new QLabel("m"), 1, 2);
         rootLayout->addLayout(conformLayout);
 
         QList<QWidget*> controls = findChildren<QWidget*>();
@@ -227,25 +225,32 @@ TerrainTools::TerrainTools(QString name)
     : QWidget(){
     setFixedWidth(scaledUiSize(250));
     GuiFunct::applyEditorPanelStyle(this);
+    terrainTexturePanel = new QWidget(this);
+    terrainTexturePanel->setFixedWidth(scaledUiSize(250));
+    GuiFunct::applyEditorPanelStyle(terrainTexturePanel);
     QFont panelFont = font();
-    if(panelFont.pointSizeF() > 0)
-        panelFont.setPointSizeF(panelFont.pointSizeF() * 1.12);
     setFont(panelFont);
+    const int cardHorizontalPadding = scaledUiSize(5);
+    const int cardVerticalPadding = scaledUiSize(6);
     int row = 0;
     
-    texPreview = new QPixmap(106,106);
-    defaultTexPreview = new QPixmap(36,36);
+    const int previewResolution = scaledUiSize(106);
+    const int previewFrameSize = scaledUiSize(108);
+    const int swatchResolution = scaledUiSize(36);
+    const int swatchFrameSize = scaledUiSize(38);
+    texPreview = new QPixmap(previewResolution, previewResolution);
+    defaultTexPreview = new QPixmap(swatchResolution, swatchResolution);
     defaultTexPreview->fill(Qt::transparent);
     texPreview->fill(Qt::black);
     texPreviewLabel = new ClickableLabel("");
     texPreviewLabel->setContentsMargins(0,0,0,0);
-    texPreviewLabel->setFixedSize(108,108);
+    texPreviewLabel->setFixedSize(previewFrameSize, previewFrameSize);
     texPreviewLabel->setAlignment(Qt::AlignCenter);
     texPreviewLabel->setStyleSheet("background-color: #171717; border: 1px solid #555555;");
     texPreviewLabel->setPixmap(*texPreview);
     texPreviewLabel->setToolTip("#000000");
     mirrorTexPreviewLabel = new QLabel("");
-    mirrorTexPreviewLabel->setFixedSize(108,108);
+    mirrorTexPreviewLabel->setFixedSize(previewFrameSize, previewFrameSize);
     mirrorTexPreviewLabel->setAlignment(Qt::AlignCenter);
     mirrorTexPreviewLabel->setStyleSheet(
         "QLabel { background-color: #171717; color: #9b9b9b; border: 1px solid #555555; }");
@@ -257,7 +262,7 @@ TerrainTools::TerrainTools(QString name)
     for(int i = 0; i < 7; i++){
         texPreviewLabels.push_back(new ClickableLabel(""));
         texPreviewLabels.back()->setContentsMargins(0,0,0,0);
-        texPreviewLabels.back()->setFixedSize(38,38);
+        texPreviewLabels.back()->setFixedSize(swatchFrameSize, swatchFrameSize);
         texPreviewLabels.back()->setAlignment(Qt::AlignCenter);
         texPreviewLabels.back()->setStyleSheet("background-color: #171717; border: 1px solid #4d4d4d;");
         texPreviewLabels.back()->setPixmap(*defaultTexPreview);
@@ -269,6 +274,7 @@ TerrainTools::TerrainTools(QString name)
     connect(&texPreviewSignals, SIGNAL(mappedInt(int)), this, SLOT(texPreviewEnabled(int)));
 
     paintBrush = new Brush();
+    meshBrush = new Brush();
     
     if(Game::terrBrushColor)        
     {
@@ -287,6 +293,7 @@ TerrainTools::TerrainTools(QString name)
     foreach(QString bfile, dir.entryList())
         brushShapes.push_back(QImage(QString("tsre_appdata/")+Game::AppDataVersion+"/brush/"+bfile).convertToFormat(QImage::Format_Grayscale8));
     nextBrushShape();
+    meshBrush->brushshape = paintBrush->brushshape;
     
     buttonTools["heightTool"] = new QPushButton("Height +", this);
     buttonTools["pickTerrainTexTool"] = new QPushButton("Pick", this);
@@ -352,31 +359,39 @@ TerrainTools::TerrainTools(QString name)
     vlist1->addWidget(buttonTools["pickTerrainTexTool"],row,0);
     vlist1->addWidget(buttonTools["putTerrainTexTool"],row,1);
     vlist1->addWidget(loadTerrainTexTool,row++,2);
-    hideGeneratedTerrtex = new QCheckBox("Hide generated tile textures", this);
+    hideGeneratedTerrtex = new QCheckBox("Hide Terrtex Textures", this);
     hideGeneratedTerrtex->setChecked(true);
     hideGeneratedTerrtex->setToolTip(
         "Hide TERRTEX files whose names begin with \"mosaic\" or \"-\" in the Load window.");
-    vlist1->addWidget(hideGeneratedTerrtex,row,0,1,3);
     
     colorw = new QPushButton(Game::terrBrushColor->name(), this);
     colorw->setStyleSheet("background-color:" + Game::terrBrushColor->name() + ";");
+    colorw->setMinimumHeight(scaledUiSize(26));
 
     
     QLabel *label0;
     QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(3);
+    vbox->setSpacing(4);
     vbox->setContentsMargins(4,3,4,4);
+    QVBoxLayout *textureVbox = new QVBoxLayout;
+    textureVbox->setSpacing(4);
+    textureVbox->setContentsMargins(4,3,4,4);
     auto addRule = [vbox]() {
-        vbox->addSpacing(scaledUiSize(5));
+        vbox->addSpacing(scaledUiSize(7));
+    };
+    auto addTextureRule = [textureVbox]() {
+        textureVbox->addSpacing(scaledUiSize(7));
     };
     
-    QLabel *panelTitle = new QLabel("TERRAIN EDITOR");
+    QLabel *panelTitle = new QLabel("TERRAIN MESH");
     GuiFunct::styleEditorTitle(panelTitle);
     vbox->addWidget(panelTitle);
-    QLabel *textureSetLabel = new QLabel("• Texture Set");
-    textureSetLabel->setContentsMargins(12,0,0,0);
-    textureSetLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    vbox->addWidget(textureSetLabel);
+    QLabel *texturePanelTitle = new QLabel("TERRAIN TEXTURE");
+    GuiFunct::styleEditorTitle(texturePanelTitle);
+    textureVbox->addWidget(texturePanelTitle);
+    QLabel *textureSetLabel = new QLabel(QString(QChar(0x2022)) + " Texture Set");
+    GuiFunct::styleEditorSubtitle(textureSetLabel);
+    textureVbox->addWidget(textureSetLabel);
 
     seasonType = new QComboBox;
     seasonType->setStyleSheet("combobox-popup: 0;");
@@ -385,33 +400,58 @@ TerrainTools::TerrainTools(QString name)
     seasonType->addItem("Autumn");
     seasonType->addItem("Winter");
     seasonType->addItem("Night");
-    vbox->addWidget(seasonType);
+    QFrame *textureSetCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(textureSetCard);
+    QVBoxLayout *textureSetLayout = new QVBoxLayout(textureSetCard);
+    textureSetLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    textureSetLayout->addWidget(seasonType);
+    textureVbox->addWidget(textureSetCard);
 
     addRule();
-    label0 = new QLabel("• Edit Terrain Layers");
-    label0->setContentsMargins(12,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    label0 = new QLabel(QString(QChar(0x2022)) + " Edit Terrain Layers");
+    GuiFunct::styleEditorSubtitle(label0);
     vbox->addWidget(label0);
-    vbox->addItem(vlist3);
+    QFrame *terrainLayersCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(terrainLayersCard);
+    vlist3->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    terrainLayersCard->setLayout(vlist3);
+    vbox->addWidget(terrainLayersCard);
     /*label0 = new QLabel("Terrain Patch:");
     label0->setContentsMargins(3,0,0,0);
     label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; }");
     vbox->addWidget(label0);
     vbox->addItem(vlist4);*/
     if(Game::serverClient == NULL){
-        label0 = new QLabel("• Paint Texture");
-        label0->setContentsMargins(12,0,0,0);
-        label0->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
-        vbox->addWidget(label0);
-        vbox->addItem(vlist0);
+        addTextureRule();
+        label0 = new QLabel(QString(QChar(0x2022)) + " Paint Texture");
+        GuiFunct::styleEditorSubtitle(label0);
+        textureVbox->addWidget(label0);
+        QFrame *paintTextureCard = new QFrame(this);
+        GuiFunct::styleEditorPanelCard(paintTextureCard);
+        vlist0->setContentsMargins(
+            cardHorizontalPadding, cardVerticalPadding,
+            cardHorizontalPadding, cardVerticalPadding);
+        paintTextureCard->setLayout(vlist0);
+        textureVbox->addWidget(paintTextureCard);
     }
 
-    addRule();
-    label0 = new QLabel("• Texture Preview");
-    label0->setContentsMargins(12,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    vbox->addWidget(label0);
-    vbox->addItem(vlist1);
+    addTextureRule();
+    label0 = new QLabel(QString(QChar(0x2022)) + " Texture Preview");
+    GuiFunct::styleEditorSubtitle(label0);
+    textureVbox->addWidget(label0);
+    QFrame *texturePreviewCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(texturePreviewCard);
+    QVBoxLayout *texturePreviewLayout = new QVBoxLayout(texturePreviewCard);
+    texturePreviewLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    texturePreviewLayout->setSpacing(cardVerticalPadding);
+    vlist1->setContentsMargins(0,0,0,0);
+    texturePreviewLayout->addLayout(vlist1);
 
     QGridLayout *pairedPreview = new QGridLayout;
     pairedPreview->setHorizontalSpacing(6);
@@ -429,7 +469,7 @@ TerrainTools::TerrainTools(QString name)
     pairedPreview->addWidget(texPreviewLabel,1,0,Qt::AlignHCenter);
     pairedPreview->addWidget(mirrorTexPreviewLabel,1,1,Qt::AlignHCenter);
     pairedPreview->addWidget(mirrorPairStatus,2,0,1,2);
-    vbox->addItem(pairedPreview);
+    texturePreviewLayout->addLayout(pairedPreview);
 
     QGridLayout *swatchGrid = new QGridLayout;
     swatchGrid->setHorizontalSpacing(3);
@@ -438,12 +478,16 @@ TerrainTools::TerrainTools(QString name)
     QLabel *recentLabel = new QLabel("RECENT");
     QLabel *brushLabel = new QLabel("BRUSH");
     clearRecentTextures = new QPushButton("Clear Recent", this);
-    clearRecentTextures->setFixedWidth(120);
     clearRecentTextures->setToolTip("Clear recent textures and reset the active texture swatches.");
     recentLabel->setAlignment(Qt::AlignCenter);
     brushLabel->setAlignment(Qt::AlignCenter);
+    QFont swatchFont = panelFont;
+    if(swatchFont.pointSizeF() > 0)
+        swatchFont.setPointSizeF(swatchFont.pointSizeF() * 0.8);
+    recentLabel->setFont(swatchFont);
+    brushLabel->setFont(swatchFont);
     const QString swatchLabelStyle =
-        "QLabel { color: #b0b0b0; font-size: 9px; font-weight: bold; padding: 0px 2px; }";
+        "QLabel { color: #b0b0b0; font-weight: bold; padding: 0px 2px; }";
     recentLabel->setStyleSheet(swatchLabelStyle);
     brushLabel->setStyleSheet(swatchLabelStyle);
     swatchGrid->addWidget(recentLabel,0,0,1,3);
@@ -453,14 +497,26 @@ TerrainTools::TerrainTools(QString name)
                 1 + previewIndex / 3, previewIndex % 3, Qt::AlignLeft);
     swatchGrid->setColumnMinimumWidth(3, scaledUiSize(18));
     swatchGrid->addWidget(texPreviewLabels[6],1,4,2,1,Qt::AlignTop | Qt::AlignHCenter);
-    swatchGrid->addWidget(clearRecentTextures,3,0,1,3,Qt::AlignHCenter);
+    swatchGrid->addWidget(clearRecentTextures,3,0,1,5);
     swatchGrid->setColumnStretch(3,1);
-    vbox->addItem(swatchGrid);
+    texturePreviewLayout->addLayout(swatchGrid);
+    textureVbox->addWidget(texturePreviewCard);
 
-    QLabel *presetLabel = new QLabel("• Presets");
-    presetLabel->setContentsMargins(12,0,0,0);
-    presetLabel->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
-    vbox->addWidget(presetLabel);
+    QFrame *hideTerrtexCell = new QFrame(terrainTexturePanel);
+    GuiFunct::styleEditorPanelCard(hideTerrtexCell);
+    QHBoxLayout *hideTerrtexLayout = new QHBoxLayout(hideTerrtexCell);
+    hideTerrtexLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    hideTerrtexLayout->addWidget(hideGeneratedTerrtex);
+    textureVbox->addWidget(hideTerrtexCell);
+    textureVbox->removeWidget(hideTerrtexCell);
+    textureVbox->insertWidget(
+        textureVbox->indexOf(texturePreviewCard), hideTerrtexCell);
+
+    QLabel *presetLabel = new QLabel(QString(QChar(0x2022)) + " Presets");
+    GuiFunct::styleEditorSubtitle(presetLabel);
+    textureVbox->addWidget(presetLabel);
 
     presetCombo = new QComboBox;
     presetApply = new QPushButton("Apply", this);
@@ -474,16 +530,25 @@ TerrainTools::TerrainTools(QString name)
     vlistPreset->addWidget(presetApply,1,0);
     vlistPreset->addWidget(presetSave,1,1);
     vlistPreset->addWidget(presetRemove,1,2);
-    vbox->addItem(vlistPreset);
+    QFrame *presetCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(presetCard);
+    vlistPreset->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    presetCard->setLayout(vlistPreset);
+    textureVbox->addWidget(presetCard);
 
     addRule();
-    QLabel *label2 = new QLabel("• Brush Settings");
-    label2->setContentsMargins(12,0,0,0);
-    label2->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
+    QLabel *label2 = new QLabel(QString(QChar(0x2022)) + " Brush Settings");
+    GuiFunct::styleEditorSubtitle(label2);
     vbox->addWidget(label2);
+    QLabel *textureBrushLabel = new QLabel(QString(QChar(0x2022)) + " Brush Settings");
+    GuiFunct::styleEditorSubtitle(textureBrushLabel);
+    textureVbox->addWidget(textureBrushLabel);
     
 
     const int labelWidth = scaledUiSize(92);
+    const int textureLabelWidth = scaledUiSize(58);
     
     // brush
     sSize = new QSlider(Qt::Horizontal);
@@ -507,7 +572,7 @@ TerrainTools::TerrainTools(QString name)
     hType->addItem("Flatten");
     hType->addItem("Conform TDB/RDB");
     hType->addItem("Waterbed Offset");
-    hType->setCurrentIndex(paintBrush->hType);
+    hType->setCurrentIndex(meshBrush->hType);
     fheight = new SelectAllOnEntryLineEdit();
     heightValidator = new QDoubleValidator(-5000, 5000, 2, this);
     heightValidator->setNotation(QDoubleValidator::StandardNotation);
@@ -525,46 +590,110 @@ TerrainTools::TerrainTools(QString name)
     leIntensity->setValidator(new QIntValidator(1, 99, this));
     leTextureRotation = GuiFunct::newQLineEdit(valueFieldWidth,3);
     leTextureRotation->setValidator(new QIntValidator(0, 360, this));
-    leTextureRotation->setText(QString::number(paintBrush->texRotationDegrees, 10));
+    leTextureRotation->setText(QString::number(meshBrush->texRotationDegrees, 10));
+    sTextureRotation->setParent(this);
+    leTextureRotation->setParent(this);
+    sTextureRotation->hide();
+    leTextureRotation->hide();
     row = 0;
-    vlist->addWidget(GuiFunct::newQLabel("Color:", labelWidth),row,0);
-    vlist->addWidget(colorw,row++,1,1,2);
     vlist->addWidget(GuiFunct::newQLabel("Size:", labelWidth),row,0);
     vlist->addWidget(leSize,row,1);
     vlist->addWidget(sSize,row++,2);
     vlist->addWidget(GuiFunct::newQLabel("Intensity:", labelWidth),row,0);
     vlist->addWidget(leIntensity,row,1);
     vlist->addWidget(sIntensity,row++,2);
-    vlist->addWidget(GuiFunct::newQLabel("Rotation:", labelWidth),row,0);
-    vlist->addWidget(leTextureRotation,row,1);
-    vlist->addWidget(sTextureRotation,row++,2);
     vlist->addWidget(GuiFunct::newQLabel("Height:", labelWidth),row,0);
     vlist->addWidget(fheight,row++,1,1,2);
     vlist->addWidget(GuiFunct::newQLabel("Tool:", labelWidth),row,0);
     vlist->addWidget(hType,row++,1,1,2);
     
 
-    vbox->addItem(vlist);
+    QFrame *brushSettingsCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(brushSettingsCard);
+    vlist->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    brushSettingsCard->setLayout(vlist);
+    vbox->addWidget(brushSettingsCard);
+
+    textureSizeSlider = new QSlider(Qt::Horizontal);
+    textureSizeSlider->setRange(1, 99);
+    textureSizeSlider->setValue(paintBrush->size);
+    textureIntensitySlider = new QSlider(Qt::Horizontal);
+    textureIntensitySlider->setRange(1, 99);
+    textureIntensitySlider->setValue(paintBrush->alpha * 100);
+    textureRotationSlider = new QSlider(Qt::Horizontal);
+    textureRotationSlider->setRange(0, 360);
+    textureRotationSlider->setValue(paintBrush->texRotationDegrees);
+    textureSizeValue = GuiFunct::newQLineEdit(valueFieldWidth, 3);
+    textureSizeValue->setValidator(new QIntValidator(1, 99, this));
+    textureIntensityValue = GuiFunct::newQLineEdit(valueFieldWidth, 3);
+    textureIntensityValue->setValidator(new QIntValidator(1, 99, this));
+    textureRotationValue = GuiFunct::newQLineEdit(valueFieldWidth, 3);
+    textureRotationValue->setValidator(new QIntValidator(0, 360, this));
+    textureRotationValue->setText(QString::number(paintBrush->texRotationDegrees, 10));
+    textureRotationSlider->setParent(terrainTexturePanel);
+    textureRotationValue->setParent(terrainTexturePanel);
+    QGridLayout *textureBrushLayout = new QGridLayout;
+    textureBrushLayout->setSpacing(4);
+    row = 0;
+    QHBoxLayout *textureColorLayout = new QHBoxLayout;
+    textureColorLayout->setContentsMargins(0, 0, 0, 0);
+    textureColorLayout->setSpacing(4);
+    QLabel *textureColorLabel = GuiFunct::newQLabel("Color:", textureLabelWidth);
+    textureColorLabel->setMinimumHeight(scaledUiSize(26));
+    textureColorLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+    textureColorLayout->addWidget(textureColorLabel);
+    textureColorLayout->addWidget(colorw, 1);
+    textureBrushLayout->addLayout(textureColorLayout, row++, 0, 1, 3);
+    textureBrushLayout->addWidget(GuiFunct::newQLabel("Size:", textureLabelWidth), row, 0);
+    textureBrushLayout->addWidget(textureSizeValue, row, 1);
+    textureBrushLayout->addWidget(textureSizeSlider, row++, 2);
+    textureBrushLayout->addWidget(GuiFunct::newQLabel("Intensity:", textureLabelWidth), row, 0);
+    textureBrushLayout->addWidget(textureIntensityValue, row, 1);
+    textureBrushLayout->addWidget(textureIntensitySlider, row++, 2);
+    textureBrushLayout->addWidget(GuiFunct::newQLabel("Rotation:", textureLabelWidth), row, 0);
+    textureBrushLayout->addWidget(textureRotationValue, row, 1);
+    textureBrushLayout->addWidget(textureRotationSlider, row++, 2);
+    textureBrushLayout->setColumnStretch(2, 1);
+    QFrame *textureBrushCard = new QFrame(terrainTexturePanel);
+    GuiFunct::styleEditorPanelCard(textureBrushCard);
+    textureBrushLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    textureBrushCard->setLayout(textureBrushLayout);
+    textureVbox->addWidget(textureBrushCard);
+    textureVbox->removeWidget(textureBrushLabel);
+    textureVbox->removeWidget(textureBrushCard);
+    const int presetSectionIndex = textureVbox->indexOf(presetLabel);
+    textureVbox->insertWidget(presetSectionIndex, textureBrushLabel);
+    textureVbox->insertWidget(presetSectionIndex + 1, textureBrushCard);
     
     // enbankment
     sEsize = new QSlider(Qt::Horizontal);
     sEsize->setMinimum(1);
-    sEsize->setMaximum(3);
-    sEsize->setValue(paintBrush->eSize);
+    sEsize->setMaximum(7);
+    sEsize->setValue(meshBrush->eSize);
     sEemb = new QSlider(Qt::Horizontal);
     sEemb->setMinimum(1);
     sEemb->setMaximum(10);
-    sEemb->setValue(paintBrush->eEmb);
+    sEemb->setValue(meshBrush->eEmb);
     sEcut = new QSlider(Qt::Horizontal);
     sEcut->setMinimum(1);
     sEcut->setMaximum(10);
-    sEcut->setValue(paintBrush->eCut);
+    sEcut->setValue(meshBrush->eCut);
     sEradius = new QSlider(Qt::Horizontal);
     sEradius->setMinimum(1);
     sEradius->setMaximum(99);
-    sEradius->setValue(paintBrush->eRadius);
+    sEradius->setValue(meshBrush->eRadius);
     leEsize = GuiFunct::newQLineEdit(valueFieldWidth,3);
-    leEsize->setValidator(new QIntValidator(1, 3, this));
+    leEsize->setValidator(new QIntValidator(1, 7, this));
+    const QString embankmentSizeTip =
+        "Track-bed half-width positions in native terrain-post spacing. "
+        "On 4 m terrain, Size 1-7 equals 4, 6, 8, 10, 12, 14, or 16 m; "
+        "on 8 m terrain, Size 1-3 retains 8, 12, or 16 m.";
+    sEsize->setToolTip(embankmentSizeTip);
+    leEsize->setToolTip(embankmentSizeTip);
     leEemb = GuiFunct::newQLineEdit(valueFieldWidth,3);
     leEemb->setValidator(new QIntValidator(1, 10, this));
     leEcut = GuiFunct::newQLineEdit(valueFieldWidth,3);
@@ -582,9 +711,8 @@ TerrainTools::TerrainTools(QString name)
     setPinPoint = new QPushButton("Set Pinpoint", this);    
     
     addRule();
-    QLabel *label3 = new QLabel("• Embankment Settings");
-    label3->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label3->setContentsMargins(12,0,0,0);
+    QLabel *label3 = new QLabel(QString(QChar(0x2022)) + " Embankment Settings");
+    GuiFunct::styleEditorSubtitle(label3);
     vbox->addWidget(label3);
 
     QGridLayout *vlist2 = new QGridLayout;
@@ -604,8 +732,12 @@ TerrainTools::TerrainTools(QString name)
     vlist2->addWidget(leEradius,row,1);
     vlist2->addWidget(sEradius,row++,2);
     
-    vlist2->addWidget(setPinPoint,row,0);        
-    vlist2->addWidget(resetDefaults,row++,1,1,2);
+    QHBoxLayout *embankmentActions = new QHBoxLayout;
+    embankmentActions->setContentsMargins(0,0,0,0);
+    embankmentActions->setSpacing(cardHorizontalPadding);
+    embankmentActions->addWidget(setPinPoint, 1);
+    embankmentActions->addWidget(resetDefaults, 1);
+    vlist2->addLayout(embankmentActions,row++,0,1,3);
     
     /*
     
@@ -619,15 +751,43 @@ TerrainTools::TerrainTools(QString name)
      */
     
     
-    vbox->addItem(vlist2);
+    QFrame *embankmentCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(embankmentCard);
+    vlist2->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    embankmentCard->setLayout(vlist2);
+    vbox->addWidget(embankmentCard);
     addRule();
     QLabel *advancedLabel = new QLabel(QString(QChar(0x2022)) + " Advanced");
     GuiFunct::styleEditorSubtitle(advancedLabel);
     vbox->addWidget(advancedLabel);
-    vbox->addWidget(terrainUtilitiesButton);
+    QFrame *advancedCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(advancedCard);
+    QVBoxLayout *advancedLayout = new QVBoxLayout(advancedCard);
+    advancedLayout->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    advancedLayout->addWidget(terrainUtilitiesButton);
+    vbox->addWidget(advancedCard);
     
     vbox->addStretch(1);
     this->setLayout(vbox);
+    textureVbox->addStretch(1);
+    terrainTexturePanel->setLayout(textureVbox);
+
+    QMapIterator<QString, QPushButton*> styledTool(buttonTools);
+    while(styledTool.hasNext()){
+        styledTool.next();
+        GuiFunct::styleEditorActionButton(styledTool.value());
+    }
+    const QList<QPushButton*> actionButtons = {
+        loadTerrainTexTool, mirrorSeason, clearRecentTextures,
+        presetApply, presetSave, presetRemove,
+        setPinPoint, resetDefaults, terrainUtilitiesButton
+    };
+    for(QPushButton *button : actionButtons)
+        GuiFunct::styleEditorActionButton(button);
 
     QList<QWidget*> controls = findChildren<QWidget*>();
     for(int c = 0; c < controls.size(); c++){
@@ -693,7 +853,7 @@ TerrainTools::TerrainTools(QString name)
         if(visible)
             terrainUtilitiesWindow->showForOwner();
         else
-            terrainUtilitiesWindow->hide();
+            terrainUtilitiesWindow->close();
     });
 
     QObject::connect(setPinPoint, SIGNAL(released()),
@@ -728,6 +888,18 @@ TerrainTools::TerrainTools(QString name)
 
     QObject::connect(leTextureRotation, SIGNAL(textEdited(QString)),
                       this, SLOT(setTextureRotation(QString)));
+    QObject::connect(textureSizeSlider, SIGNAL(valueChanged(int)),
+                      this, SLOT(setTextureBrushSize(int)));
+    QObject::connect(textureIntensitySlider, SIGNAL(valueChanged(int)),
+                      this, SLOT(setTextureBrushAlpha(int)));
+    QObject::connect(textureRotationSlider, SIGNAL(valueChanged(int)),
+                      this, SLOT(setTextureBrushRotation(int)));
+    QObject::connect(textureSizeValue, SIGNAL(textEdited(QString)),
+                      this, SLOT(setTextureBrushSize(QString)));
+    QObject::connect(textureIntensityValue, SIGNAL(textEdited(QString)),
+                      this, SLOT(setTextureBrushAlpha(QString)));
+    QObject::connect(textureRotationValue, SIGNAL(textEdited(QString)),
+                      this, SLOT(setTextureBrushRotation(QString)));
     
     // embarkment
     QObject::connect(sEsize, SIGNAL(valueChanged(int)),
@@ -768,7 +940,7 @@ TerrainTools::TerrainTools(QString name)
                       this, SLOT(setFheight(QString)));
 
     QObject::connect(fheight, &QLineEdit::editingFinished, this, [this](){
-        const int toolType = this->paintBrush->hType;
+        const int toolType = this->meshBrush->hType;
         if(toolType != 2 && toolType != 5)
             return;
 
@@ -778,8 +950,8 @@ TerrainTools::TerrainTools(QString name)
             value = toolType == 5 ? -1.0f : 0.0f;
 
         this->fheight->setText(QString::number(value, 'f', 2));
-        this->paintBrush->hFixed = value;
-        emit setPaintBrush(this->paintBrush);
+        this->meshBrush->hFixed = value;
+        emit setPaintBrush(this->meshBrush);
     });
     
     QObject::connect(hType, SIGNAL(currentIndexChanged(int)),
@@ -794,7 +966,7 @@ TerrainTools::TerrainTools(QString name)
     this->setEemb(this->sEemb->value());
     this->setEcut(this->sEcut->value());
     this->setEradius(this->sEradius->value());
-    this->paintBrush->hFixed = 0.0f;
+    this->meshBrush->hFixed = 0.0f;
     this->fheight->setText("0.00");
     this->setHtype(this->hType->currentIndex());
     
@@ -807,18 +979,25 @@ TerrainTools::TerrainTools(QString name)
     this->setBrushSize(Game::terrainTools[4]);
     this->setBrushAlpha(Game::terrainTools[5]);
 
-    sSize->setValue(paintBrush->size);
-    sIntensity->setValue(paintBrush->alpha*100);
-    sEsize->setValue(paintBrush->eSize);
-    sEemb->setValue(paintBrush->eEmb);
-    sEcut->setValue(paintBrush->eCut);
-    sEradius->setValue(paintBrush->eRadius);
+    sSize->setValue(meshBrush->size);
+    sIntensity->setValue(meshBrush->alpha*100);
+    sEsize->setValue(meshBrush->eSize);
+    sEemb->setValue(meshBrush->eEmb);
+    sEcut->setValue(meshBrush->eCut);
+    sEradius->setValue(meshBrush->eRadius);
+    setTextureBrushSize(paintBrush->size);
+    setTextureBrushAlpha(paintBrush->alpha * 100);
+    setTextureBrushRotation(paintBrush->texRotationDegrees);
     refreshPaintPresets();
     
 }
 
 
 TerrainTools::~TerrainTools() {
+}
+
+QWidget *TerrainTools::texturePanel() const {
+    return terrainTexturePanel;
 }
 
 void TerrainTools::nextBrushShape(){
@@ -835,13 +1014,15 @@ void TerrainTools::setBrushShapeIndex(int brushIndex){
         return;
     currentBrushShape = brushIndex;
     paintBrush->brushshape = &brushShapes[currentBrushShape];
+    const int brushPreviewSize = scaledUiSize(36);
     texPreviewLabels[6]->setPixmap(QPixmap::fromImage(*paintBrush->brushshape)
-                                   .scaled(36, 36, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+                                   .scaled(brushPreviewSize, brushPreviewSize,
+                                           Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
 }
 
 void TerrainTools::heightToolEnabled(bool val){
     if(val){
-        emit setPaintBrush(this->paintBrush);
+        emit setPaintBrush(this->meshBrush);
         emit enableTool("heightTool");
     } else {
         emit enableTool("");
@@ -866,6 +1047,7 @@ void TerrainTools::paintColorToolEnabled(bool val){
 
 void TerrainTools::gapsTerrToolEnabled(bool val){
     if(val){
+        emit setPaintBrush(this->meshBrush);
         emit enableTool("gapsTerrainTool");
     } else {
         emit enableTool("");
@@ -931,6 +1113,7 @@ void TerrainTools::lockTexToolEnabled(bool val){
 
 void TerrainTools::waterTerrToolEnabled(bool val){
     if(val){
+        emit setPaintBrush(this->meshBrush);
         emit enableTool("waterTerrTool");
     } else {
         emit enableTool("");
@@ -1119,33 +1302,33 @@ void TerrainTools::setTexToolEnabled(){
 // brush
 
 void TerrainTools::setBrushSize(QString val){
-    emit setPaintBrush(this->paintBrush);
+    emit setPaintBrush(this->meshBrush);
     //qDebug() << "a";
     int ival = val.toInt(0, 10);
     this->sSize->setValue(ival);
-    this->paintBrush->size = ival;
+    this->meshBrush->size = ival;
 }
 
 void TerrainTools::setBrushAlpha(QString val){
-    emit setPaintBrush(this->paintBrush);
+    emit setPaintBrush(this->meshBrush);
     //qDebug() << "a";
     int ival = val.toInt(0, 10);
     this->sIntensity->setValue(ival);
-    this->paintBrush->alpha = (float)ival/100;
+    this->meshBrush->alpha = (float)ival/100;
 }
 
 void TerrainTools::setBrushSize(int val){
-    emit setPaintBrush(this->paintBrush);
+    emit setPaintBrush(this->meshBrush);
     //qDebug() << "a";
     this->leSize->setText(QString::number(val,10));
-    this->paintBrush->size = val;
+    this->meshBrush->size = val;
 }
 
 void TerrainTools::setBrushAlpha(int val){
-    emit setPaintBrush(this->paintBrush);
+    emit setPaintBrush(this->meshBrush);
     //qDebug() << "a";
     this->leIntensity->setText(QString::number(val,10));
-    this->paintBrush->alpha = (float)val/100;
+    this->meshBrush->alpha = (float)val/100;
 }
 
 void TerrainTools::setTextureRotation(QString val){
@@ -1153,35 +1336,67 @@ void TerrainTools::setTextureRotation(QString val){
     if(ival < 0) ival = 0;
     if(ival > 360) ival = 360;
     this->sTextureRotation->setValue(ival);
-    this->paintBrush->texRotationDegrees = ival;
-    this->paintBrush->texTransformation = ival == 0 ? Brush::ROT0 : Brush::CUSTOM;
-    emit setPaintBrush(this->paintBrush);
+    this->meshBrush->texRotationDegrees = ival;
+    this->meshBrush->texTransformation = ival == 0 ? Brush::ROT0 : Brush::CUSTOM;
+    emit setPaintBrush(this->meshBrush);
 }
 
 void TerrainTools::setTextureRotation(int val){
     if(val < 0) val = 0;
     if(val > 360) val = 360;
     this->leTextureRotation->setText(QString::number(val,10));
-    this->paintBrush->texRotationDegrees = val;
-    this->paintBrush->texTransformation = val == 0 ? Brush::ROT0 : Brush::CUSTOM;
-    emit setPaintBrush(this->paintBrush);
+    this->meshBrush->texRotationDegrees = val;
+    this->meshBrush->texTransformation = val == 0 ? Brush::ROT0 : Brush::CUSTOM;
+    emit setPaintBrush(this->meshBrush);
+}
+
+void TerrainTools::setTextureBrushSize(QString val){
+    textureSizeSlider->setValue(val.toInt(0, 10));
+}
+
+void TerrainTools::setTextureBrushSize(int val){
+    textureSizeValue->setText(QString::number(val, 10));
+    paintBrush->size = val;
+    emit setPaintBrush(paintBrush);
+}
+
+void TerrainTools::setTextureBrushAlpha(QString val){
+    textureIntensitySlider->setValue(val.toInt(0, 10));
+}
+
+void TerrainTools::setTextureBrushAlpha(int val){
+    textureIntensityValue->setText(QString::number(val, 10));
+    paintBrush->alpha = (float)val / 100;
+    emit setPaintBrush(paintBrush);
+}
+
+void TerrainTools::setTextureBrushRotation(QString val){
+    textureRotationSlider->setValue(qBound(0, val.toInt(0, 10), 360));
+}
+
+void TerrainTools::setTextureBrushRotation(int val){
+    val = qBound(0, val, 360);
+    textureRotationValue->setText(QString::number(val, 10));
+    paintBrush->texRotationDegrees = val;
+    paintBrush->texTransformation = val == 0 ? Brush::ROT0 : Brush::CUSTOM;
+    emit setPaintBrush(paintBrush);
 }
 
 void TerrainTools::setFheight(QString val){
-    if(this->paintBrush->hType != 2 && this->paintBrush->hType != 5)
+    if(this->meshBrush->hType != 2 && this->meshBrush->hType != 5)
         return;
 
     bool valid = false;
     float ival = val.toFloat(&valid);
-    if(!valid || (this->paintBrush->hType == 5 && ival >= 0))
+    if(!valid || (this->meshBrush->hType == 5 && ival >= 0))
         return;
-    this->paintBrush->hFixed = ival;
-    emit setPaintBrush(this->paintBrush);
+    this->meshBrush->hFixed = ival;
+    emit setPaintBrush(this->meshBrush);
 }
 
 void TerrainTools::setHtype(int val){
     if(val < 0) return;
-    this->paintBrush->hType = val;
+    this->meshBrush->hType = val;
     const bool usesHeight = val == 2 || val == 5;
     fheight->setEnabled(usesHeight);
 
@@ -1194,7 +1409,7 @@ void TerrainTools::setHtype(int val){
         const float currentOffset = fheight->text().toFloat(&valid);
         if(!valid || currentOffset >= 0){
             fheight->setText("-1.00");
-            this->paintBrush->hFixed = -1.0f;
+            this->meshBrush->hFixed = -1.0f;
         }
     } else {
         heightValidator->setRange(-5000, 5000, 2);
@@ -1204,12 +1419,12 @@ void TerrainTools::setHtype(int val){
             (void)fheight->text().toFloat(&valid);
             if(!valid){
                 fheight->setText("0.00");
-                this->paintBrush->hFixed = 0.0f;
+                this->meshBrush->hFixed = 0.0f;
             }
         } else {
             fheight->setText("0.00");
             fheight->setToolTip("Not used by the selected Tool.");
-            this->paintBrush->hFixed = 0.0f;
+            this->meshBrush->hFixed = 0.0f;
         }
     }
     emit setPaintBrush(this->paintBrush);
@@ -1299,56 +1514,72 @@ void TerrainTools::setSeasonType(int val){
 // embarkment
 
 void TerrainTools::setEsize(int val){
-    emit setPaintBrush(this->paintBrush);
-    //qDebug() << "a";
+    val = qBound(sEsize->minimum(), val, sEsize->maximum());
     this->leEsize->setText(QString::number(val,10));
-    this->paintBrush->eSize = val;
+    this->meshBrush->eSize = val;
+    emit setPaintBrush(this->meshBrush);
 }
 void TerrainTools::setEsize(QString val){
-    emit setPaintBrush(this->paintBrush);
-    //qDebug() << "a";
-    int ival = val.toInt(0, 10);
+    bool valid = false;
+    int ival = val.toInt(&valid, 10);
+    if(!valid || ival < sEsize->minimum() || ival > sEsize->maximum())
+        return;
+    const bool sliderChanged = sEsize->value() != ival;
+    this->meshBrush->eSize = ival;
     this->sEsize->setValue(ival);
-    this->paintBrush->eSize = (float)ival/100;
+    if(!sliderChanged)
+        emit setPaintBrush(this->meshBrush);
 }
 void TerrainTools::setEemb(int val){
-    emit setPaintBrush(this->paintBrush);
-    //qDebug() << "a";
+    val = qBound(sEemb->minimum(), val, sEemb->maximum());
     this->leEemb->setText(QString::number(val,10));
-    this->paintBrush->eEmb = val;
+    this->meshBrush->eEmb = val;
+    emit setPaintBrush(this->meshBrush);
 }
 void TerrainTools::setEemb(QString val){
-    emit setPaintBrush(this->paintBrush);
-    //qDebug() << "a";
-    int ival = val.toInt(0, 10);
+    bool valid = false;
+    int ival = val.toInt(&valid, 10);
+    if(!valid || ival < sEemb->minimum() || ival > sEemb->maximum())
+        return;
+    const bool sliderChanged = sEemb->value() != ival;
+    this->meshBrush->eEmb = ival;
     this->sEemb->setValue(ival);
-    this->paintBrush->eEmb = (float)ival/100;
+    if(!sliderChanged)
+        emit setPaintBrush(this->meshBrush);
 }
 void TerrainTools::setEcut(int val){
-    emit setPaintBrush(this->paintBrush);
-    //qDebug() << "a";
+    val = qBound(sEcut->minimum(), val, sEcut->maximum());
     this->leEcut->setText(QString::number(val,10));
-    this->paintBrush->eCut = val;
+    this->meshBrush->eCut = val;
+    emit setPaintBrush(this->meshBrush);
 }
 void TerrainTools::setEcut(QString val){
-    emit setPaintBrush(this->paintBrush);
-    //qDebug() << "a";
-    int ival = val.toInt(0, 10);
+    bool valid = false;
+    int ival = val.toInt(&valid, 10);
+    if(!valid || ival < sEcut->minimum() || ival > sEcut->maximum())
+        return;
+    const bool sliderChanged = sEcut->value() != ival;
+    this->meshBrush->eCut = ival;
     this->sEcut->setValue(ival);
-    this->paintBrush->eCut = (float)ival/100;
+    if(!sliderChanged)
+        emit setPaintBrush(this->meshBrush);
 }
 void TerrainTools::setEradius(int val){
-    emit setPaintBrush(this->paintBrush);
-    //qDebug() << "a";
+    val = qBound(sEradius->minimum(), val, sEradius->maximum());
     this->leEradius->setText(QString::number(val,10));
-    this->paintBrush->eRadius = val;
+    this->meshBrush->eRadius = val;
+    emit setPaintBrush(this->meshBrush);
 }
 void TerrainTools::setEradius(QString val){
-    emit setPaintBrush(this->paintBrush);
-    //qDebug() << "a";
-    int ival = val.toInt(0, 10);
+    bool valid = false;
+    int ival = val.toInt(&valid, 10);
+    if(!valid || ival < sEradius->minimum() || ival > sEradius->maximum())
+        return;
+    const bool sliderChanged = sEradius->value() != ival;
+    this->meshBrush->eRadius = ival;
     this->sEradius->setValue(ival);
-    this->paintBrush->eRadius = (float)ival/100;
+    if(!sliderChanged)
+        emit setPaintBrush(this->meshBrush);
 }
 
 void TerrainTools::setSun1(QString val){
@@ -1510,14 +1741,14 @@ void TerrainTools::applyPaintPreset()
         int size = preset["size"].toInt(paintBrush->size);
         if (size < 1) size = 1;
         if (size > 99) size = 99;
-        setBrushSize(size);
-        sSize->setValue(size);
+        setTextureBrushSize(size);
+        textureSizeSlider->setValue(size);
 
         int intensity = preset["intensity"].toInt((int)(paintBrush->alpha * 100.0f));
         if (intensity < 1) intensity = 1;
         if (intensity > 99) intensity = 99;
-        setBrushAlpha(intensity);
-        sIntensity->setValue(intensity);
+        setTextureBrushAlpha(intensity);
+        textureIntensitySlider->setValue(intensity);
 
         if (preset.contains("brush"))
             setBrushShapeIndex(preset["brush"].toInt(currentBrushShape));
@@ -1526,8 +1757,8 @@ void TerrainTools::applyPaintPreset()
             int rotation = preset["rotation"].toInt(paintBrush->texRotationDegrees);
             if (rotation < 0) rotation = 0;
             if (rotation > 360) rotation = 360;
-            setTextureRotation(rotation);
-            sTextureRotation->setValue(rotation);
+            setTextureBrushRotation(rotation);
+            textureRotationSlider->setValue(rotation);
         }
 
         emit setPaintBrush(paintBrush);
@@ -1637,7 +1868,7 @@ void TerrainTools::clearRecentTextureHistory(){
     mainTexturePreviewReady = false;
     snowTexturePreviewReady = false;
 
-    QPixmap blackPreview(106,106);
+    QPixmap blackPreview(scaledUiSize(106), scaledUiSize(106));
     blackPreview.fill(Qt::black);
     texPreviewLabel->setPixmap(blackPreview);
     texPreviewLabel->setText("");
@@ -1691,7 +1922,7 @@ void TerrainTools::updateTexPrev(){
             textureName = previewTexture->pathid;
         if(i == 1){
             tlabel = texPreviewLabel;
-            res = 106;
+            res = scaledUiSize(106);
             if(paintBrush->useTexture){
                 out = this->paintBrush->tex->getImageData(res,res);
                 if(this->paintBrush->tex->bytesPerPixel == 3)
@@ -1778,7 +2009,7 @@ bool TerrainTools::refreshMirrorTexturePreview(bool showBriefErrorIfDisabled){
             ? "QLabel { background-color: #171717; border: 1px solid #70590e; }"
             : "QLabel { background-color: #171717; border: 1px solid #555555; }");
         if(ready)
-            setTexturePreview(label, texture, 106);
+            setTexturePreview(label, texture, scaledUiSize(106));
     };
 
     showPreviewState(texPreviewLabel, mainTexture, mainReady, mainPreviewPath);
@@ -1905,8 +2136,8 @@ void TerrainTools::setPinPointBrush()
       setBrushSize(1);
       setBrushAlpha(1);   
       
-      sSize->setValue(paintBrush->size);
-      sIntensity->setValue(paintBrush->alpha*100);
+      sSize->setValue(meshBrush->size);
+      sIntensity->setValue(meshBrush->alpha*100);
       
 }
 void TerrainTools::resetDefaultValues()
@@ -1926,13 +2157,16 @@ void TerrainTools::resetDefaultValues()
     setBrushSize(Game::terrainTools[4]);
     setBrushAlpha(Game::terrainTools[5]);
     setTextureRotation(0);
-    sSize->setValue(paintBrush->size);
-    sIntensity->setValue(paintBrush->alpha*100);
-    sTextureRotation->setValue(paintBrush->texRotationDegrees);
-    sEsize->setValue(paintBrush->eSize);
-    sEemb->setValue(paintBrush->eEmb);
-    sEcut->setValue(paintBrush->eCut);
-    sEradius->setValue(paintBrush->eRadius);
+    setTextureBrushSize(Game::terrainTools[4]);
+    setTextureBrushAlpha(Game::terrainTools[5]);
+    setTextureBrushRotation(0);
+    sSize->setValue(meshBrush->size);
+    sIntensity->setValue(meshBrush->alpha*100);
+    sTextureRotation->setValue(meshBrush->texRotationDegrees);
+    sEsize->setValue(meshBrush->eSize);
+    sEemb->setValue(meshBrush->eEmb);
+    sEcut->setValue(meshBrush->eCut);
+    sEradius->setValue(meshBrush->eRadius);
    
     preloadTextures();
     refreshPaintPresets();

@@ -16,9 +16,6 @@
 #include "FileBuffer.h"
 #include "SoundList.h"
 #include "Game.h"
-#include "SoundSource.h"
-#include "SoundManager.h"
-#include "MstsSoundDefinition.h"
 
 SoundSourceObj::SoundSourceObj() {
 }
@@ -51,17 +48,6 @@ void SoundSourceObj::load(int x, int y) {
     Quat::fill(this->qDirection);
     this->loaded = true;
     
-    if(Game::soundEnabled){
-        QString path = Game::root+"/routes/"+Game::route+"/sound";
-        int sid = MstsSoundDefinition::AddDefinition(path, fileName);
-        if(sid != -1){
-            if(MstsSoundDefinition::Definitions[sid]->group.size() > 0){
-                //soundSourceId = SoundManager::AddSoundSource(MstsSoundDefinition::Definitions[sid]->group.first());
-                //SoundManager::Sources[soundSourceId]->setPosition(x, y, position);
-            }
-        }
-    }
-
     setMartix();
 }
 

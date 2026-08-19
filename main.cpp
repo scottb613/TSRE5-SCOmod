@@ -236,7 +236,9 @@ void LoadRouteEditor(){
     QObject::connect(loadWindow, &LoadWindow::showMainWindow,
                      loadWindow, showRouteEditor);
 
-    if(consoleArgs["RESTORE"] == "TRUE"){
+    if(consoleArgs["MAINLOAD"] == "TRUE"){
+        loadWindow->show();
+    } else if(consoleArgs["RESTORE"] == "TRUE"){
         loadWindow->restoreLastSession();
     } else if(Game::checkRoot(Game::root)
               && (Game::checkRoute(Game::route) || Game::createNewRoutes)){
@@ -282,11 +284,11 @@ CommandLineParseResult parseCommandLineArgs(QCommandLineParser &parser){
     parser.addOption(RouteEditOption);
     const QCommandLineOption RestoreLastSessionOption("restore-last-session", "Restore the saved route editor session after startup.");
     parser.addOption(RestoreLastSessionOption);
+    const QCommandLineOption MainLoadOption("main-load", "Open the route editor Main Load screen after startup.");
+    parser.addOption(MainLoadOption);
     const QCommandLineOption RootOption(
                 "root", "Train Simulator root folder.", "folder");
     parser.addOption(RootOption);
-    const QCommandLineOption PlayOption("play", "Play Activity.");
-    parser.addOption(PlayOption);
     const QCommandLineOption ServerOption("server", "Run Editor Server.");
     parser.addOption(ServerOption);
     
@@ -336,8 +338,9 @@ CommandLineParseResult parseCommandLineArgs(QCommandLineParser &parser){
         consoleArgs["RESTORE"] = "TRUE";
         consoleArgs["RE"] = "TRUE";
     }
-    if (parser.isSet(PlayOption)) {
-        consoleArgs["PLAY"] = "TRUE";
+    if (parser.isSet(MainLoadOption)) {
+        consoleArgs["MAINLOAD"] = "TRUE";
+        consoleArgs["RE"] = "TRUE";
     }
     if (parser.isSet(ServerOption)) {
         consoleArgs["SERVER"] = "TRUE";
@@ -348,6 +351,16 @@ CommandLineParseResult parseCommandLineArgs(QCommandLineParser &parser){
 
 static int finishApplication(QApplication &app, QSharedMemory &singleInstance){
     const int result = app.exec();
+    if(result == Game::RestartToMainLoadExitCode){
+        singleInstance.detach();
+        if(!QProcess::startDetached(QCoreApplication::applicationFilePath(),
+                                    QStringList() << "--main-load")){
+            QMessageBox::critical(NULL, "Restart to Main Load",
+                                  "TSRE could not start the replacement process. Please start TSRE manually.");
+            return 1;
+        }
+        return 0;
+    }
     if(result == Game::RestartAndRestoreExitCode){
         singleInstance.detach();
         if(!QProcess::startDetached(QCoreApplication::applicationFilePath(),
@@ -589,14 +602,6 @@ int main(int argc, char *argv[]){
         qDebug() << "Run shape viewer";
         LoadShapeViewer(consoleArgs["FILENAME"]);
         return finishApplication(app, singleInstance);
-    }
-    if(consoleArgs["PLAY"] == "TRUE"){
-        // Play
-        if(consoleArgs["FILENAME"].length() > 0)
-            Game::ActivityToPlay = consoleArgs["FILENAME"];
-        else
-            Game::ActivityToPlay = "#";
-        qDebug() << "Play" << Game::route << Game::ActivityToPlay;
     }
     if(consoleArgs["SERVER"] == "TRUE"){
         Game::checkRoute(Game::route);

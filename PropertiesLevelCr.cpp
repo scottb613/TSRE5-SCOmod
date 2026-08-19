@@ -14,17 +14,33 @@
 #include "Game.h"
 
 PropertiesLevelCr::PropertiesLevelCr() {
+    GuiFunct::applyEditorPanelStyle(this);
 
     QDoubleValidator* doubleValidator = new QDoubleValidator(-10000, 10000, 6, this); 
     doubleValidator->setNotation(QDoubleValidator::StandardNotation);
     
     QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    const int panelMargin = qRound(4.0f * qBound(0.75f, Game::uiScale, 1.25f));
+    const int cardMargin = qRound(6.0f * qBound(0.75f, Game::uiScale, 1.25f));
+    vbox->setSpacing(3);
+    vbox->setContentsMargins(panelMargin,panelMargin,panelMargin,panelMargin);
+    auto addSubtitle = [this, vbox](const QString &text){
+        QLabel *label = new QLabel(QString(QChar(0x2022)) + ' ' + text, this);
+        GuiFunct::styleEditorSubtitle(label);
+        vbox->addWidget(label);
+    };
+    auto makeCard = [this, cardMargin](){
+        QFrame *card = new QFrame(this);
+        GuiFunct::styleEditorPanelCard(card);
+        QVBoxLayout *layout = new QVBoxLayout(card);
+        layout->setContentsMargins(cardMargin,cardMargin,cardMargin,cardMargin);
+        layout->setSpacing(3);
+        return qMakePair(card, layout);
+    };
     infoLabel = new QLabel("LevelCr:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    infoLabel->setContentsMargins(3,0,0,0);
+    GuiFunct::styleEditorSubtitle(infoLabel);
     vbox->addWidget(infoLabel);
+    auto identityCard = makeCard();
     QFormLayout *vlist = new QFormLayout;
     vlist->setSpacing(2);
     vlist->setContentsMargins(3,0,3,0);
@@ -34,116 +50,116 @@ PropertiesLevelCr::PropertiesLevelCr() {
     vlist->addRow("UiD:",&this->uid);
     vlist->addRow("Tile X:",&this->tX);
     vlist->addRow("Tile Z:",&this->tY);
-    vbox->addItem(vlist);
+    GuiFunct::alignEditorForm(vlist);
+    identityCard.second->addLayout(vlist);
+    vbox->addWidget(identityCard.first);
     
-    QLabel * label = new QLabel("Position:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    addSubtitle("Position");
+    auto positionCard = makeCard();
     vlist = new QFormLayout;
     vlist->setSpacing(2);
     vlist->setContentsMargins(3,0,3,0);
     vlist->addRow("X:",&this->posX);
     vlist->addRow("Y:",&this->posY);
     vlist->addRow("Z:",&this->posZ);
-    vbox->addItem(vlist);
+    GuiFunct::alignEditorForm(vlist);
+    positionCard.second->addLayout(vlist);
+    vbox->addWidget(positionCard.first);
     
-    label = new QLabel("Filename:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    addSubtitle("Shape");
+    auto shapeCard = makeCard();
     fileName.setDisabled(true);
     fileName.setAlignment(Qt::AlignCenter);
-    vbox->addWidget(&fileName);
+    QFormLayout *shapeForm = new QFormLayout;
+    shapeForm->setContentsMargins(0,0,0,0);
+    shapeForm->addRow("File:", &fileName);
+    GuiFunct::alignEditorForm(shapeForm);
+    shapeCard.second->addLayout(shapeForm);
+    vbox->addWidget(shapeCard.first);
     
-    label = new QLabel("Level Crossing Sensitivity:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    //QFormLayout *vlist = new QFormLayout;
-    //vlist->setSpacing(2);
-    //vlist->setContentsMargins(3,0,3,0);
-    vbox->addWidget(new QLabel("Activate LevelCr by [s]:"));
-    vbox->addWidget(&eActivateLevelCrossing);
+    addSubtitle("Sensitivity");
+    auto sensitivityCard = makeCard();
+    QFormLayout *sensitivityForm = new QFormLayout;
+    sensitivityForm->setContentsMargins(0,0,0,0);
+    sensitivityForm->addRow("Activate [s]:", &eActivateLevelCrossing);
     eActivateLevelCrossing.setValidator(doubleValidator);
     QObject::connect(&eActivateLevelCrossing, SIGNAL(textEdited(QString)), this, SLOT(eActivateLevelCrossingEnabled(QString)));
-    vbox->addWidget(new QLabel("Min activation distance [m]:"));
-    vbox->addWidget(&eMinActDist);
+    sensitivityForm->addRow("Min dist [m]:", &eMinActDist);
     eMinActDist.setValidator(doubleValidator);
     QObject::connect(&eMinActDist, SIGNAL(textEdited(QString)), this, SLOT(eMinActDistEnabled(QString)));
-    //vbox->addItem(vlist);
-    label = new QLabel("Level Crossing Timing:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    //vlist = new QFormLayout;
-    //vlist->setSpacing(2);
-    //vlist->setContentsMargins(3,0,3,0);
-    vbox->addWidget(new QLabel("Initial warning phase [s]:"));
-    vbox->addWidget(&eInitialWarning);
+    GuiFunct::alignEditorForm(sensitivityForm);
+    sensitivityCard.second->addLayout(sensitivityForm);
+    vbox->addWidget(sensitivityCard.first);
+    addSubtitle("Timing");
+    auto timingCard = makeCard();
+    QFormLayout *timingForm = new QFormLayout;
+    timingForm->setContentsMargins(0,0,0,0);
+    timingForm->addRow("Initial [s]:", &eInitialWarning);
     eInitialWarning.setValidator(doubleValidator);
     QObject::connect(&eInitialWarning, SIGNAL(textEdited(QString)), this, SLOT(eInitialWarningEnabled(QString)));
-    vbox->addWidget(new QLabel("Serious warning phase [s]:"));
-    vbox->addWidget(&eMoreWarning);
+    timingForm->addRow("Serious [s]:", &eMoreWarning);
     eMoreWarning.setValidator(doubleValidator);
     QObject::connect(&eMoreWarning, SIGNAL(textEdited(QString)), this, SLOT(eMoreWarningEnabled(QString)));
-    vbox->addWidget(new QLabel("Gate animation length [s]:"));
-    vbox->addWidget(&eGateAnimLength);
+    timingForm->addRow("Gate [s]:", &eGateAnimLength);
     eGateAnimLength.setValidator(doubleValidator);
     QObject::connect(&eGateAnimLength, SIGNAL(textEdited(QString)), this, SLOT(eGateAnimLengthEnabled(QString)));
-    //vbox->addItem(vlist);
+    GuiFunct::alignEditorForm(timingForm);
+    timingCard.second->addLayout(timingForm);
+    vbox->addWidget(timingCard.first);
 
-    label = new QLabel("More Options:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    //vlist = new QFormLayout;
-    //vlist->setSpacing(2);
-    //vlist->setContentsMargins(3,0,3,0);
-    vbox->addWidget(new QLabel("Crash probability:"));
-    vbox->addWidget(&eCrashProbability);
+    addSubtitle("Options");
+    auto optionsCard = makeCard();
+    QFormLayout *optionsForm = new QFormLayout;
+    optionsForm->setContentsMargins(0,0,0,0);
+    optionsForm->addRow("Crash %:", &eCrashProbability);
     eCrashProbability.setValidator(doubleValidator);
     QObject::connect(&eCrashProbability, SIGNAL(textEdited(QString)), this, SLOT(eCrashProbabilityEnabled(QString)));
-    //vbox->addItem(vlist);
-    vbox->addWidget(&chInvisible);
+    GuiFunct::alignEditorForm(optionsForm);
+    optionsCard.second->addLayout(optionsForm);
+    optionsCard.second->addWidget(&chInvisible);
     QObject::connect(&chInvisible, SIGNAL(stateChanged(int)),
                       this, SLOT(chInvisibleEnabled(int)));
-    vbox->addWidget(&chSilentHax);
+    optionsCard.second->addWidget(&chSilentHax);
     QObject::connect(&chSilentHax, SIGNAL(stateChanged(int)),
                       this, SLOT(chSilentHaxEnabled(int)));
     chInvisible.setText("Crossing is invisible");
     chSilentHax.setText("Silent crossing MSTS HAX");
+    vbox->addWidget(optionsCard.first);
     
-    label = new QLabel("Track Items:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    
+    addSubtitle("Track Items");
+    auto trackCard = makeCard();
     QPushButton *bDeleteSelected = new QPushButton("Delete Selected");
-    vbox->addWidget(bDeleteSelected);
+    GuiFunct::styleEditorActionButton(bDeleteSelected);
+    trackCard.second->addWidget(bDeleteSelected);
+    vbox->addWidget(trackCard.first);
     QObject::connect(bDeleteSelected, SIGNAL(released()),
                       this, SLOT(bDeleteSelectedEnabled()));
     
-    label = new QLabel("Sound File:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    addSubtitle("Sound File");
+    auto soundCard = makeCard();
     cSoundType.addItem("DEFAULT");
     cSoundType.addItem("CUSTOM");
     cSoundType.setStyleSheet("combobox-popup: 0;");
     QObject::connect(&cSoundType, SIGNAL(currentIndexChanged(int)),
             this, SLOT(cSoundTypeEnabled(int)));
-    vbox->addWidget(&cSoundType);
-    vbox->addWidget(&eSoundName);
+    QFormLayout *soundForm = new QFormLayout;
+    soundForm->setContentsMargins(0,0,0,0);
+    soundForm->addRow("Type:", &cSoundType);
+    soundForm->addRow("File:", &eSoundName);
+    GuiFunct::alignEditorForm(soundForm);
+    soundCard.second->addLayout(soundForm);
+    vbox->addWidget(soundCard.first);
     QObject::connect(&eSoundName, SIGNAL(textEdited(QString)), this, SLOT(eSoundNameEnabled(QString)));
 
     
-    label = new QLabel("Global settings:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    vbox->addWidget(new QLabel("Max placing radius:"));
-    vbox->addWidget(&eMaxPlacingDistance);
+    addSubtitle("Global Settings");
+    auto globalCard = makeCard();
+    QFormLayout *globalForm = new QFormLayout;
+    globalForm->setContentsMargins(0,0,0,0);
+    globalForm->addRow("Max radius:", &eMaxPlacingDistance);
+    GuiFunct::alignEditorForm(globalForm);
+    globalCard.second->addLayout(globalForm);
+    vbox->addWidget(globalCard.first);
     eMaxPlacingDistance.setValidator(doubleValidator);
     QObject::connect(&eMaxPlacingDistance, SIGNAL(textEdited(QString)), this, SLOT(eMaxPlacingDistanceEnabled(QString)));
     

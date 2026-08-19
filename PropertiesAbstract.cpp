@@ -30,6 +30,23 @@ PropertiesAbstract::PropertiesAbstract() : QWidget() {
 }
 
 PropertiesAbstract::~PropertiesAbstract() {
+    delete transformWindow;
+    transformWindow = NULL;
+}
+
+void PropertiesAbstract::configureTransformButton(QPushButton *button){
+    transformButton = button;
+    if(transformButton == NULL)
+        return;
+
+    transformButton->setCheckable(true);
+    transformButton->setFocusPolicy(Qt::NoFocus);
+    transformButton->setProperty("editorPopupKey", "transformWorldObject");
+    GuiFunct::styleEditorActionButton(transformButton);
+    QObject::connect(transformButton, &QPushButton::clicked,
+                     this, [this](){ emit userButtonPressed(); });
+    QObject::connect(transformButton, &QPushButton::toggled,
+                     this, [this](bool){ transformEnabled(); });
 }
 
 void PropertiesAbstract::showObj(GameObj* obj){
@@ -190,31 +207,77 @@ void PropertiesAbstract::pastePREnabled(){
 }
 
 void PropertiesAbstract::transformEnabled(){
-    if(worldObj == NULL)
+    if(transformButton == NULL)
         return;
-    TransformWorldObjDialog transformWindow;
-    transformWindow.exec();
-    //qDebug() << waterWindow->changed;
-    if(transformWindow.isOk){
+
+    const bool checked = transformButton->isChecked();
+    GuiFunct::setEditorPopupButtonActive(transformButton, checked);
+    if(!checked){
+        transformTarget = NULL;
+        if(transformWindow != NULL && transformWindow->isVisible())
+            transformWindow->hide();
+        return;
+    }
+
+    if(worldObj == NULL){
+        transformButton->blockSignals(true);
+        transformButton->setChecked(false);
+        transformButton->blockSignals(false);
+        GuiFunct::setEditorPopupButtonActive(transformButton, false);
+        return;
+    }
+
+    if(transformWindow == NULL){
+        transformWindow = new TransformWorldObjDialog(this);
+        connect(transformWindow, &TransformWorldObjDialog::finished,
+                this, &PropertiesAbstract::transformWindowClosed);
+        connect(transformWindow, &TransformWorldObjDialog::userButtonPressed,
+                this, [this](){ emit userButtonPressed(); });
+        connect(transformWindow, &QObject::destroyed, this, [this](){
+            transformWindow = NULL;
+        });
+    }
+
+    transformTarget = worldObj;
+    transformWindow->showForOwner();
+}
+
+void PropertiesAbstract::transformWindowClosed(){
+    if(transformButton != NULL){
+        transformButton->blockSignals(true);
+        transformButton->setChecked(false);
+        transformButton->blockSignals(false);
+        GuiFunct::setEditorPopupButtonActive(transformButton, false);
+    }
+
+    WorldObj *target = transformTarget;
+    transformTarget = NULL;
+    if(transformWindow == NULL || !transformWindow->isOk
+    || target == NULL || worldObj != target)
+        return;
+
         Undo::SinglePushWorldObjData(worldObj);
-        if(transformWindow.x != 0 || transformWindow.y != 0 || + transformWindow.z != 0){
+    if(transformWindow->x != 0 || transformWindow->y != 0
+    || transformWindow->z != 0){
             float pos[3];
-            pos[0] = transformWindow.x;
-            pos[1] = transformWindow.y;
-            pos[2] = -transformWindow.z;
-            if(transformWindow.isUseObjRot){
+        pos[0] = transformWindow->x;
+        pos[1] = transformWindow->y;
+        pos[2] = -transformWindow->z;
+        if(transformWindow->isUseObjRot){
                 Vec3::transformQuat((float*)pos, (float*)pos, (float*)worldObj->qDirection);
             }
             worldObj->translate(pos[0], pos[1], pos[2]);
             worldObj->modified = true;
             worldObj->setMartix();
         }
-        if(transformWindow.rx != 0 || transformWindow.ry != 0 || + transformWindow.rz != 0){
-            worldObj->rotate(transformWindow.rx*M_PI/180.0, transformWindow.ry*M_PI/180.0, transformWindow.rz*M_PI/180.0);
+    if(transformWindow->rx != 0 || transformWindow->ry != 0
+    || transformWindow->rz != 0){
+        worldObj->rotate(transformWindow->rx*M_PI/180.0,
+                         transformWindow->ry*M_PI/180.0,
+                         transformWindow->rz*M_PI/180.0);
             worldObj->modified = true;
             worldObj->setMartix();
         }
-    }
 }
 
 void PropertiesAbstract::rtransformEnabled(){
@@ -230,6 +293,7 @@ void PropertiesAbstract::rtransformEnabled(){
 }
 
 void PropertiesAbstract::showEvent(QShowEvent *event){
+    GuiFunct::applyEditorPanelStyle(this);
     if(infoLabel != NULL){
         QString infoText = infoLabel->text().trimmed();
         if(infoText.endsWith(':'))
@@ -260,7 +324,12 @@ void PropertiesAbstract::showEvent(QShowEvent *event){
     }
     QList<QPushButton*> buttons = findChildren<QPushButton*>();
     foreach (QPushButton *button, buttons){
+        if(!button->property("editorPanelAction").toBool())
+            GuiFunct::styleEditorActionButton(button);
         QObject::connect(button, SIGNAL(clicked()), this, SIGNAL(userButtonPressed()), Qt::UniqueConnection);
     }
+    const QList<QFormLayout*> forms = findChildren<QFormLayout*>();
+    foreach(QFormLayout *form, forms)
+        GuiFunct::alignEditorForm(form);
     QWidget::showEvent(event);
 }

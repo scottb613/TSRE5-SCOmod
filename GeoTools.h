@@ -17,6 +17,7 @@
 #include <QPair>
 
 class Coords;
+class EditorPopupWindow;
 
 class GeoTools : public QWidget{
     Q_OBJECT
@@ -39,7 +40,7 @@ public slots:
     void generateLoTilesEnabled();
     void generateLoTilesFromTDBEnabled();
     void mapProviderChanged(int index);
-    void configureMapProviderEnabled();
+    void configureMapProviderEnabled(bool enabled);
     
 signals:
     void enableTool(QString name);
@@ -53,6 +54,8 @@ private:
     QComboBox markerFiles;
     QComboBox mapProvider;
     QSpinBox eRadius;
+    QPushButton *configureMapProviderButton = nullptr;
+    EditorPopupWindow *mapImageryWindow = nullptr;
     void syncMapProviderUi();
 };
 

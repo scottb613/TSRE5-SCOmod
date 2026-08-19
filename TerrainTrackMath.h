@@ -10,6 +10,8 @@ namespace TerrainTrackMath {
 const float GridSize = 8.0f;
 const float MinShoulderWidth = GridSize;
 const float MaxShoulderFeather = GridSize * 1.5f;
+const float TileSize = 2048.0f;
+const float TileHalfSize = TileSize * 0.5f;
 
 struct Bounds {
     float minX;
@@ -29,28 +31,64 @@ inline float smoothStep(float value) {
     return value * value * (3.0f - 2.0f * value);
 }
 
-inline float bedHalfWidth(int eSize) {
-    return std::max(8.0f, 4.0f + eSize * 4.0f);
+inline float nativeGridSize(float sampleSize) {
+    return sampleSize > 0.0f ? sampleSize : GridSize;
 }
 
-inline float conformInfluenceRadius(float bedWidth, int eRadius) {
-    return std::max(bedWidth + GridSize, eRadius * GridSize);
+inline float bedHalfWidth(int eSize, float sampleSize = GridSize) {
+    const float gridSize = nativeGridSize(sampleSize);
+    return std::max(gridSize,
+        gridSize * 0.5f + std::max(1, eSize) * gridSize * 0.5f);
 }
 
-inline float smoothStart(float bedWidth) {
-    return bedWidth + GridSize;
+inline float conformInfluenceRadius(float bedWidth, int eRadius,
+                                    float sampleSize = GridSize) {
+    const float gridSize = nativeGridSize(sampleSize);
+    return std::max(bedWidth + gridSize,
+                    std::max(1, eRadius) * gridSize);
 }
 
-inline float smoothInfluenceRadius(float bedWidth, int eRadius) {
-    float start = smoothStart(bedWidth);
-    return std::max(start + GridSize, bedWidth + eRadius * GridSize);
+inline float smoothStart(float bedWidth, float sampleSize = GridSize) {
+    return bedWidth + nativeGridSize(sampleSize);
 }
 
-inline float shoulderWidth(float influenceRadius, float bedWidth, int sliderValue) {
+inline float smoothInfluenceRadius(float bedWidth, int eRadius,
+                                   float sampleSize = GridSize) {
+    const float gridSize = nativeGridSize(sampleSize);
+    float start = smoothStart(bedWidth, gridSize);
+    return std::max(start + gridSize,
+                    bedWidth + std::max(1, eRadius) * gridSize);
+}
+
+inline float shoulderWidth(float influenceRadius, float bedWidth,
+                           int sliderValue, float sampleSize = GridSize) {
+    const float gridSize = nativeGridSize(sampleSize);
     float steepness = clamp01((float)sliderValue / 10.0f);
-    float minimumWidth = MinShoulderWidth + (MaxShoulderFeather - MinShoulderWidth) * (1.0f - steepness);
+    float minimumWidth = gridSize + gridSize * 0.5f * (1.0f - steepness);
     float fullWidth = std::max(minimumWidth, influenceRadius - bedWidth);
     return std::max(minimumWidth, fullWidth * (1.0f - steepness) * (1.0f - steepness));
+}
+
+inline float conformEnvelopeHeight(float originalHeight, float trackHeight,
+                                   float distance, float bedWidth,
+                                   float sampleSize, int cuttingPerPost,
+                                   int embankmentPerPost) {
+    if(distance <= bedWidth)
+        return trackHeight;
+
+    const float gridSize = nativeGridSize(sampleSize);
+    const float postsOutsideBed = (distance - bedWidth) / gridSize;
+    if(originalHeight > trackHeight){
+        const float maximumHeight = trackHeight
+            + postsOutsideBed * std::max(0, cuttingPerPost);
+        return std::min(originalHeight, maximumHeight);
+    }
+    if(originalHeight < trackHeight){
+        const float minimumHeight = trackHeight
+            - postsOutsideBed * std::max(0, embankmentPerPost);
+        return std::max(originalHeight, minimumHeight);
+    }
+    return originalHeight;
 }
 
 inline Bounds boundsForTrack(const float* points, int length) {
@@ -76,6 +114,34 @@ inline int gridStart(float value, float radius) {
 
 inline int gridEnd(float value, float radius) {
     return (int)std::ceil((value + radius) / GridSize) * (int)GridSize;
+}
+
+inline int tileOffsetForCoordinate(float value) {
+    return static_cast<int>(std::floor((value + TileHalfSize) / TileSize));
+}
+
+inline float tileMinimumCoordinate(int tileOffset) {
+    return tileOffset * TileSize - TileHalfSize;
+}
+
+inline int firstNativeSampleIndex(float minimum, int tileOffset, int sampleSize) {
+    if(sampleSize <= 0)
+        return 0;
+    return std::max(0, static_cast<int>(std::ceil(
+        (minimum - tileMinimumCoordinate(tileOffset)) / sampleSize)));
+}
+
+inline int lastNativeSampleIndex(float maximum, int tileOffset,
+                                 int sampleSize, int samples) {
+    if(sampleSize <= 0 || samples <= 0)
+        return -1;
+    return std::min(samples - 1, static_cast<int>(std::floor(
+        (maximum - tileMinimumCoordinate(tileOffset)) / sampleSize)));
+}
+
+inline float nativeSampleCoordinate(int tileOffset, int sampleIndex,
+                                    int sampleSize) {
+    return tileMinimumCoordinate(tileOffset) + sampleIndex * sampleSize;
 }
 
 inline bool nearestTrack(const float* points, int length, float x, float z, float& distance, float& height) {

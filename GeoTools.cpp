@@ -18,9 +18,29 @@
 #include "Coords.h"
 #include "HeightWindow.h"
 
+#include <functional>
+
 static int scaledUiSize(int base){
-    return qRound(base * qMax(1.0f, Game::uiScale));
+    return qRound(base * qBound(0.75f, Game::uiScale, 1.25f));
 }
+
+class MapImageryHelperWindow : public EditorPopupWindow {
+public:
+    MapImageryHelperWindow(QWidget *owner, std::function<void()> closed)
+        : EditorPopupWindow(owner, "MAP IMAGERY", "mapImageryHelper", 720),
+          closedAction(std::move(closed)) {
+    }
+
+protected:
+    void closeEvent(QCloseEvent *event) override {
+        QWidget::closeEvent(event);
+        if(closedAction)
+            closedAction();
+    }
+
+private:
+    std::function<void()> closedAction;
+};
 
 GeoTools::GeoTools(QString name)
     : QWidget(){
@@ -30,82 +50,87 @@ GeoTools::GeoTools(QString name)
     if(panelFont.pointSizeF() > 0)
         panelFont.setPointSizeF(panelFont.pointSizeF() * 1.12);
     setFont(panelFont);
-    int row = 0;
-    
-    buttonTools["mapTileShowTool"] = new QPushButton("Tile Map Show/Hide", this);
-    QPushButton *routeMapShowButton = new QPushButton("Route Map Show/Hide", this);
+    buttonTools["mapTileShowTool"] = new QPushButton("Map Tile Toggle", this);
+    QPushButton *routeMapShowButton = new QPushButton("Map Route Toggle", this);
     routeMapShowButton->setToolTip("Show or hide every saved terrain_maps overlay across the route. Newly loaded tiles follow the same setting.");
     buttonTools["mapTileLoadTool"] = new QPushButton("Load Map", this);
     buttonTools["heightTileLoadTool"] = new QPushButton("Load Height", this);
-    buttonTools["makeTileTextureTool"] = new QPushButton("Make Tile Texture from Map", this);
-    buttonTools["removeTileTextureTool"] = new QPushButton("Remove Map Tile Texture", this);
+    buttonTools["makeTileTextureTool"] = new QPushButton("Make Map Tile", this);
+    buttonTools["removeTileTextureTool"] = new QPushButton("Remove Map Tile", this);
     QMapIterator<QString, QPushButton*> i(buttonTools);
     while (i.hasNext()) {
         i.next();
         i.value()->setCheckable(true);
+        GuiFunct::styleEditorActionButton(i.value());
     }
 
-    QLabel *label0;
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(3);
     vbox->setContentsMargins(4,3,4,4);
-    auto addRule = [vbox]() {
-        vbox->addSpacing(scaledUiSize(5));
+    auto addSubtitle = [this, vbox](const QString &text) {
+        QLabel *label = new QLabel(QString(QChar(0x2022)) + ' ' + text, this);
+        GuiFunct::styleEditorSubtitle(label);
+        vbox->addWidget(label);
+    };
+    auto makeCard = [this]() {
+        QFrame *card = new QFrame(this);
+        GuiFunct::styleEditorPanelCard(card);
+        QVBoxLayout *cardLayout = new QVBoxLayout(card);
+        cardLayout->setContentsMargins(scaledUiSize(6), scaledUiSize(5),
+                                       scaledUiSize(6), scaledUiSize(5));
+        cardLayout->setSpacing(scaledUiSize(5));
+        return qMakePair(card, cardLayout);
     };
     QLabel *panelTitle = new QLabel("GEODATA EDITOR");
     GuiFunct::styleEditorTitle(panelTitle);
     vbox->addWidget(panelTitle);
         
-    label0 = new QLabel("• Map Layers");
-    label0->setContentsMargins(12,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    vbox->addWidget(label0);
+    addSubtitle("Map Layers");
+    const auto mapCard = makeCard();
 
     QFormLayout *mapProviderLayout = new QFormLayout;
     mapProviderLayout->setSpacing(2);
-    mapProviderLayout->setContentsMargins(3,0,3,0);
+    mapProviderLayout->setContentsMargins(0,0,0,0);
     mapProvider.addItem("OSM Vector only", "None");
     mapProvider.addItem("Google satellite", "Google");
     mapProvider.addItem("Mapbox satellite", "Mapbox");
     mapProvider.addItem("Custom imagery", "Custom");
     mapProvider.setStyleSheet("combobox-popup: 0;");
     mapProviderLayout->addRow("Imagery:", &mapProvider);
-    vbox->addLayout(mapProviderLayout);
+    mapCard.second->addLayout(mapProviderLayout);
 
-    QPushButton *configureMapProvider = new QPushButton("Configure Map Imagery...", this);
-    configureMapProvider->setToolTip("Select and configure optional satellite imagery. OSM Vector does not require an account or API key.");
-    vbox->addWidget(configureMapProvider);
-    vbox->addWidget(buttonTools["mapTileShowTool"]);
-    vbox->addWidget(routeMapShowButton);
-    vbox->addWidget(buttonTools["mapTileLoadTool"]);
-    vbox->addWidget(buttonTools["makeTileTextureTool"]);
-    vbox->addWidget(buttonTools["removeTileTextureTool"]);
-    
-    addRule();
-    label0 = new QLabel("• Terrain Heightmap");
-    label0->setContentsMargins(12,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    vbox->addWidget(label0);
-    vbox->addWidget(buttonTools["heightTileLoadTool"]);
-    
-    addRule();
-    label0 = new QLabel("• Auto Tile Generation");
-    label0->setContentsMargins(12,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    vbox->addWidget(label0);
-    QCheckBox *chAutoCreateTile = new QCheckBox("Create new tiles if not exist.");
+    configureMapProviderButton = new QPushButton("Configure Map Imagery", this);
+    configureMapProviderButton->setCheckable(true);
+    configureMapProviderButton->setProperty("scoSoundOnPress", true);
+    configureMapProviderButton->setToolTip("Select and configure optional satellite imagery. OSM Vector does not require an account or API key.");
+    GuiFunct::styleEditorActionButton(configureMapProviderButton);
+    GuiFunct::styleEditorActionButton(routeMapShowButton);
+    mapCard.second->addWidget(configureMapProviderButton);
+    mapCard.second->addWidget(buttonTools["mapTileLoadTool"]);
+    mapCard.second->addWidget(buttonTools["makeTileTextureTool"]);
+    mapCard.second->addWidget(buttonTools["removeTileTextureTool"]);
+    mapCard.second->addWidget(buttonTools["mapTileShowTool"]);
+    mapCard.second->addWidget(routeMapShowButton);
+    vbox->addWidget(mapCard.first);
+
+    addSubtitle("Terrain Heightmap");
+    const auto heightCard = makeCard();
+    heightCard.second->addWidget(buttonTools["heightTileLoadTool"]);
+    vbox->addWidget(heightCard.first);
+
+    addSubtitle("Automatic Tile Creation");
+    const auto automaticCard = makeCard();
+    QCheckBox *chAutoCreateTile = new QCheckBox("Create New Tiles");
     chAutoCreateTile->setChecked(Game::autoNewTiles);
-    QCheckBox *chAutoGeoTerrain = new QCheckBox("Create terrain from Geodata. ");
-    chAutoCreateTile->setChecked(Game::autoGeoTerrain);
-    vbox->addWidget(chAutoCreateTile);
-    vbox->addWidget(chAutoGeoTerrain);
-    
-    addRule();
-    label0 = new QLabel("• Tiles From Marker File");
-    label0->setContentsMargins(12,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    vbox->addWidget(label0);
-    vbox->addWidget(&markerFiles);
+    QCheckBox *chAutoGeoTerrain = new QCheckBox("Create Terrain Mesh");
+    chAutoGeoTerrain->setChecked(Game::autoGeoTerrain);
+    automaticCard.second->addWidget(chAutoCreateTile);
+    automaticCard.second->addWidget(chAutoGeoTerrain);
+    vbox->addWidget(automaticCard.first);
+
+    addSubtitle("Tiles From Marker File");
+    const auto markerCard = makeCard();
+    markerCard.second->addWidget(&markerFiles);
     markerFiles.setStyleSheet("combobox-popup: 0;");
     QFormLayout *vlist = new QFormLayout;
     vlist->setSpacing(2);
@@ -113,35 +138,39 @@ GeoTools::GeoTools(QString name)
     vlist->addRow("Radius:",&this->eRadius);
     eRadius.setRange(0,2);
     eRadius.setValue(0);
-    vbox->addItem(vlist);
-    QPushButton * checkGeodataFiles = new QPushButton("Check if geodata files available.", this);
+    markerCard.second->addItem(vlist);
+    QPushButton * checkGeodataFiles = new QPushButton("Geodata Availability", this);
+    GuiFunct::styleEditorActionButton(checkGeodataFiles);
     QObject::connect(checkGeodataFiles, SIGNAL(released()),
                       this, SLOT(checkGeodataFilesEnabled()));
-    vbox->addWidget(checkGeodataFiles);
+    markerCard.second->addWidget(checkGeodataFiles);
     
-    QPushButton * generateTiles = new QPushButton("Generate tiles.", this);
+    QPushButton * generateTiles = new QPushButton("Generate Tiles", this);
+    GuiFunct::styleEditorActionButton(generateTiles);
     QObject::connect(generateTiles, SIGNAL(released()),
                       this, SLOT(generateTilesEnabled()));
-    vbox->addWidget(generateTiles);
+    markerCard.second->addWidget(generateTiles);
+    vbox->addWidget(markerCard.first);
 
-    addRule();
-    label0 = new QLabel("• Distant Terrain");
-    label0->setContentsMargins(12,0,0,0);
-    label0->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    vbox->addWidget(label0);
-    QPushButton * checkGeodataLoFiles = new QPushButton("Check if geodata files available.", this);
+    addSubtitle("Distant Terrain");
+    const auto distantCard = makeCard();
+    QPushButton * checkGeodataLoFiles = new QPushButton("Geodata Availability", this);
+    GuiFunct::styleEditorActionButton(checkGeodataLoFiles);
     //QObject::connect(checkGeodataFiles, SIGNAL(released()),
     //                  this, SLOT(checkGeodataFilesEnabled()));
-    vbox->addWidget(checkGeodataLoFiles);
+    distantCard.second->addWidget(checkGeodataLoFiles);
     
-    QPushButton * generateLoTiles = new QPushButton("Generate tiles using MKR.", this);
+    QPushButton * generateLoTiles = new QPushButton("Generate Tiles (mkr)", this);
+    GuiFunct::styleEditorActionButton(generateLoTiles);
     QObject::connect(generateLoTiles, SIGNAL(released()),
                       this, SLOT(generateLoTilesEnabled()));
-    vbox->addWidget(generateLoTiles);
-    QPushButton * generateLoTilesFromTDB = new QPushButton("Generate tiles using TDB.", this);
+    distantCard.second->addWidget(generateLoTiles);
+    QPushButton * generateLoTilesFromTDB = new QPushButton("Generate Tiles (tdb)", this);
+    GuiFunct::styleEditorActionButton(generateLoTilesFromTDB);
     QObject::connect(generateLoTilesFromTDB, SIGNAL(released()),
                       this, SLOT(generateLoTilesFromTDBEnabled()));
-    vbox->addWidget(generateLoTilesFromTDB);
+    distantCard.second->addWidget(generateLoTilesFromTDB);
+    vbox->addWidget(distantCard.first);
     
     vbox->addStretch(1);
     this->setLayout(vbox);
@@ -183,8 +212,8 @@ GeoTools::GeoTools(QString name)
 
     QObject::connect(&mapProvider, SIGNAL(currentIndexChanged(int)),
                       this, SLOT(mapProviderChanged(int)));
-    QObject::connect(configureMapProvider, SIGNAL(released()),
-                      this, SLOT(configureMapProviderEnabled()));
+    QObject::connect(configureMapProviderButton, &QPushButton::toggled,
+                     this, &GeoTools::configureMapProviderEnabled);
 
     syncMapProviderUi();
     
@@ -222,17 +251,28 @@ void GeoTools::mapProviderChanged(int index){
     syncMapProviderUi();
 }
 
-void GeoTools::configureMapProviderEnabled(){
-    QDialog dialog(this);
-    GuiFunct::applyEditorPanelStyle(&dialog);
-    dialog.setWindowTitle("F3 Map Imagery");
-    dialog.setMinimumWidth(scaledUiSize(720));
+void GeoTools::configureMapProviderEnabled(bool enabled){
+    GuiFunct::setEditorPopupButtonActive(configureMapProviderButton, enabled);
+    if(!enabled){
+        if(mapImageryWindow != NULL)
+            mapImageryWindow->close();
+        return;
+    }
 
-    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
-    QLabel *title = new QLabel("MAP IMAGERY");
-    GuiFunct::styleEditorTitle(title);
-    mainLayout->addWidget(title);
-
+    QPointer<GeoTools> owner(this);
+    MapImageryHelperWindow *helper = new MapImageryHelperWindow(
+        this, [owner]() {
+            if(owner.isNull())
+                return;
+            owner->mapImageryWindow = NULL;
+            GuiFunct::setEditorPopupButtonActive(
+                owner->configureMapProviderButton, false);
+            const QSignalBlocker blocker(owner->configureMapProviderButton);
+            owner->configureMapProviderButton->setChecked(false);
+        });
+    mapImageryWindow = helper;
+    helper->setAttribute(Qt::WA_DeleteOnClose);
+    QVBoxLayout *mainLayout = helper->popupLayout();
     QLabel *guidance = new QLabel(
         "OSM Vector is always available without an account or API key. "
         "Satellite services require credentials supplied by their provider.");
@@ -300,40 +340,44 @@ void GeoTools::configureMapProviderEnabled(){
     int providerIndex = provider->findData(Game::mapEngine.isEmpty() ? "None" : Game::mapEngine);
     provider->setCurrentIndex(providerIndex >= 0 ? providerIndex : 0);
     loadProviderFields(provider->currentData().toString());
-    QObject::connect(provider, &QComboBox::currentTextChanged, &dialog, [=]() {
+    QObject::connect(provider, &QComboBox::currentTextChanged, helper, [=]() {
         loadProviderFields(provider->currentData().toString());
     });
 
-    QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    QDialogButtonBox *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Save | QDialogButtonBox::Close);
     mainLayout->addWidget(buttons);
+    QObject::connect(buttons->button(QDialogButtonBox::Save),
+                     &QPushButton::clicked, helper, [=]() {
+        const QString selected = provider->currentData().toString();
+        if(selected == "Google"){
+            Game::googleImageMapsUrl = url->text().trimmed();
+            Game::googleMapAPIKey = apiKey->text().trimmed();
+            Game::googleImageMapsZoomOffset = zoomOffset->value();
+        } else if(selected == "Mapbox"){
+            Game::mapboxImageMapsUrl = url->text().trimmed();
+            Game::mapboxMapAPIKey = apiKey->text().trimmed();
+            Game::mapboxImageMapsZoomOffset = zoomOffset->value();
+        } else if(selected == "Custom"){
+            Game::customImageMapsUrl = url->text().trimmed();
+            Game::customMapAPIKey = apiKey->text().trimmed();
+            Game::customImageMapsZoomOffset = zoomOffset->value();
+        }
 
-    if(dialog.exec() != QDialog::Accepted)
-        return;
-
-    const QString selected = provider->currentData().toString();
-    if(selected == "Google"){
-        Game::googleImageMapsUrl = url->text().trimmed();
-        Game::googleMapAPIKey = apiKey->text().trimmed();
-        Game::googleImageMapsZoomOffset = zoomOffset->value();
-    } else if(selected == "Mapbox"){
-        Game::mapboxImageMapsUrl = url->text().trimmed();
-        Game::mapboxMapAPIKey = apiKey->text().trimmed();
-        Game::mapboxImageMapsZoomOffset = zoomOffset->value();
-    } else if(selected == "Custom"){
-        Game::customImageMapsUrl = url->text().trimmed();
-        Game::customMapAPIKey = apiKey->text().trimmed();
-        Game::customImageMapsZoomOffset = zoomOffset->value();
-    }
-
-    Game::mapEngine = selected;
-    Game::mapImageResolution = resolution->value();
-    Game::configureMapProvider();
-    if(!Game::saveMapProviderSettings())
-        QMessageBox::warning(this, "Map Settings Save Failed",
-                             "The F3 imagery settings could not be saved to settings.json.");
-    syncMapProviderUi();
+        Game::mapEngine = selected;
+        Game::mapImageResolution = resolution->value();
+        Game::configureMapProvider();
+        if(!Game::saveMapProviderSettings())
+            QMessageBox::warning(helper, "Map Settings Save Failed",
+                                 "The F3 imagery settings could not be saved to settings.json.");
+        if(!owner.isNull())
+            owner->syncMapProviderUi();
+        helper->close();
+    });
+    QObject::connect(buttons->button(QDialogButtonBox::Close),
+                     &QPushButton::clicked, helper, &QWidget::close);
+    helper->finalizePopup();
+    helper->showExclusive();
 }
 
 void GeoTools::mkrList(QMap<QString, Coords*> list){

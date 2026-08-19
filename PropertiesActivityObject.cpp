@@ -12,11 +12,13 @@
 #include "Game.h"
 #include "ActivityObject.h"
 #include "Activity.h"
+#include "GuiFunct.h"
 
 PropertiesActivityObject::PropertiesActivityObject() {
+    GuiFunct::applyEditorPanelStyle(this);
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    vbox->setContentsMargins(4,4,4,4);
     infoLabel = new QLabel("ActivityObject:");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
@@ -31,17 +33,34 @@ PropertiesActivityObject::PropertiesActivityObject() {
     eObjectType.setDisabled(true);
     eId.setDisabled(true);
     eEid.setDisabled(true);
-    vbox->addItem(vlist);
+    GuiFunct::alignEditorForm(vlist);
+    QFrame *identityCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(identityCard);
+    QVBoxLayout *identityLayout = new QVBoxLayout(identityCard);
+    identityLayout->setContentsMargins(6,4,6,4);
+    identityLayout->addLayout(vlist);
+    vbox->addWidget(identityCard);
     
     QPushButton *bDelete = new QPushButton("Delete");
+    GuiFunct::styleEditorActionButton(bDelete);
     QObject::connect(bDelete, SIGNAL(released()), this, SLOT(bDeleteEnabled()));
-    vbox->addWidget(bDelete);
+    QFrame *actionCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(actionCard);
+    QVBoxLayout *actionLayout = new QVBoxLayout(actionCard);
+    actionLayout->setContentsMargins(4,3,4,3);
+    actionLayout->addWidget(bDelete);
+    vbox->addWidget(actionCard);
     
     QLabel *label = new QLabel("Owned by:");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
-    vbox->addWidget(&eActivityName);
+    QFrame *ownerCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(ownerCard);
+    QVBoxLayout *ownerLayout = new QVBoxLayout(ownerCard);
+    ownerLayout->setContentsMargins(6,4,6,4);
+    ownerLayout->addWidget(&eActivityName);
+    vbox->addWidget(ownerCard);
     
     vbox->addStretch(1);
     this->setLayout(vbox);

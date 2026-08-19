@@ -11,35 +11,39 @@
 #include "PropertiesActivityPath.h"
 #include "Path.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 PropertiesActivityPath::PropertiesActivityPath() {
-QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
-    
+    GuiFunct::applyEditorPanelStyle(this);
+    QVBoxLayout *vbox = new QVBoxLayout;
+    vbox->setSpacing(3);
+    vbox->setContentsMargins(4,4,4,4);
     infoLabel = new QLabel("Path:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    infoLabel->setContentsMargins(3,0,0,0);
+    GuiFunct::styleEditorSubtitle(infoLabel);
     vbox->addWidget(infoLabel);
-    //QFormLayout *vlist = new QFormLayout;
-    vbox->addWidget(new QLabel("File Name"));
-    vbox->addWidget(&this->ePathFName);
-    vbox->addWidget(new QLabel("Display Name"));
-    vbox->addWidget(&this->eName);
-    vbox->addWidget(new QLabel("Start location"));
-    vbox->addWidget(&this->ePathStart);
-    vbox->addWidget(new QLabel("End Location"));
-    vbox->addWidget(&this->ePathEnd);
-    
-    QLabel *label = new QLabel("Main route nodes:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
+
+    QFrame *pathCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(pathCard);
+    QFormLayout *pathForm = new QFormLayout(pathCard);
+    pathForm->setSpacing(2);
+    pathForm->setContentsMargins(6,4,6,4);
+    pathForm->addRow("File:", &ePathFName);
+    pathForm->addRow("Name:", &eName);
+    pathForm->addRow("Start:", &ePathStart);
+    pathForm->addRow("End:", &ePathEnd);
+    GuiFunct::alignEditorForm(pathForm);
+    vbox->addWidget(pathCard);
+
+    QLabel *label = new QLabel(QString::fromUtf8("• Main Route Nodes"));
+    GuiFunct::styleEditorSubtitle(label);
     vbox->addWidget(label);
-    
-    vbox->addWidget(&nodeList);
-    //vlist->setSpacing(2);
-    //vlist->setContentsMargins(3,0,3,0);
-    //vbox->addItem(vlist);
+
+    QFrame *nodesCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(nodesCard);
+    QVBoxLayout *nodesLayout = new QVBoxLayout(nodesCard);
+    nodesLayout->setContentsMargins(4,3,4,3);
+    nodesLayout->addWidget(&nodeList);
+    vbox->addWidget(nodesCard);
 
     vbox->addStretch(1);
     this->setLayout(vbox);

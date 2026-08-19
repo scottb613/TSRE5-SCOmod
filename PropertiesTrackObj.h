@@ -46,6 +46,7 @@ public slots:
     void haxRemoveTDBTreeEnabled();
     void removeAllInteractivesEnabled();
     void deleteSelectedInstancesEnabled();
+    void fixSignalFlagsEnabled();
     void toggleHacksForSelection(
         GameObj *obj, QPushButton *button, bool checked);
     void adoptHacksButton(QPushButton *button);
@@ -94,6 +95,7 @@ private:
     void refreshGradeHelperUi();
     bool hasSelectedTrackForHacks() const;
     bool hasSelectedStaticForHacks() const;
+    bool hasSelectedSignalForHacks() const;
 };
 
 #endif	/* PROPERTIESTRACKOBJ_H */

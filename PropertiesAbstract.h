@@ -16,6 +16,7 @@
 
 class GameObj;
 class WorldObj;
+class TransformWorldObjDialog;
 
 class PropertiesAbstract : public QWidget {
     Q_OBJECT
@@ -38,6 +39,7 @@ public slots:
     void pasteFEnabled();
     void rotYEnabled();
     void transformEnabled();
+    void transformWindowClosed();
     void rtransformEnabled();
     void resetRotEnabled();
     void msg(QString name, QString val);
@@ -48,6 +50,7 @@ signals:
     
 protected:
     void showEvent(QShowEvent *event) override;
+    void configureTransformButton(QPushButton *button);
 
     static QString ElevTypeName;
     
@@ -66,6 +69,9 @@ protected:
     QComboBox eTemplate;
     QCheckBox enableCustomDetailLevel;
     WorldObj *worldObj;
+    WorldObj *transformTarget = NULL;
+    QPushButton *transformButton = NULL;
+    TransformWorldObjDialog *transformWindow = NULL;
     QMap<QString, QPushButton*> buttonTools;
 private:
 

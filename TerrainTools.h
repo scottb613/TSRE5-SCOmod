@@ -26,6 +26,7 @@ class TerrainTools : public QWidget{
 public:
     TerrainTools(QString name);
     virtual ~TerrainTools();
+    QWidget *texturePanel() const;
     
 public slots:
     void heightToolEnabled(bool val);
@@ -57,6 +58,12 @@ public slots:
     void setBrushAlpha(QString val);
     void setTextureRotation(int val);
     void setTextureRotation(QString val);
+    void setTextureBrushSize(int val);
+    void setTextureBrushSize(QString val);
+    void setTextureBrushAlpha(int val);
+    void setTextureBrushAlpha(QString val);
+    void setTextureBrushRotation(int val);
+    void setTextureBrushRotation(QString val);
     void setFheight(QString val);
     void setHtype(int val);
     void setSeasonType(int val);
@@ -92,6 +99,8 @@ signals:
     
 private:
     Brush* paintBrush;
+    Brush* meshBrush;
+    QWidget* terrainTexturePanel;
     QVector<QImage> brushShapes;
     int currentBrushShape = -1;
     void nextBrushShape();
@@ -142,6 +151,12 @@ private:
     QLineEdit *leSize;
     QLineEdit *leIntensity;
     QLineEdit *leTextureRotation;
+    QSlider *textureSizeSlider;
+    QSlider *textureIntensitySlider;
+    QSlider *textureRotationSlider;
+    QLineEdit *textureSizeValue;
+    QLineEdit *textureIntensityValue;
+    QLineEdit *textureRotationValue;
     QLineEdit *fheight;
     QDoubleValidator *heightValidator;
     QComboBox* hType;

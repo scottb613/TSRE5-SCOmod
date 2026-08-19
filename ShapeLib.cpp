@@ -24,9 +24,15 @@ ShapeLib::ShapeLib(const ShapeLib& orig) {
 }
 
 ShapeLib::~ShapeLib() {
+    for(auto entry = shape.begin(); entry != shape.end(); ++entry)
+        delete entry->second;
+    shape.clear();
+    jestshape = 0;
 }
 
 void ShapeLib::reset() {
+    for(auto entry = shape.begin(); entry != shape.end(); ++entry)
+        delete entry->second;
     jestshape = 0;
     shape.clear();
 }

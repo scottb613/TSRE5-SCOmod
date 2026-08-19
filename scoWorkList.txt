@@ -1,16 +1,47 @@
-TSRE GenX v0.12 Community Open-Testing Work List
+TSRE GenX v0.13 Community Source Checkpoint Work List
 
 ======================================================================================================
 
 SCOPE
 
-TSRE GenX is a maintained development line of the TSRE route editor for MSTS and Open Rails route building. v0.9 delivered the Qt6/CMake modernization on master, v0.10 and v0.11 preserved subsequent source checkpoints, and immutable tag v0.12 records the completed code-only checkpoint from `tsre-scomod-wip`.
+TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.13 is the current source checkpoint from `tsre-scomod-wip`.
 
 TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Grønbæk Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.
 
 ======================================================================================================
 
-COMPLETED SOURCE CHECKPOINT: V0.12
+COMPLETED SOURCE CHECKPOINT: V0.13
+
+Route Editor workflow and interface
+
+- Completed the PolyVeg-derived GenX style pass across remaining object properties, helpers, Errors & Messages, and F5 map panels.
+- Standardized aligned fields, compact labels, black button borders, tooltips, select-on-entry typing, and latching pinned/snapped/mutually-exclusive `...` popups.
+- Added paired Control Panel coordinate copy, orange copied feedback, compact Location labeling, and a centered low-contrast route title.
+- Moved styled Errors & Messages to F11, retained Settings on F12, and added direct removal for identified invalid TrackDB/RoadDB items.
+
+Terrain, maps, PolyVeg, and route sessions
+
+- Completed editable experimental 512-sample/4 m terrain handling across conforming, Undo, gaps, patch outlines, coordinate math, and renderer lifetime.
+- Added native 2048/4096 overlay drawing with bounded residency, explicit Map Tiles ownership, and map-off purge.
+- Changed Exit to Main Load into a guarded process restart for clean route-owned state.
+- Shortened the PolyVeg stack, added Map Tiles and the Edit Schema placeholder, and retained deterministic planting and hard-commit baking.
+
+Activity Builder, consist, and cleanup
+
+- Refreshed F5 as a map-first workspace with fixed compact side panels, clearer path controls and legends, and unclipped short labels.
+- Improved long Consist and Activity Consist selection, including unresolved stock cards.
+- Removed the unfinished in-editor activity simulator and unused OpenAL dependency.
+
+Verification
+
+- Clean Qt 6.11.1 MinGW 13.1 and VS2026/MSVC v143 Release builds completed on 2026-08-19.
+- Both registered CTest suites passed 7/7.
+- MinGW and promoted TST SHA-256: C6DDD2BA7C5E68FE7412C1BB98A4457A915ECC409254F412A1FADCE36B121D9F.
+- MSVC SHA-256: 062B82FFFBF945DCB52C617B9010E88C082E97FA180C1BEBF7F0CB96D6FDEE15.
+
+======================================================================================================
+
+PREVIOUS SOURCE CHECKPOINT: V0.12
 
 Build systems
 
@@ -124,8 +155,23 @@ The immutable v0.12 source tag is the latest completed checkpoint. Continuing de
 
 WORK DETAIL
 
-CURRENT RELEASE - v0.12 COMMUNITY OPEN TESTING
+CURRENT RELEASE - v0.13 SOURCE CHECKPOINT
 ==============================================
+
+   --- v0.13 Route Editor Production Pass ---
+The remaining Route Editor panels and helpers now use one compact GenX visual and behavioral language. Ellipsis controls latch orange while their pinned/snapped popup is open, close on a second press, remain mutually exclusive, and close when the active property panel no longer owns them. Editable fields select their current contents on entry. Dynamic Track, Signal, Terrain, Static, Forest, Transform, Height Helper, Errors & Messages, and the F5 side panels received focused alignment and framing work.
+
+   --- v0.13 Terrain, Maps, and Route Lifetime ---
+Experimental native 4 m terrain now follows its real sample resolution through conforming, Undo, gaps, patch outlines, coordinate math, and rendering. Native 2048/4096 map overlays use indexed drawing and bounded residency; Map Tiles remain explicitly user-controlled and purge when disabled. Exit to Main Load performs a guarded restart so the next route does not inherit route-owned memory or helpers.
+
+   --- v0.13 PolyVeg, F5, and Diagnostics ---
+PolyVeg retains deterministic planting and hard-commit baking in a shorter panel with direct Map Tiles control and an Edit Schema placeholder. F5 is a map-first workspace with compact fixed panels and clearer path tools. F11 now owns the styled Errors & Messages window and can remove identified invalid database items. Control Panel coordinate pairs copy directly with brief orange confirmation.
+
+   --- v0.13 Verification and Distribution ---
+Both clean maintained Release lanes compiled and passed 7/7 CTest probes on 2026-08-19. v0.13 is a source-only GitHub checkpoint: the public branch and immutable tag are pushed directly, a local MinGW distributable is retained for verification, and no v0.13 binary or GitHub Release is uploaded.
+
+PREVIOUS RELEASE - v0.12 COMMUNITY OPEN TESTING
+================================================
 
    --- v0.12 PolyVeg Planter ---
 F6 opens the full-height POLYVEG PLANTER in the right tools column. It consumes route-owned OpenRails/polyveg.json definitions and SCO LIDEX contract-v2 planting/exclusion GeoJSON. Pointer planting is tile-clipped; Flood Fill is limited to the same category and fill style. The tile-locked ruler supports a corridor or closed Area, and Unrestricted retains permanent exclusion and database-clearance rules.
@@ -552,7 +598,7 @@ The recommended range is roughly 1.00 to 1.25. The setting scales the applicatio
 
 Interface sounds are mapped by purpose so deliberate actions are acknowledged without producing noise during passive refreshes:
 
-  - `SCOclick.wav` plays only after a successful guarded object placement.
+  - `SCOpluck.wav` plays only after a successful guarded object placement.
   - `SCObuzz.wav` plays only after a Place Guard placement failure.
   - `SCOpress.wav` plays once for deliberate mode/status changes and manual panel button presses, including Control Panel controls, edit-mode shortcuts, property panels, and the right-side object selector.
 
@@ -563,7 +609,7 @@ The same GUI pass standardized active, neutral, success, warning, and failure st
 Yellow button and indicator states now use the same clear Control Panel palette instead of the older mustard shades. F12 True/False choices retain mutually exclusive radio-button behavior but use the cleaner square checkbox-style indicator artwork.
 
    --- Place Guard ---
-I added a Place Guard system to catch the most common accidental object-placement mistakes after TSRE performs its normal placement operation. The idea is to leave the old placement workflow intact, then validate what was just created. If the placement fails validation, TSRE automatically undoes the placement, flashes the Place Guard button red with `ERROR` for three seconds, and plays `SCObuzz.wav`. If the placement passes validation, TSRE plays `SCOclick.wav`.
+I added a Place Guard system to catch the most common accidental object-placement mistakes after TSRE performs its normal placement operation. The idea is to leave the old placement workflow intact, then validate what was just created. If the placement fails validation, TSRE automatically undoes the placement, flashes the Place Guard button red with `ERROR` for three seconds, and plays `SCObuzz.wav`. If the placement passes validation, TSRE plays `SCOpluck.wav`.
 
 The current rules are:
 

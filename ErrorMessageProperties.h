@@ -27,12 +27,13 @@ public:
     
 public slots:
     void jumpToLocation();
-    
     void bSelectReleased();
+    void deleteCurrentItem();
     
 signals:
     void jumpTo(PreciseTileCoordinate *c);
     void selectObject(GameObj *o);
+    void messageUpdated();
     
 protected:
     ErrorMessage *currentMessage = NULL;
@@ -45,6 +46,7 @@ protected:
     QPlainTextEdit eAction;
     
     QPushButton bSelect;
+    QPushButton bDelete;
 
 };
 

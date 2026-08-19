@@ -92,6 +92,7 @@ protected:
     int mapOverlayCenterX = 0;
     int mapOverlayCenterZ = 0;
     int mapOverlayRadius = 0;
+    bool mapOverlayPurgeRequested = false;
     QSet<int> mapOverlayUnavailableTiles;
     
     void spiralLoop(int n, int &x, int &y);

@@ -12,46 +12,59 @@
 #include "WorldObj.h"
 #include "ForestObj.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 PropertiesForest::PropertiesForest() {
+    GuiFunct::applyEditorPanelStyle(this);
     QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    vbox->setSpacing(3);
+    vbox->setContentsMargins(4,4,4,4);
+    auto addSubtitle = [this, vbox](const QString &text){
+        QLabel *label = new QLabel(QString::fromUtf8("• ") + text, this);
+        GuiFunct::styleEditorSubtitle(label);
+        vbox->addWidget(label);
+    };
+    auto makeCard = [this](){
+        QFrame *card = new QFrame(this);
+        GuiFunct::styleEditorPanelCard(card);
+        QVBoxLayout *layout = new QVBoxLayout(card);
+        layout->setContentsMargins(6,4,6,4);
+        layout->setSpacing(2);
+        return qMakePair(card, layout);
+    };
     infoLabel = new QLabel("Forest:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    infoLabel->setContentsMargins(3,0,0,0);
-    
-   
+    GuiFunct::styleEditorSubtitle(infoLabel);
     vbox->addWidget(infoLabel);
+
+    auto identityCard = makeCard();
     QFormLayout *vlistt = new QFormLayout;
-    vlistt->setSpacing(2);
-    vlistt->setContentsMargins(3,0,3,0);
+    vlistt->setContentsMargins(0,0,0,0);
     this->tX.setDisabled(true);
     this->tY.setDisabled(true);
     vlistt->addRow("Tile X:",&this->tX);
     vlistt->addRow("Tile Z:",&this->tY);
-    vbox->addItem(vlistt);
-    
-    QLabel * label = new QLabel("Texture:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    QLabel * label1 = new QLabel("FileName:");
-    label1->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label1);
+    GuiFunct::alignEditorForm(vlistt);
+    identityCard.second->addLayout(vlistt);
+    vbox->addWidget(identityCard.first);
+
+    addSubtitle("Texture");
+    auto textureCard = makeCard();
     this->fileName.setDisabled(true);
-    this->fileName.setAlignment(Qt::AlignCenter);
-    vbox->addWidget(&this->fileName);
+    QFormLayout *textureForm = new QFormLayout;
+    textureForm->setContentsMargins(0,0,0,0);
+    textureForm->addRow("File:", &fileName);
+    GuiFunct::alignEditorForm(textureForm);
+    textureCard.second->addLayout(textureForm);
     QPushButton *copyF = new QPushButton("Copy FileName", this);
-    vbox->addWidget(copyF);
-    
-    QLabel * label12 = new QLabel("Size:");
-    label12->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label12->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label12);
+    GuiFunct::styleEditorActionButton(copyF);
+    QObject::connect(copyF, SIGNAL(released()), this, SLOT(copyFileNameEnabled()));
+    textureCard.second->addWidget(copyF);
+    vbox->addWidget(textureCard.first);
+
+    addSubtitle("Forest Region");
+    auto regionCard = makeCard();
     QFormLayout *vlist = new QFormLayout;
-    vlist->setSpacing(2);
-    vlist->setContentsMargins(3,0,3,0);
+    vlist->setContentsMargins(0,0,0,0);
     vlist->addRow("Width:",&this->sizeX);
     vlist->addRow("Height:",&this->sizeY);
     QDoubleValidator* doubleValidator = new QDoubleValidator(0, 1000, 2, this); 
@@ -72,53 +85,60 @@ PropertiesForest::PropertiesForest() {
     densitykm.setValidator( new QIntValidator(0, 1000000, this) );
     QObject::connect(&densitykm, SIGNAL(textEdited(QString)),
                       this, SLOT(densitykmEnabled(QString)));
-    vbox->addItem(vlist);
-    
-    label = new QLabel("Position & Rotation:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    GuiFunct::alignEditorForm(vlist);
+    regionCard.second->addLayout(vlist);
+    vbox->addWidget(regionCard.first);
+
+    addSubtitle("Position & Rotation");
+    auto positionCard = makeCard();
     vlist = new QFormLayout;
-    vlist->setSpacing(2);
-    vlist->setContentsMargins(3,0,3,0);
+    vlist->setContentsMargins(0,0,0,0);
     vlist->addRow("X:",&this->posX);
     vlist->addRow("Y:",&this->posY);
     vlist->addRow("Z:",&this->posZ);
     this->quat.setDisabled(true);
     this->quat.setAlignment(Qt::AlignCenter);
     vlist->addRow("Rot:",&this->quat);
-    vbox->addItem(vlist);
+    GuiFunct::alignEditorForm(vlist);
+    positionCard.second->addLayout(vlist);
     QGridLayout *posRotList = new QGridLayout;
     posRotList->setSpacing(2);
     posRotList->setContentsMargins(0,0,0,0);    
 
     QPushButton *copyPos = new QPushButton("Copy Pos", this);
+    GuiFunct::styleEditorActionButton(copyPos);
     QObject::connect(copyPos, SIGNAL(released()),
                       this, SLOT(copyPEnabled()));
     QPushButton *pastePos = new QPushButton("Paste", this);
+    GuiFunct::styleEditorActionButton(pastePos);
     QObject::connect(pastePos, SIGNAL(released()),
                       this, SLOT(pastePEnabled()));
     QPushButton *copyQrot = new QPushButton("Copy Rot", this);
+    GuiFunct::styleEditorActionButton(copyQrot);
     QObject::connect(copyQrot, SIGNAL(released()),
                       this, SLOT(copyREnabled()));
     QPushButton *pasteQrot = new QPushButton("Paste", this);
+    GuiFunct::styleEditorActionButton(pasteQrot);
     QObject::connect(pasteQrot, SIGNAL(released()),
                       this, SLOT(pasteREnabled()));
     QPushButton *copyPosRot = new QPushButton("Copy Pos+Rot", this);
+    GuiFunct::styleEditorActionButton(copyPosRot);
     QObject::connect(copyPosRot, SIGNAL(released()),
                       this, SLOT(copyPREnabled()));
     QPushButton *pastePosRot = new QPushButton("Paste", this);
+    GuiFunct::styleEditorActionButton(pastePosRot);
     QObject::connect(pastePosRot, SIGNAL(released()),
                       this, SLOT(pastePREnabled()));
     QPushButton *resetQrot = new QPushButton("Reset Rot", this);
+    GuiFunct::styleEditorActionButton(resetQrot);
     QObject::connect(resetQrot, SIGNAL(released()),
                       this, SLOT(resetRotEnabled()));
     QPushButton *qRot90 = new QPushButton("Rot Y 90°", this);
+    GuiFunct::styleEditorActionButton(qRot90);
     QObject::connect(qRot90, SIGNAL(released()),
                       this, SLOT(rotYEnabled()));
-    QPushButton *transform = new QPushButton("Transform ...", this);
-    QObject::connect(transform, SIGNAL(released()),
-                      this, SLOT(transformEnabled()));
+    QPushButton *transform = new QPushButton("Transform...", this);
+    configureTransformButton(transform);
     
     posRotList->addWidget(copyPos, 0, 0);
     posRotList->addWidget(pastePos, 0, 1);
@@ -129,12 +149,11 @@ PropertiesForest::PropertiesForest() {
     posRotList->addWidget(resetQrot, 3, 0);
     posRotList->addWidget(qRot90, 3, 1);
     posRotList->addWidget(transform, 4, 0, 1, 2);
-    vbox->addItem(posRotList);
-    
-    label = new QLabel("Detail Level:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    positionCard.second->addLayout(posRotList);
+    vbox->addWidget(positionCard.first);
+
+    addSubtitle("Detail Level");
+    auto detailCard = makeCard();
     this->defaultDetailLevel.setDisabled(true);
     this->defaultDetailLevel.setAlignment(Qt::AlignCenter);
     this->enableCustomDetailLevel.setText("Custom");
@@ -154,27 +173,29 @@ PropertiesForest::PropertiesForest() {
     detailLevelView->addWidget(&defaultDetailLevel, 0, 1);
     detailLevelView->addWidget(&enableCustomDetailLevel, 1, 0);
     detailLevelView->addWidget(&customDetailLevel, 1, 1);
-    vbox->addItem(detailLevelView);
-    
-    label = new QLabel("Flags:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    detailCard.second->addLayout(detailLevelView);
+    vbox->addWidget(detailCard.first);
+
+    addSubtitle("Flags");
+    auto flagsCard = makeCard();
     this->flags.setDisabled(true);
     this->flags.setAlignment(Qt::AlignCenter);
-    vbox->addWidget(&this->flags);
+    flagsCard.second->addWidget(&this->flags);
     QGridLayout *flagslView = new QGridLayout;
     flagslView->setSpacing(2);
     flagslView->setContentsMargins(0,0,0,0);    
     QPushButton *copyFlags = new QPushButton("Copy Flags", this);
+    GuiFunct::styleEditorActionButton(copyFlags);
     QObject::connect(copyFlags, SIGNAL(released()),
                       this, SLOT(copyFEnabled()));
     QPushButton *pasteFlags = new QPushButton("Paste", this);
+    GuiFunct::styleEditorActionButton(pasteFlags);
     QObject::connect(pasteFlags, SIGNAL(released()),
                       this, SLOT(pasteFEnabled()));
     flagslView->addWidget(copyFlags,0,0);
     flagslView->addWidget(pasteFlags,0,1);
-    vbox->addItem(flagslView);
+    flagsCard.second->addLayout(flagslView);
+    vbox->addWidget(flagsCard.first);
     
     vbox->addStretch(1);
     this->setLayout(vbox);

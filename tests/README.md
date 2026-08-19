@@ -12,7 +12,7 @@ Initial automated coverage should include:
 - path serialization and validation;
 - settings JSON recovery and atomic saving.
 
-Manual editor coverage is tracked in `Docs/TEST-MATRIX-v0.12.md`.
+Manual editor coverage is tracked in `Docs/TEST-MATRIX-v0.13.md`.
 
 `scripts/Invoke-RouteRegression.ps1` automates the evidence around manual
 Route Editor scenarios. `Capture` records a full-route hash manifest and exact

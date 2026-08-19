@@ -25,11 +25,11 @@ public:
     static int jesttextur;
     static std::unordered_map<int, Texture*> mtex;
     static QHash<int, int> disabledTextures;
-    static void reset();
     static void enableTexture(int id);
     static void disableTexture(int id);
     static void delRef(int texx);
     static void releaseMapTexture(int texx);
+    static bool releaseAllMapTextures();
     static void addRef(int texx);
     static int addTex(QString path, QString name, bool reload = false);
     static int addTex(QString pathid, bool reload = false);

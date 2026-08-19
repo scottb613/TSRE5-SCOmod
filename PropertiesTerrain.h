@@ -28,6 +28,7 @@ public:
     QPushButton *hacksButton();
     
 public slots:
+    void naviInfo(int all, int hidden);
     void startWaterRuler(Terrain *terrain);
     void bWaterEditorEnabled();
     void bHeightMapResetEnabled();
@@ -43,10 +44,8 @@ public slots:
     void bMirrorXEnabled();
     void bMirrorYEnabled();
     void bRemoveAllGapsEnabled();
-    void bShowWaterEnabled();
-    void bShowDrawEnabled();
-    void bHideWaterEnabled();
-    void bHideDrawEnabled();
+    void bWaterVisibilityToggled(bool checked);
+    void bDrawVisibilityToggled(bool checked);
     void bShowAdjacentEnabled();
     void eBiasEnabled(QString val);
     void eAvgWaterEnabled(QString val);
@@ -64,6 +63,11 @@ private:
     QLineEdit tTex;
     QLineEdit eAvgWater;
     QLineEdit eBias;
+    QLineEdit eObjectCount;
+    int currentObjectCount = 0;
+    QPushButton waterVisibilityButton;
+    QPushButton drawVisibilityButton;
+    void syncVisibilityButtons();
     
     QDoubleSpinBox eScalexy;
     QDoubleSpinBox eScalex;

@@ -7,6 +7,11 @@ This is the visual baseline for new and updated SCO TSRE5 editor panels.
 Keep the interface compact, dark, readable, and consistent with the existing
 editor. Orange identifies controls the user can act on or edit.
 
+The F6 PolyVeg panel is the primary visual model. New work should reuse the
+shared GuiFunct panel primitives rather than reproduce its appearance with
+local styles. Preserve an established panel's workflow while promoting its
+layout and controls to this language.
+
 
 CORE PALETTE
 ------------
@@ -21,8 +26,9 @@ Dark inset/top border:        #151515
 Dim editable border:          #70590e
 Focused editable border:      #8a7116
 Bright hover/accent orange:   #f08200
-Bright checked border:        #ffad3b
-Checked-button orange:        #f7a32d to #d46f00
+Bright checked border:        #f08200
+Action-card background:       #252525
+Action-button background:     #343434
 Secondary warm label accent:  #c4a480
 
 
@@ -54,32 +60,74 @@ Disabled state:
 
 Text selection:
   - #f08200 selection background with black selected text.
+  - A field intended for direct typing selects its complete existing value
+    when clicked into, so typing immediately replaces the old value.
+  - Apply this globally to editable text, number, date, and time fields. Do not
+    implement it only in one panel or one widget subclass.
 
 
 BUTTONS
 -------
-Normal:
-  - Gray vertical gradient (#606060 through #414141).
-  - White text, one-pixel gray border, two-pixel corner radius.
+Standard editor action buttons:
+  - Dark #343434 face, white text, one-pixel #5b5b5b border, and two-pixel
+    corner radius. This black-border treatment replaces the legacy raised
+    gray-gradient look inside modernized panels.
+  - Use GuiFunct::styleEditorActionButton().
 
 Hover:
-  - Slightly brighter gray gradient and border.
+  - Slightly brighter dark face with orange text and border.
 
 Pressed:
-  - Darker/reversed gradient with a subtle one-pixel downward shift.
+  - Dark #202020 face with orange text and border.
 
 Checked/active:
-  - Orange vertical gradient (#f7a32d to #d46f00).
-  - Dark text and bright #ffad3b border.
+  - Retain the dark face and use bright orange text and border.
+  - Do not fill ordinary latched editor actions solid orange.
 
 Disabled:
   - Muted gray text, background, and border.
+
+Labels and sizing:
+  - Prefer short, direct labels that fit the standard panel width.
+  - Abbreviate crowded repeated actions consistently: Jump To becomes Jump,
+    Delete becomes Del, and Delete All becomes Del All.
+  - Buttons in the same action row use equal cells. Use two columns whenever
+    that improves clarity and keeps a helper compact.
+
+Popup launch buttons:
+  - Every button that opens a non-modal helper ends in "...".
+  - It is a checkable latch: checked while its helper is visible, orange in the
+    shared active treatment, and unchecked when the helper closes.
+  - Pressing the checked launcher again closes the helper.
+  - Play the standard button-press sound on both opening and closing actions.
+  - Closing through the native window close control must also release the
+    launcher state.
 
 Pin controls:
   - Use the shared compact, scale-aware icon from GuiFunct::setupWindowPinButton().
   - Do not use a text label that changes helper-window width or competes with the panel title.
   - Keep the icon legible in both pinned/checked and unpinned states.
   - Pin controls remember placement only; they must not silently open a helper or change its workflow state.
+
+
+PANEL CARDS AND ACTION GROUPS
+-----------------------------
+Modernized controls are grouped in compact charcoal cards rather than left as
+bare widgets on the panel background.
+
+Cards:
+  - Use GuiFunct::styleEditorPanelCard().
+  - #252525 background, one-pixel #454545 border, and a small scale-aware
+    corner radius.
+  - Use compact internal margins and spacing. A card should group related
+    fields/actions, not become a large decorative container.
+  - Do not leave unexplained vertical expansion inside a card. Stacked option
+    areas contract to the currently visible page.
+
+Hierarchy:
+  - Main panel title, then subtitle, then its card.
+  - Distinct work groups receive separate subtitles and cards.
+  - Do not add a subtitle to a single-section popup merely for decoration.
 
 
 CHECKBOXES, RADIO BUTTONS, AND SLIDERS
@@ -118,6 +166,12 @@ Subtitles:
 Ordinary labels:
   - #f2f2f2 text.
   - Do not make normal field text bold.
+  - Give labels enough room before the value column. Values begin on one shared
+    vertical line throughout a section.
+  - Abbreviate where appropriate, such as Elev: and Desc:, rather than clipping
+    the value column.
+  - When a read-only value can be clipped, its tooltip displays the complete
+    current value.
 
 
 LAYOUT AND SCALE
@@ -127,8 +181,30 @@ Standard editor fields have a minimum logical height of 22 pixels.
 Standard form/grid vertical row spacing is 3 logical pixels.
 All dimensions must respect Game::uiScale.
 Avoid adding decorative spacing that reduces the usable editor area.
+Use a stable label column and an expanding value column. Shift data fields far
+enough right to protect labels, and align every field edge in the section.
+Prefer concise two-column helper layouts over tall single-column stacks.
+Helper height follows content; do not reserve blank space for hidden or smaller
+stack pages.
+
+Widths and resizing:
+  - Ordinary popup helpers use the Control Panel width: 300 logical pixels via
+    EditorPopupWindow unless a documented extended panel needs more room.
+  - Preserve established fixed dock widths. Do not expose drag-resize separators
+    on fixed left or right editor side panels.
+  - Avoid horizontal scrollbars. Shorten labels or reorganize rows before
+    widening a standard panel.
 Context-sensitive docks, such as F4 Path Controls, should be visible only while
 their editing session is active and should not leave an empty permanent column.
+
+F4/F5 Activity map workspace:
+  - Treat the map as a dedicated workspace, not as a floating helper.
+  - Keep both side panels fixed and non-resizable so the map remains stable.
+  - Use the shared title, subtitle, charcoal-card, field, and action-button
+    language on the visible map workspace.
+  - Path Controls are context-sensitive and appear only during path editing.
+  - Legacy activity editors opened from this workspace are a separate redesign
+    concern; do not casually restructure their workflows during map styling.
 
 F2 terrain texture layout:
   - Keep MAIN TERRTEX and SNOW TERRTEX previews paired and equal at 108x108 logical pixels.
@@ -154,6 +230,48 @@ Tooltips should identify unfamiliar controls or content without repeating obviou
 button labels.
 
 
+HELPER WINDOWS AND POPUP LIFECYCLE
+----------------------------------
+All non-modal editor helpers follow one behavior. Do not create one-off popup
+ownership or positioning systems.
+
+Construction and appearance:
+  - Use EditorPopupWindow for the standard internal orange title, GenX caption,
+    fixed width, compact content height, pin control, and edge snapping.
+  - Use a unique persistent position key.
+  - Helpers snap to nearby application/helper edges while being moved.
+  - Use two columns when six-axis, paired-value, or similar controls fit more
+    clearly at the standard width.
+
+Exclusivity and ownership:
+  - Editor helpers are mutually exclusive unless a feature explicitly documents
+    simultaneous windows as necessary.
+  - Opening one helper closes the previously active helper and releases its
+    launcher latch.
+  - If the calling Object Properties panel changes to an object/panel that does
+    not define the open helper, close it immediately.
+  - This owner-change rule is global and applies to every "..." helper, including
+    Transform, Grade/Height/Water helpers, Subobjects, Hacks, and future helpers.
+  - Pinning remembers position; it does not override exclusivity or allow a
+    helper to outlive an incompatible owner panel.
+
+Dialog exception:
+  - Modal Yes/No confirmations use the shared dialog format rather than the
+    helper latch system. Yes uses the green acceptance bar, No uses the red
+    rejection bar, and destructive confirmations default to No.
+
+
+READ-ONLY COPY PAIRS
+--------------------
+The Control Panel coordinate display is an intentional special case:
+  - Cam X/Cam Y and Cam Lat/Cam Lon have no default highlight.
+  - Hovering either member highlights both fields in that pair.
+  - Clicking either member silently copies both displayed values, in displayed
+    order, to the Windows clipboard.
+  - Do not open a dialog for this copy action. Briefly replace the centered
+    Position subtitle with bright-orange "• COPIED •" for two seconds.
+
+
 IMPLEMENTATION REFERENCE
 ------------------------
 The source of truth is GuiFunct::scoEditorPanelStyle() in GuiFunct.cpp.
@@ -170,3 +288,16 @@ editable-versus-read-only orange field distinction.
 
 Do not place a local widget stylesheet on an editable field unless necessary.
 A local stylesheet can override the shared hover, focus, and read-only states.
+
+Shared primitives:
+
+    GuiFunct::styleEditorTitle(label);
+    GuiFunct::styleEditorSubtitle(label);
+    GuiFunct::styleEditorPanelCard(card);
+    GuiFunct::styleEditorActionButton(button);
+    GuiFunct::alignEditorForm(form);
+    GuiFunct::setEditorPopupButtonActive(button, active);
+
+Use EditorPopupWindow rather than duplicating popup title, pin, snap, geometry,
+and fixed-width code. Keep popup visibility connected to the central owner/popup
+coordination path so launcher states and owner changes remain synchronized.

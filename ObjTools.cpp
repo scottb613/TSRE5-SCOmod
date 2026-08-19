@@ -23,61 +23,33 @@
 #include <QMapIterator>
 
 static int scaledUiSize(int base){
-    return qRound(base * qMax(1.0f, Game::uiScale));
+    return qRound(base * qBound(0.75f, Game::uiScale, 1.25f));
 }
 
-class AutoPlacementWindow : public EditorPopupWindow {
+class AutoPlacementWindow : public QWidget {
 public:
     explicit AutoPlacementWindow(ObjTools *owner)
-        : EditorPopupWindow(owner, "AUTO PLACE", "autoPlacementHelper", 380),
-          owner(owner) {
-        setPopupPinToolTips(
-            "Save the current Auto Place position between sessions.",
-            "The Auto Place position is saved between sessions.");
+        : QWidget(owner) {
+        GuiFunct::applyEditorPanelStyle(this);
+        rootLayout = new QVBoxLayout(this);
+        rootLayout->setContentsMargins(scaledUiSize(6), scaledUiSize(6),
+                                       scaledUiSize(6), scaledUiSize(6));
+        rootLayout->setSpacing(scaledUiSize(5));
+        QLabel *heading = new QLabel("AUTO PLACE", this);
+        GuiFunct::styleEditorTitle(heading);
+        rootLayout->addWidget(heading);
     }
 
     QVBoxLayout *contentLayout(){
-        return popupLayout();
+        return rootLayout;
     }
 
     void finishLayout(){
-        finalizePopup();
-    }
-
-    void showForOwner(){
-        if(!everShown && !isPopupPositionPinned()){
-            moveToDefaultPosition();
-            everShown = true;
-        }
-        showExclusive();
-    }
-
-protected:
-    void closeEvent(QCloseEvent *event) override {
-        QWidget::closeEvent(event);
-        owner->autoPlacementWindowClosed();
+        rootLayout->addStretch(1);
     }
 
 private:
-    void popupPinChanged(bool pinned) override {
-        if(pinned)
-            Game::clearPinnedWindowPosition("autoPlacementHelperUseDefault");
-        EditorPopupWindow::popupPinChanged(pinned);
-        if(!pinned){
-            Game::savePinnedWindowPosition(
-                "autoPlacementHelperUseDefault", QPoint(0, 0));
-            moveToDefaultPosition();
-        }
-    }
-
-    void moveToDefaultPosition(){
-        const QPoint ownerTopLeft = owner->mapToGlobal(QPoint(0, 0));
-        const QPoint desired(ownerTopLeft.x() - width() - 1, ownerTopLeft.y());
-        move(Game::visibleWindowPosition(desired, size()));
-    }
-
-    ObjTools *owner;
-    bool everShown = false;
+    QVBoxLayout *rootLayout = NULL;
 };
 
 static QString tdbCategoryLabel(const QString& filename, bool roadShape){
@@ -117,7 +89,7 @@ ObjTools::ObjTools(QString name)
     //QRadioButton *radio2 = new QRadioButton(tr("R&adio button 2"));
     //QRadioButton *radio3 = new QRadioButton(tr("Ra&dio button 3"));
     setFixedWidth(scaledUiSize(250));
-    setStyleSheet(GuiFunct::scoPanelStyle());
+    GuiFunct::applyEditorPanelStyle(this);
     QFont objectPanelFont = font();
     if(objectPanelFont.pointSizeF() > 0)
         objectPanelFont.setPointSizeF(objectPanelFont.pointSizeF() * 1.12);
@@ -131,6 +103,8 @@ ObjTools::ObjTools(QString name)
         i.value()->setCheckable(true);
         i.value()->setMinimumHeight(scaledUiSize(20));
     }
+    GuiFunct::styleEditorActionButton(buttonTools["selectTool"]);
+    GuiFunct::styleEditorActionButton(buttonTools["placeTool"]);
 
     QPushButton *resetRotationButton = new QPushButton("Reset Rotation", this);
     resetRotationButton->setMinimumHeight(scaledUiSize(20));
@@ -150,22 +124,22 @@ ObjTools::ObjTools(QString name)
     QLabel *panelTitle = new QLabel("OBJECT SELECTION");
     GuiFunct::styleEditorTitle(panelTitle);
     vbox->addWidget(panelTitle);
-    QFormLayout *vlist = new QFormLayout;
+    QFrame *selectionCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(selectionCard);
+    QFormLayout *vlist = new QFormLayout(selectionCard);
     vlist->setSpacing(2);
-    vlist->setContentsMargins(3,0,3,0);
+    vlist->setContentsMargins(scaledUiSize(6), scaledUiSize(5),
+                              scaledUiSize(6), scaledUiSize(5));
     vlist->addRow("Ref file:",&refClass);
     vlist->addRow("Tracks:",&refTrack);
     vlist->addRow("Roads:",&refRoad);
     vlist->addRow("Other:",&refOther);
-    QHBoxLayout *searchLayout = new QHBoxLayout;
-    searchLayout->setSpacing(2);
-    searchLayout->setContentsMargins(0,0,0,0);
-    searchLayout->addWidget(&searchBox, 1);
     resetSearchButton.setText("Reset");
     resetSearchButton.setMinimumHeight(scaledUiSize(20));
     resetSearchButton.setFont(objectPanelFont);
-    searchLayout->addWidget(&resetSearchButton);
-    vlist->addRow("Search:",searchLayout);
+    GuiFunct::styleEditorActionButton(&resetSearchButton);
+    vlist->addRow("Search:", &searchBox);
+    vlist->addRow(&resetSearchButton);
     QList<QComboBox*> comboBoxes;
     comboBoxes << &refClass << &refTrack << &refRoad << &refOther;
     for(int cb = 0; cb < comboBoxes.size(); cb++){
@@ -174,22 +148,21 @@ ObjTools::ObjTools(QString name)
     }
     searchBox.setFont(objectPanelFont);
     searchBox.setMinimumHeight(scaledUiSize(20));
-    vbox->addItem(vlist);
+    vbox->addWidget(selectionCard);
     vbox->addWidget(&refList);
     addRule();
-    QLabel *placeTitle = new QLabel("OBJECT PLACE");
-    GuiFunct::styleEditorTitle(placeTitle);
+    QLabel *placeTitle = new QLabel(QString(QChar(0x2022)) + " Object Place");
+    GuiFunct::styleEditorSubtitle(placeTitle);
     vbox->addWidget(placeTitle);
-    QGridLayout *vlist3 = new QGridLayout;
+    QFrame *placeCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(placeCard);
+    QGridLayout *vlist3 = new QGridLayout(placeCard);
     vlist3->setSpacing(2);
-    vlist3->setContentsMargins(3,0,1,0);    
+    vlist3->setContentsMargins(scaledUiSize(6), scaledUiSize(5),
+                               scaledUiSize(6), scaledUiSize(5));
     int row = 0;
     vlist3->addWidget(buttonTools["selectTool"],row,0,1,2);
     vlist3->addWidget(buttonTools["placeTool"],row++,2,1,2);
-    autoPlacementHelperButton.setText("Auto Place...");
-    autoPlacementHelperButton.setCheckable(true);
-    autoPlacementHelperButton.setMinimumHeight(scaledUiSize(20));
-    vlist3->addWidget(&autoPlacementHelperButton,row++,0,1,4);
     autoPlacementLength.setText("50");
     autoPlacementLength.setMinimumHeight(scaledUiSize(20));
 //    QDoubleValidator* doubleValidator = new QDoubleValidator(-999, 999, 6, this); 
@@ -200,7 +173,7 @@ ObjTools::ObjTools(QString name)
     doubleValidator1->setNotation(QDoubleValidator::StandardNotation);
     autoPlacementLength.setValidator(doubleValidator1);
     QObject::connect(&autoPlacementLength, SIGNAL(textEdited(QString)), this, SLOT(autoPlacementLengthEnabled(QString)));
-    vbox->addItem(vlist3);
+    vbox->addWidget(placeCard);
     
     vlist3 = new QGridLayout;
     vlist3->setSpacing(2);
@@ -264,6 +237,7 @@ ObjTools::ObjTools(QString name)
     autoPlacementRotY.setValidator(doubleValidator);
     autoPlacementRotZ.setValidator(doubleValidator);
     advancedPlacementWidget.setLayout(vlist3);
+    GuiFunct::styleEditorPanelCard(&advancedPlacementWidget);
 
     stickToTDB.setText("Stick Target");
     stickToTDB.setChecked(false);
@@ -280,42 +254,58 @@ ObjTools::ObjTools(QString name)
     GuiFunct::styleEditorSubtitle(placementHeading);
     autoPlaceLayout->addWidget(placementHeading);
 
+    QFrame *placementCard = new QFrame(autoPlacementWindow);
+    GuiFunct::styleEditorPanelCard(placementCard);
+    QVBoxLayout *placementCardLayout = new QVBoxLayout(placementCard);
+    placementCardLayout->setContentsMargins(scaledUiSize(6), scaledUiSize(5),
+                                            scaledUiSize(6), scaledUiSize(5));
+    placementCardLayout->setSpacing(scaledUiSize(5));
     QGridLayout *placementLayout = new QGridLayout;
     placementLayout->setSpacing(3);
-    placementLayout->setContentsMargins(3,0,3,0);
+    placementLayout->setContentsMargins(0,0,0,0);
     placementLayout->addWidget(new QLabel("Spacing:"), 0, 0);
     placementLayout->addWidget(&autoPlacementLength, 0, 1);
     placementLayout->addWidget(new QLabel("m"), 0, 2);
     placementLayout->addWidget(&stickToTDB, 1, 0, 1, 3);
-    autoPlaceLayout->addLayout(placementLayout);
+    placementCardLayout->addLayout(placementLayout);
 
     buttonTools["autoPlaceSimpleTool"]->setText("Commit");
-    autoPlaceLayout->addWidget(buttonTools["autoPlaceSimpleTool"]);
-    autoPlaceLayout->addWidget(autoPlacementDeleteLast);
-    autoPlaceLayout->addWidget(resetRotationButton);
+    GuiFunct::styleEditorActionButton(buttonTools["autoPlaceSimpleTool"]);
+    GuiFunct::styleEditorActionButton(autoPlacementDeleteLast);
+    GuiFunct::styleEditorActionButton(resetRotationButton);
+    placementCardLayout->addWidget(buttonTools["autoPlaceSimpleTool"]);
+    placementCardLayout->addWidget(autoPlacementDeleteLast);
+    placementCardLayout->addWidget(resetRotationButton);
+    autoPlaceLayout->addWidget(placementCard);
     autoPlacementWindow->finishLayout();
 
-    QLabel *label2 = new QLabel("RECENT ITEMS");
-    GuiFunct::styleEditorTitle(label2);
+    QLabel *label2 = new QLabel(QString(QChar(0x2022)) + " Recent Items");
+    GuiFunct::styleEditorSubtitle(label2);
     label2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     clearRecentButton.setText("Clear Recent");
     clearRecentButton.setFocusPolicy(Qt::NoFocus);
-    QHBoxLayout *recentHeader = new QHBoxLayout;
-    recentHeader->setSpacing(2);
-    recentHeader->setContentsMargins(0,0,1,0);
-    recentHeader->addWidget(label2);
-    recentHeader->addWidget(&clearRecentButton);
+    GuiFunct::styleEditorActionButton(&clearRecentButton);
+    vbox->addWidget(label2);
+    QFrame *recentCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(recentCard);
+    recentCard->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    QVBoxLayout *recentLayout = new QVBoxLayout(recentCard);
+    recentLayout->setContentsMargins(scaledUiSize(6), scaledUiSize(5),
+                                     scaledUiSize(6), scaledUiSize(5));
+    recentLayout->setSpacing(scaledUiSize(5));
+    recentLayout->addWidget(&clearRecentButton);
+    recentLayout->addWidget(&lastItems);
     //refClasssetMargin(0);
     //refTrack->sets >setMargin(0);
     //refRoad->setMargin(0);
     //label1->setMargin(0);
-    vbox->addLayout(recentHeader);
-    vbox->addWidget(&lastItems);
+    vbox->addWidget(recentCard);
 
     lastItems.setFont(objectPanelFont);
     const int visibleRecentRows = qBound(1, Game::numRecentItems, 15);
     lastItems.setMinimumHeight(visibleRecentRows*scaledUiSize(16));
     lastItems.setMaximumHeight(visibleRecentRows*scaledUiSize(16));
+    lastItems.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     lastItems.setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     //QSizePolicy* sizePolicy = new QSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
     //astItems.setSizePolicy(*sizePolicy);
@@ -376,9 +366,6 @@ ObjTools::ObjTools(QString name)
     
     QObject::connect(buttonTools["autoPlaceSimpleTool"], SIGNAL(toggled(bool)),
                       this, SLOT(autoPlacementButtonEnabled(bool)));
-    QObject::connect(&autoPlacementHelperButton, SIGNAL(toggled(bool)),
-                      this, SLOT(autoPlacementHelperEnabled(bool)));
-    
     QObject::connect(resetRotationButton, SIGNAL(released()),
                       this, SLOT(resetRotationButtonEnabled()));
     
@@ -394,6 +381,10 @@ ObjTools::ObjTools(QString name)
 }
 
 ObjTools::~ObjTools() {
+}
+
+QWidget *ObjTools::autoPlacementPanel() const {
+    return autoPlacementWindow;
 }
 
 void ObjTools::refreshObjLists(){
@@ -894,29 +885,13 @@ void ObjTools::autoPlacementButtonEnabled(bool val){
         emit enableTool("");
 }
 
-void ObjTools::autoPlacementHelperEnabled(bool val){
-    if(autoPlacementWindow == NULL)
-        return;
-    GuiFunct::setEditorPopupButtonActive(&autoPlacementHelperButton, val);
-    if(val){
-        autoPlacementWindow->showForOwner();
-    } else {
+void ObjTools::autoPlacementPanelVisibilityChanged(bool visible){
+    if(!visible){
         if(buttonTools["autoPlaceSimpleTool"] != NULL
         && buttonTools["autoPlaceSimpleTool"]->isChecked())
             buttonTools["autoPlaceSimpleTool"]->setChecked(false);
-        autoPlacementWindow->hide();
         emit requestMainFocus();
     }
-}
-
-void ObjTools::autoPlacementWindowClosed(){
-    if(buttonTools["autoPlaceSimpleTool"] != NULL
-    && buttonTools["autoPlaceSimpleTool"]->isChecked())
-        buttonTools["autoPlaceSimpleTool"]->setChecked(false);
-    autoPlacementHelperButton.blockSignals(true);
-    autoPlacementHelperButton.setChecked(false);
-    autoPlacementHelperButton.blockSignals(false);
-    emit requestMainFocus();
 }
 
 void ObjTools::resetRotationButtonEnabled(){

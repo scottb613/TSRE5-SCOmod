@@ -23,7 +23,6 @@ class FileBuffer;
 class QTextStream;
 class GLUU;
 class Activity;
-class SimpleHud;
 class ContentHierarchyInfo;
 
 class Consist : public GameObj {
@@ -102,8 +101,6 @@ public:
     void setDurability(float val);
     void initOnTrack(float *posTXZ, int direction, QMap<int, int> *junctionDirections = NULL);
     bool getWagonWorldPosition(int id, float *posTW);
-    void updateSim(float deltaTime);
-    void renderHud();
     void getCameraPosition(float *out);
     void renderOnTrack(GLUU* gluu, float * playerT, int selectionColor);
     void render(int selectionColor = 0, bool renderText = false);
@@ -114,7 +111,6 @@ public:
     QString getFirstEngName();
     void setTrainSpeed(float val);
     float getTrainSpeed();
-    float getTrainDistanceTravelled();
     void fillContentHierarchyInfo(QVector<ContentHierarchyInfo*>& list, int parent);
     
 private:
@@ -123,8 +119,6 @@ private:
     bool defaultValue = false;
     bool maxVelocityFixed = false;
     float trainSpeed = 0.0;
-    float trainTotalDistance = 0.0;
-    SimpleHud *hud = NULL;
     
     void replaceEngItem(int id, int pos);
 };

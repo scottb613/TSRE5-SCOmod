@@ -21,7 +21,7 @@ UnsavedDialog::UnsavedDialog(QString buttonLayout, QWidget *parent)
     : QDialog(parent) {
     GuiFunct::styleEditorDialog(this);
     setProperty("scoCenterOnScreen", true);
-    const qreal scale = qMax(1.0f, Game::uiScale);
+    const qreal scale = qBound(0.75f, Game::uiScale, 1.25f);
     setMinimumWidth(qRound(520.0f * scale));
     items.setMinimumHeight(qRound(220.0f * scale));
     qDebug() << buttonLayout;

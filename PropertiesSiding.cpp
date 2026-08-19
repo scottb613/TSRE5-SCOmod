@@ -12,16 +12,33 @@
 #include "WorldObj.h"
 #include "PlatformObj.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 PropertiesSiding::PropertiesSiding() {
+    GuiFunct::applyEditorPanelStyle(this);
+    const int panelMargin = qRound(4.0f * qBound(0.75f, Game::uiScale, 1.25f));
+    const int cardMargin = qRound(6.0f * qBound(0.75f, Game::uiScale, 1.25f));
     QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    vbox->setSpacing(3);
+    vbox->setContentsMargins(panelMargin,panelMargin,panelMargin,panelMargin);
+    auto addSubtitle = [this, vbox](const QString &text){
+        QLabel *label = new QLabel(QString(QChar(0x2022)) + ' ' + text, this);
+        GuiFunct::styleEditorSubtitle(label);
+        vbox->addWidget(label);
+    };
+    auto makeCard = [this, cardMargin](){
+        QFrame *card = new QFrame(this);
+        GuiFunct::styleEditorPanelCard(card);
+        QVBoxLayout *layout = new QVBoxLayout(card);
+        layout->setContentsMargins(cardMargin,cardMargin,cardMargin,cardMargin);
+        layout->setSpacing(3);
+        return qMakePair(card, layout);
+    };
     
     infoLabel = new QLabel("Platform:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    infoLabel->setContentsMargins(3,0,0,0);
+    GuiFunct::styleEditorSubtitle(infoLabel);
     vbox->addWidget(infoLabel);
+    auto identityCard = makeCard();
     QFormLayout *vlist = new QFormLayout;
     vlist->setSpacing(2);
     vlist->setContentsMargins(3,0,3,0);
@@ -33,19 +50,24 @@ PropertiesSiding::PropertiesSiding() {
     vlist->addRow("Tile X:",&this->tX);
     vlist->addRow("Tile Z:",&this->tY);
     vlist->addRow("Length:",&this->lengthPlatform);
-    vbox->addItem(vlist);
+    GuiFunct::alignEditorForm(vlist);
+    identityCard.second->addLayout(vlist);
+    vbox->addWidget(identityCard.first);
     // name
-    QLabel* label = new QLabel("Siding Name:");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    vbox->addWidget(&this->namePlatform);
+    addSubtitle("Name");
+    auto nameCard = makeCard();
+    QFormLayout *nameForm = new QFormLayout;
+    nameForm->setContentsMargins(0,0,0,0);
+    nameForm->addRow("Siding:", &this->namePlatform);
+    GuiFunct::alignEditorForm(nameForm);
+    nameCard.second->addLayout(nameForm);
+    vbox->addWidget(nameCard.first);
     // misc
-    label = new QLabel("Misc:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    addSubtitle("Options");
+    auto optionsCard = makeCard();
     disablePlatform.setText("Disable Platform");
-    vbox->addWidget(&disablePlatform);
+    optionsCard.second->addWidget(&disablePlatform);
+    vbox->addWidget(optionsCard.first);
     vbox->addStretch(1);
     this->setLayout(vbox);
     

@@ -17,21 +17,18 @@ TerrainWaterWindow2::TerrainWaterWindow2(QWidget* parent)
     : EditorPopupWindow(parent, "WATER HELPER", "waterHelper") {
     QVBoxLayout *mainLayout = popupLayout();
     addPopupSubtitle(QString::fromUtf8("• Corner Elevations"));
-
-    tileIdentifier.setReadOnly(true);
-    tileIdentifier.setAlignment(Qt::AlignCenter);
-    tileIdentifier.setFocusPolicy(Qt::NoFocus);
-    QFormLayout *tileForm = new QFormLayout;
-    tileForm->setContentsMargins(3,0,3,0);
-    tileForm->addRow("Tile:", &tileIdentifier);
-    mainLayout->addLayout(tileForm);
+    QFrame *cornerCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(cornerCard);
+    QVBoxLayout *cornerLayout = new QVBoxLayout(cornerCard);
+    cornerLayout->setContentsMargins(4,3,4,3);
+    cornerLayout->setSpacing(2);
 
     QLabel *help = new QLabel(
         "Edit the selected tile's four corner water elevations. "
         "Adjacent values are read-only until synchronized.");
     help->setWordWrap(true);
     help->setStyleSheet("QLabel { color: #c7c7c7; padding: 1px 3px 2px 3px; }");
-    mainLayout->addWidget(help);
+    cornerLayout->addWidget(help);
     
     for(int i = 0; i < 12; i++){
         e[i].setFixedWidth(50);
@@ -82,19 +79,26 @@ TerrainWaterWindow2::TerrainWaterWindow2(QWidget* parent)
     vlist1->addWidget(&e[10], 6, 4);
     vlist1->addWidget(&e[11], 6, 6);
     QPushButton *bAdjust = new QPushButton("Adjust Adjacent Tiles");
+    GuiFunct::styleEditorActionButton(bAdjust);
     bAdjust->setToolTip("Copies this tile's corner water elevations to the adjoining tiles.");
     connect(bAdjust, SIGNAL (released()), this, SLOT (bAdjustEdited()));
     vlist1->addWidget(bAdjust, 7, 0, 1, 7);
-    mainLayout->addLayout(vlist1);
+    cornerLayout->addLayout(vlist1);
+    mainLayout->addWidget(cornerCard);
 
     addPopupSubtitle(QString::fromUtf8("• Automatic Water"));
+    QFrame *automaticCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(automaticCard);
+    QVBoxLayout *automaticLayout = new QVBoxLayout(automaticCard);
+    automaticLayout->setContentsMargins(4,3,4,3);
+    automaticLayout->setSpacing(2);
     QLabel *autoHelp = new QLabel(
         "Trace the watercourse bottom with one blue ruler, then scan outward "
         "to raised terrain. The tile limit prevents the scan escaping "
         "into unrelated low ground.");
     autoHelp->setWordWrap(true);
     autoHelp->setStyleSheet("QLabel { color: #c7c7c7; padding: 1px 3px 2px 3px; }");
-    mainLayout->addWidget(autoHelp);
+    automaticLayout->addWidget(autoHelp);
 
     waterHeight.setDecimals(2);
     waterHeight.setRange(0.01, 100.0);
@@ -111,9 +115,11 @@ TerrainWaterWindow2::TerrainWaterWindow2(QWidget* parent)
         "A value of 1 includes the ruler tiles plus one neighboring tile in every direction.");
     QFormLayout *autoForm = new QFormLayout;
     autoForm->setContentsMargins(3,0,3,0);
+    autoForm->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    autoForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     autoForm->addRow("Above bed:", &waterHeight);
     autoForm->addRow("Scan distance:", &searchDistance);
-    mainLayout->addLayout(autoForm);
+    automaticLayout->addLayout(autoForm);
 
     QGridLayout *autoButtons = new QGridLayout;
     autoButtons->setContentsMargins(3,0,3,0);
@@ -121,6 +127,9 @@ TerrainWaterWindow2::TerrainWaterWindow2(QWidget* parent)
     placeRulerButton->setCheckable(true);
     QPushButton *processWaterTiles = new QPushButton("Process Water Tiles");
     QPushButton *undoScan = new QPushButton("Undo Last");
+    GuiFunct::styleEditorActionButton(placeRulerButton);
+    GuiFunct::styleEditorActionButton(processWaterTiles);
+    GuiFunct::styleEditorActionButton(undoScan);
     placeRulerButton->setToolTip(
         "Toggle on to clear any previous ruler and place points along the watercourse bottom. "
         "Toggle off to remove the ruler and leave generated water in place.");
@@ -131,7 +140,8 @@ TerrainWaterWindow2::TerrainWaterWindow2(QWidget* parent)
     autoButtons->addWidget(placeRulerButton, 0, 0, 1, 2);
     autoButtons->addWidget(processWaterTiles, 1, 0, 1, 2);
     autoButtons->addWidget(undoScan, 2, 0, 1, 2);
-    mainLayout->addLayout(autoButtons);
+    automaticLayout->addLayout(autoButtons);
+    mainLayout->addWidget(automaticCard);
 
     connect(placeRulerButton, &QPushButton::clicked, this, [this](bool checked){
         if(checked)
@@ -175,10 +185,6 @@ void TerrainWaterWindow2::setTerrain(Terrain* t){
         return;
     
     terrain = t;
-    tileIdentifier.setText(QString("%1, %2")
-                           .arg(terrain->mojex)
-                           .arg(-terrain->mojez));
-    
     eAvg.setText(QString::number(terrain->getAvgVaterLevel()));
     float waterLevels[4];
     terrain->getWaterLevels(waterLevels);

@@ -35,7 +35,6 @@
 #include "NaviBox.h"
 #include "ShapeViewWindow.h"
 #include "AboutWindow.h"
-#include "SoundManager.h"
 #include "PropertiesAbstract.h"
 #include "PropertiesUndefined.h"
 #include "PropertiesStatic.h"
@@ -81,7 +80,7 @@
 #include "PolyVegHelper.h"
 
 static int scaledUiSize(int base){
-    return qRound(base * qMax(1.0f, Game::uiScale));
+    return qRound(base * qBound(0.75f, Game::uiScale, 1.25f));
 }
 
 static void tuneScaledPanel(QWidget *panel){
@@ -162,6 +161,7 @@ RouteEditorWindow::RouteEditorWindow() {
 
     objTools = new ObjTools("ObjTools");
     terrainTools = new TerrainTools("TerrainTools");
+    terrainTextureTools = terrainTools->texturePanel();
     geoTools = new GeoTools("GeoTools");
     activityTools = new ActivityTools("ActivityTools");
     activityBuilderWindow = new ActivityBuilderWindow(activityTools, this);
@@ -194,6 +194,8 @@ RouteEditorWindow::RouteEditorWindow() {
                      glWidget, &RouteEditorGLWidget::jumpNextPolyVegBakeTile);
     QObject::connect(polyVegHelper, &PolyVegHelper::resetBakeJumpRequested,
                      glWidget, &RouteEditorGLWidget::resetPolyVegBakeJump);
+    QObject::connect(polyVegHelper, &PolyVegHelper::toggleMapTilesRequested,
+                     glWidget, &RouteEditorGLWidget::toggleRouteMapOverlays);
     QObject::connect(glWidget, &RouteEditorGLWidget::polyVegHelperRequested,
                      this, [this](){ showPolyVegHelper(true); });
     QObject::connect(glWidget, &RouteEditorGLWidget::polyVegTileCounts,
@@ -247,14 +249,15 @@ RouteEditorWindow::RouteEditorWindow() {
     box->setFixedWidth(scaledUiSize(250));
     box->setWindowTitle("Tools Window");
     box2->setWindowFilePath("Properties Window");
-    box2->setMaximumWidth(scaledUiSize(190));
-    box2->setMinimumWidth(scaledUiSize(190));
+    box2->setMaximumWidth(scaledUiSize(220));
+    box2->setMinimumWidth(scaledUiSize(220));
 
     // Make the embedded-panel ownership and Qt::Widget type explicit before
     // layout. This prevents future window-style changes from treating these
     // panels as independent native surfaces.
     objTools->setParent(box, Qt::Widget);
     terrainTools->setParent(box, Qt::Widget);
+    terrainTextureTools->setParent(box, Qt::Widget);
     geoTools->setParent(box, Qt::Widget);
     foreach(PropertiesAbstract *propertyPanel, objProperties){
         if(propertyPanel != NULL)
@@ -269,6 +272,7 @@ RouteEditorWindow::RouteEditorWindow() {
     mainLayout2->setContentsMargins(0,0,0,0);
     mainLayout2->addWidget(objTools);
     mainLayout2->addWidget(terrainTools);
+    mainLayout2->addWidget(terrainTextureTools);
     mainLayout2->addWidget(geoTools);
     //mainLayout2->addWidget(naviBox);
     //mainLayout2->setAlignment(naviBox, Qt::AlignBottom);
@@ -300,6 +304,8 @@ RouteEditorWindow::RouteEditorWindow() {
     PropertiesTrackObj *trackProperties =
         qobject_cast<PropertiesTrackObj*>(objProperties["TrackObj"]);
     if(terrainProperties != NULL){
+        QObject::connect(glWidget, &RouteEditorGLWidget::naviInfo,
+                         terrainProperties, &PropertiesTerrain::naviInfo);
         QObject::connect(glWidget, &RouteEditorGLWidget::waterRulerPlacementRequested,
                          terrainProperties, &PropertiesTerrain::startWaterRuler);
         QObject::connect(terrainProperties, &PropertiesTerrain::placeWaterRulerRequested,
@@ -319,6 +325,12 @@ RouteEditorWindow::RouteEditorWindow() {
         qobject_cast<PropertiesStatic*>(objProperties["Static"]);
     if(staticProperties != NULL && trackProperties != NULL){
         QObject::connect(staticProperties, &PropertiesStatic::hacksToggled,
+                         trackProperties, &PropertiesTrackObj::toggleHacksForSelection);
+    }
+    PropertiesSignal *signalProperties =
+        qobject_cast<PropertiesSignal*>(objProperties["Signal"]);
+    if(signalProperties != NULL && trackProperties != NULL){
+        QObject::connect(signalProperties, &PropertiesSignal::hacksToggled,
                          trackProperties, &PropertiesTrackObj::toggleHacksForSelection);
     }
     if(trackProperties != NULL){
@@ -352,6 +364,43 @@ RouteEditorWindow::RouteEditorWindow() {
     mainLayout->setContentsMargins(0,0,0,0);
     
     this->setCentralWidget(remain);
+    autoPlacementDock = new QDockWidget(tr("AUTO PLACE"), this);
+    autoPlacementDock->setObjectName("autoPlacementDock");
+    autoPlacementDock->setAllowedAreas(Qt::RightDockWidgetArea);
+    autoPlacementDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    QWidget *autoPlacementDockTitle = new QWidget(autoPlacementDock);
+    autoPlacementDockTitle->setFixedHeight(0);
+    autoPlacementDock->setTitleBarWidget(autoPlacementDockTitle);
+    autoPlacementDock->setFixedWidth(scaledUiSize(350));
+    QScrollArea *autoPlacementScroll = new QScrollArea(autoPlacementDock);
+    autoPlacementScroll->setObjectName("autoPlacementScroll");
+    autoPlacementScroll->setWidgetResizable(true);
+    autoPlacementScroll->setFrameShape(QFrame::NoFrame);
+    autoPlacementScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    autoPlacementScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    QWidget *autoPlacementPanel = objTools->autoPlacementPanel();
+    autoPlacementPanel->setParent(autoPlacementScroll, Qt::Widget);
+    autoPlacementScroll->setWidget(autoPlacementPanel);
+    autoPlacementDock->setWidget(autoPlacementScroll);
+    addDockWidget(Qt::RightDockWidgetArea, autoPlacementDock);
+    autoPlacementDock->hide();
+    QObject::connect(autoPlacementDock, &QDockWidget::visibilityChanged,
+                     this, [this](bool visible){
+        if(visible){
+            if(polyVegDock != NULL && polyVegDock->isVisible())
+                polyVegDock->hide();
+            if(box != NULL)
+                box->hide();
+            if(activityBuilderWindow != NULL && activityBuilderWindow->isVisible())
+                activityBuilderWindow->hide();
+        }
+        if(autoPlacementAction != NULL){
+            const QSignalBlocker blocker(autoPlacementAction);
+            autoPlacementAction->setChecked(visible);
+        }
+        objTools->autoPlacementPanelVisibilityChanged(visible);
+    });
+
     polyVegDock = new QDockWidget(tr("POLYVEG PLANTER"), this);
     polyVegDock->setObjectName("polyVegDock");
     polyVegDock->setAllowedAreas(Qt::RightDockWidgetArea);
@@ -359,11 +408,13 @@ RouteEditorWindow::RouteEditorWindow() {
     QWidget *polyVegDockTitle = new QWidget(polyVegDock);
     polyVegDockTitle->setFixedHeight(0);
     polyVegDock->setTitleBarWidget(polyVegDockTitle);
-    polyVegDock->setMinimumWidth(scaledUiSize(350));
+    polyVegDock->setFixedWidth(scaledUiSize(350));
     QScrollArea *polyVegScroll = new QScrollArea(polyVegDock);
     polyVegScroll->setObjectName("polyVegScroll");
     polyVegScroll->setWidgetResizable(true);
     polyVegScroll->setFrameShape(QFrame::NoFrame);
+    polyVegScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    polyVegScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     polyVegHelper->setParent(polyVegScroll, Qt::Widget);
     polyVegScroll->setWidget(polyVegHelper);
     polyVegDock->setWidget(polyVegScroll);
@@ -374,12 +425,12 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(polyVegDock, &QDockWidget::visibilityChanged,
                      this, [this](bool visible){
         if(visible){
-            polyVegToolsPanelWasVisible = box != NULL && box->isVisible();
+            if(autoPlacementDock != NULL && autoPlacementDock->isVisible())
+                autoPlacementDock->hide();
             if(box != NULL)
                 box->hide();
-        } else if(polyVegToolsPanelWasVisible && box != NULL) {
-            box->show();
-            polyVegToolsPanelWasVisible = false;
+            if(activityBuilderWindow != NULL && activityBuilderWindow->isVisible())
+                activityBuilderWindow->hide();
         }
         if(polyVegHelperAction != NULL){
             const QSignalBlocker blocker(polyVegHelperAction);
@@ -393,7 +444,7 @@ RouteEditorWindow::RouteEditorWindow() {
     setWindowTitle(Game::AppName+" "+Game::AppVersion+" Route Editor");
     QFont menuFont = menuBar()->font();
     if(menuFont.pointSizeF() > 0)
-        menuFont.setPointSizeF(menuFont.pointSizeF() * qMax(1.0f, Game::uiScale));
+        menuFont.setPointSizeF(menuFont.pointSizeF() * qBound(0.75f, Game::uiScale, 1.25f));
     menuBar()->setFont(menuFont);
     menuBar()->setStyleSheet(QString("QMenuBar::item { padding: %1px %2px; } "
                                      "QMenu::item { padding: %1px %3px; min-height: %4px; } "
@@ -543,73 +594,58 @@ RouteEditorWindow::RouteEditorWindow() {
     // Tools
     toolsMenu = menuBar()->addMenu(tr("&Tools"));
     propertiesAction = GuiFunct::newMenuCheckAction(tr("&Properties"), this); 
-    propertiesAction->setShortcut(QKeySequence("F5"));            
+    propertiesAction->setShortcut(QKeySequence("Shift+F1"));
     toolsMenu->addAction(propertiesAction);
     QObject::connect(propertiesAction, SIGNAL(triggered(bool)), this, SLOT(hideShowPropertiesWidget(bool)));
 
     statAction = GuiFunct::newMenuCheckAction(tr("Control &Panel"), this, false); 
-    statAction->setShortcut(QKeySequence("F7"));
+    statAction->setShortcut(QKeySequence("Ctrl+F1"));
     toolsMenu->addAction(statAction);
     QObject::connect(statAction, SIGNAL(triggered(bool)), this, SLOT(hideShowStatWidget(bool)));
     
     settingsAction = GuiFunct::newMenuCheckAction(tr("S&ettings Window"), this, false); 
     settingsAction->setShortcut(QKeySequence("F12"));
+    settingsAction->setShortcutContext(Qt::ApplicationShortcut);
+    settingsAction->setToolTip(tr("Settings (F12)"));
     toolsMenu->addAction(settingsAction);
     QObject::connect(settingsAction, SIGNAL(triggered(bool)), this, SLOT(hideShowSettingsDialog(bool)));
     QObject::connect(settingsDialog, &QDialog::finished, this, [this](int){
         settingsAction->setChecked(false);
     });
-    
-    
-    
+
+    errorViewAction = GuiFunct::newMenuCheckAction(tr("Errors && Messages"), this, false);
+    errorViewAction->setShortcut(QKeySequence("F11"));
+    errorViewAction->setToolTip(tr("Errors & Messages (F11)"));
+    toolsMenu->addAction(errorViewAction);
+    QObject::connect(errorViewAction, SIGNAL(triggered(bool)), this, SLOT(hideShowErrorMsgWidget(bool)));
+
     shapeViewAction = GuiFunct::newMenuCheckAction(tr("&Shape View Window"), this, false); 
     toolsMenu->addAction(shapeViewAction);
     QObject::connect(shapeViewAction, SIGNAL(triggered(bool)), this, SLOT(hideShowShapeViewWidget(bool)));
-    errorViewAction = GuiFunct::newMenuCheckAction(tr("&Errors and Messages"), this, false); 
-    errorViewAction->setShortcut(QKeySequence("F8"));    
-    toolsMenu->addAction(errorViewAction);
-    QObject::connect(errorViewAction, SIGNAL(triggered(bool)), this, SLOT(hideShowErrorMsgWidget(bool)));
     toolsMenu->addSeparator();
-    objectsAndTerrainAction = GuiFunct::newMenuCheckAction(tr("O&bjects and Terrain"), this); 
-    toolsMenu->addAction(objectsAndTerrainAction);
-    QObject::connect(objectsAndTerrainAction, SIGNAL(triggered(bool)), this, SLOT(showToolsObjectAndTerrain(bool)));
     objectsAction = GuiFunct::newMenuCheckAction(tr("&Objects"), this); 
     objectsAction->setShortcut(QKeySequence("F1"));
     toolsMenu->addAction(objectsAction);
     QObject::connect(objectsAction, SIGNAL(triggered(bool)), this, SLOT(showToolsObject(bool)));
-    terrainAction = GuiFunct::newMenuCheckAction(tr("&Terrain"), this); 
+    terrainAction = GuiFunct::newMenuCheckAction(tr("Terrain &Mesh"), this);
     terrainAction->setChecked(false);    
     terrainAction->setShortcut(QKeySequence("F2"));
     toolsMenu->addAction(terrainAction);
     QObject::connect(terrainAction, SIGNAL(triggered(bool)), this, SLOT(showToolsTerrain(bool)));
+    terrainTextureAction = GuiFunct::newMenuCheckAction(tr("Terrain &Texture"), this);
+    terrainTextureAction->setChecked(false);
+    terrainTextureAction->setShortcut(QKeySequence("F3"));
+    toolsMenu->addAction(terrainTextureAction);
+    QObject::connect(terrainTextureAction, SIGNAL(triggered(bool)),
+                     this, SLOT(showToolsTerrainTexture(bool)));
     geoAction = GuiFunct::newMenuCheckAction(tr("&Geo"), this); 
     geoAction->setChecked(false);    
-    geoAction->setShortcut(QKeySequence("F3"));
+    geoAction->setShortcut(QKeySequence("F4"));
     toolsMenu->addAction(geoAction);
     QObject::connect(geoAction, SIGNAL(triggered(bool)), this, SLOT(showToolsGeo(bool)));
-    QMenu *polyVegMenu = toolsMenu->addMenu(tr("PolyVeg"));
-    QAction *plantPolyVegAction = polyVegMenu->addAction(tr("Plant PolyVeg"));
-    QObject::connect(plantPolyVegAction, &QAction::triggered,
-                     glWidget, &RouteEditorGLWidget::plantConfiguredPolyVeg);
-    QAction *bakePolyVegAction = polyVegMenu->addAction(tr("Bake PolyVeg Tile"));
-    QObject::connect(bakePolyVegAction, &QAction::triggered,
-                     glWidget, &RouteEditorGLWidget::bakeVegetationPointerTile);
-    QAction *bakeAllPolyVegAction = polyVegMenu->addAction(tr("Bake PolyVeg LOD"));
-    QObject::connect(bakeAllPolyVegAction, &QAction::triggered,
-                     glWidget, &RouteEditorGLWidget::bakeAllVegetation);
-    polyVegHelperAction = polyVegMenu->addAction(tr("PolyVeg Planter"));
-    polyVegHelperAction->setCheckable(true);
-    polyVegHelperAction->setShortcut(QKeySequence("F6"));
-    QObject::connect(polyVegHelperAction, &QAction::toggled,
-                     this, [this](bool visible){
-        if(visible)
-            glWidget->requestPolyVegHelper();
-        else
-            showPolyVegHelper(false);
-    });
     activityAction = GuiFunct::newMenuCheckAction(tr("&Activity"), this); 
-    activityAction->setChecked(false);    
-    activityAction->setShortcut(QKeySequence("F4"));
+    activityAction->setChecked(false);
+    activityAction->setShortcut(QKeySequence("F5"));
     toolsMenu->addAction(activityAction);
     QObject::connect(activityAction, SIGNAL(triggered(bool)), this, SLOT(showToolsActivity(bool)));
     QObject::connect(activityBuilderWindow, SIGNAL(visibilityChanged(bool)),
@@ -620,6 +656,54 @@ RouteEditorWindow::RouteEditorWindow() {
                      glWidget, SLOT(userPlacementSound()));
     QObject::connect(activityBuilderWindow, SIGNAL(userErrorSoundRequested()),
                      glWidget, SLOT(userErrorSound()));
+    autoPlacementAction = GuiFunct::newMenuCheckAction(tr("Auto &Place"), this, false);
+    autoPlacementAction->setShortcut(QKeySequence("F6"));
+    toolsMenu->addAction(autoPlacementAction);
+    QObject::connect(autoPlacementAction, &QAction::toggled,
+                     this, [this](bool visible){
+        if(autoPlacementDock == NULL)
+            return;
+        if(visible){
+            autoPlacementDock->show();
+            autoPlacementDock->raise();
+        } else {
+            autoPlacementDock->hide();
+        }
+    });
+    QObject::connect(autoPlacementAction, &QAction::triggered,
+                     glWidget, &RouteEditorGLWidget::userPanelToggleSound);
+    polyVegHelperAction = GuiFunct::newMenuCheckAction(tr("PolyVeg Planter"), this, false);
+    polyVegHelperAction->setShortcut(QKeySequence("F7"));
+    toolsMenu->addAction(polyVegHelperAction);
+    QObject::connect(polyVegHelperAction, &QAction::toggled,
+                     this, [this](bool visible){
+        if(visible)
+            glWidget->requestPolyVegHelper();
+        else
+            showPolyVegHelper(false);
+    });
+
+    QActionGroup *toolModeActions = new QActionGroup(this);
+    toolModeActions->setExclusionPolicy(QActionGroup::ExclusionPolicy::ExclusiveOptional);
+    toolModeActions->addAction(objectsAction);
+    toolModeActions->addAction(terrainAction);
+    toolModeActions->addAction(terrainTextureAction);
+    toolModeActions->addAction(geoAction);
+    toolModeActions->addAction(activityAction);
+    toolModeActions->addAction(autoPlacementAction);
+    toolModeActions->addAction(polyVegHelperAction);
+
+    toolsMenu->addSeparator();
+    QMenu *polyVegMenu = toolsMenu->addMenu(tr("PolyVeg Actions"));
+    QAction *plantPolyVegAction = polyVegMenu->addAction(tr("Plant PolyVeg"));
+    QObject::connect(plantPolyVegAction, &QAction::triggered,
+                     glWidget, &RouteEditorGLWidget::plantConfiguredPolyVeg);
+    QAction *bakePolyVegAction = polyVegMenu->addAction(tr("Bake PolyVeg Tile"));
+    QObject::connect(bakePolyVegAction, &QAction::triggered,
+                     glWidget, &RouteEditorGLWidget::bakeVegetationPointerTile);
+    QAction *bakeAllPolyVegAction = polyVegMenu->addAction(tr("Bake PolyVeg LOD"));
+    QObject::connect(bakeAllPolyVegAction, &QAction::triggered,
+                     glWidget, &RouteEditorGLWidget::bakeAllVegetation);
     // Settings
     terrainCameraAction = GuiFunct::newMenuCheckAction(tr("&Stick Camera To Terrain"), this); 
     terrainCameraAction->setChecked(Game::cameraStickToTerrain);
@@ -654,6 +738,17 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(aboutAction, SIGNAL(triggered()), this, SLOT(about()));
     helpMenu = menuBar()->addMenu(tr("&Help"));
     helpMenu->addAction(aboutAction);
+
+    routeNameLabel = new QLabel(menuBar());
+    routeNameLabel->setText(Game::routeName.trimmed().isEmpty()
+                            ? Game::route : Game::routeName);
+    routeNameLabel->setAlignment(Qt::AlignCenter);
+    routeNameLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+    routeNameLabel->setStyleSheet(
+        "QLabel { color: #707477; background: transparent; font-weight: normal; }");
+    glWidget->installEventFilter(this);
+    menuBar()->installEventFilter(this);
+    QTimer::singleShot(0, this, [this](){ positionRouteNameLabel(); });
     
     hideAllTools();
     objTools->show();
@@ -666,15 +761,6 @@ RouteEditorWindow::RouteEditorWindow() {
     } else {
         //box->show();
         //box2->show();
-    }
-    
-    if(Game::playerMode){
-        statusWindow->hide();
-        errorMessagesWindow->hide();
-        box->hide();
-        box2->hide();
-        menuBar()->hide();
-        this->viewToggleAll();
     }
     
     if(Game::serverClient != NULL){
@@ -711,9 +797,6 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(glWidget, SIGNAL(sendMsg(QString, int)), shapeViewWindow, SLOT(msg(QString, int)));
     QObject::connect(glWidget, SIGNAL(sendMsg(QString, float)), shapeViewWindow, SLOT(msg(QString, float)));
     QObject::connect(glWidget, SIGNAL(sendMsg(QString, QString)), shapeViewWindow, SLOT(msg(QString, QString)));
-    
-    QObject::connect(glWidget, SIGNAL(naviInfo(int, int)),
-                      statusWindow, SLOT(naviInfo(int, int)));
     
     QObject::connect(glWidget, SIGNAL(posInfo(PreciseTileCoordinate*)),
                       statusWindow, SLOT(posInfo(PreciseTileCoordinate*)));
@@ -823,6 +906,7 @@ RouteEditorWindow::RouteEditorWindow() {
     // unaffected.
     restoreEditorFocusAfterButtons(objTools, glWidget);
     restoreEditorFocusAfterButtons(terrainTools, glWidget);
+    restoreEditorFocusAfterButtons(terrainTextureTools, glWidget);
     restoreEditorFocusAfterButtons(geoTools, glWidget);
     restoreEditorFocusAfterButtons(box2, glWidget);
     restoreEditorFocusAfterButtons(statusWindow, glWidget);
@@ -834,6 +918,7 @@ RouteEditorWindow::RouteEditorWindow() {
     // already have purpose-specific sound paths. Supply the same user-click
     // sound to panels which historically lacked one, plus the pin buttons.
     addUserClickSoundToButtons(terrainTools, glWidget);
+    addUserClickSoundToButtons(terrainTextureTools, glWidget);
     addUserClickSoundToButtons(geoTools, glWidget);
     addUserClickSoundToButtons(activityBuilderWindow, glWidget);
     addUserClickSoundToButtons(polyVegHelper, glWidget);
@@ -948,9 +1033,14 @@ void RouteEditorWindow::keyPressEvent(QKeyEvent *e) {
 }
 
 void RouteEditorWindow::exitToLoadWindow(){
+    saveLastSession();
     hideRouteSessionWindows();
     hide();
-    emit returnToLoadWindow();
+    // The legacy editor contains reparented tool windows and OpenGL resources
+    // that cannot yet be destroyed safely as one in-process QObject tree.
+    // Restarting lets the OS reclaim that tree and guarantees Main Load begins
+    // with no route, renderer, texture, or compass state from this process.
+    qApp->exit(Game::RestartToMainLoadExitCode);
 }
 
 void RouteEditorWindow::hideRouteSessionWindows(){
@@ -980,12 +1070,10 @@ void RouteEditorWindow::hideRouteSessionWindows(){
 
 void RouteEditorWindow::completeEditorClose(QCloseEvent *event){
     saveLastSession();
-    glWidget->clearRouteSession();
     hideRouteSessionWindows();
-    emit exitNow();
-    emit returnToLoadWindow();
-    event->accept();
-    SoundManager::CloseAl();
+    hide();
+    event->ignore();
+    qApp->exit(Game::RestartToMainLoadExitCode);
 }
 
 void RouteEditorWindow::closeEvent(QCloseEvent * event ){
@@ -1027,8 +1115,35 @@ void RouteEditorWindow::moveEvent(QMoveEvent *event){
         pinPositionTimer.start(240);
 }
 
+bool RouteEditorWindow::eventFilter(QObject *watched, QEvent *event){
+    if((watched == glWidget || watched == menuBar())
+    && (event->type() == QEvent::Resize
+     || event->type() == QEvent::Move
+     || event->type() == QEvent::Show)){
+        QTimer::singleShot(0, this, [this](){ positionRouteNameLabel(); });
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void RouteEditorWindow::positionRouteNameLabel(){
+    if(routeNameLabel == NULL || glWidget == NULL || menuBar() == NULL)
+        return;
+    const int minimumWidth = scaledUiSize(180);
+    const int preferredWidth = routeNameLabel->sizeHint().width() + scaledUiSize(36);
+    const int labelWidth = qMin(menuBar()->width(),
+                                qMax(minimumWidth,
+                                     qMin(scaledUiSize(520), preferredWidth)));
+    const QPoint viewportCenter = glWidget->mapTo(
+        menuBar(), QPoint(glWidget->width() / 2, 0));
+    const int left = qBound(0, viewportCenter.x() - labelWidth / 2,
+                            qMax(0, menuBar()->width() - labelWidth));
+    routeNameLabel->setGeometry(left, 0, labelWidth, menuBar()->height());
+    routeNameLabel->raise();
+}
+
 void RouteEditorWindow::resizeEvent(QResizeEvent *event){
     QMainWindow::resizeEvent(event);
+    positionRouteNameLabel();
     if(pinMainWindowAction != NULL && pinMainWindowAction->isChecked() && !applyingWindowPosition)
         pinPositionTimer.start(240);
 }
@@ -1415,19 +1530,6 @@ void RouteEditorWindow::showToolsObject(bool show){
     }
 }
 
-void RouteEditorWindow::showToolsObjectAndTerrain(bool show){
-    if(show){
-        hideShowToolWidget(true);
-        hideAllTools();
-        objTools->show();
-        objectsAndTerrainAction->setChecked(true);
-        terrainTools->show();
-        box->setFixedWidth(scaledUiSize(500));
-    } else {
-        hideShowToolWidget(false);
-    }
-}
-
 void RouteEditorWindow::showToolsTerrain(bool show){
     if(show){
         hideShowToolWidget(true);
@@ -1488,6 +1590,11 @@ void RouteEditorWindow::setToolbox(QString name){
         terrainTools->show();
         terrainAction->setChecked(true);       
     }
+    if(name == "terrainTextureTools"){
+        hideAllTools();
+        terrainTextureTools->show();
+        terrainTextureAction->setChecked(true);
+    }
     if(name == "geoTools"){
         hideAllTools();
         geoTools->show();
@@ -1499,14 +1606,28 @@ void RouteEditorWindow::setToolbox(QString name){
 }
 
 void RouteEditorWindow::hideAllTools(){
+    if(autoPlacementDock != NULL)
+        autoPlacementDock->hide();
+    if(polyVegDock != NULL)
+        polyVegDock->hide();
     objTools->hide();
     terrainTools->hide();
+    terrainTextureTools->hide();
     geoTools->hide();
     objectsAction->setChecked(false);
     terrainAction->setChecked(false);     
+    terrainTextureAction->setChecked(false);
     geoAction->setChecked(false);
-    objectsAndTerrainAction->setChecked(false);
     box->setFixedWidth(scaledUiSize(250));
+}
+
+void RouteEditorWindow::showToolsTerrainTexture(bool show){
+    if(show){
+        hideShowToolWidget(true);
+        setToolbox("terrainTextureTools");
+    } else {
+        hideShowToolWidget(false);
+    }
 }
 
 void RouteEditorWindow::showPolyVegHelper(bool show){
@@ -1541,14 +1662,19 @@ void RouteEditorWindow::showProperties(GameObj* obj){
                 qobject_cast<PropertiesStatic*>(objProperties["Static"]);
             PropertiesTerrain *terrainProperties =
                 qobject_cast<PropertiesTerrain*>(objProperties["Terrain"]);
+            PropertiesSignal *signalProperties =
+                qobject_cast<PropertiesSignal*>(objProperties["Signal"]);
             if(staticProperties != NULL && staticProperties->support(obj))
                 visibleHacksButton = staticProperties->hacksButton();
             else if(terrainProperties != NULL && terrainProperties->support(obj))
                 visibleHacksButton = terrainProperties->hacksButton();
+            else if(signalProperties != NULL && signalProperties->support(obj))
+                visibleHacksButton = signalProperties->hacksButton();
         }
         trackProperties->adoptHacksButton(visibleHacksButton);
     }
     if(obj == NULL){
+        EditorPopupWindow::closeActiveUnlessSupportedBy(NULL);
         propertiesPanelTitle->hide();
         return;
     }
@@ -1562,8 +1688,10 @@ void RouteEditorWindow::showProperties(GameObj* obj){
         if(!it->support(obj)) continue;
         it->showObj(obj);
         it->show();
+        EditorPopupWindow::closeActiveUnlessSupportedBy(it);
         return;
     }
+    EditorPopupWindow::closeActiveUnlessSupportedBy(NULL);
 }
 
 void RouteEditorWindow::updateProperties(GameObj* obj){
@@ -1620,6 +1748,10 @@ void RouteEditorWindow::hideShowSettingsDialog(bool show){
 
 void RouteEditorWindow::hideShowToolWidget(bool show){
     if(show) {
+        if(activityBuilderWindow != NULL && activityBuilderWindow->isVisible())
+            activityBuilderWindow->hide();
+        if(autoPlacementDock != NULL && autoPlacementDock->isVisible())
+            autoPlacementDock->hide();
         if(polyVegDock != NULL && polyVegDock->isVisible())
             polyVegDock->hide();
         box->show();
@@ -1686,7 +1818,6 @@ void RouteEditorWindow::showRoute(){
     if(Game::serverClient == NULL){
         if(!glWidget->initRoute()){
             emit exitNow();
-            SoundManager::CloseAl();
             qApp->quit();
             return;
         }
@@ -1699,41 +1830,33 @@ void RouteEditorWindow::showRoute(){
 
 // EFO Move windows
 void RouteEditorWindow::show(){
-    const bool showControlPanel = !Game::playerMode;
-    
     if(Game::lockCamera == true) emit updStatus(QString("camera"),QString("Camera Locked")); else emit updStatus(QString("camera"),QString("Camera Unlocked"));
     
     QMainWindow::show();
     applyRestoredSessionGeometry();
 
-    if(!Game::playerMode){
-        QStringList winPos = Game::statusPos.split(",");
-        QPoint pinnedControlPosition;
-        const bool controlPositionPinned =
-                Game::pinnedWindowPosition("controlPanel", &pinnedControlPosition);
-        const bool controlDefaultRequested =
-                Game::pinnedWindowPosition("controlPanelUseDefault", NULL);
+    QStringList winPos = Game::statusPos.split(",");
+    QPoint pinnedControlPosition;
+    const bool controlPositionPinned =
+            Game::pinnedWindowPosition("controlPanel", &pinnedControlPosition);
+    const bool controlDefaultRequested =
+            Game::pinnedWindowPosition("controlPanelUseDefault", NULL);
 
-        if(!controlPositionPinned && (controlDefaultRequested || winPos.count() < 2)){
-            const int naviTemp1 = this->x() - statusWindow->width();
-            const int naviTemp2 = this->y() + 200;
-            statusWindow->move(
-                std::max(0, naviTemp1),
-                std::min(naviTemp2,
-                         QApplication::primaryScreen()->geometry().bottom()
-                         - statusWindow->height()));
-        }
-
-        if(showControlPanel){
-            // A Qt::Tool child shown before its parent can remain logically
-            // checked but invisible. Show it only after Main is live.
-            statusWindow->show();
-            statusWindow->raise();
-        } else {
-            statusWindow->hide();
-        }
-        statAction->setChecked(showControlPanel);
+    if(!controlPositionPinned && (controlDefaultRequested || winPos.count() < 2)){
+        const int naviTemp1 = this->x() - statusWindow->width();
+        const int naviTemp2 = this->y() + 200;
+        statusWindow->move(
+            std::max(0, naviTemp1),
+            std::min(naviTemp2,
+                     QApplication::primaryScreen()->geometry().bottom()
+                     - statusWindow->height()));
     }
+
+    // A Qt::Tool child shown before its parent can remain logically checked
+    // but invisible. Show it only after Main is live.
+    statusWindow->show();
+    statusWindow->raise();
+    statAction->setChecked(true);
 }
 
 void RouteEditorWindow::statusWindowClosed(){

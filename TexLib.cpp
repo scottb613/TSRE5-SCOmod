@@ -57,11 +57,6 @@ QString TexLib::resolveTexturePath(const QStringList &basePaths, const QString &
     return QDir::cleanPath(basePaths.first() + "/" + fileName).replace("\\", "/");
 }
 
-void TexLib::reset() {
-    jesttextur = 0;
-    mtex.clear();
-}
-
 void TexLib::enableTexture(int id){
     Texture* tex = mtex[id];
     if(tex != NULL)
@@ -114,6 +109,39 @@ void TexLib::releaseMapTexture(int texx) {
     texture->imageData = NULL;
     mtex.erase(entry);
     delete texture;
+}
+
+bool TexLib::releaseAllMapTextures() {
+    QOpenGLContext *context = QOpenGLContext::currentContext();
+    bool allReleased = true;
+
+    for(auto entry = mtex.begin(); entry != mtex.end(); ){
+        Texture *texture = entry->second;
+        if(texture == NULL
+                || !texture->pathid.endsWith(":maptex", Qt::CaseInsensitive)){
+            ++entry;
+            continue;
+        }
+
+        // A live GL texture can only be destroyed while a context is current.
+        // Leave it registered so the render-time purge can retry next frame.
+        if(texture->glLoaded && texture->tex != NULL && context == NULL){
+            allReleased = false;
+            ++entry;
+            continue;
+        }
+
+        if(texture->glLoaded && texture->tex != NULL)
+            context->functions()->glDeleteTextures(1, texture->tex);
+        delete[] texture->tex;
+        texture->tex = NULL;
+        delete[] texture->imageData;
+        texture->imageData = NULL;
+        delete texture;
+        entry = mtex.erase(entry);
+    }
+
+    return allReleased;
 }
 
 void TexLib::addRef(int texx) {

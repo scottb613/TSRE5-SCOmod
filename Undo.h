@@ -21,9 +21,10 @@ class Terrain;
 struct UndoState {
     ~UndoState();
     struct TerrainData {
-        int x;
-        int z;
-        float data[257*257];
+        int x = 0;
+        int z = 0;
+        int samples = 0;
+        QVector<float> data;
     };
     struct WorldObjInfo {
         WorldObj * obj;

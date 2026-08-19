@@ -210,6 +210,84 @@ void ShapeViewerGLWidget::paintGL() {
         Mat4::rotate(gluu->mvMatrix, gluu->mvMatrix, rotZ, 0,0,1);
 
     }
+
+    if(selection && renderItem == 3 && con != NULL){
+        // The consist is a one-dimensional roster. Build each unit's hit zone
+        // from the same positions, lengths, camera and projection used for the
+        // visible render. This avoids a second color-render/readback pass whose
+        // alignment can drift progressively along a long consist.
+        float consistProjection[16];
+        Mat4::multiply(consistProjection, gluu->pMatrix, gluu->mvMatrix);
+        const auto projectToWidget = [this, &consistProjection](
+                                      float y, float z,
+                                      QPointF &screenPoint) {
+            const float *matrix = consistProjection;
+            const float clipX = matrix[4] * y + matrix[8] * z + matrix[12];
+            const float clipY = matrix[5] * y + matrix[9] * z + matrix[13];
+            const float clipW = matrix[7] * y + matrix[11] * z + matrix[15];
+            if(clipW <= 0.00001f)
+                return false;
+
+            screenPoint.setX((clipX / clipW + 1.0f) * 0.5f * width());
+            screenPoint.setY((1.0f - clipY / clipW) * 0.5f * height());
+            return true;
+        };
+
+        int selectedUnit = -1;
+        qreal closestCenter = width() + 1.0;
+        for(int i = 0; i < con->engItems.size(); ++i){
+            const Consist::EngItem &item = con->engItems[i];
+            const float unitLength = qMax(1.0f, item.previewWidth);
+            float unitHeight = 4.5f;
+            if(Game::currentEngLib != NULL){
+                const auto engIt = Game::currentEngLib->eng.find(item.eng);
+                if(!item.previewMissing
+                        && engIt != Game::currentEngLib->eng.end()
+                        && engIt->second != NULL
+                        && engIt->second->sizey > 0.0f)
+                    unitHeight = engIt->second->sizey;
+            }
+
+            QPointF firstEnd;
+            QPointF secondEnd;
+            QPointF bottom;
+            QPointF top;
+            QPointF center;
+            const float centerY = unitHeight * 0.5f;
+            if(!projectToWidget(centerY, item.pos - unitLength * 0.5f,
+                                firstEnd)
+                    || !projectToWidget(centerY,
+                                        item.pos + unitLength * 0.5f,
+                                        secondEnd)
+                    || !projectToWidget(-0.25f, item.pos, bottom)
+                    || !projectToWidget(unitHeight + 0.25f, item.pos, top)
+                    || !projectToWidget(centerY, item.pos, center))
+                continue;
+
+            constexpr qreal hitTolerance = 3.0;
+            const qreal left = qMin(firstEnd.x(), secondEnd.x())
+                    - hitTolerance;
+            const qreal right = qMax(firstEnd.x(), secondEnd.x())
+                    + hitTolerance;
+            const qreal upper = qMin(bottom.y(), top.y()) - hitTolerance;
+            const qreal lower = qMax(bottom.y(), top.y()) + hitTolerance;
+            if(mousex < left || mousex > right
+                    || mousey < upper || mousey > lower)
+                continue;
+
+            const qreal centerDistance = qAbs(mousex - center.x());
+            if(centerDistance < closestCenter){
+                closestCenter = centerDistance;
+                selectedUnit = i;
+            }
+        }
+
+        selection = false;
+        if(selectedUnit >= 0){
+            con->select(selectedUnit);
+            emit selected(selectedUnit);
+        }
+    }
     gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
     
     if(renderItem == 2 && eng != NULL){
@@ -246,35 +324,6 @@ void ShapeViewerGLWidget::paintGL() {
         }
     }
 
-    if (selection) {
-        int x = mousex;
-        int y = mousey;
-
-        float winZ[4];
-
-        int viewport[4];
-        float mvmatrix[16];
-        float projmatrix[16];
-
-        glGetIntegerv(GL_VIEWPORT, viewport);
-        glGetFloatv(GL_MODELVIEW_MATRIX, mvmatrix);
-        glGetFloatv(GL_PROJECTION_MATRIX, projmatrix);
-        int realy = viewport[3] - (int) y - 1;
-        glReadPixels(x, realy, 1, 1, GL_RGBA, GL_FLOAT, &winZ);
-        
-        //qDebug() << winZ[0] << " " << winZ[1] << " " << winZ[2] << " " << winZ[3];
-        //int colorHash = (int)(winZ[0]*255)*256*256 + (int)(winZ[1]*255)*256 + (int)(winZ[2]*255);
-        //qDebug() << colorHash;
-        int isSelection = (int)(winZ[0]*255);
-        if(isSelection == 1 && renderItem == 3 && con != NULL){
-            con->select((int)(winZ[1]*255)*256 + (int)(winZ[2]*255));
-            emit selected((int)(winZ[1]*255)*256 + (int)(winZ[2]*255));
-        }
-        
-        selection = !selection;
-        paintGL();
-    }
-    
     if(getImage){
         qDebug() << "get image";
         if(screenShot != NULL)
@@ -341,10 +390,10 @@ void ShapeViewerGLWidget::keyReleaseEvent(QKeyEvent * event) {
 
 void ShapeViewerGLWidget::mousePressEvent(QMouseEvent *event) {
     m_lastPos = event->position().toPoint();
-    mousex = event->position().x()*Game::PixelRatio;
-    mousey = event->position().y()*Game::PixelRatio;
+    mousex = m_lastPos.x();
+    mousey = m_lastPos.y();
     mousePressed = true;
-    selection = true;
+    selection = renderItem == 3 && con != NULL;
     if(event->button() == Qt::RightButton)
         mouseRPressed = true;
     if(event->button() == Qt::LeftButton)
@@ -371,8 +420,8 @@ void ShapeViewerGLWidget::mouseReleaseEvent(QMouseEvent* event) {
 
 void ShapeViewerGLWidget::mouseMoveEvent(QMouseEvent *event) {
     const QPoint currentPos = event->position().toPoint();
-    mousex = event->position().x()*Game::PixelRatio;
-    mousey = event->position().y()*Game::PixelRatio;
+    mousex = currentPos.x();
+    mousey = currentPos.y();
     
     if(mode == "rot"){
         if (mousePressed) {

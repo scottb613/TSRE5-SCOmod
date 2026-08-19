@@ -24,6 +24,7 @@ class ObjTools : public QWidget{
 public:
     ObjTools(QString name);
     virtual ~ObjTools();
+    QWidget *autoPlacementPanel() const;
     
 public slots:
     void routeLoaded(Route * a);
@@ -50,8 +51,7 @@ public slots:
     void autoPlacementOffsetEnabled(QString val);
     void autoSnapableRadiusEnabled(QString val);
     void chSnapableOnlyRotation(int val);
-    void autoPlacementHelperEnabled(bool val);
-    void autoPlacementWindowClosed();
+    void autoPlacementPanelVisibilityChanged(bool visible);
 
     void showLastItemsContextMenu(QPoint val);
     void lastItemsMenuFindSimilar();
@@ -90,7 +90,6 @@ private:
     QComboBox refOther;
     QPushButton resetSearchButton;
     QPushButton clearRecentButton;
-    QPushButton autoPlacementHelperButton;
     Ref::RefItem itemRef;
     std::deque<Ref::RefItem*> lastItemsPtr;
     QVector<Ref::RefItem*> currentItemList;
@@ -103,7 +102,7 @@ private:
     //QPushButton *autoPlacementButton;
     QMap<QString, QPushButton*> buttonTools;
     
-    QWidget advancedPlacementWidget;
+    QFrame advancedPlacementWidget;
     QLineEdit autoPlacementPosX;
     QLineEdit autoPlacementPosY;
     QLineEdit autoPlacementPosZ;

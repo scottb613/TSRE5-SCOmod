@@ -29,7 +29,7 @@
 #include <QStringConverter>
 
 static int scaledUiSize(int base){
-    return qRound(base * qMax(1.0f, Game::uiScale));
+    return qRound(base * qBound(0.75f, Game::uiScale, 1.25f));
 }
 
 ActivityTools::ActivityTools(QString name)
@@ -78,10 +78,24 @@ ActivityTools::ActivityTools(QString name)
     auto addRule = [vbox]() {
         vbox->addSpacing(scaledUiSize(5));
     };
+    auto addSectionCard = [this, vbox]() {
+        QFrame *card = new QFrame(this);
+        GuiFunct::styleEditorPanelCard(card);
+        QVBoxLayout *layout = new QVBoxLayout(card);
+        layout->setSpacing(3);
+        layout->setContentsMargins(4,3,4,3);
+        vbox->addWidget(card);
+        return layout;
+    };
     QLabel *label = new QLabel("PATH EDITOR");
     GuiFunct::styleEditorTitle(label);
     vbox->addWidget(label);
-    vbox->addWidget(&cPath);
+    QFrame *pathEditorCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(pathEditorCard);
+    QVBoxLayout *pathEditorCardLayout = new QVBoxLayout(pathEditorCard);
+    pathEditorCardLayout->setSpacing(3);
+    pathEditorCardLayout->setContentsMargins(4,4,4,4);
+    pathEditorCardLayout->addWidget(&cPath);
     cPath.setEditable(true);
     cPath.setInsertPolicy(QComboBox::NoInsert);
     cPath.lineEdit()->setReadOnly(true);
@@ -91,13 +105,16 @@ ActivityTools::ActivityTools(QString name)
     cPath.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     vlist1 = new QGridLayout;
     vlist1->setSpacing(2);
-    vlist1->setContentsMargins(0,0,1,0);
+    vlist1->setContentsMargins(0,0,0,0);
     pathNewButton = new QPushButton("New Path");
     pathEditButton = new QPushButton("Edit");
     pathCloneButton = new QPushButton("Clone");
     pathNewButton->setCheckable(true);
     pathEditButton->setCheckable(true);
     pathCloneButton->setCheckable(true);
+    GuiFunct::styleEditorActionButton(pathNewButton);
+    GuiFunct::styleEditorActionButton(pathEditButton);
+    GuiFunct::styleEditorActionButton(pathCloneButton);
     QObject::connect(pathNewButton, &QPushButton::clicked, this, [this](bool checked) {
         if(checked)
             actPathsNewEnabled();
@@ -116,13 +133,15 @@ ActivityTools::ActivityTools(QString name)
         else
             cancelActivePathSession();
     });
-    QPushButton *actPathsDelete = new QPushButton("Delete");
+    QPushButton *actPathsDelete = new QPushButton("Del");
+    GuiFunct::styleEditorActionButton(actPathsDelete);
     QObject::connect(actPathsDelete, SIGNAL(released()), this, SLOT(actPathsDeleteEnabled()));
     vlist1->addWidget(pathNewButton,0,0);
     vlist1->addWidget(pathEditButton,0,1);
     vlist1->addWidget(pathCloneButton,1,0);
     vlist1->addWidget(actPathsDelete,1,1);
-    vbox->addItem(vlist1);
+    pathEditorCardLayout->addLayout(vlist1);
+    vbox->addWidget(pathEditorCard);
 
     vbox->addSpacing(scaledUiSize(19));
     label = new QLabel("ACTIVITY EDITOR");
@@ -134,62 +153,67 @@ ActivityTools::ActivityTools(QString name)
     label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
     label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
-    vbox->addWidget(&actShow);
+    QVBoxLayout *sectionCardLayout = addSectionCard();
+    sectionCardLayout->addWidget(&actShow);
     actShow.setStyleSheet("combobox-popup: 0;");
     actShow.setMaxVisibleItems(35);
     actShow.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    vbox->addWidget(newActButton);
+    sectionCardLayout->addWidget(newActButton);
     
     addRule();
     label = new QLabel("• Player");
     label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
     label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
-    vbox->addWidget(&cService);
+    sectionCardLayout = addSectionCard();
+    sectionCardLayout->addWidget(&cService);
     cService.setStyleSheet("combobox-popup: 0;");
     cService.setMaxVisibleItems(35);
     cService.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     QPushButton *actServiceOpen = new QPushButton("Open Service Editor");
     QObject::connect(actServiceOpen, SIGNAL(released()), this, SLOT(actServiceOpenEnabled()));
-    vbox->addWidget(actServiceOpen);
+    sectionCardLayout->addWidget(actServiceOpen);
     
     addRule();
     label = new QLabel("• Traffic");
     label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
     label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
-    vbox->addWidget(&cTraffic);
+    sectionCardLayout = addSectionCard();
+    sectionCardLayout->addWidget(&cTraffic);
     cTraffic.setStyleSheet("combobox-popup: 0;");
     cTraffic.setMaxVisibleItems(35);
     cTraffic.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     QPushButton *actTrafficOpen = new QPushButton("Open Traffic Editor");
     QObject::connect(actTrafficOpen, SIGNAL(released()), this, SLOT(actTrafficOpenEnabled()));
-    vbox->addWidget(actTrafficOpen);
+    sectionCardLayout->addWidget(actTrafficOpen);
     
     addRule();
     label = new QLabel("• Timetable");
     label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
     label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
+    sectionCardLayout = addSectionCard();
     QPushButton *actTimetableOpen = new QPushButton("Open Timetable Editor");
     QObject::connect(actTimetableOpen, SIGNAL(released()), this, SLOT(actTimetableOpenEnabled()));
-    vbox->addWidget(actTimetableOpen);
+    sectionCardLayout->addWidget(actTimetableOpen);
     
     addRule();
     label = new QLabel("• Activity Objects");
     label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
     label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
-    vbox->addWidget(&consists);
+    sectionCardLayout = addSectionCard();
+    sectionCardLayout->addWidget(&consists);
     consists.setStyleSheet("combobox-popup: 0;");
     consists.setMaxVisibleItems(35);
     consists.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     vlist1 = new QGridLayout;
     vlist1->setSpacing(2);
     vlist1->setContentsMargins(0,0,1,0);
-    QPushButton *actConsistJump = new QPushButton("Jump To");
+    QPushButton *actConsistJump = new QPushButton("Jump");
     QObject::connect(actConsistJump, SIGNAL(released()), this, SLOT(actConsistJumpEnabled()));
-    QPushButton *actConsistDelete = new QPushButton("Delete");
+    QPushButton *actConsistDelete = new QPushButton("Del");
     QObject::connect(actConsistDelete, SIGNAL(released()), this, SLOT(actConsistDeleteEnabled()));
     vlist1->addWidget(actConsistJump,0,0);
     vlist1->addWidget(actConsistDelete,0,1);
@@ -205,85 +229,90 @@ ActivityTools::ActivityTools(QString name)
     QPushButton *conFilesRefresh = new QPushButton("Refresh List");
     QObject::connect(conFilesRefresh, SIGNAL(released()), this, SLOT(conFilesRefreshSelected()));
     vlist1->addWidget(conFilesRefresh,2,1,1,3);
-    vbox->addItem(vlist1);
+    sectionCardLayout->addLayout(vlist1);
     
     addRule();
     label = new QLabel("• Restricted Speed Zones");
     label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
     label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
-    vbox->addWidget(&speedZones);
+    sectionCardLayout = addSectionCard();
+    sectionCardLayout->addWidget(&speedZones);
     speedZones.setStyleSheet("combobox-popup: 0;");
     speedZones.setMaxVisibleItems(35);
     speedZones.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     vlist1 = new QGridLayout;
     vlist1->setSpacing(2);
     vlist1->setContentsMargins(0,0,1,0);
-    QPushButton *actZoneJump = new QPushButton("Jump To");
+    QPushButton *actZoneJump = new QPushButton("Jump");
     QObject::connect(actZoneJump, SIGNAL(released()), this, SLOT(actReducedSpeedZonesEnabled()));
     QObject::connect(buttonTools["actNewSpeedZoneTool"], SIGNAL(toggled(bool)), this, SLOT(actZoneNewToolEnabled(bool)));
-    QPushButton *actZoneDelete = new QPushButton("Delete");
+    QPushButton *actZoneDelete = new QPushButton("Del");
     QObject::connect(actZoneDelete, SIGNAL(released()), this, SLOT(actZoneDeleteEnabled()));
-    QPushButton *actZoneDeleteAll = new QPushButton("Delete All");
+    QPushButton *actZoneDeleteAll = new QPushButton("Del All");
     QObject::connect(actZoneDeleteAll, SIGNAL(released()), this, SLOT(actZoneDeleteAllEnabled()));
     vlist1->addWidget(actZoneJump,0,0);
     vlist1->addWidget(buttonTools["actNewSpeedZoneTool"],0,1);
     vlist1->addWidget(actZoneDelete,0,2);
     vlist1->addWidget(actZoneDeleteAll,0,3);
-    vbox->addItem(vlist1);
+    sectionCardLayout->addLayout(vlist1);
     
     addRule();
     label = new QLabel("• Failed Signals");
     label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
     label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
-    vbox->addWidget(&failedSignals);
+    sectionCardLayout = addSectionCard();
+    sectionCardLayout->addWidget(&failedSignals);
     failedSignals.setStyleSheet("combobox-popup: 0;");
     failedSignals.setMaxVisibleItems(35);
     failedSignals.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     vlist1 = new QGridLayout;
     vlist1->setSpacing(2);
     vlist1->setContentsMargins(0,0,1,0);
-    QPushButton *actFailedSignalJump = new QPushButton("Jump To");
+    QPushButton *actFailedSignalJump = new QPushButton("Jump");
     QObject::connect(actFailedSignalJump, SIGNAL(released()), this, SLOT(actFailedSignalsJumpEnabled()));
     QPushButton *actFailedSignalTool = new QPushButton("Disable");
     QObject::connect(actFailedSignalTool, SIGNAL(released()), this, SLOT(actFailedSignalNewToolEnabled()));
-    QPushButton *actFailedSignalDelete = new QPushButton("Delete");
+    QPushButton *actFailedSignalDelete = new QPushButton("Del");
     QObject::connect(actFailedSignalDelete, SIGNAL(released()), this, SLOT(actFailedSignalDeleteEnabled()));
-    QPushButton *actFailedSignalDeleteAll = new QPushButton("Delete All");
+    QPushButton *actFailedSignalDeleteAll = new QPushButton("Del All");
     QObject::connect(actFailedSignalDeleteAll, SIGNAL(released()), this, SLOT(actFailedSignalDeleteAllEnabled()));
     vlist1->addWidget(actFailedSignalJump,0,0);
     vlist1->addWidget(actFailedSignalTool,0,1);
     vlist1->addWidget(actFailedSignalDelete,0,2);
     vlist1->addWidget(actFailedSignalDeleteAll,0,3);
-    vbox->addItem(vlist1);
+    sectionCardLayout->addLayout(vlist1);
     
     addRule();
     label = new QLabel("• Events");
     label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
     label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
+    sectionCardLayout = addSectionCard();
     QPushButton *actEventsOpen = new QPushButton("Open Event Editor");
     QObject::connect(actEventsOpen, SIGNAL(released()), this, SLOT(actEventsOpenEnabled()));
-    vbox->addWidget(actEventsOpen);
+    sectionCardLayout->addWidget(actEventsOpen);
     
     addRule();
     label = new QLabel("• Activity Details");
     label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
     label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
+    sectionCardLayout = addSectionCard();
     QPushButton *actSettingsOpen = new QPushButton("Open Settings ...");
     QObject::connect(actSettingsOpen, SIGNAL(released()), this, SLOT(actSettingsOpenEnabled()));
-    vbox->addWidget(actSettingsOpen);
+    sectionCardLayout->addWidget(actSettingsOpen);
     
     addRule();
     label = new QLabel("• Save");
     label->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel + "; font-weight: bold; }");
     label->setContentsMargins(12,0,0,0);
     vbox->addWidget(label);
+    sectionCardLayout = addSectionCard();
     QPushButton *actSaveButton = new QPushButton("Save Activity Files");
     QObject::connect(actSaveButton, SIGNAL(released()), this, SLOT(actSaveEnabled()));
-    vbox->addWidget(actSaveButton);
+    sectionCardLayout->addWidget(actSaveButton);
     
     QHBoxLayout *vbox1 = new QHBoxLayout;
     int row = 0;
@@ -391,6 +420,11 @@ ActivityTools::ActivityTools(QString name)
     
     vbox->addStretch(1);
     this->setLayout(vbox);    
+
+    foreach(QPushButton *button, findChildren<QPushButton*>()){
+        if(!settingsWidget.isAncestorOf(button))
+            GuiFunct::styleEditorActionButton(button);
+    }
 
     QList<QWidget*> controls = findChildren<QWidget*>();
     for(int c = 0; c < controls.size(); c++){
@@ -665,20 +699,6 @@ void ActivityTools::conFilesShowEnabled(QString val){
     if(ActLib::Act[id] == NULL)
         return;
     ActLib::Act[id]->editorConListSelected = file;
-}
-
-void ActivityTools::actPlayEnabled(){
-    if(actShow.currentIndex() < 0)
-        return;
-    int id = actShow.currentData().toInt();
-    if(Game::debugOutput) qDebug() << "id" << id;
-    Activity *a = ActLib::Act[id];
-    
-    if(a == NULL)
-        return;
-    
-    a->initToPlay();
-
 }
 
 void ActivityTools::actSaveEnabled(){

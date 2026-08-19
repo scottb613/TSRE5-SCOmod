@@ -246,7 +246,7 @@ ConEditorWindow::ConEditorWindow()
     QStatusBar *rootStatusBar = statusBar();
     rootStatusBar->setSizeGripEnabled(false);
     rootStatusBar->setMinimumHeight(
-        qRound(29.0f * qMax(1.0f, Game::uiScale)));
+        qRound(29.0f * qBound(0.75f, Game::uiScale, 1.25f)));
     rootStatusBar->setStyleSheet(
         "QStatusBar { background-color: #292929;"
         " border-top: 1px solid #454545; }");

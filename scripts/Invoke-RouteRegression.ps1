@@ -40,6 +40,20 @@ function Get-RelativePath {
     return $Path.Substring($Root.Length).TrimStart("\")
 }
 
+function Get-SHA256Hash {
+    param([string]$Path)
+
+    $stream = [IO.File]::OpenRead($Path)
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString(
+            $algorithm.ComputeHash($stream))).Replace("-", "")
+    } finally {
+        $algorithm.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Get-RouteManifest {
     param([string]$Root)
     foreach ($file in Get-ChildItem -LiteralPath $Root -Recurse -File |
@@ -48,8 +62,7 @@ function Get-RouteManifest {
             RelativePath = Get-RelativePath -Root $Root -Path $file.FullName
             Length = $file.Length
             LastWriteTimeUtc = $file.LastWriteTimeUtc.ToString("o")
-            SHA256 = (Get-FileHash -Algorithm SHA256 `
-                -LiteralPath $file.FullName).Hash
+            SHA256 = Get-SHA256Hash -Path $file.FullName
         }
     }
 }

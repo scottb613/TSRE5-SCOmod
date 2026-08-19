@@ -42,6 +42,7 @@ signals:
     void resetRawJumpRequested();
     void jumpBakeRequested();
     void resetBakeJumpRequested();
+    void toggleMapTilesRequested();
 
 private slots:
     void loadDefinitions();

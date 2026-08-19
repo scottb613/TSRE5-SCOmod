@@ -24,7 +24,11 @@ class QAbstractButton;
 class QToolButton;
 class QVBoxLayout;
 class QMoveEvent;
+class QShowEvent;
 class QDialog;
+class QFrame;
+class QPushButton;
+class QFormLayout;
 
 class GuiFunct {
 public:
@@ -38,6 +42,9 @@ public:
     static QString editorSubtitleStyle();
     static void styleEditorTitle(QLabel *label);
     static void styleEditorSubtitle(QLabel *label);
+    static void styleEditorPanelCard(QFrame *card);
+    static void styleEditorActionButton(QPushButton *button);
+    static void alignEditorForm(QFormLayout *form, int baseLabelWidth = 70);
     static void applyEditorPanelStyle(QWidget *panel);
     static void setEditorToolWindowTitle(QWidget *window);
     static void styleEditorDialog(QDialog *dialog);
@@ -69,8 +76,10 @@ public:
     void setPopupPinToolTips(const QString &unpinnedToolTip,
                             const QString &pinnedToolTip);
     void showExclusive();
+    static void closeActiveUnlessSupportedBy(QWidget *panel);
 
 protected:
+    void showEvent(QShowEvent *event) override;
     void moveEvent(QMoveEvent *event) override;
     virtual void popupPinChanged(bool pinned);
     virtual void popupPinClicked();

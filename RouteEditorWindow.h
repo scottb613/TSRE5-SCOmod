@@ -90,9 +90,9 @@ public slots:
     void viewMarkers(bool show);
     void viewSnapable(bool show);
     void viewCompass(bool show);
-    void showToolsObjectAndTerrain(bool show);
     void showToolsObject(bool show);
     void showToolsTerrain(bool show);
+    void showToolsTerrainTexture(bool show);
     void showToolsGeo(bool show);
     void showToolsActivity(bool show);
     void showPolyVegHelper(bool show = true);
@@ -124,6 +124,7 @@ signals:
 protected:
     void keyPressEvent(QKeyEvent *event);
     virtual void closeEvent(QCloseEvent * event );
+    bool eventFilter(QObject *watched, QEvent *event);
     void moveEvent(QMoveEvent *event);
     void resizeEvent(QResizeEvent *event);
     void changeEvent(QEvent *event);
@@ -134,14 +135,17 @@ private:
     void completeEditorClose(QCloseEvent *event);
     void saveLastSession();
     void applyRestoredSessionGeometry();
+    void positionRouteNameLabel();
     QWidget* box;
     QWidget* box2;
     QLabel* propertiesPanelTitle = NULL;
+    QLabel* routeNameLabel = NULL;
     
     RouteEditorGLWidget *glWidget;
     ObjTools *objTools;
     GeoTools *geoTools;
     TerrainTools *terrainTools;
+    QWidget *terrainTextureTools;
     ActivityTools *activityTools;
     ActivityBuilderWindow *activityBuilderWindow;
     //NaviBox *naviBox;
@@ -180,8 +184,8 @@ private:
     QAction *errorViewAction;
     QAction *toolsAction;
     QAction *objectsAction;
-    QAction *objectsAndTerrainAction;
     QAction *terrainAction;
+    QAction *terrainTextureAction;
     QAction *terrainTreeEditr;
     QAction *trkEditr;
     QAction *geoAction;
@@ -215,10 +219,11 @@ private:
     ActivityTrafficWindow* activityTrafficWindow;
     ActivityTimetableWindow* activityTimetableWindow;
     ShapeViewWindow* shapeViewWindow;
+    QDockWidget* autoPlacementDock = nullptr;
+    QAction* autoPlacementAction = nullptr;
     PolyVegHelper* polyVegHelper = nullptr;
     QDockWidget* polyVegDock = nullptr;
     QAction* polyVegHelperAction = nullptr;
-    bool polyVegToolsPanelWasVisible = false;
     QTimer pinPositionTimer;
     bool applyingWindowPosition = false;
 };

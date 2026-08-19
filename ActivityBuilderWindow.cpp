@@ -17,6 +17,7 @@
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDockWidget>
+#include <QFrame>
 #include <QLabel>
 #include <QGridLayout>
 #include <QKeySequence>
@@ -31,12 +32,18 @@
 #include <functional>
 
 ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *parent)
-    : QMainWindow(parent, Qt::Window), defaultSize(qRound(1200 * qMax(1.0f, Game::uiScale)),
-                                                   qRound(800 * qMax(1.0f, Game::uiScale))) {
+    : QMainWindow(parent, Qt::Window), defaultSize(qRound(1200 * qBound(0.75f, Game::uiScale, 1.25f)),
+                                                   qRound(800 * qBound(0.75f, Game::uiScale, 1.25f))) {
     setWindowTitle(tr("TSRE Activity Builder"));
     setAttribute(Qt::WA_DeleteOnClose, false);
     setDockOptions(QMainWindow::AnimatedDocks | QMainWindow::AllowNestedDocks);
     setMinimumSize(850, 560);
+    const qreal panelScale = qBound(0.75f, Game::uiScale, 1.25f);
+    const int activityPanelWidth = qRound(260 * panelScale);
+    const int panelWidth = qRound(300 * panelScale);
+    setStyleSheet(styleSheet()
+        + " QMainWindow::separator { width: 0px; height: 0px; margin: 0px;"
+          " background: transparent; }");
 
     viewer = new ActivityTrackViewer(this);
     setCentralWidget(viewer);
@@ -69,7 +76,7 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     activityDock->setTitleBarWidget(activityDockTitle);
     activityDock->setAllowedAreas(Qt::LeftDockWidgetArea);
     activityDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
-    activityDock->setMinimumWidth(qRound(260 * qMax(1.0f, Game::uiScale)));
+    activityDock->setFixedWidth(activityPanelWidth);
     QScrollArea *activityScroll = new QScrollArea(activityDock);
     activityScroll->setWidgetResizable(true);
     activityScroll->setFrameShape(QFrame::NoFrame);
@@ -132,7 +139,7 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     detailsLayout->addWidget(interactiveLegendHeading);
     detailsLayout->addWidget(interactiveLegend);
     detailsDock->setWidget(details);
-    detailsDock->setMinimumWidth(qRound(190 * qMax(1.0f, Game::uiScale)));
+    detailsDock->setFixedWidth(panelWidth);
     addDockWidget(Qt::RightDockWidgetArea, detailsDock);
 
     QDockWidget *pathDock = new QDockWidget(tr("Path Controls"), this);
@@ -145,13 +152,23 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     QWidget *pathControls = new QWidget(pathDock);
     GuiFunct::applyEditorPanelStyle(pathControls);
     QVBoxLayout *pathLayout = new QVBoxLayout(pathControls);
+    pathLayout->setSpacing(4);
+    pathLayout->setContentsMargins(4,3,4,4);
     QLabel *pathHeading = new QLabel(tr("PATH CONTROLS"), pathControls);
     GuiFunct::styleEditorTitle(pathHeading);
     pathLayout->addWidget(pathHeading);
     QLabel *pathHelp = new QLabel(tr("Build the path like flowing water. Orange switches are always live: click one directly at any time. Use a button before placing a start, endpoint, or reverse point."), pathControls);
     pathHelp->setWordWrap(true);
+    pathHelp->setStyleSheet("color: #c5c9cc; padding: 2px 4px 4px 4px;");
     pathLayout->addWidget(pathHelp);
-    QGridLayout *pathButtons = new QGridLayout();
+    QLabel *pathActionsHeading = new QLabel(tr("• Path Actions"), pathControls);
+    GuiFunct::styleEditorSubtitle(pathActionsHeading);
+    pathLayout->addWidget(pathActionsHeading);
+    QFrame *pathActionsCard = new QFrame(pathControls);
+    GuiFunct::styleEditorPanelCard(pathActionsCard);
+    QGridLayout *pathButtons = new QGridLayout(pathActionsCard);
+    pathButtons->setSpacing(2);
+    pathButtons->setContentsMargins(4,4,4,4);
     QPushButton *setStart = new QPushButton(tr("Place Start"), pathControls);
     QPushButton *reverseDirection = new QPushButton(tr("Reverse Start"), pathControls);
     QPushButton *placeEnd = new QPushButton(tr("Place Endpoint"), pathControls);
@@ -172,14 +189,18 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     pathButtons->addWidget(validate, 4, 0, 1, 2);
     undoEdit->setShortcut(QKeySequence::Undo);
     redoEdit->setShortcut(QKeySequence::Redo);
-    pathLayout->addLayout(pathButtons);
-    pathLayout->addSpacing(qRound(5 * qMax(1.0f, Game::uiScale)));
+    pathLayout->addWidget(pathActionsCard);
+    pathLayout->addSpacing(qRound(5 * qBound(0.75f, Game::uiScale, 1.25f)));
     QLabel *waitHeading = new QLabel(tr("• Wait Point"), pathControls);
-    waitHeading->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel
-                               + "; font-weight: bold; }");
-    waitHeading->setContentsMargins(8,0,0,0);
+    GuiFunct::styleEditorSubtitle(waitHeading);
     pathLayout->addWidget(waitHeading);
-    QGridLayout *waitControls = new QGridLayout();
+    QFrame *waitCard = new QFrame(pathControls);
+    GuiFunct::styleEditorPanelCard(waitCard);
+    QGridLayout *waitControls = new QGridLayout(waitCard);
+    waitControls->setSpacing(2);
+    waitControls->setContentsMargins(4,4,4,4);
+    waitControls->setColumnStretch(0, 1);
+    waitControls->setColumnStretch(1, 1);
     QCheckBox *waitForDuration = new QCheckBox(tr("Wait for duration"), pathControls);
     QCheckBox *waitUntilTime = new QCheckBox(tr("Wait until clock time"), pathControls);
     QButtonGroup *waitModeGroup = new QButtonGroup(pathControls);
@@ -216,24 +237,30 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     waitControls->addWidget(waitUntilHour, 3, 0);
     waitControls->addWidget(waitUntilMinute, 3, 1);
     waitControls->addWidget(addWait, 4, 0, 1, 2);
-    pathLayout->addLayout(waitControls);
-    pathLayout->addSpacing(qRound(5 * qMax(1.0f, Game::uiScale)));
+    pathLayout->addWidget(waitCard);
+    pathLayout->addSpacing(qRound(5 * qBound(0.75f, Game::uiScale, 1.25f)));
     QLabel *advancedHeading = new QLabel(tr("• Advanced"), pathControls);
-    advancedHeading->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel
-                                   + "; font-weight: bold; }");
-    advancedHeading->setContentsMargins(8,0,0,0);
+    GuiFunct::styleEditorSubtitle(advancedHeading);
     pathLayout->addWidget(advancedHeading);
+    QFrame *advancedCard = new QFrame(pathControls);
+    GuiFunct::styleEditorPanelCard(advancedCard);
+    QVBoxLayout *advancedLayout = new QVBoxLayout(advancedCard);
+    advancedLayout->setSpacing(3);
+    advancedLayout->setContentsMargins(4,4,4,4);
     QComboBox *advancedOperation = new QComboBox(pathControls);
     advancedOperation->addItem(tr("Blow Horn"));
     advancedOperation->addItem(tr("Uncouple Cars"));
     advancedOperation->addItem(tr("Join / Split"));
     advancedOperation->addItem(tr("Request Pass Red"));
-    pathLayout->addWidget(advancedOperation);
+    advancedLayout->addWidget(advancedOperation);
     QStackedWidget *advancedOptions = new QStackedWidget(pathControls);
+    advancedOptions->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
     QWidget *hornPage = new QWidget(advancedOptions);
     QGridLayout *hornLayout = new QGridLayout(hornPage);
     hornLayout->setContentsMargins(0, 0, 0, 0);
+    hornLayout->setColumnStretch(0, 1);
+    hornLayout->setColumnStretch(1, 1);
     QLabel *hornLabel = new QLabel(tr("Horn duration"), hornPage);
     QSpinBox *hornSeconds = new QSpinBox(hornPage);
     hornSeconds->setRange(1, 10);
@@ -280,20 +307,35 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     passRedHelp->setWordWrap(true);
     passRedLayout->addWidget(passRedHelp);
     advancedOptions->addWidget(passRedPage);
-    pathLayout->addWidget(advancedOptions);
+    advancedLayout->addWidget(advancedOptions);
+    QTimer::singleShot(0, advancedOptions, [advancedOptions](){
+        if(advancedOptions->currentWidget() != NULL)
+            advancedOptions->setFixedHeight(
+                advancedOptions->currentWidget()->sizeHint().height());
+    });
 
     QLabel *advancedNote = new QLabel(tr("Requires ORTS Extended AI train shunting."), pathControls);
     advancedNote->setWordWrap(true);
     advancedNote->setStyleSheet("color: #aeb5bb;");
-    pathLayout->addWidget(advancedNote);
+    advancedLayout->addWidget(advancedNote);
     QPushButton *addAdvanced = new QPushButton(tr("Place Horn Point"), pathControls);
     addAdvanced->setCheckable(true);
-    pathLayout->addWidget(addAdvanced);
-    pathLayout->addSpacing(qRound(12 * qMax(1.0f, Game::uiScale)));
+    advancedLayout->addWidget(addAdvanced);
+    pathLayout->addWidget(advancedCard);
+    pathLayout->addSpacing(qRound(12 * qBound(0.75f, Game::uiScale, 1.25f)));
+    QLabel *saveHeading = new QLabel(tr("• Path File"), pathControls);
+    GuiFunct::styleEditorSubtitle(saveHeading);
+    pathLayout->addWidget(saveHeading);
+    QFrame *saveCard = new QFrame(pathControls);
+    GuiFunct::styleEditorPanelCard(saveCard);
+    QGridLayout *saveLayout = new QGridLayout(saveCard);
+    saveLayout->setSpacing(2);
+    saveLayout->setContentsMargins(4,4,4,4);
     QPushButton *editMetadata = new QPushButton(tr("Meta Data"), pathControls);
     editMetadata->setToolTip(tr("Set the ORTS Path ID, name, start and end labels, and player-path use."));
-    pathLayout->addWidget(editMetadata);
-    pathLayout->addWidget(savePath);
+    saveLayout->addWidget(editMetadata, 0, 0);
+    saveLayout->addWidget(savePath, 0, 1);
+    pathLayout->addWidget(saveCard);
     const std::function<int()> advancedValue =
         [advancedOperation, hornSeconds, uncoupleEnd, uncoupleCars, uncouplePause]() {
         switch(advancedOperation->currentIndex()){
@@ -310,10 +352,12 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     };
     pathLayout->addStretch(1);
     QLabel *keyHeading = new QLabel(tr("• Path Key"), pathControls);
-    keyHeading->setStyleSheet(QString("QLabel { color: ") + Game::StyleMainLabel
-                              + "; font-weight: bold; }");
-    keyHeading->setContentsMargins(8,0,0,0);
+    GuiFunct::styleEditorSubtitle(keyHeading);
     pathLayout->addWidget(keyHeading);
+    QFrame *keyCard = new QFrame(pathControls);
+    GuiFunct::styleEditorPanelCard(keyCard);
+    QVBoxLayout *keyLayout = new QVBoxLayout(keyCard);
+    keyLayout->setContentsMargins(6,4,6,4);
     QLabel *colorKey = new QLabel(
         tr("<span style='color:#ff00d2'>■</span>&nbsp; Path: Main<br>"
            "<span style='color:#00ebff'>■</span>&nbsp; Path: Overlap<br>"
@@ -321,9 +365,12 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
            "<span style='color:#ffe140'>■</span>&nbsp; Path: Saved"),
         pathControls);
     colorKey->setWordWrap(true);
-    pathLayout->addWidget(colorKey);
+    keyLayout->addWidget(colorKey);
+    pathLayout->addWidget(keyCard);
+    foreach(QPushButton *button, pathControls->findChildren<QPushButton*>())
+        GuiFunct::styleEditorActionButton(button);
     pathDock->setWidget(pathControls);
-    pathDock->setMinimumWidth(qRound(260 * qMax(1.0f, Game::uiScale)));
+    pathDock->setFixedWidth(panelWidth);
     addDockWidget(Qt::RightDockWidgetArea, pathDock);
     tabifyDockWidget(detailsDock, pathDock);
     pathControlsDock = pathDock;
@@ -360,6 +407,9 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     QObject::connect(advancedOperation, QOverload<int>::of(&QComboBox::currentIndexChanged),
                      this, [this, advancedOptions, addAdvanced, advancedValue](int index) {
         advancedOptions->setCurrentIndex(index);
+        if(advancedOptions->currentWidget() != NULL)
+            advancedOptions->setFixedHeight(
+                advancedOptions->currentWidget()->sizeHint().height());
         const QString labels[] = {
             tr("Place Horn Point"),
             tr("Place Uncouple Point"),
@@ -391,7 +441,7 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     });
 
     QAction *toggleActivityBuilder = new QAction(this);
-    toggleActivityBuilder->setShortcut(QKeySequence(Qt::Key_F4));
+    toggleActivityBuilder->setShortcut(QKeySequence(Qt::Key_F5));
     toggleActivityBuilder->setShortcutContext(Qt::WindowShortcut);
     addAction(toggleActivityBuilder);
     QObject::connect(toggleActivityBuilder, &QAction::triggered, this, [this]() {

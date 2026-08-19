@@ -48,7 +48,7 @@
 //////// Version
 //////////////////////////////////
 
-QString Game::AppVersion = "v0.12";  // over-ride from main.cpp
+QString Game::AppVersion = "v0.13";  // over-ride from main.cpp
 
 
 bool Game::ServerMode = false;
@@ -77,10 +77,7 @@ bool Game::loadConsists = true;
 //QString Game::route = "traska";
 //QString Game::route = "cmk";
 QString Game::ceWindowLayout = "C1";
-QString Game::ActivityToPlay = "";
 Renderer *Game::currentRenderer = NULL;
-bool Game::playerMode = false;
-bool Game::useNetworkEng = false;
 bool Game::useQuadTree = true;
 bool Game::useTdbEmptyItems = true;
 int Game::allowObjLag = 1000;
@@ -147,8 +144,6 @@ bool Game::snapableOnlyRot = false;
 float Game::trackElevationMaxPm = 700.0;
 bool Game::proceduralTracks = false;
 bool Game::fullscreen = false;
-bool Game::hudEnabled = false;
-float Game::hudScale = 1.0;
 float Game::uiScale = 1.00f;
 bool Game::markerLines = false;
 
@@ -191,7 +186,6 @@ bool Game::autoGeoTerrain = false;
 
 bool Game::useSuperelevation = false;
 
-bool Game::soundEnabled = false;
 bool Game::scoSoundEnabled = true;
 
 int Game::AASamples = 0;
@@ -1392,13 +1386,6 @@ void Game::load() {
                 cameraStickToTerrain = false; 
         }
 
-        if(setname =="soundenabled"){
-            if((setval == "true") or (setval == "1") or (setval == "on"))
-                soundEnabled = true;
-            else
-                soundEnabled = false; 
-        }
-
         if(setname =="scosoundenabled"){
             if((setval == "true") or (setval == "1") or (setval == "on"))
                 scoSoundEnabled = true;
@@ -1433,18 +1420,6 @@ void Game::load() {
             else
                 useQuadTree = false; 
         }
-        if(setname =="playermode"){
-            if((setval == "true") or (setval == "1") or (setval == "on"))
-                playerMode = true;
-            else
-                playerMode = false; 
-        }
-        if(setname =="usenetworkeng"){
-            if((setval == "true") or (setval == "1") or (setval == "on"))
-                useNetworkEng = true;
-            else
-                useNetworkEng = false; 
-        }
         if(setname =="fogdensity"){
             fogDensity = setval.toFloat();
         }
@@ -1474,8 +1449,8 @@ void Game::load() {
             uiScale = setval.toFloat();
             if(uiScale < 0.75f)
                 uiScale = 0.75f;
-            if(uiScale > 1.50f)
-                uiScale = 1.50f;
+            if(uiScale > 1.25f)
+                uiScale = 1.25f;
         }
 
         if(setname =="season"){
@@ -1882,47 +1857,6 @@ template void Game::check_coords(int& x, int& z, int& px, int& pz);
 template void Game::check_coords(int& x, int& z, float& px, float& pz);
 template void Game::check_coords(float& x, float& z, float& px, float& pz);
 
-
-void Game::CheckForOpenAl(){
-    
-    QString openalfilename;
-    QString Url;
-    
-    QFile file("./"+openalfilename);
-    if(file.exists())
-        return;
-    
-#ifdef Q_PROCESSOR_X86_64
-    openalfilename = "OpenAL32.dll";
-    Url = "http://koniec.org/tsre5/data/openal/Win64/soft_oal.dll";
-#endif
-
-#ifdef Q_PROCESSOR_X86_32
-    openalfilename = "openal32.dll";
-    Url = "http://koniec.org/tsre5/data/openal/Win32/soft_oal.dll";
-#endif
-    
-    QNetworkAccessManager* mgr = new QNetworkAccessManager();
-    //connect(mgr, SIGNAL(finished(QNetworkReply*)), this, SLOT(isData(QNetworkReply*)));
-    qDebug() << "Wait ..";
-
-    QNetworkRequest req;
-    req.setUrl(QUrl(Url));
-    qDebug() << req.url();
-    QNetworkReply* r = mgr->get(req);
-    QEventLoop loop;
-    QObject::connect(r, SIGNAL(finished()), &loop, SLOT(quit()));
-    loop.exec();
-    qDebug() << "Network Reply Loop End";
-    QByteArray data = r->readAll();
-
-    if(!file.open(QIODevice::WriteOnly)){
-        qWarning() << "Unable to save downloaded OpenAL library" << file.fileName() << file.errorString();
-        return;
-    }
-    file.write(data);
-    file.close();
-}
 
 void Game::DownloadAppData(QString path){
     QDir().mkdir(path);

@@ -79,6 +79,27 @@ public:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override {
+        QLineEdit *input = qobject_cast<QLineEdit*>(watched);
+        if(input != NULL && input->isEnabled() && !input->isReadOnly()){
+            bool selectForEntry = false;
+            if(event->type() == QEvent::MouseButtonPress){
+                QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+                selectForEntry = mouseEvent->button() == Qt::LeftButton;
+            } else if(event->type() == QEvent::FocusIn){
+                QFocusEvent *focusEvent = static_cast<QFocusEvent*>(event);
+                selectForEntry = focusEvent->reason() == Qt::TabFocusReason
+                                 || focusEvent->reason() == Qt::BacktabFocusReason
+                                 || focusEvent->reason() == Qt::ShortcutFocusReason;
+            }
+            if(selectForEntry){
+                QPointer<QLineEdit> guardedInput(input);
+                QTimer::singleShot(0, input, [guardedInput](){
+                    if(!guardedInput.isNull())
+                        guardedInput->selectAll();
+                });
+            }
+        }
+
         QWidget *dialog = qobject_cast<QWidget*>(watched);
         QMessageBox *messageBox = qobject_cast<QMessageBox*>(dialog);
         if(messageBox != NULL
@@ -307,9 +328,12 @@ QString GuiFunct::scoPanelStyle(){
         " padding-top: 3px; padding-bottom: 1px;"
         "}"
         "QPushButton:checked {"
-        " color: #232323;"
-        " background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %8, stop:1 %7);"
-        " border-color: %8; border-bottom-color: #704a26;"
+        " color: %7; background: #343434;"
+        " border-color: %7; border-bottom-color: %7;"
+        "}"
+        "QPushButton:checked:hover {"
+        " color: %8; background: #3a3a3a;"
+        " border-color: %8; border-bottom-color: %8;"
         "}"
         "QPushButton:disabled { color: #858585; background: #3b3b3b; border-color: #4b4b4b; }"
         "QPushButton[dialogRole=\"primary\"] { border-left: 3px solid %1; }"
@@ -354,7 +378,26 @@ QString GuiFunct::scoPanelStyle(){
 }
 
 QString GuiFunct::scoEditorPanelStyle(){
+    const qreal panelScale = qBound(0.75f, Game::uiScale, 1.25f);
+    const int cardRadius = qRound(3.0 * panelScale);
+    const int buttonVerticalPadding = qRound(5.0 * panelScale);
+    const int buttonHorizontalPadding = qRound(8.0 * panelScale);
     return scoPanelStyle() + QString(
+        "QFrame[editorPanelCard=\"true\"] { background-color: #252525;"
+        " border: 1px solid #454545; border-radius: %2px; }"
+        "QPushButton[editorPanelAction=\"true\"] { color: #e2e2e2;"
+        " background-color: #343434; border: 1px solid #5b5b5b;"
+        " border-radius: 2px; padding: %3px %4px; font-weight: 600; }"
+        "QPushButton[editorPanelAction=\"true\"]:hover { color: %1;"
+        " background-color: #3a3a3a; border-color: %1; }"
+        "QPushButton[editorPanelAction=\"true\"]:pressed { color: %1;"
+        " background-color: #202020; border-color: %1; }"
+        "QPushButton[editorPanelAction=\"true\"]:checked { color: %1;"
+        " background-color: #343434; border-color: %1; }"
+        "QPushButton[editorPanelAction=\"true\"]:checked:hover { color: %1;"
+        " background-color: #3a3a3a; border-color: %1; }"
+        "QPushButton[editorPanelAction=\"true\"]:disabled { color: #777777;"
+        " background-color: #2b2b2b; border-color: #3f3f3f; }"
         "QLineEdit, QSpinBox, QDoubleSpinBox, QTimeEdit, QDateEdit, QDateTimeEdit,"
         " QTextEdit, QPlainTextEdit, QComboBox {"
         " background-color: #202020; color: #f2f2f2; font-weight: normal;"
@@ -404,7 +447,10 @@ QString GuiFunct::scoEditorPanelStyle(){
         "QSpinBox::up-arrow, QSpinBox::down-arrow, QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow,"
         " QTimeEdit::up-arrow, QTimeEdit::down-arrow, QDateEdit::up-arrow, QDateEdit::down-arrow,"
         " QDateTimeEdit::up-arrow, QDateTimeEdit::down-arrow { width: 7px; height: 7px; }"
-    );
+    ).arg(Game::StyleMainLabel)
+     .arg(cardRadius)
+     .arg(buttonVerticalPadding)
+     .arg(buttonHorizontalPadding);
 }
 
 QString GuiFunct::editorTitleStyle(){
@@ -433,7 +479,35 @@ void GuiFunct::styleEditorSubtitle(QLabel *label){
     if(label == NULL)
         return;
     label->setStyleSheet(editorSubtitleStyle());
-    label->setContentsMargins(qRound(6.0f * qMax(1.0f, Game::uiScale)),0,0,0);
+    label->setContentsMargins(qRound(6.0f * qBound(0.75f, Game::uiScale, 1.25f)),0,0,0);
+}
+
+void GuiFunct::styleEditorPanelCard(QFrame *card){
+    if(card == NULL)
+        return;
+    card->setProperty("editorPanelCard", true);
+}
+
+void GuiFunct::styleEditorActionButton(QPushButton *button){
+    if(button == NULL)
+        return;
+    button->setProperty("editorPanelAction", true);
+    button->setMinimumHeight(qRound(28.0f * qBound(0.75f, Game::uiScale, 1.25f)));
+}
+
+void GuiFunct::alignEditorForm(QFormLayout *form, int baseLabelWidth){
+    if(form == NULL)
+        return;
+    const int labelWidth = qRound(
+        baseLabelWidth * qBound(0.75f, Game::uiScale, 1.25f));
+    form->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    form->setRowWrapPolicy(QFormLayout::DontWrapRows);
+    for(int row = 0; row < form->rowCount(); row++){
+        QLayoutItem *labelItem = form->itemAt(row, QFormLayout::LabelRole);
+        if(labelItem != NULL && labelItem->widget() != NULL)
+            labelItem->widget()->setMinimumWidth(labelWidth);
+    }
 }
 
 void GuiFunct::applyEditorPanelStyle(QWidget *panel){
@@ -443,8 +517,8 @@ void GuiFunct::applyEditorPanelStyle(QWidget *panel){
     QTimer::singleShot(0, panel, [panel](){
         QFont fieldFont = panel->font();
         fieldFont.setBold(false);
-        const int fieldHeight = qRound(22.0f * qMax(1.0f, Game::uiScale));
-        const int rowSpacing = qRound(3.0f * qMax(1.0f, Game::uiScale));
+        const int fieldHeight = qRound(22.0f * qBound(0.75f, Game::uiScale, 1.25f));
+        const int rowSpacing = qRound(3.0f * qBound(0.75f, Game::uiScale, 1.25f));
 
         foreach(QLineEdit *field, panel->findChildren<QLineEdit*>()){
             field->setFont(fieldFont);
@@ -585,7 +659,7 @@ void GuiFunct::showEditorNotice(QWidget *parent, const QString &heading,
                                  const QString &message){
     QMessageBox notice(parent);
     const int standardWidth =
-        qRound(420.0f * qMax(1.0f, Game::uiScale));
+        qRound(420.0f * qBound(0.75f, Game::uiScale, 1.25f));
     notice.setIcon(QMessageBox::Information);
     notice.setWindowTitle(Game::AppName);
     notice.setText(heading.toUpper());
@@ -602,8 +676,8 @@ void GuiFunct::showEditorNotice(QWidget *parent, const QString &heading,
 
     QTimer::singleShot(0, &notice, [&notice, parent, standardWidth](){
         const int textWidth = qMax(
-            qRound(260.0f * qMax(1.0f, Game::uiScale)),
-            standardWidth - qRound(100.0f * qMax(1.0f, Game::uiScale)));
+            qRound(260.0f * qBound(0.75f, Game::uiScale, 1.25f)),
+            standardWidth - qRound(100.0f * qBound(0.75f, Game::uiScale, 1.25f)));
         const char *labelNames[2] = {
             "qt_msgbox_label", "qt_msgbox_informativelabel"
         };
@@ -640,7 +714,7 @@ void GuiFunct::showEditorStopped(QWidget *parent, const QString &heading,
                                  const QString &message){
     QMessageBox stopped(parent);
     const int standardWidth =
-        qRound(420.0f * qMax(1.0f, Game::uiScale));
+        qRound(420.0f * qBound(0.75f, Game::uiScale, 1.25f));
     stopped.setIcon(QMessageBox::Warning);
     stopped.setWindowTitle(Game::AppName);
     stopped.setText(heading.toUpper());
@@ -657,8 +731,8 @@ void GuiFunct::showEditorStopped(QWidget *parent, const QString &heading,
 
     QTimer::singleShot(0, &stopped, [&stopped, parent, standardWidth](){
         const int textWidth = qMax(
-            qRound(260.0f * qMax(1.0f, Game::uiScale)),
-            standardWidth - qRound(100.0f * qMax(1.0f, Game::uiScale)));
+            qRound(260.0f * qBound(0.75f, Game::uiScale, 1.25f)),
+            standardWidth - qRound(100.0f * qBound(0.75f, Game::uiScale, 1.25f)));
         const char *labelNames[2] = {
             "qt_msgbox_label", "qt_msgbox_informativelabel"
         };
@@ -696,7 +770,7 @@ void GuiFunct::setupWindowPinButton(QToolButton *button){
         return;
     button->setText(QString());
     button->setIcon(QIcon(new WindowPinIconEngine));
-    const int iconSide = qRound(15.0f * qMax(1.0f, Game::uiScale));
+    const int iconSide = qRound(15.0f * qBound(0.75f, Game::uiScale, 1.25f));
     button->setIconSize(QSize(iconSide, iconSide));
 }
 
@@ -798,7 +872,7 @@ bool GuiFunct::confirmDestructiveAction(QWidget *parent, const QString &heading,
                                         const QString &message){
     QMessageBox warning(parent);
     const int standardWidth =
-        qRound(420.0f * qMax(1.0f, Game::uiScale));
+        qRound(420.0f * qBound(0.75f, Game::uiScale, 1.25f));
     warning.setIcon(QMessageBox::Warning);
     warning.setWindowTitle(Game::AppName);
     warning.setText(heading.toUpper());
@@ -821,8 +895,8 @@ bool GuiFunct::confirmDestructiveAction(QWidget *parent, const QString &heading,
 
     QTimer::singleShot(0, &warning, [&warning, parent, standardWidth](){
         const int textWidth = qMax(
-            qRound(260.0f * qMax(1.0f, Game::uiScale)),
-            standardWidth - qRound(100.0f * qMax(1.0f, Game::uiScale)));
+            qRound(260.0f * qBound(0.75f, Game::uiScale, 1.25f)),
+            standardWidth - qRound(100.0f * qBound(0.75f, Game::uiScale, 1.25f)));
         QLabel *titleLabel =
             warning.findChild<QLabel*>("qt_msgbox_label");
         QLabel *messageLabel =
@@ -871,7 +945,7 @@ EditorPopupWindow::EditorPopupWindow(QWidget *owner, const QString &title,
       positionKey(pinnedPositionKey) {
     GuiFunct::applyEditorPanelStyle(this);
     GuiFunct::setEditorToolWindowTitle(this);
-    setFixedWidth(qRound(baseWidth * qMax(1.0f, Game::uiScale)));
+    setFixedWidth(qRound(baseWidth * qBound(0.75f, Game::uiScale, 1.25f)));
 
     rootLayout = new QVBoxLayout(this);
     rootLayout->setSpacing(4);
@@ -890,8 +964,8 @@ EditorPopupWindow::EditorPopupWindow(QWidget *owner, const QString &title,
     pinButton->setCheckable(true);
     pinButton->setFocusPolicy(Qt::NoFocus);
     pinButton->setFixedSize(
-        qRound(30.0f * qMax(1.0f, Game::uiScale)),
-        qRound(17.0f * qMax(1.0f, Game::uiScale)));
+        qRound(30.0f * qBound(0.75f, Game::uiScale, 1.25f)),
+        qRound(17.0f * qBound(0.75f, Game::uiScale, 1.25f)));
     positionPinned = Game::pinnedWindowPosition(this->positionKey, NULL);
     pinButton->setChecked(positionPinned);
     updatePinAppearance();
@@ -935,6 +1009,28 @@ void EditorPopupWindow::showExclusive(){
     show();
     raise();
     activateWindow();
+}
+
+void EditorPopupWindow::showEvent(QShowEvent *event){
+    if(!activePopup.isNull() && activePopup != this)
+        activePopup->close();
+    activePopup = this;
+    QWidget::showEvent(event);
+}
+
+void EditorPopupWindow::closeActiveUnlessSupportedBy(QWidget *panel){
+    if(activePopup.isNull() || !activePopup->isVisible())
+        return;
+    if(panel != NULL){
+        const QList<QAbstractButton*> launchers =
+            panel->findChildren<QAbstractButton*>();
+        for(QAbstractButton *launcher : launchers){
+            if(launcher->property("editorPopupKey").toString()
+                    == activePopup->positionKey)
+                return;
+        }
+    }
+    activePopup->close();
 }
 
 QVBoxLayout *EditorPopupWindow::popupLayout() const {

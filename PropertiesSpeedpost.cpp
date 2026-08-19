@@ -13,8 +13,10 @@
 #include "TRitem.h"
 #include "Game.h"
 #include "GLMatrix.h"
+#include "GuiFunct.h"
 
 PropertiesSpeedpost::PropertiesSpeedpost() {
+    GuiFunct::applyEditorPanelStyle(this);
     
     QDoubleValidator* doubleValidator = new QDoubleValidator(-10000, 10000, 6, this); 
     doubleValidator->setNotation(QDoubleValidator::StandardNotation);
@@ -22,12 +24,27 @@ PropertiesSpeedpost::PropertiesSpeedpost() {
     doubleValidator2->setNotation(QDoubleValidator::StandardNotation);
     
     QVBoxLayout *vbox = new QVBoxLayout;
-    vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    const int panelMargin = qRound(4.0f * qBound(0.75f, Game::uiScale, 1.25f));
+    const int cardMargin = qRound(6.0f * qBound(0.75f, Game::uiScale, 1.25f));
+    vbox->setSpacing(3);
+    vbox->setContentsMargins(panelMargin,panelMargin,panelMargin,panelMargin);
+    auto addSubtitle = [this, vbox](const QString &text){
+        QLabel *label = new QLabel(QString(QChar(0x2022)) + ' ' + text, this);
+        GuiFunct::styleEditorSubtitle(label);
+        vbox->addWidget(label);
+    };
+    auto makeCard = [this, cardMargin](){
+        QFrame *card = new QFrame(this);
+        GuiFunct::styleEditorPanelCard(card);
+        QVBoxLayout *layout = new QVBoxLayout(card);
+        layout->setContentsMargins(cardMargin,cardMargin,cardMargin,cardMargin);
+        layout->setSpacing(3);
+        return qMakePair(card, layout);
+    };
     infoLabel = new QLabel("SpeedPost:");
-    infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    infoLabel->setContentsMargins(3,0,0,0);
+    GuiFunct::styleEditorSubtitle(infoLabel);
     vbox->addWidget(infoLabel);
+    auto identityCard = makeCard();
     QFormLayout *vlist = new QFormLayout;
     vlist->setSpacing(2);
     vlist->setContentsMargins(3,0,3,0);
@@ -39,89 +56,99 @@ PropertiesSpeedpost::PropertiesSpeedpost() {
     vlist->addRow("UiD:",&this->uid);
     vlist->addRow("Tile X:",&this->tX);
     vlist->addRow("Tile Z:",&this->tY);
-    vbox->addItem(vlist);
+    GuiFunct::alignEditorForm(vlist);
+    identityCard.second->addLayout(vlist);
+    vbox->addWidget(identityCard.first);
     
-    QLabel * label = new QLabel("Position:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    addSubtitle("Position");
+    auto positionCard = makeCard();
     vlist = new QFormLayout;
     vlist->setSpacing(2);
     vlist->setContentsMargins(3,0,3,0);
     vlist->addRow("X:",&this->posX);
     vlist->addRow("Y:",&this->posY);
     vlist->addRow("Z:",&this->posZ);
-    vbox->addItem(vlist);
+    GuiFunct::alignEditorForm(vlist);
+    positionCard.second->addLayout(vlist);
+    vbox->addWidget(positionCard.first);
     speedlabel = new QLabel("Speed:");
-    speedlabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    speedlabel->setContentsMargins(3,0,0,0);
+    GuiFunct::styleEditorSubtitle(speedlabel);
     chCustomSpeed.setText("Speed instead of Number");
     vbox->addWidget(speedlabel);
-    vbox->addWidget(&chCustomSpeed);
-    vbox->addWidget(&speed);
-    vbox->addWidget(&kmm);
+    auto speedCard = makeCard();
+    speedCard.second->addWidget(&chCustomSpeed);
+    QFormLayout *speedForm = new QFormLayout;
+    speedForm->setContentsMargins(0,0,0,0);
+    speedForm->addRow("Value:", &speed);
+    speedForm->addRow("Units:", &kmm);
     kmm.setStyleSheet("combobox-popup: 0;");
     kmm.addItem("Kilometers");
     kmm.addItem("Miles");
     lSpeedFor = new QLabel("Speed for:");
-    lSpeedFor->setContentsMargins(3,0,0,0);
-    vbox->addWidget(lSpeedFor);
-    vbox->addWidget(&ptb);
+    speedForm->addRow(lSpeedFor, &ptb);
     ptb.addItem("Passenger");
     ptb.addItem("Freight");
     ptb.addItem("Both");
     ptb.setStyleSheet("combobox-popup: 0;");
+    GuiFunct::alignEditorForm(speedForm);
+    speedCard.second->addLayout(speedForm);
+    vbox->addWidget(speedCard.first);
     numberlabel = new QLabel("Number:");
-    numberlabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    numberlabel->setContentsMargins(3,0,0,0);
+    GuiFunct::styleEditorSubtitle(numberlabel);
     chCustomNumber.setText("Number instead of Speed");
     vbox->addWidget(numberlabel);
-    vbox->addWidget(&chCustomNumber);
-    vbox->addWidget(&number);
+    auto numberCard = makeCard();
+    numberCard.second->addWidget(&chCustomNumber);
+    QFormLayout *numberForm = new QFormLayout;
+    numberForm->setContentsMargins(0,0,0,0);
+    numberForm->addRow("Value:", &number);
     number.setValidator(doubleValidator2);
     chNumberDot.setText("Show Dot");
-    vbox->addWidget(&chNumberDot);
+    numberCard.second->addLayout(numberForm);
+    numberCard.second->addWidget(&chNumberDot);
+    GuiFunct::alignEditorForm(numberForm);
+    vbox->addWidget(numberCard.first);
 
-    label = new QLabel("Track Items:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
+    addSubtitle("Track Items");
+    auto trackCard = makeCard();
     QPushButton *button = new QPushButton("Flip", this);
-    vbox->addWidget(button);
+    GuiFunct::styleEditorActionButton(button);
+    trackCard.second->addWidget(button);
     connect(button, SIGNAL(released()), this, SLOT(flipSignal()));
     chFlipShape.setText("Flip Shape");
     chFlipShape.setChecked(true);
-    vbox->addWidget(&chFlipShape);
+    trackCard.second->addWidget(&chFlipShape);
     QPushButton *bDeleteSelected = new QPushButton("Delete Selected");
-    vbox->addWidget(bDeleteSelected);
+    GuiFunct::styleEditorActionButton(bDeleteSelected);
+    trackCard.second->addWidget(bDeleteSelected);
     QObject::connect(bDeleteSelected, SIGNAL(released()),
                       this, SLOT(bDeleteSelectedEnabled()));
     QPushButton *bExpandSelected = new QPushButton("Expand");
-    vbox->addWidget(bExpandSelected);
+    GuiFunct::styleEditorActionButton(bExpandSelected);
+    trackCard.second->addWidget(bExpandSelected);
     QObject::connect(bExpandSelected, SIGNAL(released()),
                       this, SLOT(bExpandEnabled()));
     
-    label = new QLabel("Global settings:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    vbox->addWidget(new QLabel("Max placing radius:"));
-    vbox->addWidget(&eMaxPlacingDistance);
+    vbox->addWidget(trackCard.first);
+    addSubtitle("Global Settings");
+    auto globalCard = makeCard();
+    QFormLayout *globalForm = new QFormLayout;
+    globalForm->setContentsMargins(0,0,0,0);
+    globalForm->addRow("Max radius:", &eMaxPlacingDistance);
+    GuiFunct::alignEditorForm(globalForm);
+    globalCard.second->addLayout(globalForm);
+    vbox->addWidget(globalCard.first);
     eMaxPlacingDistance.setValidator(doubleValidator);
     QObject::connect(&eMaxPlacingDistance, SIGNAL(textEdited(QString)), this, SLOT(eMaxPlacingDistanceEnabled(QString)));
     
-    label = new QLabel("Advanced:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    
-    
-    
-    
+    addSubtitle("Advanced");
+    auto advancedCard = makeCard();
     QPushButton *hacks = new QPushButton("Hacks", this);
+    GuiFunct::styleEditorActionButton(hacks);
     QObject::connect(hacks, SIGNAL(released()),
                       this, SLOT(hacksButtonEnabled()));
-    vbox->addWidget(hacks);
+    advancedCard.second->addWidget(hacks);
+    vbox->addWidget(advancedCard.first);
     
     QObject::connect(&speed, SIGNAL(textEdited(QString)),
                       this, SLOT(speedEnabled(QString)));

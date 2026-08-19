@@ -11,11 +11,13 @@
 #include "PropertiesTrackItem.h"
 #include "TRitem.h"
 #include "Game.h"
+#include "GuiFunct.h"
 
 PropertiesTrackItem::PropertiesTrackItem() {
+    GuiFunct::applyEditorPanelStyle(this);
    QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    vbox->setContentsMargins(4,4,4,4);
     infoLabel = new QLabel("Terrain:");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
@@ -36,18 +38,17 @@ PropertiesTrackItem::PropertiesTrackItem() {
     vlist->addRow("Pos Z:",&posZ);
     
     
-    vbox->addItem(vlist);
-
-    QLabel *label = new QLabel("Type:");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    vbox->addWidget(&eItemType);
+    GuiFunct::alignEditorForm(vlist);
+    vlist->addRow("Type:", &eItemType);
     eItemType.setDisabled(true);
-    label = new QLabel("Id:");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    vbox->addWidget(&eItemId);
+    vlist->addRow("Id:", &eItemId);
     eItemId.setDisabled(true);
+    QFrame *itemCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(itemCard);
+    QVBoxLayout *itemLayout = new QVBoxLayout(itemCard);
+    itemLayout->setContentsMargins(6,4,6,4);
+    itemLayout->addLayout(vlist);
+    vbox->addWidget(itemCard);
     vbox->addStretch(1);
     this->setLayout(vbox);
 }

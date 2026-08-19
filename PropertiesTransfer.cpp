@@ -130,9 +130,8 @@ PropertiesTransfer::PropertiesTransfer() {
     QPushButton *qRot90 = new QPushButton("Rot Y 90°", this);
     QObject::connect(qRot90, SIGNAL(released()),
                       this, SLOT(rotYEnabled()));
-    QPushButton *transform = new QPushButton("Transform ...", this);
-    QObject::connect(transform, SIGNAL(released()),
-                      this, SLOT(transformEnabled()));
+    QPushButton *transform = new QPushButton("Transform...", this);
+    configureTransformButton(transform);
     
     posRotList->addWidget(copyPos, 0, 0);
     posRotList->addWidget(pastePos, 0, 1);

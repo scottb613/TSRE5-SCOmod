@@ -12,8 +12,9 @@
 #define	TRANSFORMWORLDOBJDIALOG_H
 
 #include <QtWidgets>
+#include "GuiFunct.h"
 
-class TransformWorldObjDialog : public QDialog {
+class TransformWorldObjDialog : public EditorPopupWindow {
     Q_OBJECT
 public:
     float x = 0;
@@ -24,13 +25,24 @@ public:
     float rz = 0;
     bool isUseObjRot = false;
     bool isOk = false;
-    TransformWorldObjDialog();
-    virtual ~TransformWorldObjDialog();
+    explicit TransformWorldObjDialog(QWidget *parent);
+    ~TransformWorldObjDialog() override;
+    void showForOwner();
+
+signals:
+    void finished();
+    void userButtonPressed();
     
 public slots:
     void cancel();
     void ok();
+
+protected:
+    void closeEvent(QCloseEvent *event) override;
+    void popupPinClicked() override;
+
 private:
+    bool finishing = false;
     QCheckBox useObjRot;
     QLineEdit posX;
     QLineEdit posY;

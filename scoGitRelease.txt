@@ -1,151 +1,85 @@
-# TSRE GenX v0.12
+# TSRE GenX v0.13 Release Notes
 
-TSRE GenX v0.12 is the current Qt6/CMake community open-testing release after
-the immutable v0.11 checkpoint. The active source belongs on
-`tsre-scomod-wip`.
+Released as a source checkpoint on 2026-08-19.
 
-## Highlights
+v0.13 turns the accumulated Route Editor work into a cohesive production pass.
+It remains experimental and actively developed, but it is a full route editor
+with maintained build, test, documentation, and compatibility gates.
 
-- Added a supported Visual Studio 2026/MSVC v143 CMake build lane using Qt's
-  `msvc2022_64` package and the `x64-windows-v143` vcpkg overlay. MinGW remains
-  the parity and release-package baseline.
-- Added the **F6 PolyVeg Planter** for deterministic planting from SCO LIDEX
-  contract-v2 polygons or a tile-locked corridor/Area ruler.
-- Added style-aware Flood Fill, permanent exclusions, TDB/RDB clearance, slope
-  and footprint protection, repeatable seeds, and route-global orchard rows.
-- Added high-count planting optimizations, concise timing/progress feedback,
-  loaded-world Raw/Baked/Tile status, and cycling jump controls.
-- Kept the last completed viewport frame visible during high-count generation
-  and placement, repainting once afterward. Successful plant and bake operations
-  queue one final `SCOsuccess.wav`; partial LOD bakes report the successful and
-  attempted tile counts without a success cue.
-- Added **Bake PolyVeg Tile** and bounded **Bake PolyVeg LOD** with verified
-  4x4 block creation, tile-local raw-instance purge, and safe asset cleanup.
-- Preserved and rendered Static-object `Matrix3x3` instance scale.
-- Hardened **Reset All TERRTEX** for canonical detailed/distant material reset
-  and safe generated-texture/saved-map cleanup.
-- Made F3 PNG overlays lazy-resident inside camera Tile LOD. Route sessions
-  start with overlays Off until explicitly enabled.
-- Fixed optimized-MSVC RAW terrain byte order and added display-only support
-  for experimental 512-sample, 4 m terrain.
-- Hardened NextGen Auto-Flex, corrected scaled-display Shape/Consist rotation,
-  standardized dialog sounds, improved F1 markers, and removed PolyForest.
+## Route Editor interface
 
-## PolyVeg Planter
+- Applied the PolyVeg-derived GenX style across remaining properties, helpers,
+  Errors & Messages, the F5 map workspace, and utility windows.
+- Standardized panel widths, charcoal cards, orange headings and active states,
+  black button borders, aligned value columns, compact labels, and tooltips.
+- Standardized `...` controls as latching toggles with sound, orange open state,
+  second-click close, pinning, snapping, and mutual exclusion.
+- Contextual popups close when their owning property panel is no longer active.
+- Editable fields select their value on entry for immediate overwrite.
 
-The full-height `POLYVEG PLANTER` panel replaces the normal right tools column
-while open. It reads route-owned `OpenRails/polyveg.json` definitions plus SCO
-LIDEX `osm_data/polyveg-polygons.geojson` and `polyveg-exclusions.geojson` data.
-GeoJSON is cached by path, size, and modification time.
+## Object properties and helpers
 
-Pointer planting never crosses the pointer world tile. Flood Fill extends an
-operation only to polygons on that tile with the same category and fill style.
-The ruler supports a centerline corridor or closed Area; Unrestricted permits
-planting outside mapped PolyVeg while keeping permanent water, transport,
-building, developed-land, TDB, and RDB exclusions.
+- Reworked Dynamic Track fields, sections, grade controls, and labels.
+- Rebuilt Transform and Height Helper as compact two-column GenX popups.
+- Simplified Signal properties, added value tooltips, promoted Subobjects to a
+  styled popup, and made signal HACKS context-sensitive.
+- Completed the shared treatment across Static, Terrain, Forest, Car Spawner,
+  Sound, Transfer, Group, Platform, Siding, Speedpost, Level Crossing, and
+  remaining property panels.
 
-One deterministic generator applies density or route-global Rows, operation
-Cap, seed, weighted shapes, yaw/scale variation, edge feathering, slope,
-clearance, minimum separation, and scaled-footprint overlap prevention. The
-high-count path avoids per-object world scans and reports generation/placement
-times.
+## Control Panel and diagnostics
 
-The panel reports loaded-world Raw Objects, Baked Blocks, and Baked Tiles. Bake
-PolyVeg Tile handles one loaded tile; Bake PolyVeg LOD handles only loaded
-pending tiles inside camera Tile LOD. Bake first writes and places every block,
-then clears Undo and purges only that tile's raw instances. Generated files are
-tracked in `OpenRails/forest-bakes.json` for safe save-time cleanup.
+- Cam X/Cam Y and Cam Lat/Cam Lon highlight and copy as displayed pairs.
+- Added centered orange `* COPIED *` feedback for two seconds.
+- Shortened Marker Location to Location and centered a low-contrast route title
+  over the compass lubber line.
+- Restyled Errors & Messages, moved it to F11, and added direct removal for
+  identified invalid TrackDB/RoadDB items. F11 and F12 toggle normally.
 
-## Terrain and maps
+## Terrain and map overlays
 
-Reset All TERRTEX rebuilds each successfully reset detailed and distant tile
-with one canonical material at index 0, redirects every patch to it, removes
-matching generated TERRTEX and saved maps, and preserves unrelated textures.
+- Completed editable experimental 512-sample, 4 m terrain support across
+  conforming, Undo, patch outlines, gaps, coordinate math, and rendering.
+- Reworked native 2048/4096 overlays with indexed drawing and bounded residency.
+- Added explicit Map Tiles controls, removed forced F5 loading, and purge
+  overlays when maps are turned off.
+- Tightened terrain/overlay retention during long travel and route changes.
+- Exit to Main Load now performs a guarded restart after unsaved-work handling.
 
-F3 retains Tile Map and Route Map Show/Hide controls, but each route session
-starts with overlays Off. Saved PNGs decode incrementally only inside camera
-Tile LOD and release their resources after leaving it. Extended SCO_LHR travel
-across 545 maps remained at or below about 1.5 GB.
+## PolyVeg and F5 Activity Builder
 
-The RAW decoder now reads low and high bytes in explicit order. Renderer
-buffers, map UV scale, and terrain height/flag lifetime derive from metadata,
-allowing experimental 512-sample/4 m display. Editing, seams, save behavior,
-and simulator compatibility remain outside this display-only gate.
+- Removed redundant Planting Options and Rows subtitles, added Map Tiles, and
+  added the non-functional Edit Schema placeholder.
+- Preserved deterministic planting, rows, exclusions, status, and hard-commit
+  tile/LOD baking from v0.12.
+- Refreshed F5 as a map-first workspace with fixed GenX side panels.
+- Reworked Path Editor and Path Controls, compacted Activity Editor, shortened
+  Jump/Del labels, removed resize controls, and kept Map Tiles user-controlled.
 
-Obsolete eager `load.ace`/`details.ace` requests and their unused preview were
-removed; the TRK `LoadingScreen` field remains compatible.
+## Track, consist, and cleanup
 
-## Objects, track, and editor behavior
+- Improved projected hit regions so long Consist views select the clicked unit,
+  including unresolved stock cards.
+- Retained hardened NextGen Dynamic Track validation and route-owned Flex.
+- Removed the unfinished activity simulator and unused OpenAL dependency.
+- Updated the canonical UI style guide with the v0.13 rules.
 
-Static objects separate rotation from `Matrix3x3` scale, use the scale for
-rendering/culling, preserve untouched source matrices, and reconstruct a scaled
-matrix after editor rotation. Ordinary `QDirection` objects retain their path.
+## Verification
 
-NextGen Auto-Flex validates geometry, length, tile relationship, and connection
-state before mutation. Shape/Consist viewers use logical mouse coordinates and
-F12 Mouse Speed. Message boxes follow GenX sounds without the native Windows
-sound. PolyForest was removed without renumbering neighboring IDs; standard
-Forest remains.
+Clean Qt 6.11.1 Release builds completed on 2026-08-19.
 
-## Verification status
+- MinGW 13.1: `C6DDD2BA7C5E68FE7412C1BB98A4457A915ECC409254F412A1FADCE36B121D9F`
+- Promoted `TSREvcTST`: identical to MinGW
+- VS2026/MSVC v143: `062B82FFFBF945DCB52C617B9010E88C082E97FA180C1BEBF7F0CB96D6FDEE15`
+- MinGW CTest: 7/7 passed in 1.60 seconds
+- MSVC CTest: 7/7 passed in 1.63 seconds
 
-v0.12 supports both the Qt 6.11.1 MinGW 13.1 and Visual Studio 2026/MSVC v143
-build lanes. MinGW remains the parity and packaged-runtime baseline.
+Coverage includes encoding, DDS, Unicode whitespace, PolyVeg definitions,
+bake-manifest cleanup, OSM caching, and the route-regression harness.
 
-The final clean Qt 6.11.1 MinGW 13.1 and Visual Studio 2026/MSVC v143 Release
-builds linked with zero errors on 2026-08-16. The MinGW build and active TST
-copy match at SHA-256
-`026D55414585F11BD54AE25A794363A23FA08AC1C2D89E8D3785536C7E0800DF`.
-The MSVC executable SHA-256 is
-`1448DA29E2F0D729BF5332573E78F713645585ECCDC2EF4185507292B15687E4`.
+## Distribution status
 
-Both post-build automated runs passed 7/7 on 2026-08-16: text encoding, DDS,
-Unicode whitespace, PolyVeg definition/generator, bake-manifest cleanup,
-PolyVeg OSM cache, and route-regression harness. MinGW completed in 1.39 seconds
-and MSVC in 1.38 seconds.
-
-Manual evidence covers the optimized terrain fix, scaled-viewer rotation, F1
-markers, standard Forest after PolyForest removal, 4 m terrain/map display,
-bounded map memory, Static scale display, dense PolyVeg planting, and a
-6,000-object PolyVeg save/reload. Remaining checks are consolidated in
-`TEST-MATRIX-v0.12.md`.
-
-## Download and installation
-
-Download `tsre-scomod-v0.12.zip` and its `.sha256` companion. Extract the ZIP
-to a separate folder; do not install it over another TSRE copy. Run
-`AddShortcutDesktop.cmd` if a desktop shortcut is wanted.
-
-The ZIP contains one compiler-matched MinGW runtime, application assets, and
-the frozen public v0.12 documents. It excludes source, debug symbols, build
-output, logs, caches, user settings, and alternate-compiler runtime folders.
-
-## Release status
-
-v0.12 is a community open-testing release for 64-bit Windows 10 version 1809
-or later and Windows 11. Report problems with the affected route or rolling
-stock, the operation performed, and the relevant TSRE log when available.
-
-## Acknowledgments and source lineage
-
-Piotr Gadecki, known as GokuMK, is the original author of TSRE5. He created the
-core editor, MSTS/Open Rails file handling, texture, terrain, activity, consist,
-and rendering systems on which GenX is built and shared that invaluable body of
-work with the community. His later TSRE5vc Qt6 and native compressed-texture
-work also supplied an essential independent reference for DXT color,
-transparency, alpha, and future GPU texture work.
-
-Eric Olesen, known as eric-from-trainsim, carried TSRE forward through the TSRE
-8.006 line that directly precedes GenX. His continuing editor, compatibility,
-imagery, rolling-stock, route-reporting, and dedicated 8.006n Qt6 work provided
-the primary source/API reference for preserving the behavior of the immediate
-GenX parent line.
-
-Peter Grønbæk Andersen produced the independent Eric-line Qt6/CMake port used
-as the primary build-structure and dependency-management reference. His CMake,
-vcpkg, deployment, and DDS-loading work supplied proven solutions that were
-reviewed and narrowly adapted to the GenX source rather than copied wholesale.
-
-TSRE GenX continues because these three bodies of work complement one another:
-Piotr's original application and technical foundation, Eric's sustained TSRE
-8.x development, and Peter's independent modern build and Qt6 migration work.
+v0.13 is capped as source code only on GitHub. Reviewed source is published to
+`tsre-scomod-wip` and tagged `v0.13`. A local MinGW distributable and
+checksums are produced, but no binary is uploaded and no GitHub Release is
+created. The latest uploaded binary remains v0.12.

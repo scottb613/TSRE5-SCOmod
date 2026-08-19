@@ -195,10 +195,12 @@ void HeightWindow::drawTile(QImage* &image, bool gui){
     int step = (terrainSize)/terrainResolution;
     
     if(terrainData != NULL){
-        for (int i = 0; i < terrainResolution; i++) {
+        for (int i = 0; i < terrainDataResolution; i++) {
             delete[] terrainData[i];
         }
         delete[] terrainData;
+        terrainData = NULL;
+        terrainDataResolution = 0;
     }
     /*if(terrainData == NULL){
         terrainData = new float*[terrainResolution];
@@ -208,6 +210,7 @@ void HeightWindow::drawTile(QImage* &image, bool gui){
     }*/
     
     terrainData = new float*[terrainResolution];
+    terrainDataResolution = terrainResolution;
     minVal = 999;
     maxVal = -999;
     for (int i = 0; i < terrainResolution; i++) {
@@ -246,6 +249,12 @@ void HeightWindow::drawTile(QImage* &image, bool gui){
 }
 
 HeightWindow::~HeightWindow() {
-    
+    if(terrainData == NULL)
+        return;
+    for(int i = 0; i < terrainDataResolution; ++i)
+        delete[] terrainData[i];
+    delete[] terrainData;
+    terrainData = NULL;
+    terrainDataResolution = 0;
 }
 

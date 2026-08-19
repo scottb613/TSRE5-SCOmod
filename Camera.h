@@ -20,8 +20,6 @@
 
 struct PreciseTileCoordinate;
 class GameObj;
-class GLUU;
-
 class Camera {
 public:
     Camera(float* pt = 0);
@@ -55,7 +53,6 @@ public:
     virtual void keyUp(QKeyEvent * e);
     void setMoveSpeedLock(int mode);
     virtual void update(float fps);
-    virtual void renderHud(GLUU *gluu);
     virtual void setCameraObject(GameObj* o);
     virtual PreciseTileCoordinate* getCurrentPos();
     float * pozT = NULL;

@@ -11,11 +11,13 @@
 #include "PropertiesConsist.h"
 #include "Game.h"
 #include "Consist.h"
+#include "GuiFunct.h"
 
 PropertiesConsist::PropertiesConsist() {
+    GuiFunct::applyEditorPanelStyle(this);
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
-    vbox->setContentsMargins(0,1,1,1);
+    vbox->setContentsMargins(4,4,4,4);
     infoLabel = new QLabel("ActivityConsist:");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     infoLabel->setContentsMargins(3,0,0,0);
@@ -32,11 +34,23 @@ PropertiesConsist::PropertiesConsist() {
     //eObjectType.setDisabled(true);
     //eId.setDisabled(true);
     //eEid.setDisabled(true);
-    vbox->addItem(vlist);
+    GuiFunct::alignEditorForm(vlist);
+    QFrame *speedCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(speedCard);
+    QVBoxLayout *speedLayout = new QVBoxLayout(speedCard);
+    speedLayout->setContentsMargins(6,4,6,4);
+    speedLayout->addLayout(vlist);
+    vbox->addWidget(speedCard);
     
     QPushButton *bCam = new QPushButton("Get Camera View");
+    GuiFunct::styleEditorActionButton(bCam);
     QObject::connect(bCam, SIGNAL(released()), this, SLOT(bCamEnabled()));
-    vbox->addWidget(bCam);
+    QFrame *actionCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(actionCard);
+    QVBoxLayout *actionLayout = new QVBoxLayout(actionCard);
+    actionLayout->setContentsMargins(4,3,4,3);
+    actionLayout->addWidget(bCam);
+    vbox->addWidget(actionCard);
     
         
     vbox->addStretch(1);

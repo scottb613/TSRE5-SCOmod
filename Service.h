@@ -59,9 +59,8 @@ public:
     void load();
     void save();
     Consist *getConsistPointer();
-    void updateSim(float *playerT, float deltaTime);
     void render(GLUU* gluu, float* playerT, int selectionColor);
-    void initToPlay();
+    void prepareEditorPreview();
 private:
     bool modified = false;
     int serial = -1;

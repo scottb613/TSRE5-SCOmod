@@ -1,16 +1,38 @@
-{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Consolas;}}\viewkind4\uc1\pard\f0\fs20 TSRE GenX v0.12 Community Open-Testing Work List\par
+{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Consolas;}}\viewkind4\uc1\pard\f0\fs20 TSRE GenX v0.13 Community Source Checkpoint Work List\par
 \par
 ======================================================================================================\par
 \par
 SCOPE\par
 \par
-TSRE GenX is a maintained development line of the TSRE route editor for MSTS and Open Rails route building. v0.9 delivered the Qt6/CMake modernization on master, v0.10 and v0.11 preserved subsequent source checkpoints, and immutable tag v0.12 records the completed code-only checkpoint from `tsre-scomod-wip`.\par
+TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.13 is the current source checkpoint from tsre-scomod-wip.\par
 \par
 TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Gr\'f8nb\'e6k Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.\par
 \par
 ======================================================================================================\par
 \par
-COMPLETED SOURCE CHECKPOINT: V0.12\par
+COMPLETED SOURCE CHECKPOINT: V0.13\par
+\par
+Route Editor workflow and interface\par
+\par
+- Completed the PolyVeg-derived GenX style pass across remaining object properties, helpers, Errors & Messages, and F5 map panels.\par
+- Standardized aligned fields, compact labels, tooltips, overwrite typing, and latching pinned/snapped/mutually-exclusive popups.\par
+- Added paired Control Panel coordinate copy, copied feedback, compact Location labeling, and a centered route title.\par
+- Moved styled Errors & Messages to F11 and retained Settings on F12.\par
+\par
+Terrain, maps, PolyVeg, and route sessions\par
+\par
+- Completed experimental editable 512-sample/4 m terrain handling and native 2048/4096 bounded map overlays.\par
+- Added explicit Map Tiles ownership and map-off purge; Main Load now performs a guarded restart.\par
+- Shortened PolyVeg controls and refreshed F5 as a map-first workspace with compact fixed panels.\par
+\par
+Verification\par
+\par
+- Clean MinGW and MSVC Release builds completed on 2026-08-19; both registered suites passed 7/7.\par
+- v0.13 is source-only on GitHub. No v0.13 binary or GitHub Release is uploaded.\par
+\par
+======================================================================================================\par
+\par
+PREVIOUS SOURCE CHECKPOINT: V0.12\par
 \par
 Build systems\par
 \par
@@ -552,7 +574,7 @@ The recommended range is roughly 1.00 to 1.25. The setting scales the applicatio
 \par
 Interface sounds are mapped by purpose so deliberate actions are acknowledged without producing noise during passive refreshes:\par
 \par
-  - `SCOclick.wav` plays only after a successful guarded object placement.\par
+  - `SCOpluck.wav` plays only after a successful guarded object placement.\par
   - `SCObuzz.wav` plays only after a Place Guard placement failure.\par
   - `SCOpress.wav` plays once for deliberate mode/status changes and manual panel button presses, including Control Panel controls, edit-mode shortcuts, property panels, and the right-side object selector.\par
 \par
@@ -563,7 +585,7 @@ The same GUI pass standardized active, neutral, success, warning, and failure st
 Yellow button and indicator states now use the same clear Control Panel palette instead of the older mustard shades. F12 True/False choices retain mutually exclusive radio-button behavior but use the cleaner square checkbox-style indicator artwork.\par
 \par
    --- Place Guard ---\par
-I added a Place Guard system to catch the most common accidental object-placement mistakes after TSRE performs its normal placement operation. The idea is to leave the old placement workflow intact, then validate what was just created. If the placement fails validation, TSRE automatically undoes the placement, flashes the Place Guard button red with `ERROR` for three seconds, and plays `SCObuzz.wav`. If the placement passes validation, TSRE plays `SCOclick.wav`.\par
+I added a Place Guard system to catch the most common accidental object-placement mistakes after TSRE performs its normal placement operation. The idea is to leave the old placement workflow intact, then validate what was just created. If the placement fails validation, TSRE automatically undoes the placement, flashes the Place Guard button red with `ERROR` for three seconds, and plays `SCObuzz.wav`. If the placement passes validation, TSRE plays `SCOpluck.wav`.\par
 \par
 The current rules are:\par
 \par

@@ -39,6 +39,7 @@ class RouteEditorClient;
 class Game {
 public:
     static const int RestartAndRestoreExitCode = 773;
+    static const int RestartToMainLoadExitCode = 774;
     static bool ServerMode;
     static QString serverLogin;
     static QString serverAuth;
@@ -62,11 +63,8 @@ public:
     static QString trkName;
     static QString season;
     static QString ceWindowLayout;
-    static QString ActivityToPlay;
     static bool useQuadTree;
     static bool useTdbEmptyItems;
-    static bool playerMode;
-    static bool useNetworkEng;
     static float objectLod;
     static float distantLod;
     static int tileLod;
@@ -182,7 +180,6 @@ public:
     static bool autoNewTiles;
     static bool autoGeoTerrain;
     static bool useSuperelevation;
-    static bool soundEnabled;
     static bool scoSoundEnabled;
     static bool fullscreen;
             
@@ -213,8 +210,6 @@ public:
     static float gradeAssistStepPercent;
     static float gradeAssistNextPercent;
     
-    static bool hudEnabled;
-    static float hudScale;
     static float uiScale;
     
     static bool markerLines;
@@ -329,7 +324,6 @@ private:
     //static RouteEditorWindow* window;
     //static LoadWindow* loadWindow;
     static void DownloadAppData(QString path);
-    static void CheckForOpenAl();
     static void cleanupLogs();
     
     

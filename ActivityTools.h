@@ -82,7 +82,6 @@ public slots:
     void actTrafficOpenEnabled();
     void actTimetableOpenEnabled();
     void actSettingsOpenEnabled();
-    void actPlayEnabled();
     void actSaveEnabled();
     
     void reloadActivityList();

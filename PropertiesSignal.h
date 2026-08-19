@@ -25,6 +25,7 @@ public:
     bool support(GameObj* obj);
     void showObj(GameObj* obj);
     void updateObj(GameObj* obj);
+    QPushButton *hacksButton();
 
 public slots:
     // EFO added two
@@ -32,17 +33,17 @@ public slots:
     void customDetailLevelEdited(QString val);    
     void shiftSignal();
     void flipSignal();
-    void showSubObjList();
+    void showSubObjList(bool checked);
+    void subObjectsWindowClosed();
     void checkboxAnimEdited(int val);
     void checkboxTerrainEdited(int val);
     void cShadowTypeEdited(int val);
-    void hacksButtonEnabled();
-    void haxFixFlagsEnabled();
     void msg(QString name, QString val);
     void editPositionEnabled(QString val);
     
 signals:
     void enableTool(QString val);
+    void hacksToggled(GameObj *selection, QPushButton *button, bool checked);
     
 private:
     QLineEdit name;
@@ -50,6 +51,8 @@ private:
     QCheckBox chFlipShape;
     SignalObj* sobj;
     SignalWindow* signalWindow;
+    QPushButton* subObjectsButton = NULL;
+    QPushButton hacks;
     
     QCheckBox checkboxAnim;
     QCheckBox checkboxTerrain;

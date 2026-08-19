@@ -208,7 +208,6 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "consoleoutput") return "Shows log output in the command window while TSRE is running. Leave this off for normal use unless you are troubleshooting.";
     if (k == "debugoutput") return "Enables extra diagnostic logging. Use this only while chasing a problem because it can create noisy logs.";
     if (k == "fullscreen") return "Starts the editor maximized. Leave this off if you prefer TSRE to restore its saved window size.";
-    if (k == "soundenabled") return "Controls legacy TSRE sound support. This is separate from GenX interface sounds.";
     if (k == "scosoundenabled") return "Enables GenX interface sounds such as placement clicks, error buzzes, and mode-change chirps.";
     if (k == "systemtheme") return "Uses the Windows system palette instead of TSRE's built-in dark interface colors.";
     if (k == "unsafemode") return "Enables advanced maintenance operations that can alter route data. Keep this off unless you know a tool requires it.";
@@ -231,7 +230,7 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "routemergeterrain") return "Allows route merge operations to overwrite overlapping terrain heights.";
     if (k == "routemergeterrtex") return "Allows route merge operations to overwrite overlapping terrain texture assignments.";
     if (k == "toolshidden") return "Starts with tool panels hidden so the viewport gets more room.";
-    if (k == "uiscale") return "Scales editor fonts and panel widths. The recommended range is 1.00 to 1.25.";
+    if (k == "uiscale") return "Scales editor fonts and panel geometry. Supported range: 0.75 to 1.25.";
     if (k == "camerafov") return "Sets the camera field of view in degrees. Lower values feel more zoomed in; higher values show more peripheral view.";
     if (k == "cameraspeedmax") return "Camera movement speed while holding Shift.";
     if (k == "cameraspeedmin") return "Camera movement speed while holding Ctrl.";
@@ -310,11 +309,9 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "routerebuildtdb") return "Allows route TDB rebuild operations. This requires unsafe mode and should be used only with backups.";
     if (k == "sorttileobjects") return "Sorts tile objects by detail level when saving world files.";
     if (k == "fpslimit") return "Caps the editor refresh rate to reduce unnecessary CPU and GPU load.";
-    if (k == "playermode") return "Advanced mode intended for player-style operation rather than route editing.";
     if (k == "proceduraltracks") return "Enables procedural track support where TSRE uses that path.";
     if (k == "serverauth") return "Authentication mode for network/server editing. Leave blank for none or enter file for file-based authentication.";
     if (k == "serverlogin") return "Login string used by network/server editing modes.";
-    if (k == "usenetworkeng") return "Enables the network editor engine. Leave this off for normal local route editing.";
     if (k == "cewindowlayout") return "Controls Consist Editor panel layout. C is Consists, 1 is Main List, and 2 is Second List.";
     if (k == "colorconview") return "Background color used by the Consist Editor consist view.";
     if (k == "colorshapeview") return "Background color used by the Shape Viewer.";
@@ -333,7 +330,7 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
 
 void SettingsDialog::createKeyAssignmentsTab(QTabWidget* tabs) {
     QTableWidget* table = new QTableWidget(tabs);
-    const float scale = qMax(1.0f, Game::uiScale);
+    const float scale = qBound(0.75f, Game::uiScale, 1.25f);
     const int normalRowHeight = qRound(24.0f * scale);
     const int sectionRowHeight = qRound(29.0f * scale);
     const int spacerRowHeight = qRound(8.0f * scale);
@@ -422,11 +419,14 @@ QString SettingsDialog::keyAssignmentsText() const {
         "Ctrl+C        Copy\n"
         "Ctrl+V        Paste\n"
         "F1            Show Objects tools\n"
-        "F2            Show Terrain tools\n"
-        "F3            Show Geo tools\n"
-        "F4            Show Activity tools\n"
-        "F5            Toggle Properties window\n"
-        "F7            Toggle Control Panel\n"
+        "Shift+F1      Toggle Properties window\n"
+        "Ctrl+F1       Toggle Control Panel\n"
+        "F2            Show Terrain Mesh tools\n"
+        "F3            Show Terrain Texture tools\n"
+        "F4            Show Geo tools\n"
+        "F5            Toggle full-screen Activity Builder\n"
+        "F6            Toggle Auto Place\n"
+        "F7            Toggle PolyVeg Planter\n"
         "F8            Toggle Errors/Messages window\n"
         "F12           Toggle Settings window\n"
         "/             Toggle Stick Camera To Terrain\n"
@@ -530,7 +530,6 @@ void SettingsDialog::setupUi() {
     addRow(l, "consoleOutput", "bool", "Console Output", "Displays log output in realtime in command window");
     addRow(l, "debugOutput", "bool", "Debug Output", "enables extended logging detail");
     addRow(l, "fullscreen", "bool", "Fullscreen", "Starts the editor maximized");
-    addRow(l, "soundEnabled", "bool", "Sound Enabled", "");
     addRow(l, "systemTheme", "bool", "System Theme", "true uses Windows palette");
     addRow(l, "unsafemode", "bool", "Unsafe Mode", "Only for risky features");
     addRow(l, "useImperial", "bool", "Use Imperial", "");
@@ -558,7 +557,7 @@ void SettingsDialog::setupUi() {
 
     createScrollTab(l, tabs, "UI");
     addRow(l, "toolsHidden", "bool", "Tools Hidden", "");
-    addRow(l, "uiScale", "number", "UI Scale", "1.00 to 1.25 recommended");
+    addRow(l, "uiScale", "number", "UI Scale", "0.75 to 1.25 supported");
     addRow(l, "scoSoundEnabled", "bool", "UI Sounds", "Enables interface clicks, error buzzes, and success chirps");
 
     createScrollTab(l, tabs, "Camera");
@@ -647,11 +646,9 @@ void SettingsDialog::setupUi() {
 
     createScrollTab(l, tabs, "Advanced");
     addRow(l, "fpsLimit", "number", "FPS Limit", "");
-    addRow(l, "playerMode", "bool", "Player Mode", "");
     addRow(l, "proceduralTracks", "bool", "Procedural Tracks", "");
     addRow(l, "serverAuth", "string", "Server Auth Mode", "blank or file");
     addRow(l, "serverLogin", "string", "Server Login", "");
-    addRow(l, "useNetworkEng", "bool", "Use Network Engine", "");
 
     createScrollTab(l, tabs, "Consist");
     addRow(l, "ceWindowLayout", "string", "CE Layout", "C-Consists, 1-Main List, 2-Second List");
@@ -709,13 +706,12 @@ bool SettingsDialog::save(const QString& filename) {
 
     out << "// TSRE GenX " << Game::AppVersion << " settings\n";
     out << "// Both # and // can be used for comments.\n";
-    out << "// Recommended public uiScale range: 1.00 to 1.25.\n\n";
+    out << "// Supported public uiScale range: 0.75 to 1.25.\n\n";
 
     out << "\n//// General / System\n\n";
     writeSetting(out, "consoleOutput", "false", "display log output in realtime in the command window");
     writeSetting(out, "debugOutput", "false", "enable extended logging detail");
     writeSetting(out, "fullscreen", "false", "start maximized/fullscreen");
-    writeSetting(out, "soundEnabled", "false", "legacy TSRE sound support");
     writeSetting(out, "systemTheme", "false", "true uses your Windows palette");
     writeSetting(out, "unsafemode", "false", "only enable for risky/advanced features");
     writeSetting(out, "useImperial", "on", "convert some display values from metric");
@@ -745,7 +741,7 @@ bool SettingsDialog::save(const QString& filename) {
 
     out << "\n\n//// UI / Windows / Scaling\n\n";
     writeSetting(out, "toolsHidden", "false", "only show the viewport");
-    writeSetting(out, "uiScale", "1.00", "global editor UI font/panel scale; 1.00 to 1.25 recommended");
+    writeSetting(out, "uiScale", "1.00", "global editor UI font/panel scale; 0.75 to 1.25 supported");
     writeSetting(out, "scoSoundEnabled", "true", "interface clicks, error buzzes, and success chirps");
 
     out << "\n\n//// Camera / Viewport\n\n";
@@ -852,11 +848,9 @@ bool SettingsDialog::save(const QString& filename) {
 
     out << "\n\n//// Advanced / Network / Multi-User\n\n";
     writeSetting(out, "fpsLimit", "59");
-    writeOptionalSetting(out, "playerMode", "");
     writeOptionalSetting(out, "proceduralTracks", "true");
     writeOptionalSetting(out, "serverAuth", "");
     writeOptionalSetting(out, "serverLogin", "");
-    writeOptionalSetting(out, "useNetworkEng", "false");
 
     out << "\n\n//// Consist Editor\n\n";
     writeSetting(out, "ceWindowLayout", "cu1", "C = Consists, 1 = Main List, 2 = Second List", true);
@@ -1097,8 +1091,6 @@ QString SettingsDialog::getGameValue(const QString& key) {
     if (key == "loadactivities") return Game::loadActivities ? "true" : "false";
     if (key == "loadconsists") return Game::loadConsists ? "true" : "false";
     if (key == "cewindowlayout") return Game::ceWindowLayout;
-    if (key == "playermode") return Game::playerMode ? "true" : "false";
-    if (key == "usenetworkeng") return Game::useNetworkEng ? "true" : "false";
     if (key == "usequadtree") return Game::useQuadTree ? "true" : "false";
     if (key == "usetdbemptyitems") return Game::useTdbEmptyItems ? "true" : "false";
     if (key == "allowobjlag") return QString::number(Game::allowObjLag);
@@ -1148,7 +1140,6 @@ QString SettingsDialog::getGameValue(const QString& key) {
     if (key == "autofix") return Game::autoFix ? "true" : "false";
     if (key == "listfiles") return Game::listFiles ? "true" : "false";
     if (key == "mapimageresolution") return QString::number(Game::mapImageResolution);
-    if (key == "soundenabled") return Game::soundEnabled ? "true" : "false";
     if (key == "scosoundenabled") return Game::scoSoundEnabled ? "true" : "false";
     if (key == "aasamples") return QString::number(Game::AASamples);
     if (key == "defaultelevationbox") return QString::number(Game::DefaultElevationBox);

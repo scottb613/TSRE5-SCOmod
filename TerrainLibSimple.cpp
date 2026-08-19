@@ -25,6 +25,73 @@
 #include "Environment.h"
 #include "TerrainInfo.h"
 #include "MapWindow.h"
+#include "TerrainTrackMath.h"
+
+namespace {
+
+template<typename TerrainGetter, typename Visitor>
+void forEachNativeSimpleTerrainSample(TerrainGetter terrainGetter,
+                                      int originTileX, int originTileZ,
+                                      const TerrainTrackMath::Bounds &bounds,
+                                      float radius,
+                                      Visitor visitor) {
+    const float minWorldX = bounds.minX - radius;
+    const float maxWorldX = bounds.maxX + radius;
+    const float minWorldZ = bounds.minZ - radius;
+    const float maxWorldZ = bounds.maxZ + radius;
+    const int minTileOffsetX = TerrainTrackMath::tileOffsetForCoordinate(minWorldX);
+    const int maxTileOffsetX = TerrainTrackMath::tileOffsetForCoordinate(maxWorldX);
+    const int minTileOffsetZ = TerrainTrackMath::tileOffsetForCoordinate(minWorldZ);
+    const int maxTileOffsetZ = TerrainTrackMath::tileOffsetForCoordinate(maxWorldZ);
+
+    for(int tileOffsetX = minTileOffsetX; tileOffsetX <= maxTileOffsetX; ++tileOffsetX){
+        for(int tileOffsetZ = minTileOffsetZ; tileOffsetZ <= maxTileOffsetZ; ++tileOffsetZ){
+            const int tileX = originTileX + tileOffsetX;
+            const int tileZ = originTileZ + tileOffsetZ;
+            Terrain *sampleTerrain = terrainGetter(tileX, tileZ);
+            if(sampleTerrain == NULL || !sampleTerrain->loaded)
+                continue;
+
+            const int samples = sampleTerrain->getSampleCount();
+            const int sampleSize = sampleTerrain->getSampleSize();
+            if(samples <= 0 || sampleSize <= 0)
+                continue;
+
+            const int firstSampleX = TerrainTrackMath::firstNativeSampleIndex(
+                minWorldX, tileOffsetX, sampleSize);
+            const int lastSampleX = TerrainTrackMath::lastNativeSampleIndex(
+                maxWorldX, tileOffsetX, sampleSize, samples);
+            const int firstSampleZ = TerrainTrackMath::firstNativeSampleIndex(
+                minWorldZ, tileOffsetZ, sampleSize);
+            const int lastSampleZ = TerrainTrackMath::lastNativeSampleIndex(
+                maxWorldZ, tileOffsetZ, sampleSize, samples);
+
+            for(int sampleX = firstSampleX; sampleX <= lastSampleX; ++sampleX){
+                const float worldX = TerrainTrackMath::nativeSampleCoordinate(
+                    tileOffsetX, sampleX, sampleSize);
+                for(int sampleZ = firstSampleZ; sampleZ <= lastSampleZ; ++sampleZ){
+                    const float worldZ = TerrainTrackMath::nativeSampleCoordinate(
+                        tileOffsetZ, sampleZ, sampleSize);
+                    visitor(sampleTerrain, tileX, tileZ, sampleX, sampleZ,
+                            sampleSize, worldX, worldZ);
+                }
+            }
+        }
+    }
+}
+
+void setNativeSimpleTerrainSampleHeight(Terrain *terrain,
+                                        int tileX, int tileZ,
+                                        int sampleX, int sampleZ,
+                                        int sampleSize, float height) {
+    terrain->terrainData[sampleZ][sampleX] = height;
+    const float localX = sampleX * sampleSize - TerrainTrackMath::TileHalfSize;
+    const float localZ = sampleZ * sampleSize - TerrainTrackMath::TileHalfSize;
+    terrain->setErrorBias(tileX, tileZ, localX, localZ, 0);
+    terrain->setModified(true);
+}
+
+}
 
 TerrainLibSimple::TerrainLibSimple() {
 }
@@ -148,10 +215,7 @@ void TerrainLibSimple::setHeight(int x, int z, float posx, float posz, float h) 
     if (terr == NULL) return;
     if (terr->loaded == false) return;
     
-    //float value = terr->terrainData[(int) (posz + 1024) / 8][(int) (posx + 1024) / 8];
-    terr->terrainData[(int) (posz + 1024) / 8][(int) (posx + 1024) / 8] = h;
-    terr->setErrorBias(x, z, posx, posz, 0);
-    terr->setModified(true);
+    terr->setHeight(x, z, posx, posz, h);
 }
 
 Terrain* TerrainLibSimple::setHeight256(int x, int z, int posx, int posz, float h){
@@ -166,16 +230,24 @@ Terrain* TerrainLibSimple::setHeight256(int x, int z, int posx, int posz, float 
     if (terr == NULL) return NULL;
     if (terr->loaded == false) return NULL;
     
-    //float value = terr->terrainData[(int) (posz + 1024) / 8][(int) (posx + 1024) / 8];
+    float localX = posx;
+    float localZ = posz;
+    terr->getLocalCoords(x, z, localX, localZ);
+    const int sampleSize = terr->getSampleSize();
+    if(sampleSize <= 0)
+        return NULL;
+    const int sampleX = localX / sampleSize;
+    const int sampleZ = localZ / sampleSize;
+
     if(diffC == 0 && diffE == 0){
-        terr->terrainData[(posz+1024)/8][(posx+1024)/8] = h;
+        terr->terrainData[sampleZ][sampleX] = h;
     } else {
-        if(terr->terrainData[(posz+1024)/8][(posx+1024)/8] < h)
-            if(terr->terrainData[(posz+1024)/8][(posx+1024)/8] < h - diffE) 
-                terr->terrainData[(posz+1024)/8][(posx+1024)/8] = h - diffE;
-        if(terr->terrainData[(posz+1024)/8][(posx+1024)/8] > h)
-            if(terr->terrainData[(posz+1024)/8][(posx+1024)/8] > h + diffC) 
-                terr->terrainData[(posz+1024)/8][(posx+1024)/8] = h + diffC;
+        if(terr->terrainData[sampleZ][sampleX] < h)
+            if(terr->terrainData[sampleZ][sampleX] < h - diffE)
+                terr->terrainData[sampleZ][sampleX] = h - diffE;
+        if(terr->terrainData[sampleZ][sampleX] > h)
+            if(terr->terrainData[sampleZ][sampleX] > h + diffC)
+                terr->terrainData[sampleZ][sampleX] = h + diffC;
     }
     terr->setErrorBias(x, z, posx, posz, 0);
     terr->setModified(true);
@@ -210,14 +282,7 @@ void TerrainLibSimple::getRotation(float* rot, int x, int z, float posx, float p
     if (terr == NULL) return;
     if (terr->loaded == false) return;
     
-    float tx = terr->terrainData[(int) (posz + 1024) / 8 + 1][(int) (posx + 1024) / 8]
-        - terr->terrainData[(int) (posz + 1024) / 8][(int) (posx + 1024) / 8];
-    float tz = terr->terrainData[(int) (posz + 1024) / 8][(int) (posx + 1024) / 8 + 1]
-        - terr->terrainData[(int) (posz + 1024) / 8][(int) (posx + 1024) / 8];
-    
-    rot[0] = atan(tx/8.0);
-    rot[1] = atan(tz/8.0);
-    return;
+    terr->getRotation(rot, x, z, posx, posz);
 }
 
 void TerrainLibSimple::setHeightFromGeoGui(int x, int z, float* p){
@@ -237,13 +302,14 @@ void TerrainLibSimple::setHeightFromGeoGui(int x, int z, float* p){
     heightWindow->tileX = x;
     heightWindow->tileZ = -z;
     heightWindow->ok = false;
-    heightWindow->terrainResolution = 256;
-    heightWindow->terrainSize = 2048;
+    const int samples = terr->getSampleCount();
+    heightWindow->terrainResolution = samples;
+    heightWindow->terrainSize = samples * terr->getSampleSize();
     heightWindow->exec();
     if(heightWindow->ok){
         qDebug() << "ok";
-        for (int i = 0; i < 256; i++) {
-            for (int j = 0; j < 256; j++) {
+        for (int i = 0; i < samples; i++) {
+            for (int j = 0; j < samples; j++) {
                 terr->terrainData[i][j] = heightWindow->terrainData[j][i];
             }
         }
@@ -277,13 +343,14 @@ void TerrainLibSimple::setHeightFromGeo(int x, int z, float* p){
     heightWindow->tileX = x;
     heightWindow->tileZ = -z;
     heightWindow->ok = false;
-    heightWindow->terrainResolution = 256;
-    heightWindow->terrainSize = 2048;
+    const int samples = terr->getSampleCount();
+    heightWindow->terrainResolution = samples;
+    heightWindow->terrainSize = samples * terr->getSampleSize();
     heightWindow->load(false);
     if(heightWindow->ok){
         qDebug() << "ok";
-        for (int i = 0; i < 256; i++) {
-            for (int j = 0; j < 256; j++) {
+        for (int i = 0; i < samples; i++) {
+            for (int j = 0; j < samples; j++) {
                 terr->terrainData[i][j] = heightWindow->terrainData[j][i];
             }
         }
@@ -320,134 +387,63 @@ void TerrainLibSimple::setTextureToTrackObj(Brush* brush, float* punkty, int len
 
 void TerrainLibSimple::setTerrainToTrackObj(Brush* brush, float* punkty, int length, int tx, int tz, float* matrix, float offsetY){
     QSet<Terrain*> uterr;
+    if(brush == NULL || punkty == NULL || length < 3)
+        return;
+    (void)matrix;
 
-    // calculating plane equation
-    float p1[3];
-    float p2[3];
-    float p3[3];
-    
-    p1[0] = punkty[0];
-    p1[1] = punkty[1];
-    p1[2] = punkty[2];
-    p2[0] = punkty[length-3];
-    p2[1] = punkty[length-2];
-    p2[2] = punkty[length-1];
-    p3[0] = 10;
-    p3[1] = 0;
-    p3[2] = 10;
-    Vec3::transformMat4(p3, p3, matrix);
-    qDebug() << p1[0] << " " << p1[1] <<" " << p1[2];
-    qDebug() << p2[0] << " " << p2[1] <<" " << p2[2];
-    qDebug() << p3[0] << " " << p3[1] <<" " << p3[2];
-    Vector3f vec1, vec2, vec3;
-    vec1.x = p2[0] - p1[0]; vec1.y = p2[1] - p1[1]; vec1.z = p2[2] - p1[2];
-    vec2.x = p3[0] - p1[0]; vec2.y = p3[1] - p1[1]; vec2.z = p3[2] - p1[2];
+    auto terrainGetter = [&](int tileX, int tileZ) {
+        return terrain[(tileX * 10000 + tileZ)];
+    };
+    int referenceTileX = tx;
+    int referenceTileZ = tz;
+    float referenceX = punkty[0];
+    float referenceZ = punkty[2];
+    Game::check_coords(referenceTileX, referenceTileZ, referenceX, referenceZ);
+    Terrain *referenceTerrain = terrainGetter(referenceTileX, referenceTileZ);
+    const float gridSize = referenceTerrain != NULL && referenceTerrain->loaded
+        ? referenceTerrain->getSampleSize()
+        : TerrainTrackMath::GridSize;
+    const float bedHalfWidth = TerrainTrackMath::bedHalfWidth(
+        brush->eSize, gridSize);
+    const float influenceRadius = TerrainTrackMath::conformInfluenceRadius(
+        bedHalfWidth, brush->eRadius, gridSize);
+    const TerrainTrackMath::Bounds bounds =
+        TerrainTrackMath::boundsForTrack(punkty, length);
 
-    //Vector3f::cross(vec3, vec1, vec2);
-    vec3.x = vec1.y * vec2.z - vec1.z * vec2.y;
-    vec3.y = vec1.z * vec2.x - vec1.x * vec2.z;
-    vec3.z = vec1.x * vec2.y - vec1.y * vec2.x;
-    qDebug() << vec1.x << " " << vec1.y <<" " << vec1.z;
-    qDebug() << vec2.x << " " << vec2.y <<" " << vec2.z;
-    qDebug() << vec3.x << " " << vec3.y <<" " << vec3.z;
-    float vec3d = vec3.x*p1[0] + vec3.y*p1[1] + vec3.z*p1[2];
-    vec3.x /= vec3.y;
-    vec3.z /= vec3.y;
-    vec3d /= vec3.y;
-    
-    // end of calculating plane equation
-    
-    for(int i = 0; i < length; i+=3 ){
-        float h = vec3d - vec3.x*punkty[i] - vec3.z*punkty[i+2];
-        qDebug() << punkty[i] << " " << punkty[i+1] <<" " << punkty[i+2] <<" "<<h <<"";
-    }
-    //qDebug() << p1[0] << " " << p1[1] <<" "<<p1[2] <<"";
-    //qDebug() << p2[0] << " " << p2[1] <<" "<<p2[2] <<"";
-    //qDebug() << p3[0] << " " << p3[1] <<" "<<p3[2] <<"";
-    
-    // use equation
-    int xxf, zzf;
-    int xxc, zzc;
-    int xx, zz;
-    float h; 
+    QSet<Terrain*> undoTerrains;
+    forEachNativeSimpleTerrainSample(terrainGetter, tx, tz, bounds,
+        influenceRadius,
+        [&](Terrain *terr, int tileX, int tileZ,
+            int sampleX, int sampleZ, int sampleSize,
+            float worldX, float worldZ) {
+            float distance;
+            float trackHeight;
+            if(!TerrainTrackMath::nearestTrack(
+                    punkty, length, worldX, worldZ, distance, trackHeight))
+                return;
+            if(distance > influenceRadius)
+                return;
 
-    float diffC = 0;
-    float diffE = 0;
-    int iis, jjs;
-    
-    //set to undo
-    int ttx, ttz;
-    Terrain *terr = NULL;
-    for(int ii = -brush->eRadius; ii < brush->eRadius; ii++)
-        for(int jj = -brush->eRadius; jj < brush->eRadius; jj++){
-            if(sqrt(ii*ii + jj*jj) > brush->eRadius) continue;
-            for(int i = 0; i< length; i+=3){
-                xx = floor((float)punkty[i]/8.0) + ii;
-                zz = floor((float)punkty[i+2]/8.0) + jj;
-                xx *= 8;
-                zz *= 8;
-                ttx = tx;
-                ttz = tz;
-                Game::check_coords(ttx, ttz, xx, zz);
-                if (terr != terrain[(ttx * 10000 + ttz)]){
-                    terr = terrain[(ttx * 10000 + ttz)];
-                    if (terr == NULL) continue;
-                    if (terr->loaded == false) continue;
-                    Undo::PushTerrainHeightMap(terr->mojex, terr->mojez, terr->terrainData, terr->getSampleCount());
-                }
+            const float originalHeight = terr->terrainData[sampleZ][sampleX];
+            const float targetHeight = TerrainTrackMath::conformEnvelopeHeight(
+                originalHeight, trackHeight + offsetY, distance,
+                bedHalfWidth, sampleSize, brush->eCut, brush->eEmb);
+            if(fabs(targetHeight - originalHeight) < 0.001f)
+                return;
+
+            if(!undoTerrains.contains(terr)){
+                Undo::PushTerrainHeightMap(
+                    terr->mojex, terr->mojez,
+                    terr->terrainData, terr->getSampleCount());
+                undoTerrains.insert(terr);
             }
-        }
-    //
-    
-    for(int ii = -brush->eRadius; ii < brush->eRadius; ii++)
-        for(int jj = -brush->eRadius; jj < brush->eRadius; jj++){
-            if(sqrt(ii*ii + jj*jj) > brush->eRadius) continue;
-            for(int i = 0; i< length; i+=3){
-                xx = floor((float)punkty[i]/8.0);
-                zz = floor((float)punkty[i+2]/8.0);
-                xx += ii;
-                zz += jj;
-                if(ii <= -brush->eSize) 
-                    iis = ii+brush->eSize-1;
-                else if(ii >= brush->eSize) 
-                    iis = ii-brush->eSize;
-                else
-                    iis = 0;
-                if(jj <= -brush->eSize) 
-                    jjs = jj+brush->eSize-1;
-                else if(jj >= brush->eSize) 
-                    jjs = jj-brush->eSize;
-                else
-                    jjs = 0;
-                h = vec3d - vec3.x*xx*8 - vec3.z*zz*8;
-                //
-                diffC = sqrt(iis*iis + jjs*jjs)*brush->eCut;
-                diffE = sqrt(iis*iis + jjs*jjs)*brush->eEmb;
-                //qDebug() << diffC <<" "<<diffE;
-                uterr.insert(setHeight256(tx, tz, xx*8, zz*8, h + offsetY, diffC, diffE));
-            }
-        }
-    
-    /*for(int j = 0; j < brush->eSize; j++)
-        for(int i = 0; i< length; i+=3){
-            xxf = floor((float)punkty[i]/8.0 -1*j);
-            zzf = floor((float)punkty[i+2]/8.0 -1*j);
-            xxc = ceil((float)punkty[i]/8.0 +1*j);
-            zzc = ceil((float)punkty[i+2]/8.0 +1*j);
-            //xx+=ii;
-            //zz+=jj;
-            h = vec3d - vec3.x*xxf*8 - vec3.z*zzf*8;
-            uterr.insert(setHeight256(tx, tz, xxf*8, zzf*8, h));
-            h = vec3d - vec3.x*xxc*8 - vec3.z*zzf*8;
-            uterr.insert(setHeight256(tx, tz, xxc*8, zzf*8, h));
-            h = vec3d - vec3.x*xxf*8 - vec3.z*zzc*8;
-            uterr.insert(setHeight256(tx, tz, xxf*8, zzc*8, h));
-            h = vec3d - vec3.x*xxc*8 - vec3.z*zzc*8;
-            uterr.insert(setHeight256(tx, tz, xxc*8, zzc*8, h));
-            //qDebug() << xx << " " << zz << " " << h;
-        }*/
-    
-    //Terrain *terr;
+
+            setNativeSimpleTerrainSampleHeight(
+                terr, tileX, tileZ, sampleX, sampleZ,
+                sampleSize, targetHeight);
+            uterr.insert(terr);
+        });
+
     foreach (Terrain *value, uterr){
         if(value == NULL)
             continue;
@@ -457,12 +453,140 @@ void TerrainLibSimple::setTerrainToTrackObj(Brush* brush, float* punkty, int len
 }
 
 void TerrainLibSimple::smoothTerrainToTrackObj(Brush* brush, float* punkty, int length, int tx, int tz, float* matrix){
-    (void)brush;
-    (void)punkty;
-    (void)length;
-    (void)tx;
-    (void)tz;
+    QSet<Terrain*> uterr;
+    if(brush == NULL || punkty == NULL || length < 3)
+        return;
     (void)matrix;
+
+    auto terrainGetter = [&](int tileX, int tileZ) {
+        return terrain[(tileX * 10000 + tileZ)];
+    };
+    int referenceTileX = tx;
+    int referenceTileZ = tz;
+    float referenceX = punkty[0];
+    float referenceZ = punkty[2];
+    Game::check_coords(referenceTileX, referenceTileZ, referenceX, referenceZ);
+    Terrain *referenceTerrain = terrainGetter(referenceTileX, referenceTileZ);
+    const float gridSize = referenceTerrain != NULL && referenceTerrain->loaded
+        ? referenceTerrain->getSampleSize()
+        : TerrainTrackMath::GridSize;
+    const float bedHalfWidth = TerrainTrackMath::bedHalfWidth(
+        brush->eSize, gridSize);
+    const float smoothStart = TerrainTrackMath::smoothStart(
+        bedHalfWidth, gridSize);
+    const float influenceRadius = TerrainTrackMath::smoothInfluenceRadius(
+        bedHalfWidth, brush->eRadius, gridSize);
+    const float smoothWidth = std::max(gridSize, influenceRadius - smoothStart);
+    float strength = std::max(0.35f, brush->alpha);
+    if(strength < 0.0f) strength = 0.0f;
+    if(strength > 1.0f) strength = 1.0f;
+
+    const TerrainTrackMath::Bounds bounds =
+        TerrainTrackMath::boundsForTrack(punkty, length);
+    struct SmoothTarget {
+        int tileX;
+        int tileZ;
+        int sampleX;
+        int sampleZ;
+        int sampleSize;
+        float height;
+        Terrain *terrain;
+    };
+    QVector<SmoothTarget> targets;
+
+    forEachNativeSimpleTerrainSample(terrainGetter, tx, tz, bounds,
+        influenceRadius,
+        [&](Terrain *terr, int tileX, int tileZ,
+            int sampleX, int sampleZ, int sampleSize,
+            float worldX, float worldZ) {
+            float distance;
+            float trackHeight;
+            if(!TerrainTrackMath::nearestTrack(
+                    punkty, length, worldX, worldZ, distance, trackHeight))
+                return;
+            if(distance > influenceRadius)
+                return;
+
+            const float originalHeight = terr->terrainData[sampleZ][sampleX];
+            if(distance <= bedHalfWidth){
+                if(fabs(trackHeight - originalHeight) < 0.001f)
+                    return;
+                targets.push_back({tileX, tileZ, sampleX, sampleZ,
+                                   sampleSize, trackHeight, terr});
+                return;
+            }
+            if(distance < smoothStart)
+                return;
+
+            float weightedHeight = 0.0f;
+            float weightTotal = 0.0f;
+            const float localX = sampleX * sampleSize - TerrainTrackMath::TileHalfSize;
+            const float localZ = sampleZ * sampleSize - TerrainTrackMath::TileHalfSize;
+            for(int ox = -2; ox <= 2; ++ox){
+                for(int oz = -2; oz <= 2; ++oz){
+                    const float neighborWorldX = worldX + ox * sampleSize;
+                    const float neighborWorldZ = worldZ + oz * sampleSize;
+                    const float sampleHeight = getHeight(
+                        tileX, tileZ,
+                        localX + ox * sampleSize,
+                        localZ + oz * sampleSize, false);
+                    if(sampleHeight < -999.0f)
+                        continue;
+                    float sampleDistance;
+                    float sampleTrackHeight;
+                    if(!TerrainTrackMath::nearestTrack(
+                            punkty, length, neighborWorldX, neighborWorldZ,
+                            sampleDistance, sampleTrackHeight))
+                        continue;
+                    if(sampleDistance < smoothStart)
+                        continue;
+                    const float kernelDistance =
+                        sqrt((float)(ox * ox + oz * oz));
+                    float weight = 1.0f / (1.0f + kernelDistance);
+                    if(ox == 0 && oz == 0)
+                        weight = 2.0f;
+                    weightedHeight += sampleHeight * weight;
+                    weightTotal += weight;
+                }
+            }
+            if(weightTotal <= 0.0f)
+                return;
+
+            const float averageHeight = weightedHeight / weightTotal;
+            const float fade = 1.0f - TerrainTrackMath::smoothStep(
+                (distance - smoothStart) / smoothWidth);
+            const float targetHeight = originalHeight
+                + (averageHeight - originalHeight) * strength * fade;
+            if(fabs(targetHeight - originalHeight) < 0.001f)
+                return;
+            targets.push_back({tileX, tileZ, sampleX, sampleZ,
+                               sampleSize, targetHeight, terr});
+        });
+
+    QSet<Terrain*> undoTerrains;
+    for(int i = 0; i < targets.size(); ++i){
+        Terrain *terr = targets[i].terrain;
+        if(terr == NULL || !terr->loaded)
+            continue;
+        if(!undoTerrains.contains(terr)){
+            Undo::PushTerrainHeightMap(
+                terr->mojex, terr->mojez,
+                terr->terrainData, terr->getSampleCount());
+            undoTerrains.insert(terr);
+        }
+        setNativeSimpleTerrainSampleHeight(
+            terr, targets[i].tileX, targets[i].tileZ,
+            targets[i].sampleX, targets[i].sampleZ,
+            targets[i].sampleSize, targets[i].height);
+        uterr.insert(terr);
+    }
+
+    foreach (Terrain *value, uterr){
+        if(value == NULL)
+            continue;
+        value->setModified(true);
+        value->refresh();
+    }
 }
 
 void TerrainLibSimple::setTerrainTexture(Brush* brush, int x, int z, float* p){
@@ -649,214 +773,169 @@ void TerrainLibSimple::setFixedTileHeight(Brush* brush, int x, int z, float* p){
     if (terr == NULL) return;
     if (terr->loaded == false) return;
     Undo::PushTerrainHeightMap(terr->mojex, terr->mojez, terr->terrainData, terr->getSampleCount());
-    for (int i = 0; i < 256; i++)
-        for (int j = 0; j < 256; j++) {
-            terr->terrainData[i][j] = brush->hFixed;
-        }
-    terr->refresh();
-    terr->setModified(true);
+    terr->setFixedHeight(brush->hFixed);
 }
 
 QSet<Terrain*> TerrainLibSimple::paintHeightMap(Brush* brush, int x, int z, float* p){
-    
     QSet<Terrain*> uterr;
-    
-    float posx = round(p[0]/8.0)*8.0;
-    float posz = round(p[2]/8.0)*8.0;
-    
+
+    if(brush == NULL || p == NULL || brush->size <= 0)
+        return uterr;
+
+    float posx = p[0];
+    float posz = p[2];
     Game::check_coords(x, z, posx, posz);
-    if(Game::debugOutput) qDebug() << x << " " << z << " " << posx << " " << posz;
-    
-    Terrain *terr;
-    terr = terrain[(x * 10000 + z)];
-    if (terr == NULL) return uterr;
-    if (terr->loaded == false) return uterr;
-    //terr->paintTexture(x, z, posx, posz);
+
+    auto terrainGetter = [&](int tileX, int tileZ) {
+        return terrain[(tileX * 10000 + tileZ)];
+    };
+
+    Terrain *terr = terrainGetter(x, z);
+    if(terr == NULL || !terr->loaded)
+        return uterr;
+
+    const int centerSampleSize = terr->getSampleSize();
+    if(centerSampleSize <= 0)
+        return uterr;
+    posx = std::round(posx / centerSampleSize) * centerSampleSize;
+    posz = std::round(posz / centerSampleSize) * centerSampleSize;
+    Game::check_coords(x, z, posx, posz);
+    terr = terrainGetter(x, z);
+    if(terr == NULL || !terr->loaded)
+        return uterr;
+
+    if(Game::debugOutput)
+        qDebug() << x << " " << z << " " << posx << " " << posz;
+
+    const float legacyGridSize = TerrainTrackMath::GridSize;
+    const float brushRadius = brush->size * legacyGridSize;
+    TerrainTrackMath::Bounds brushBounds;
+    brushBounds.minX = posx - brushRadius;
+    brushBounds.maxX = posx + brushRadius;
+    brushBounds.minZ = posz - brushRadius;
+    brushBounds.maxZ = posz + brushRadius;
+
+    if(brush->hType == 5 && brush->hFixed >= 0)
+        return uterr;
+
+    QSet<Terrain*> undoTerrains;
+    forEachNativeSimpleTerrainSample(terrainGetter, x, z, brushBounds, 0.0f,
+        [&](Terrain *sampleTerrain, int, int, int, int, int, float, float) {
+            if(undoTerrains.contains(sampleTerrain))
+                return;
+            Undo::PushTerrainHeightMap(
+                sampleTerrain->mojex, sampleTerrain->mojez,
+                sampleTerrain->terrainData, sampleTerrain->getSampleCount());
+            undoTerrains.insert(sampleTerrain);
+        });
+
+    if(undoTerrains.isEmpty())
+        return uterr;
 
     if(brush->hType == 5){
-        if(brush->hFixed >= 0 || brush->size <= 0)
-            return uterr;
+        forEachNativeSimpleTerrainSample(terrainGetter, x, z, brushBounds, 0.0f,
+            [&](Terrain *sampleTerrain, int tileX, int tileZ,
+                int sampleX, int sampleZ, int sampleSize,
+                float worldX, float worldZ) {
+                const float dx = worldX - posx;
+                const float dz = worldZ - posz;
+                const float distance = std::sqrt(dx * dx + dz * dz);
+                if(distance > brushRadius)
+                    return;
 
-        const int radius = brush->size;
-        const int radiusSquared = radius * radius;
-        const float inverseRadius = 1.0f / radius;
-        QSet<Terrain*> undoTerrains;
-        Terrain *cachedTerrain = NULL;
-        int cachedX = std::numeric_limits<int>::min();
-        int cachedZ = std::numeric_limits<int>::min();
-
-        for(int i = -radius; i < radius; i++){
-            const int iSquared = i * i;
-            for(int j = -radius; j < radius; j++){
-                const int distanceSquared = iSquared + j * j;
-                if(distanceSquared > radiusSquared)
-                    continue;
-
-                int tx = x;
-                int tz = z;
-                int samplePosX = (int)posx + i * 8;
-                int samplePosZ = (int)posz + j * 8;
-                Game::check_coords(tx, tz, samplePosX, samplePosZ);
-
-                if(tx != cachedX || tz != cachedZ){
-                    cachedX = tx;
-                    cachedZ = tz;
-                    cachedTerrain = terrain[(tx * 10000 + tz)];
-                }
-                if(cachedTerrain == NULL || !cachedTerrain->loaded)
-                    continue;
-
-                if(!undoTerrains.contains(cachedTerrain)){
-                    Undo::PushTerrainHeightMap(
-                        cachedTerrain->mojex, cachedTerrain->mojez,
-                        cachedTerrain->terrainData, cachedTerrain->getSampleCount());
-                    undoTerrains.insert(cachedTerrain);
-                }
-
-                const float distance = std::sqrt((float)distanceSquared);
                 const float strength = std::max(0.0f, std::min(1.0f,
-                    (radius - distance) * inverseRadius * brush->alpha));
-                if(cachedTerrain->paintWaterbedOffset(
-                        tx, tz, samplePosX, samplePosZ,
+                    ((brushRadius - distance) / brushRadius) * brush->alpha));
+                const float localX = sampleX * sampleSize - TerrainTrackMath::TileHalfSize;
+                const float localZ = sampleZ * sampleSize - TerrainTrackMath::TileHalfSize;
+                if(sampleTerrain->paintWaterbedOffset(
+                        tileX, tileZ, localX, localZ,
                         brush->hFixed, strength))
-                    uterr.insert(cachedTerrain);
-            }
+                    uterr.insert(sampleTerrain);
+            });
+    } else {
+        float referenceHeight = brush->hFixed;
+        if(brush->hType == 3){
+            referenceHeight = 0.0f;
+            int sampleCount = 0;
+            forEachNativeSimpleTerrainSample(terrainGetter, x, z, brushBounds, 0.0f,
+                [&](Terrain *sampleTerrain, int, int,
+                    int sampleX, int sampleZ, int,
+                    float, float) {
+                    referenceHeight += sampleTerrain->terrainData[sampleZ][sampleX];
+                    ++sampleCount;
+                });
+            if(sampleCount == 0)
+                return uterr;
+            referenceHeight /= sampleCount;
         }
 
-        foreach(Terrain *value, uterr){
-            value->setModified(true);
-            value->refresh();
-        }
-        return uterr;
-    }
-    
-    //int px = (posx + 1024)/8;
-    //int pz = (posz + 1024)/8;
-    int px = posx;
-    int pz = posz;
-    float size = brush->size;
-    float h = 0;
-    float rd = 0;
-    float hAvg = 0;
-    int tx, tz;
-    int tpx, tpz;
-    int count = 0;
-    
-    // The brush is bounded to less than one terrain tile. Determine the small
-    // set of touched tiles directly instead of scanning every brush sample once
-    // for Undo and then scanning all samples again for painting.
-    const int minTileX = x + (px - (int)size * 8 < -1024 ? -1 : 0);
-    const int maxTileX = x + (px + ((int)size - 1) * 8 >= 1024 ? 1 : 0);
-    const int minTileZ = z + (pz - (int)size * 8 < -1024 ? -1 : 0);
-    const int maxTileZ = z + (pz + ((int)size - 1) * 8 >= 1024 ? 1 : 0);
-    for(int undoX = minTileX; undoX <= maxTileX; undoX++){
-        for(int undoZ = minTileZ; undoZ <= maxTileZ; undoZ++){
-            Terrain *undoTerrain = terrain[(undoX * 10000 + undoZ)];
-            if(undoTerrain == NULL || !undoTerrain->loaded)
-                continue;
-            Undo::PushTerrainHeightMap(
-                undoTerrain->mojex, undoTerrain->mojez,
-                undoTerrain->terrainData, undoTerrain->getSampleCount());
-        }
-    }
-    terr = terrain[(x * 10000 + z)];
-    h = brush->alpha*brush->direction*10.0;
-    if(brush->hType == 1){
-        terr->terrainData[(pz+1024)/8][(px+1024)/8] += h;
-        //float rh = brush->alpha*brush->direction*10.0;
-        rd = terr->terrainData[(pz+1024)/8][(px+1024)/8];
-    }
-    if(brush->hType == 2){
-        hAvg = brush->hFixed;
-    }
-    if(brush->hType == 3){
-        for(int i = -size; i < size; i++)
-            for(int j = -size; j < size; j++){
-                tpx = px+i*8;
-                tpz = pz+j*8;
-                tx = x;
-                tz = z;
-                Game::check_coords(tx, tz, tpx, tpz);
-                terr = terrain[(tx * 10000 + tz)];
-                if (terr == NULL) continue;
-                if (!terr->loaded) continue;
-                tpx = (tpx + 1024)/8;
-                tpz = (tpz + 1024)/8;
-                hAvg += terr->terrainData[tpz][tpx];
-                count++;
-            }
-        hAvg /= count;
-    }
-    
-    for(int i = -size; i < size; i++)
-        for(int j = -size; j < size; j++){
-            if(brush->hType == 1)
-                if(i == 0 && j == 0) continue;
-            //if(px+i >= 256) continue;
-            //if(pz+j >= 256) continue;
-            //if(px+i < 0) continue;
-            //if(pz+j < 0) continue;
-            //h = (fabs(i) + fabs(j))/2.0;
-            tx = x;
-            tz = z;
-            tpx = px+i*8;
-            tpz = pz+j*8;
-            Game::check_coords(tx, tz, tpx, tpz);
-            terr = terrain[(tx * 10000 + tz)];
-            if (terr == NULL) continue;
-            if (!terr->loaded) continue;
+        float radiusHeight = 0.0f;
+        if(brush->hType == 1){
+            radiusHeight = terr->setHeight(
+                x, z, posx, posz,
+                brush->alpha * brush->direction * 10.0f, true);
             uterr.insert(terr);
-            
-            const float distance = std::sqrt((float)(i*i + j*j));
-            if(distance > size) continue;
-            h = (size - distance)/size;
-            h = h*brush->alpha*brush->direction*10.0;
-            
-            terr->setErrorBias(tx, tz, tpx, tpz, 0);
-            float samplePosX = tpx;
-            float samplePosZ = tpz;
-            tpz = (tpz + 1024)/8;
-            tpx = (tpx + 1024)/8;
-            if(brush->hType == 0){
-                    terr->terrainData[tpz][tpx] += h;
-            } else if(brush->hType == 1){
-                if(h < 0){
-                    if(terr->terrainData[tpz][tpx] > rd)
-                        terr->terrainData[tpz][tpx] += h;
-                }
-                if(h > 0){
-                    if(terr->terrainData[tpz][tpx] < rd)
-                        terr->terrainData[tpz][tpx] += h;
-                }
-            } else if(brush->hType == 2 || brush->hType == 3){
-                if(terr->terrainData[tpz][tpx] >hAvg){
-                    terr->terrainData[tpz][tpx] -= h*brush->direction;
-                    if(terr->terrainData[tpz][tpx] < hAvg)
-                        terr->terrainData[tpz][tpx] = hAvg;
-                }
-                if(terr->terrainData[tpz][tpx] < hAvg){
-                    terr->terrainData[tpz][tpx] += h*brush->direction;
-                    if(terr->terrainData[tpz][tpx] > hAvg)
-                        terr->terrainData[tpz][tpx] = hAvg;
-                }
-            } else if(brush->hType == 4 && Game::currentRoute != NULL){
-                float samplePos[3] = {samplePosX, terr->terrainData[tpz][tpx], samplePosZ};
-                float targetHeight = 0;
-                float maxDbDistance = std::min(24.0f, std::max(8.0f, size * 8.0f));
-                if(Game::currentRoute->findNearestDbHeight(tx, tz, samplePos, maxDbDistance, targetHeight)){
-                    float strength = std::max(0.0f, std::min(1.0f,
-                            ((size - distance) / size) * brush->alpha));
-                    terr->terrainData[tpz][tpx] += (targetHeight - terr->terrainData[tpz][tpx]) * strength;
-                }
-            }
         }
-    
-    foreach (Terrain* value, uterr){
+
+        forEachNativeSimpleTerrainSample(terrainGetter, x, z, brushBounds, 0.0f,
+            [&](Terrain *sampleTerrain, int tileX, int tileZ,
+                int sampleX, int sampleZ, int sampleSize,
+                float worldX, float worldZ) {
+                const float dx = worldX - posx;
+                const float dz = worldZ - posz;
+                const float distance = std::sqrt(dx * dx + dz * dz);
+                if(distance > brushRadius)
+                    return;
+                if(brush->hType == 1 && distance < 0.001f)
+                    return;
+
+                uterr.insert(sampleTerrain);
+                const float distanceInLegacySamples = distance / legacyGridSize;
+                float heightDelta = (brush->size - distanceInLegacySamples) / brush->size;
+                heightDelta *= brush->alpha * brush->direction * 10.0f;
+
+                const float localX = sampleX * sampleSize - TerrainTrackMath::TileHalfSize;
+                const float localZ = sampleZ * sampleSize - TerrainTrackMath::TileHalfSize;
+                sampleTerrain->setErrorBias(tileX, tileZ, localX, localZ, 0);
+                float &sampleHeight = sampleTerrain->terrainData[sampleZ][sampleX];
+
+                if(brush->hType == 0){
+                    sampleHeight += heightDelta;
+                } else if(brush->hType == 1){
+                    if(heightDelta < 0 && sampleHeight > radiusHeight)
+                        sampleHeight += heightDelta;
+                    if(heightDelta > 0 && sampleHeight < radiusHeight)
+                        sampleHeight += heightDelta;
+                } else if(brush->hType == 2 || brush->hType == 3){
+                    if(sampleHeight > referenceHeight){
+                        sampleHeight -= heightDelta * brush->direction;
+                        if(sampleHeight < referenceHeight)
+                            sampleHeight = referenceHeight;
+                    }
+                    if(sampleHeight < referenceHeight){
+                        sampleHeight += heightDelta * brush->direction;
+                        if(sampleHeight > referenceHeight)
+                            sampleHeight = referenceHeight;
+                    }
+                } else if(brush->hType == 4 && Game::currentRoute != NULL){
+                    float samplePos[3] = {localX, sampleHeight, localZ};
+                    float targetHeight = 0.0f;
+                    const float maxDbDistance = std::min(
+                        24.0f, std::max(8.0f, brushRadius));
+                    if(Game::currentRoute->findNearestDbHeight(
+                            tileX, tileZ, samplePos, maxDbDistance, targetHeight)){
+                        const float strength = std::max(0.0f, std::min(1.0f,
+                            ((brushRadius - distance) / brushRadius) * brush->alpha));
+                        sampleHeight += (targetHeight - sampleHeight) * strength;
+                    }
+                }
+            });
+    }
+
+    foreach (Terrain *value, uterr){
         value->setModified(true);
         value->refresh();
     }
-    //terr->setModified(true);
-    //terr->refresh();
     return uterr;
 }
 
@@ -980,13 +1059,8 @@ void TerrainLibSimple::fillRaw(Terrain *cTerr, int mojex, int mojez) {
         mapOverlayResidencyValid = false;
     }
     tTile = terrain[(mojex + 1)*10000 + mojez];
-    if (tTile->loaded) {
-        if(cTerr->getSampleSize() == tTile->getSampleSize())
-        if(cTerr->getSampleCount() == tTile->getSampleCount())
-            for (int i = 0; i < 256; i++) {
-                cTerr->terrainData[i][256] = tTile->terrainData[i][0];
-            }
-    }
+    if (tTile->loaded)
+        cTerr->fillTerrainDataX(tTile);
 
     
     tTile = terrain[((mojex)*10000 + mojez + 1)];
@@ -996,13 +1070,8 @@ void TerrainLibSimple::fillRaw(Terrain *cTerr, int mojex, int mojez) {
         mapOverlayResidencyValid = false;
     }
     tTile = terrain[(mojex)*10000 + mojez + 1];
-    if (tTile->loaded) {
-        if(cTerr->getSampleSize() == tTile->getSampleSize())
-        if(cTerr->getSampleCount() == tTile->getSampleCount())
-            for (int i = 0; i < 256; i++) {
-                cTerr->terrainData[256][i] = tTile->terrainData[0][i];
-            }
-    }
+    if (tTile->loaded)
+        cTerr->fillTerrainDataY(tTile);
 
 
     tTile = terrain[((mojex + 1)*10000 + (mojez + 1))];
@@ -1012,11 +1081,8 @@ void TerrainLibSimple::fillRaw(Terrain *cTerr, int mojex, int mojez) {
         mapOverlayResidencyValid = false;
     }
     tTile = terrain[(mojex + 1)*10000 + mojez + 1];
-    if (tTile->loaded) {
-        if(cTerr->getSampleSize() == tTile->getSampleSize())
-        if(cTerr->getSampleCount() == tTile->getSampleCount())
-            cTerr->terrainData[256][256] = tTile->terrainData[0][0];
-    }/**/
+    if (tTile->loaded)
+        cTerr->fillTerrainDataXY(tTile);
 }
 
 void TerrainLibSimple::render(GLUU *gluu, float * playerT, float* playerW, float* target, float fov, int renderMode) {

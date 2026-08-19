@@ -1,17 +1,19 @@
-TSRE GenX v0.12 - ROUTE EDITOR - MENU SHORTCUTS
+TSRE GenX v0.13 - ROUTE EDITOR - MENU SHORTCUTS
 Shift+Ctrl+S  Save route
 Alt+F4        Exit/close route editor
 Ctrl+Z        Undo
 Ctrl+C        Copy
 Ctrl+V        Paste
 F1            Show Objects tools
-F2            Show Terrain tools
-F3            Show Geo tools
-F4            Toggle full-screen Activity Builder
-F5            Toggle Properties window
-F6            Toggle PolyVeg Planter
-F7            Toggle Control Panel
-F8            Toggle Errors/Messages window
+Shift+F1      Toggle Properties window
+Ctrl+F1       Toggle Control Panel
+F2            Show Terrain Mesh tools
+F3            Show Terrain Texture tools
+F4            Show Geo tools
+F5            Toggle full-screen Activity Builder
+F6            Toggle Auto Place
+F7            Toggle PolyVeg Planter
+F11           Toggle Errors/Messages window
 F12           Toggle Settings window
 /             Toggle Stick Camera To Terrain
 

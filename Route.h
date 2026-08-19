@@ -169,7 +169,7 @@ public:
     void actNewNewSpeedZone(int x, int z, float* p);
     void transalteObj(int x, int z, float px, float py, float pz, int uid);
     void setTDB(TDB* tdb, bool road);
-    void updateSim(float *playerT, float deltaTime);
+    void updateAnimatedWorld(float *playerT, float deltaTime);
     ActivityObject* getActivityObject(int id);
     Consist* getActivityConsist(int id);
     Activity* getCurrentActivity();

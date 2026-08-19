@@ -11,6 +11,7 @@
 #include "PropertiesTrackObj.h"
 #include "WorldObj.h"
 #include "TrackObj.h"
+#include "SignalObj.h"
 #include <math.h>
 #include "GLMatrix.h"
 #include "ParserX.h"
@@ -21,10 +22,11 @@
 #include "ProceduralShape.h"
 #include "ShapeTemplates.h"
 #include "GuiFunct.h"
+#include "TextEditDialog.h"
 #include <QScreen>
 
 static int gradeHelperScaledSize(int base){
-    return qRound(base * qMax(1.0f, Game::uiScale));
+    return qRound(base * qBound(0.75f, Game::uiScale, 1.25f));
 }
 
 static QString gradeHelperStateStyle(const QString &background, const QString &border, const QString &text){
@@ -45,9 +47,13 @@ public:
         setPopupPinToolTips(
             "Save the current Grade Helper position between sessions.",
             "The Grade Helper position is saved between sessions. Click to return to default placement.");
-        QFormLayout *form = new QFormLayout;
+        addPopupSubtitle(QString::fromUtf8("• Transition"));
+        QFrame *transitionCard = new QFrame;
+        GuiFunct::styleEditorPanelCard(transitionCard);
+        QFormLayout *form = new QFormLayout(transitionCard);
         form->setSpacing(3);
-        form->setContentsMargins(0,0,0,0);
+        form->setContentsMargins(4,3,4,3);
+        form->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         currentGrade.setReadOnly(true);
         nextGrade.setReadOnly(true);
         currentGrade.setAlignment(Qt::AlignCenter);
@@ -69,7 +75,7 @@ public:
         form->addRow(&targetGradeLabel, &targetGrade);
         form->addRow(&stepGradeLabel, &stepGrade);
         form->addRow("Next Grade:", &nextGrade);
-        layout->addLayout(form);
+        layout->addWidget(transitionCard);
 
         QFont fieldFont = font();
         fieldFont.setBold(false);
@@ -83,10 +89,15 @@ public:
         stepGrade.setMinimumHeight(fieldHeight);
         nextGrade.setMinimumHeight(fieldHeight);
 
-        layout->addSpacing(gradeHelperScaledSize(5));
-
+        addPopupSubtitle(QString::fromUtf8("• Grade Assist"));
+        QFrame *stateCard = new QFrame;
+        GuiFunct::styleEditorPanelCard(stateCard);
+        QVBoxLayout *stateLayout = new QVBoxLayout(stateCard);
+        stateLayout->setContentsMargins(4,3,4,3);
         stateButton.setFocusPolicy(Qt::NoFocus);
-        layout->addWidget(&stateButton);
+        GuiFunct::styleEditorActionButton(&stateButton);
+        stateLayout->addWidget(&stateButton);
+        layout->addWidget(stateCard);
 
         QObject::connect(&refreshTimer, &QTimer::timeout, this, [this](){ syncUi(); });
         refreshTimer.start(120);
@@ -303,7 +314,7 @@ private:
                                       Game::StyleGreenButtonHover, "#232323"));
         } else {
             stateButton.setText("Start Grade Assist");
-            stateButton.setStyleSheet(QString());
+            GuiFunct::styleEditorActionButton(&stateButton);
         }
     }
 
@@ -351,53 +362,85 @@ public:
         fixElevation->setToolTip(
             "Repairs the selected TrackDB vector's stored section elevations (sElev).");
 
-        QGridLayout *trackActions = new QGridLayout;
-        trackActions->setSpacing(3);
-        trackActions->setContentsMargins(0,0,0,0);
+        QFrame *trackCard = new QFrame;
+        GuiFunct::styleEditorPanelCard(trackCard);
+        QGridLayout *trackActions = new QGridLayout(trackCard);
+        trackActions->setSpacing(2);
+        trackActions->setContentsMargins(4, 3, 4, 3);
+        GuiFunct::styleEditorActionButton(fixJNodePosn);
+        GuiFunct::styleEditorActionButton(fixElevation);
+        GuiFunct::styleEditorActionButton(removeTdbVector);
+        GuiFunct::styleEditorActionButton(removeTdbTree);
         trackActions->addWidget(fixJNodePosn, 0, 0);
         trackActions->addWidget(fixElevation, 0, 1);
         trackActions->addWidget(removeTdbVector, 1, 0);
         trackActions->addWidget(removeTdbTree, 1, 1);
-        layout->addLayout(trackActions);
+        layout->addWidget(trackCard);
 
-        layout->addSpacing(gradeHelperScaledSize(5));
+        addPopupSubtitle(QString::fromUtf8("• Selected Signal"));
+
+        QFrame *signalCard = new QFrame;
+        GuiFunct::styleEditorPanelCard(signalCard);
+        QVBoxLayout *signalActions = new QVBoxLayout(signalCard);
+        signalActions->setSpacing(2);
+        signalActions->setContentsMargins(4, 3, 4, 3);
+        fixSignalFlags = new QPushButton("Fix Signal Flags");
+        fixSignalFlags->setToolTip(
+            "Checks the selected signal's TrSignalType flags, previews each old/new "
+            "change, and applies the repairs only after confirmation.");
+        GuiFunct::styleEditorActionButton(fixSignalFlags);
+        signalActions->addWidget(fixSignalFlags);
+        layout->addWidget(signalCard);
+
         addPopupSubtitle(QString::fromUtf8("• Route Cleanup"));
+
+        QFrame *cleanupCard = new QFrame;
+        GuiFunct::styleEditorPanelCard(cleanupCard);
+        QVBoxLayout *cleanupLayout = new QVBoxLayout(cleanupCard);
+        cleanupLayout->setSpacing(2);
+        cleanupLayout->setContentsMargins(4, 3, 4, 3);
 
         QLabel *routeHelp = new QLabel(
             "Full-route cleanup tools load every world tile before making changes.");
         routeHelp->setWordWrap(true);
         routeHelp->setStyleSheet("QLabel { color: #c7c7c7; padding: 0px 3px 2px 3px; }");
-        layout->addWidget(routeHelp);
+        cleanupLayout->addWidget(routeHelp);
 
         QPushButton *removeInteractives = new QPushButton("Remove All Interactives");
         removeInteractives->setToolTip(
             "Loads every world tile, then removes all TrackDB/RoadDB-linked interactive "
             "world objects. Track and road geometry are not removed.");
-        layout->addWidget(removeInteractives);
+        GuiFunct::styleEditorActionButton(removeInteractives);
+        cleanupLayout->addWidget(removeInteractives);
 
         deleteInstances = new QPushButton("Delete Instances");
         deleteInstances->setToolTip(
             "Deletes every route instance of the selected static object. "
             "The object type and filename must both match.");
-        layout->addWidget(deleteInstances);
+        GuiFunct::styleEditorActionButton(deleteInstances);
+        cleanupLayout->addWidget(deleteInstances);
 
         QPushButton *resetTerrtex = new QPushButton("Reset All TERRTEX");
         resetTerrtex->setToolTip(
             "Resets every route terrain patch to terrain.ace and removes "
             "matching per-tile TERRTEX paint files.");
-        layout->addWidget(resetTerrtex);
+        GuiFunct::styleEditorActionButton(resetTerrtex);
+        cleanupLayout->addWidget(resetTerrtex);
 
         QPushButton *waterTilesOff = new QPushButton("Water Tiles Off");
         waterTilesOff->setToolTip(
             "Turns off every water patch in every terrain tile across the route.");
-        layout->addWidget(waterTilesOff);
+        GuiFunct::styleEditorActionButton(waterTilesOff);
+        cleanupLayout->addWidget(waterTilesOff);
 
         QPushButton *deletePolyVegBakes =
             new QPushButton("Delete All PolyVeg Bakes");
         deletePolyVegBakes->setToolTip(
             "Loads every world tile and deletes every PolyVeg bake object. "
             "The deletion remains Undo-friendly until the route is saved.");
-        layout->addWidget(deletePolyVegBakes);
+        GuiFunct::styleEditorActionButton(deletePolyVegBakes);
+        cleanupLayout->addWidget(deletePolyVegBakes);
+        layout->addWidget(cleanupCard);
 
         QObject::connect(fixJNodePosn, &QPushButton::clicked, owner, [this](){
             this->owner->userButtonPressed();
@@ -444,6 +487,11 @@ public:
             emit this->owner->deleteAllPolyVegBakesRequested();
             this->owner->requestMainFocus();
         });
+        QObject::connect(fixSignalFlags, &QPushButton::clicked, owner, [this](){
+            this->owner->userButtonPressed();
+            this->owner->fixSignalFlagsEnabled();
+            this->owner->requestMainFocus();
+        });
 
         syncSelection();
         finalizePopup();
@@ -477,6 +525,7 @@ private:
         removeTdbTree->setEnabled(trackSelected);
         fixElevation->setEnabled(trackSelected);
         deleteInstances->setEnabled(owner->hasSelectedStaticForHacks());
+        fixSignalFlags->setEnabled(owner->hasSelectedSignalForHacks());
     }
 
     void popupPinChanged(bool pinned) override {
@@ -519,13 +568,14 @@ private:
     QPushButton *removeTdbTree = NULL;
     QPushButton *fixElevation = NULL;
     QPushButton *deleteInstances = NULL;
+    QPushButton *fixSignalFlags = NULL;
     bool everShown = false;
 };
 
 PropertiesTrackObj::PropertiesTrackObj(){
+    const int alignedLabelWidth = qRound(66.0f * qBound(0.75f, Game::uiScale, 1.25f));
     const QString detailLevelHelp = "Controls this placed track object's StaticDetailLevel. Default uses the ESD_Detail_Level from the shape's .sd file; enable Custom to write an override into the world file. The value is limited by the route's TsreMaxStaticDetailLevel.";
-    const QString flagsHelp = "Read-only MSTS StaticFlags from the world file. These hexadecimal bit flags control object rendering properties. Use Copy/Paste Flags instead of editing the value directly.";
-    const QString collisionHelp = "MSTS CollideFlags and collision function for this track object. Disabled turns collision off; Immovable uses the normal solid collision function; Buffer uses the buffer collision function.";
+    const QString collisionHelp = "Controls Open Rails collision behavior for this track object.";
     setStyleSheet(GuiFunct::scoEditorPanelStyle());
 
     QLabel *label;
@@ -533,7 +583,7 @@ PropertiesTrackObj::PropertiesTrackObj(){
     vbox->setSpacing(2);
     vbox->setContentsMargins(0,1,1,1);
     auto addRule = [vbox]() {
-        vbox->addSpacing(qRound(5.0f * qMax(1.0f, Game::uiScale)));
+        vbox->addSpacing(qRound(5.0f * qBound(0.75f, Game::uiScale, 1.25f)));
     };
     infoLabel = new QLabel("Object: Track");
     infoLabel->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
@@ -546,33 +596,50 @@ PropertiesTrackObj::PropertiesTrackObj(){
     this->tX.setDisabled(true);
     this->tY.setDisabled(true);
     this->eSectionIdx.setDisabled(true);
-    vlist->addRow("UiD:",&this->uid);
+    vlist->addRow("UID:",&this->uid);
     vlist->addRow("Tile X:",&this->tX);
     vlist->addRow("Tile Z:",&this->tY);
     vlist->addRow("Id:",&this->eSectionIdx);
-    vlist->addRow("Name:",&this->fileName);
+
+    vlist->labelForField(&this->uid)->setMinimumWidth(alignedLabelWidth);
     vbox->addItem(vlist);
     addRule();
+    label = new QLabel(QString(QChar(0x2022)) + " Shape");
+    GuiFunct::styleEditorSubtitle(label);
+    vbox->addWidget(label);
     this->fileName.setDisabled(true);
-    this->fileName.setAlignment(Qt::AlignCenter);
-    QGridLayout *filenameList = new QGridLayout;
+    this->fileName.setAlignment(Qt::AlignLeft);
+    QGridLayout *shapeNameGrid = new QGridLayout;
+    shapeNameGrid->setContentsMargins(3,0,3,0);
+    shapeNameGrid->setColumnMinimumWidth(0, alignedLabelWidth);
+    shapeNameGrid->setColumnStretch(1, 1);
+    shapeNameGrid->addWidget(new QLabel("Name:"), 0, 0);
+    shapeNameGrid->addWidget(&this->fileName, 0, 1);
+    vbox->addLayout(shapeNameGrid);
+    QFrame *filenameActionsCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(filenameActionsCard);
+    QGridLayout *filenameList = new QGridLayout(filenameActionsCard);
     filenameList->setSpacing(2);
-    filenameList->setContentsMargins(0,0,0,0);    
+    filenameList->setContentsMargins(4,3,4,3);
     QPushButton *copyF = new QPushButton("Copy Name", this);
+    GuiFunct::styleEditorActionButton(copyF);
     QObject::connect(copyF, SIGNAL(released()),
                       this, SLOT(copyFileNameEnabled()));
     QPushButton *editF = new QPushButton("Edit", this);
+    GuiFunct::styleEditorActionButton(editF);
     QObject::connect(editF, SIGNAL(released()),
                       this, SLOT(editFileNameEnabled()));
     filenameList->addWidget(copyF, 0, 0);
     filenameList->addWidget(editF, 0, 1);
-    vbox->addItem(filenameList);
+    vbox->addWidget(filenameActionsCard);
     
-    label = new QLabel("Shape Template:");
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    vbox->addWidget(&eTemplate);
+    QGridLayout *templateGrid = new QGridLayout;
+    templateGrid->setContentsMargins(3,0,3,0);
+    templateGrid->setColumnMinimumWidth(0, alignedLabelWidth);
+    templateGrid->setColumnStretch(1, 1);
+    templateGrid->addWidget(new QLabel("Template:"), 0, 0);
+    templateGrid->addWidget(&eTemplate, 0, 1);
+    vbox->addLayout(templateGrid);
     eTemplate.setStyleSheet("combobox-popup: 0;");
     eTemplate.addItem("DEFAULT");
     eTemplate.addItem("DISABLED");
@@ -591,7 +658,7 @@ PropertiesTrackObj::PropertiesTrackObj(){
                       this, SLOT(eTemplateEdited(QString)));
 
     addRule();
-    label = new QLabel("Position & Rotation:");
+    label = new QLabel("Position & Rotation");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
@@ -606,39 +673,50 @@ PropertiesTrackObj::PropertiesTrackObj(){
     this->posZ.setReadOnly(true);
     this->quat.setReadOnly(true);
     this->quat.setAlignment(Qt::AlignCenter);
-    vlist->addRow("Rot:",&this->quat);
+    vlist->addRow("Rotation:",&this->quat);
+    vlist->labelForField(&this->posX)->setMinimumWidth(alignedLabelWidth);
     vbox->addItem(vlist);
-    QGridLayout *posRotList = new QGridLayout;
+    QFrame *positionActionsCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(positionActionsCard);
+    QGridLayout *posRotList = new QGridLayout(positionActionsCard);
     posRotList->setSpacing(2);
-    posRotList->setContentsMargins(0,0,0,0);    
+    posRotList->setContentsMargins(4,3,4,3);
 
-    QPushButton *copyPos = new QPushButton("Copy Pos", this);
+    QPushButton *copyPos = new QPushButton("Copy Pos", positionActionsCard);
+    GuiFunct::styleEditorActionButton(copyPos);
     QObject::connect(copyPos, SIGNAL(released()),
                       this, SLOT(copyPEnabled()));
-    QPushButton *pastePos = new QPushButton("Paste", this);
+    QPushButton *pastePos = new QPushButton("Paste Pos", positionActionsCard);
+    GuiFunct::styleEditorActionButton(pastePos);
     QObject::connect(pastePos, SIGNAL(released()),
                       this, SLOT(pastePEnabled()));
-    QPushButton *copyQrot = new QPushButton("Copy Rot", this);
+    QPushButton *copyQrot = new QPushButton("Copy Rot", positionActionsCard);
+    GuiFunct::styleEditorActionButton(copyQrot);
     QObject::connect(copyQrot, SIGNAL(released()),
                       this, SLOT(copyREnabled()));
-    QPushButton *pasteQrot = new QPushButton("Paste", this);
+    QPushButton *pasteQrot = new QPushButton("Paste Rot", positionActionsCard);
+    GuiFunct::styleEditorActionButton(pasteQrot);
     QObject::connect(pasteQrot, SIGNAL(released()),
                       this, SLOT(pasteREnabled()));
-    QPushButton *copyPosRot = new QPushButton("Copy Pos+Rot", this);
+    QPushButton *copyPosRot = new QPushButton("Copy Both", positionActionsCard);
+    GuiFunct::styleEditorActionButton(copyPos);
+    GuiFunct::styleEditorActionButton(copyPosRot);
     QObject::connect(copyPosRot, SIGNAL(released()),
                       this, SLOT(copyPREnabled()));
-    QPushButton *pastePosRot = new QPushButton("Paste", this);
+    QPushButton *pastePosRot = new QPushButton("Paste Both", positionActionsCard);
+    GuiFunct::styleEditorActionButton(pastePosRot);
     QObject::connect(pastePosRot, SIGNAL(released()),
                       this, SLOT(pastePREnabled()));
-    QPushButton *resetQrot = new QPushButton("Reset Rot", this);
+    QPushButton *resetQrot = new QPushButton("Reset Rot", positionActionsCard);
+    GuiFunct::styleEditorActionButton(resetQrot);
     QObject::connect(resetQrot, SIGNAL(released()),
                       this, SLOT(resetRotEnabled()));
-    QPushButton *qRot90 = new QPushButton("Rot Y 90°", this);
+    QPushButton *qRot90 = new QPushButton("Rot Y 90°", positionActionsCard);
+    GuiFunct::styleEditorActionButton(qRot90);
     QObject::connect(qRot90, SIGNAL(released()),
                       this, SLOT(rotYEnabled()));
-    QPushButton *transform = new QPushButton("Transform ...", this);
-    QObject::connect(transform, SIGNAL(released()),
-                      this, SLOT(transformEnabled()));
+    QPushButton *transform = new QPushButton("Transform...", positionActionsCard);
+    configureTransformButton(transform);
     
     posRotList->addWidget(copyPos, 0, 0);
     posRotList->addWidget(pastePos, 0, 1);
@@ -649,10 +727,10 @@ PropertiesTrackObj::PropertiesTrackObj(){
     posRotList->addWidget(resetQrot, 3, 0);
     posRotList->addWidget(qRot90, 3, 1);
     posRotList->addWidget(transform, 4, 0, 1, 2);
-    vbox->addItem(posRotList);
+    vbox->addWidget(positionActionsCard);
     addRule();
     
-    label = new QLabel("Detail Level:");
+    label = new QLabel("Detail Level");
     label->setToolTip(detailLevelHelp);
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
@@ -673,48 +751,26 @@ PropertiesTrackObj::PropertiesTrackObj(){
     this->customDetailLevel.setAlignment(Qt::AlignCenter);
     QObject::connect(&customDetailLevel, SIGNAL(textEdited(QString)),
                       this, SLOT(customDetailLevelEdited(QString)));
-    QGridLayout *detailLevelView = new QGridLayout;
+    QFrame *detailCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(detailCard);
+    QGridLayout *detailLevelView = new QGridLayout(detailCard);
     detailLevelView->setSpacing(2);
-    detailLevelView->setContentsMargins(0,0,0,0);    
+    detailLevelView->setContentsMargins(4,3,4,3);
+    detailLevelView->setColumnMinimumWidth(0, alignedLabelWidth);
     detailLevelView->addWidget(defaultDetailLevelLabel, 0, 0);
     detailLevelView->addWidget(&defaultDetailLevel, 0, 1);
     detailLevelView->addWidget(&enableCustomDetailLevel, 1, 0);
     detailLevelView->addWidget(&customDetailLevel, 1, 1);
-    vbox->addItem(detailLevelView);
+    vbox->addWidget(detailCard);
     addRule();
     
-    label = new QLabel("Flags:");
-    label->setToolTip(flagsHelp);
-    label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
-    label->setContentsMargins(3,0,0,0);
-    vbox->addWidget(label);
-    this->flags.setDisabled(true);
-    this->flags.setToolTip(flagsHelp);
-    this->flags.setAlignment(Qt::AlignCenter);
-    vbox->addWidget(&this->flags);
-    QGridLayout *flagslView = new QGridLayout;
-    flagslView->setSpacing(2);
-    flagslView->setContentsMargins(0,0,0,0);    
-    QPushButton *copyFlags = new QPushButton("Copy Flags", this);
-    copyFlags->setToolTip(flagsHelp);
-    QObject::connect(copyFlags, SIGNAL(released()),
-                      this, SLOT(copyFEnabled()));
-    QPushButton *pasteFlags = new QPushButton("Paste", this);
-    pasteFlags->setToolTip(flagsHelp);
-    QObject::connect(pasteFlags, SIGNAL(released()),
-                      this, SLOT(pasteFEnabled()));
-    flagslView->addWidget(copyFlags,0,0);
-    flagslView->addWidget(pasteFlags,0,1);
-    vbox->addItem(flagslView);
-    addRule();
-    
-    label = new QLabel("Grade:");
+    label = new QLabel("Grade");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
     vlist = new QFormLayout;
     vlist->setSpacing(3);
-    vlist->setContentsMargins(0,0,0,0);
+    vlist->setContentsMargins(3,0,3,0);
     QDoubleValidator* doubleValidator = new QDoubleValidator(-10000, 10000, 6, this); 
     doubleValidator->setNotation(QDoubleValidator::StandardNotation);
     QDoubleValidator* doubleValidator1 = new QDoubleValidator(-1000, 1000, 6, this); 
@@ -752,25 +808,28 @@ PropertiesTrackObj::PropertiesTrackObj(){
     QObject::connect(&elevStep, SIGNAL(textEdited(QString)), this, SLOT(elevStepEnabled(QString)));
     elevType.setCurrentIndex(Game::DefaultElevationBox);
     showElevBox(elevType.currentText());
+    vlist->labelForField(&this->elevType)->setMinimumWidth(alignedLabelWidth);
     vbox->addItem(vlist);
 
     gradeHelper.setText("Grade Helper...");
     gradeHelper.setCheckable(true);
+    gradeHelper.setProperty("editorPopupKey", "gradeHelper");
+    GuiFunct::styleEditorActionButton(&gradeHelper);
     gradeHelper.setFocusPolicy(Qt::NoFocus);
     gradeLock.setText("Lock Grade");
     gradeLock.setCheckable(true);
+    GuiFunct::styleEditorActionButton(&gradeLock);
     gradeLock.setChecked(Game::gradeLockEnabled);
     gradeLock.setFocusPolicy(Qt::NoFocus);
 
-    QHBoxLayout *gradeHelperRow = new QHBoxLayout;
-    gradeHelperRow->setContentsMargins(3,0,3,0);
-    gradeHelperRow->addWidget(&gradeHelper);
-    vbox->addLayout(gradeHelperRow);
-
-    QHBoxLayout *gradeLockRow = new QHBoxLayout;
-    gradeLockRow->setContentsMargins(3,0,3,1);
-    gradeLockRow->addWidget(&gradeLock);
-    vbox->addLayout(gradeLockRow);
+    QFrame *gradeActionsCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(gradeActionsCard);
+    QVBoxLayout *gradeActions = new QVBoxLayout(gradeActionsCard);
+    gradeActions->setContentsMargins(4,3,4,3);
+    gradeActions->setSpacing(2);
+    gradeActions->addWidget(&gradeHelper);
+    gradeActions->addWidget(&gradeLock);
+    vbox->addWidget(gradeActionsCard);
 
     QObject::connect(&gradeLock, &QPushButton::toggled, [this](bool checked){
         if(checked && trackObj == NULL){
@@ -807,12 +866,12 @@ PropertiesTrackObj::PropertiesTrackObj(){
     addRule();
     
     
-    label = new QLabel("MSTS Collision:");
+    label = new QLabel("Collision");
     label->setToolTip(collisionHelp);
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
     label->setContentsMargins(3,0,0,0);
     vbox->addWidget(label);
-    vbox->addWidget(&eCollisionFlags);
+
     eCollisionFlags.setToolTip(collisionHelp);
     eCollisionFlags.setDisabled(true);
     eCollisionFlags.setAlignment(Qt::AlignCenter);
@@ -821,7 +880,13 @@ PropertiesTrackObj::PropertiesTrackObj(){
     cCollisionType.addItem("Buffer");
     cCollisionType.setStyleSheet("combobox-popup: 0;");
     cCollisionType.setToolTip(collisionHelp);
-    vbox->addWidget(&cCollisionType);
+    QGridLayout *collisionGrid = new QGridLayout;
+    collisionGrid->setContentsMargins(3,0,3,0);
+    collisionGrid->setColumnMinimumWidth(0, alignedLabelWidth);
+    collisionGrid->setColumnStretch(1, 1);
+    collisionGrid->addWidget(new QLabel("Type:"), 0, 0);
+    collisionGrid->addWidget(&cCollisionType, 0, 1);
+    vbox->addLayout(collisionGrid);
     QObject::connect(&cCollisionType, SIGNAL(currentIndexChanged(int)),
                       this, SLOT(cCollisionTypeEdited(int)));
     //QPushButton *resetFlags = new QPushButton("Reset Flags", this);
@@ -833,14 +898,21 @@ PropertiesTrackObj::PropertiesTrackObj(){
     GuiFunct::styleEditorSubtitle(label);
     vbox->addWidget(label);
     
+    QFrame *advancedCard = new QFrame(this);
+    GuiFunct::styleEditorPanelCard(advancedCard);
+    QVBoxLayout *advancedLayout = new QVBoxLayout(advancedCard);
+    advancedLayout->setContentsMargins(4,3,4,3);
     hacks.setText("Hacks...");
     hacks.setCheckable(true);
+    hacks.setProperty("editorPopupKey", "hacksHelper");
+    GuiFunct::styleEditorActionButton(&hacks);
     hacks.setFocusPolicy(Qt::NoFocus);
     QObject::connect(&hacks, &QPushButton::toggled, this, [this](bool checked){
         GuiFunct::setEditorPopupButtonActive(&hacks, checked);
         toggleHacksForSelection(trackObj, &hacks, checked);
     });
-    vbox->addWidget(&hacks);
+    advancedLayout->addWidget(&hacks);
+    vbox->addWidget(advancedCard);
     
     vbox->addStretch(1);
     this->setLayout(vbox);
@@ -865,6 +937,7 @@ PropertiesTrackObj::PropertiesTrackObj(){
         field->setMinimumHeight(fieldHeight);
     }
     
+    GuiFunct::styleEditorActionButton(copyF);
     QObject::connect(copyF, SIGNAL(released()),
                       this, SLOT(copyFileNameEnabled()));
 }
@@ -986,6 +1059,31 @@ bool PropertiesTrackObj::hasSelectedStaticForHacks() const{
         && (hacksSelection->typeID == WorldObj::sstatic
             || hacksSelection->typeID == WorldObj::gantry
             || hacksSelection->typeID == WorldObj::collideobject);
+}
+
+bool PropertiesTrackObj::hasSelectedSignalForHacks() const{
+    return hacksSelection != NULL
+        && hacksSelection->loaded
+        && hacksSelection->type == "signal";
+}
+
+void PropertiesTrackObj::fixSignalFlagsEnabled(){
+    if(!hasSelectedSignalForHacks())
+        return;
+
+    SignalObj *selectedSignal = static_cast<SignalObj*>(hacksSelection);
+    QStringList changes;
+    selectedSignal->checkFlags(changes);
+
+    TextEditDialog dialog;
+    QString text = "___old_____new___\n";
+    for(const QString &change : changes)
+        text += change + "\n";
+    dialog.textBox.setPlainText(text);
+    dialog.setWindowTitle("Signal Flags");
+    dialog.exec();
+    if(dialog.changed == 1)
+        selectedSignal->fixFlags();
 }
 
 void PropertiesTrackObj::hacksWindowClosed(){

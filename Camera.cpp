@@ -14,7 +14,6 @@
 #include "Game.h"
 #include "GeoCoordinates.h"
 #include "GameObj.h"
-#include "GLUU.h"
 
 Camera::Camera(float* pt) {
     pozT = pt;
@@ -96,12 +95,6 @@ float Camera::getRotY() {
 }
 
 void Camera::update(float fps) {
-}
-
-void Camera::renderHud(GLUU *gluu){
-
-    if(cameraObject != NULL)
-        cameraObject->renderHud();
 }
 
 void Camera::setCameraObject(GameObj* o){
