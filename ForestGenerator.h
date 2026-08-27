@@ -23,7 +23,6 @@ struct ForestPlantingBoundary {
 struct ForestGenerationSettings {
     double densityPerSquareMetre = 0.0;
     int maximumTrees = 0;
-    double variationScale = 1.0;
     std::uint64_t seed = 0;
     bool rowsEnabled = false;
     double rowWidthMetres = 0.0;
@@ -39,7 +38,6 @@ struct ForestCandidate {
     int vegetationIndex = -1;
     QString vegetationId;
     QString shape;
-    QString stratum;
     double x = 0.0;
     double z = 0.0;
     double yawDegrees = 0.0;

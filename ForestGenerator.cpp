@@ -177,11 +177,6 @@ ForestGenerationResult ForestGenerator::generate(
         result.errors.append("Population density must be positive and finite.");
         return result;
     }
-    if(!std::isfinite(settings.variationScale)
-            || settings.variationScale < 0.0 || settings.variationScale > 1.0) {
-        result.errors.append("Variation scale must be in 0..1.");
-        return result;
-    }
     if(settings.rowsEnabled
             && (!std::isfinite(settings.rowWidthMetres)
                 || settings.rowWidthMetres < 0.0)) {
@@ -199,10 +194,8 @@ ForestGenerationResult ForestGenerator::generate(
         result.errors.append("Row direction must be finite.");
         return result;
     }
-    if(recipe.minimumSeparationMetres <= 0.0
-            || !recipe.preventFootprintOverlap) {
-        result.errors.append(
-            "Recipe must enforce positive global separation and footprint overlap prevention.");
+    if(recipe.minimumSeparationMetres <= 0.0) {
+        result.errors.append("Recipe must enforce positive global separation.");
         return result;
     }
 
@@ -316,15 +309,8 @@ ForestGenerationResult ForestGenerator::generate(
         const int vegetationIndex = selectVegetation(recipe, random);
         const ForestVegetationDefinition &vegetation =
             recipe.vegetation.at(vegetationIndex);
-        const double scaleMidpoint =
-            (vegetation.uniformScale.minimum + vegetation.uniformScale.maximum) * 0.5;
-        const double scaleMinimum = scaleMidpoint
-            + (vegetation.uniformScale.minimum - scaleMidpoint)
-                * settings.variationScale;
-        const double scaleMaximum = scaleMidpoint
-            + (vegetation.uniformScale.maximum - scaleMidpoint)
-                * settings.variationScale;
-        const double scale = random.range(scaleMinimum, scaleMaximum);
+        const double scale = random.range(
+            vegetation.uniformScale.minimum, vegetation.uniformScale.maximum);
         const double radius = vegetation.footprintRadiusMetres * scale;
 
         const int cellX = static_cast<int>(std::floor(point.x / cellSize));
@@ -364,7 +350,6 @@ ForestGenerationResult ForestGenerator::generate(
         candidate.vegetationIndex = vegetationIndex;
         candidate.vegetationId = vegetation.id;
         candidate.shape = vegetation.shape;
-        candidate.stratum = vegetation.stratum;
         candidate.x = point.x;
         candidate.z = point.z;
         candidate.yawDegrees = random.range(

@@ -9,60 +9,46 @@ GenX is experimental and under active development, but it is a full route
 editor rather than a demonstration port. Back up production routes and test
 major operations on a copy.
 
-Current source checkpoint: **v0.13**
+Current source checkpoint: **v0.14**
 
 ## Release Highlights
 
-### v0.13 - Route Editor workflow and production pass
+### v0.14 - Terrain, Water, PolyVeg, and production safety
 
-- Unified remaining panels, properties, helpers, and popups around the compact
-  PolyVeg-derived charcoal/orange interface.
-- Standardized pinned, snapped, mutually exclusive, latching `...` windows.
-  Contextual helpers close when their calling property panel is no longer active.
-- Made editable fields select their value on entry for immediate overwrite.
-- Reworked Dynamic Track, Signal, Terrain, Static, Forest, and other properties
-  for aligned labels and fields, compact controls, and useful tooltips.
-- Added paired Control Panel coordinate copying, orange copied confirmation,
-  compact Location labeling, and a low-contrast route title over the compass.
-- Promoted Errors & Messages to styled F11 with direct deletion of identified
-  invalid TrackDB/RoadDB items. F12 now toggles Settings normally.
-
-### Terrain, maps, and route sessions
-
-- Completed editable experimental 512-sample, 4 m terrain support across
-  conforming, Undo, patch outlines, gaps, and renderer data lifetime.
-- Added native 2048/4096 overlays with indexed drawing, bounded camera-area
-  residency, explicit Map Tiles controls, and map-off purge.
-- Hardened detailed-terrain and overlay cleanup during travel and route changes.
-- Changed Exit to Main Load into a guarded restart so reopened routes begin with
-  clean route-owned state and memory.
-
-### PolyVeg and Activity Builder
-
-- Shortened the F7 PolyVeg stack, retained deterministic planting and baking,
-  added Map Tiles control, and reserved Edit Schema for the planned editor.
-- Refreshed F5 as a map-first workspace with compact fixed-width side panels,
-  improved path controls, readable legends, and unclipped short labels.
-- Kept map overlays user-controlled when entering F5.
-
-### Reliability and cleanup
-
-- Improved Consist and Activity Consist selection across long consists and
-  unresolved stock cards.
-- Removed the unfinished in-editor activity simulator and unused OpenAL path.
-- Consolidated future interface rules in `scoUiStyle.txt`.
+- Fixed TrackDB/RoadDB terrain conforming at world-tile borders and made F2
+  Size/Intensity text, sliders, and brush state remain synchronized.
+- Completed F7 Water Tools with explicit special-ruler modes, bounded 4 m/8 m
+  water processing, repeatable terrain clearance, long-ruler corrections, and
+  operation-specific Undo.
+- Added the full-screen PolyVeg Schema Editor and transactional ownership for
+  generated bake files, manifests, discard, and route Save.
+- Hardened PolyVeg geometry validation and legacy-orphan cleanup and registered
+  a self-contained baker probe.
+- Added transactional terrain saves plus stronger malformed-input, ACE
+  allocation, TrackDB/RoadDB, and route-save guards.
+- Restored authored static-track shapes and made missing/loading shape materials
+  render magenta instead of inheriting stale terrain texture state.
+- Consolidated Route Editor shortcuts, global map-overlay control, responsive
+  sizing, and GenX checkbox/spin-control styling.
 
 ## Verification
 
-Clean Qt 6.11.1 Release builds completed on 2026-08-19. Both registered suites
-passed 7/7.
+Clean Qt 6.11.1 MinGW and VS2026/MSVC Release builds completed on 2026-08-26.
+The expanded registered suite passed 15/15 in both lanes.
 
-- MinGW/TST SHA-256: `C6DDD2BA7C5E68FE7412C1BB98A4457A915ECC409254F412A1FADCE36B121D9F`
-- MSVC SHA-256: `062B82FFFBF945DCB52C617B9010E88C082E97FA180C1BEBF7F0CB96D6FDEE15`
+- MinGW/distribution SHA-256: `327612590FF056EB82E6ACBE82A3E64411249A777565FF0839393C35284FBB78`
+- MSVC SHA-256: `4789690A99D4845DF3645C7CB24E4B19EE8E8EADE57C8BEDECE05CBD93B99C4B`
 
-See `TEST-MATRIX-v0.13.md` for coverage and focused manual checks.
+The operator accepted v0.14 with no outstanding release testing. See
+`TEST-MATRIX-v0.14.md` for exact evidence and accepted future hardening.
 
 ## Earlier GenX Milestones
+
+### v0.13
+
+Unified the Route Editor interface, completed editable experimental 4 m terrain,
+bounded native overlays, strengthened route-session cleanup, refreshed Activity
+Builder, and improved diagnostics and long-consist selection.
 
 ### v0.12
 
@@ -85,10 +71,10 @@ terrain tools, and the first full Activity Builder.
 
 ## Release Status
 
-v0.13 is a reviewed **source checkpoint** on `tsre-scomod-wip` and immutable
-tag `v0.13`. A local distributable is produced for verification, but no v0.13
-binary is uploaded and no GitHub Release is created. The latest uploaded binary
-remains v0.12.
+v0.14 is a reviewed **source checkpoint** on `tsre-scomod-wip` and immutable
+tag `v0.14`. Complete local binary and source packages are retained, but no
+v0.14 binary is uploaded and no GitHub Release is created. The latest uploaded
+binary remains v0.12.
 
 Supported systems are 64-bit Windows 10 version 1809 or later and Windows 11.
 
@@ -103,8 +89,8 @@ portable.
 
 ## Documentation
 
-- `RELEASE-NOTES-v0.13.md` - grouped v0.13 notes
-- `TEST-MATRIX-v0.13.md` - verification status
+- `RELEASE-NOTES-v0.14.md` - grouped v0.14 notes
+- `TEST-MATRIX-v0.14.md` - verification status
 - `scoKeyList.txt` - Route Editor shortcuts
 - `scoUiStyle.txt` - canonical interface rules
 - `scoWorkList.txt` - historical engineering record

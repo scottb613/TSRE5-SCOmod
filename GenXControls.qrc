@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/genx-controls">
+        <file alias="spin-up.svg">icons/spin-up.svg</file>
+        <file alias="spin-down.svg">icons/spin-down.svg</file>
+    </qresource>
+</RCC>

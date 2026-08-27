@@ -30,6 +30,8 @@ void Ref::loadFile(QString path){
     if (!file.open(QIODevice::ReadOnly))
         return;
     FileBuffer* data = ReadFile::read(&file);
+    if (data == nullptr)
+        return;
     data->toUtf16();
     data->skipBOM();    
     loadUtf16Data(data, path);

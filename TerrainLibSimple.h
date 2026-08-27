@@ -57,7 +57,7 @@ public:
     int getTexture(int x, int z, float* p);
     bool load(int x, int z);
     void getUnsavedInfo(QVector<QString> &items);
-    void save();
+    bool save(QString *error = NULL);
     void refresh(int x, int z);
     bool reload(int x, int z);
     void loadQuadTree();

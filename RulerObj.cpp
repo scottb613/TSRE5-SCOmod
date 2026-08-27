@@ -89,6 +89,22 @@ bool polyVegAreaIsSimple(const QVector<QPointF> &polygon) {
     return true;
 }
 
+bool normalizeSpecialRulerPoint(
+        int &tileX, int &tileZ, float &localX, float &localZ) {
+    if(!std::isfinite(localX) || !std::isfinite(localZ))
+        return false;
+    const int offsetX = static_cast<int>(
+        std::floor((localX + 1024.0f) / 2048.0f));
+    const int offsetZ = static_cast<int>(
+        std::floor((localZ + 1024.0f) / 2048.0f));
+    tileX += offsetX;
+    tileZ += offsetZ;
+    localX -= offsetX * 2048.0f;
+    localZ -= offsetZ * 2048.0f;
+    return localX >= -1024.0f && localX < 1024.0f
+            && localZ >= -1024.0f && localZ < 1024.0f;
+}
+
 } // namespace
 
 RulerObj::RulerObj() {
@@ -249,21 +265,34 @@ void RulerObj::setTemplate(QString name){
 }
 
 void RulerObj::setPosition(int x, int z, float* p){
+    if(p == NULL)
+        return;
     if(isSpecialRuler() && selectionValue >= 0 && selectionValue < points.size()){
         int pointTileX = x;
         int pointTileZ = z;
         float local[3] {p[0], p[1], p[2]};
-        Game::check_coords(pointTileX, pointTileZ, local);
+        if(!normalizeSpecialRulerPoint(
+                pointTileX, pointTileZ, local[0], local[2]))
+            return;
         if(vegetationRuler && !acceptsVegetationTile(pointTileX, pointTileZ))
             return;
-        float newX = -2048*(this->x-pointTileX) + local[0];
-        float newY = local[1];
-        float newZ = -2048*(this->y-pointTileZ) + local[2];
         Point &point = points[selectionValue];
+        float newX = -2048*(this->x-pointTileX) + local[0];
+        float newY = point.position[1];
+        float newZ = -2048*(this->y-pointTileZ) + local[2];
+        const float deltaX = newX - point.position[0];
+        const float deltaZ = newZ - point.position[2];
+        constexpr float MaximumDragStep = 1024.0f;
+        if(!std::isfinite(newX) || !std::isfinite(newZ)
+                || deltaX*deltaX + deltaZ*deltaZ
+                   > MaximumDragStep*MaximumDragStep)
+            return;
         if(std::fabs(point.position[0] - newX) < 0.001f
                 && std::fabs(point.position[1] - newY) < 0.001f
                 && std::fabs(point.position[2] - newZ) < 0.001f)
             return;
+        if(!specialPointMoved)
+            Vec3::copy(specialPointStartPosition, point.position);
         point.position[0] = newX;
         point.position[1] = newY;
         point.position[2] = newZ;
@@ -405,9 +434,9 @@ void RulerObj::setVegetationArea(bool enabled) {
         line3d->deleteVBO();
     }
     if(vegetationBounds3d != NULL) {
-        vegetationBounds3d->setMaterial(enabled
-            ? 0.42f : 1.0f, enabled ? 0.88f : 0.0f,
-            enabled ? 0.48f : 1.0f);
+        // The point-to-point Area polygon is green, but its optional Width
+        // influence outline stays magenta just like the Corridor outline.
+        vegetationBounds3d->setMaterial(1.0f, 0.0f, 1.0f);
         vegetationBounds3d->deleteVBO();
     }
     if(vegetationPost3d != NULL)
@@ -501,6 +530,14 @@ bool RulerObj::isSpecialRuler() const {
     return waterRuler || vegetationRuler || gradeRuler;
 }
 
+int RulerObj::specialSelectionKind() const {
+    if(vegetationRuler)
+        return VegetationSelection;
+    if(gradeRuler)
+        return GradeSelection;
+    return WaterSelection;
+}
+
 void RulerObj::appendSpecialPoint(int px, int pz, float *p) {
     if(p == NULL)
         return;
@@ -554,34 +591,50 @@ void RulerObj::selectSpecialPoint(
     selected = true;
 }
 
-void RulerObj::snapSelectedSpecialPointToTerrain() {
+bool RulerObj::snapSelectedSpecialPointToTerrain() {
     if(!isSpecialRuler() || !specialPointMoved
             || selectionValue < 0 || selectionValue >= points.size())
-        return;
+        return false;
 
     specialPointMoved = false;
 
-    // A point may have moved even when the terrain tile cannot be sampled at
-    // release. Always discard the pre-drag corridor; terrain lookup below is
-    // only responsible for correcting the point height.
+    // Always discard the pre-drag geometry. If the destination terrain cannot
+    // be sampled, restore the point instead of leaving it at viewport depth.
     if(vegetationBounds3d != NULL)
         vegetationBounds3d->deleteVBO();
+
+    auto restorePoint = [this]() {
+        Vec3::copy(points[selectionValue].position,
+                   specialPointStartPosition);
+        if(line3d != NULL)
+            line3d->deleteVBO();
+    };
 
     int tileX = x;
     int tileZ = y;
     float localX = points[selectionValue].position[0];
     float localZ = points[selectionValue].position[2];
-    Game::check_coords(tileX, tileZ, localX, localZ);
-    Terrain *terrain = Game::terrainLib->getTerrainByXY(tileX, tileZ, true);
-    if(terrain == NULL || !terrain->loaded)
-        return;
-    float height = Game::terrainLib->getHeight(tileX, tileZ, localX, localZ, false);
-    if(height <= -10000.0f)
-        return;
+    if(!normalizeSpecialRulerPoint(tileX, tileZ, localX, localZ)){
+        restorePoint();
+        return true;
+    }
+    Terrain *terrain = Game::terrainLib != NULL
+            ? Game::terrainLib->getTerrainByXY(tileX, tileZ, true) : NULL;
+    if(terrain == NULL || !terrain->loaded){
+        restorePoint();
+        return true;
+    }
+    float height = terrain->getHeight(
+        tileX, tileZ, localX, localZ, false);
+    if(!std::isfinite(height) || height <= -10000.0f){
+        restorePoint();
+        return true;
+    }
     points[selectionValue].position[1] = height;
     setModified();
     if(line3d != NULL)
         line3d->deleteVBO();
+    return true;
 }
 
 void RulerObj::createRoadPaths(){
@@ -638,6 +691,8 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
     
     int useSC = (float)selectionColor/(float)(selectionColor+0.000001);
     const bool specialRuler = isSpecialRuler();
+    const bool directSpecialSelection = specialRuler
+            && ((selectionColor >> 20) & 0xF) == SpecialSelectionWindow;
     
     if(shapeEnabled){
         if(proceduralShapeInit){
@@ -808,10 +863,7 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
 
     if(vegetationRuler && vegetationBounds3d == NULL){
         vegetationBounds3d = new OglObj();
-        if(vegetationArea)
-            vegetationBounds3d->setMaterial(0.42f,0.88f,0.48f);
-        else
-            vegetationBounds3d->setMaterial(1.0f,0.0f,1.0f);
+        vegetationBounds3d->setMaterial(1.0f,0.0f,1.0f);
         vegetationBounds3d->setLineWidth(3);
     }
     if(vegetationRuler && vegetationBounds3d != NULL
@@ -997,15 +1049,18 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
         vegetationBounds3d->render(selectionColor);
 
     for(int i = 0; i < points.size(); i++){
+        const int pointSelectionColor = directSpecialSelection
+                ? selectionColor | (i & SpecialSelectionPointMask)
+                : selectionColor | (i&0xF)*useSC;
         gluu->mvPushMatrix();
         Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, points[i].position[0], points[i].position[1], points[i].position[2]);
         gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
         if(i == 0 || i == points.size() - 1 || DrawPoints || specialRuler){
             if(specialRuler && vegetationPost3d != NULL){
                 if(this->selected && this->selectionValue == i)
-                    vegetationPostSelected3d->render(selectionColor | (i&0xF)*useSC);
+                    vegetationPostSelected3d->render(pointSelectionColor);
                 else
-                    vegetationPost3d->render(selectionColor | (i&0xF)*useSC);
+                    vegetationPost3d->render(pointSelectionColor);
                 Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, 0,
                                 VegetationPostHeight + VegetationHandleGap
                                 + VegetationHandleSize*0.5f, 0);
@@ -1018,11 +1073,11 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
                 }
                 OglObj *handle = selectionColor == 0
                     ? vegetationHandle3d : specialHandlePick3d;
-                handle->render(selectionColor | (i&0xF)*useSC);
+                handle->render(pointSelectionColor);
             } else if(this->selected && this->selectionValue == i) {
-                point3dSelected->render(selectionColor | (i&0xF)*useSC);
+                point3dSelected->render(pointSelectionColor);
             } else {
-                point3d->render(selectionColor | (i&0xF)*useSC);
+                point3d->render(pointSelectionColor);
             }
         //    pointer3d->render(selectionColor + (i+1)*131072*8*useSC);
         }

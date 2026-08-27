@@ -25,6 +25,7 @@
 #include "TerrainLib.h"
 #include "TerrainLibSimple.h"
 #include "TerrainLibQt.h"
+#include "TerrainTrackMath.h"
 #include "TFile.h"
 #include "Game.h"
 #include "GuiFunct.h"
@@ -617,37 +618,6 @@ void Route::selectObjectsByXYRange(int mojex, int mojez, int minx, int maxx, int
 }
 
 Route::Route(const Route& orig) {
-}
-
-Route::~Route() {
-    clearMkrList();
-
-    for(auto entry = tile.begin(); entry != tile.end(); ++entry)
-        delete entry.value();
-    tile.clear();
-    // Path objects are shared with and owned by the process-scoped
-    // ActLib::Paths registry; Route only maintains a non-owning view.
-    path.clear();
-
-    if(Game::terrainLib == terrainLib)
-        Game::terrainLib = NULL;
-    delete terrainLib;
-    terrainLib = NULL;
-
-    if(Game::trackDB == trackDB)
-        Game::trackDB = NULL;
-    if(Game::roadDB == roadDB)
-        Game::roadDB = NULL;
-    if(Game::soundList == soundList)
-        Game::soundList = NULL;
-    delete trackDB;
-    delete roadDB;
-    delete soundList;
-    delete tsection;
-    delete ref;
-    delete env;
-    delete skydome;
-    delete trk;
 }
 
 void Route::loadAddons(){
@@ -1346,8 +1316,7 @@ void Route::render(GLUU *gluu, float * playerT, float* playerW, float* target, f
     // point. Normal object/tile LOD would therefore hide the entire guide when
     // the camera follows a long river away from that first tile. Render this
     // one editor guide explicitly whenever normal tile rendering culled it.
-    if(waterRulerObj != NULL && waterRulerObj->loaded
-            && renderMode != gluu->RENDER_SELECTION){
+    if(waterRulerObj != NULL && waterRulerObj->loaded){
         int offsetX = waterRulerObj->x - (int)playerT[0];
         int offsetZ = waterRulerObj->y - (int)playerT[1];
         float lodx = offsetX * 2048.0f
@@ -1360,20 +1329,24 @@ void Route::render(GLUU *gluu, float * playerT, float* playerW, float* target, f
         bool normalObjectRendered = homeTileRendered
                 && (lod < Game::objectLod || waterRulerObj->isInternalLodControl());
         if(!normalObjectRendered){
+            int selectionColor = renderMode == gluu->RENDER_SELECTION
+                    ? (RulerObj::SpecialSelectionWindow << 20)
+                      | (waterRulerObj->specialSelectionKind()
+                         << RulerObj::SpecialSelectionKindShift)
+                    : 0;
             gluu->mvPushMatrix();
             Mat4::translate(gluu->mvMatrix, gluu->mvMatrix,
                             2048.0f * offsetX, 0, 2048.0f * offsetZ);
             waterRulerObj->render(gluu, lod, lodx, lodz,
-                                  playerW, target, fov, 0, renderMode);
+                                  playerW, target, fov,
+                                  selectionColor, renderMode);
             gluu->mvPopMatrix();
         }
     }
 
     // Keep the route-wide vegetation guide visible when its owning world tile
-    // is outside the normal render window. Selection remains on the ordinary
-    // world-tile pass so its control-point color encoding stays unchanged.
-    if(vegetationRulerObj != NULL && vegetationRulerObj->loaded
-            && renderMode != gluu->RENDER_SELECTION){
+    // is outside the normal render window.
+    if(vegetationRulerObj != NULL && vegetationRulerObj->loaded){
         int offsetX = vegetationRulerObj->x - (int)playerT[0];
         int offsetZ = vegetationRulerObj->y - (int)playerT[1];
         float lodx = offsetX * 2048.0f
@@ -1386,17 +1359,22 @@ void Route::render(GLUU *gluu, float * playerT, float* playerW, float* target, f
         bool normalObjectRendered = homeTileRendered
                 && (lod < Game::objectLod || vegetationRulerObj->isInternalLodControl());
         if(!normalObjectRendered){
+            int selectionColor = renderMode == gluu->RENDER_SELECTION
+                    ? (RulerObj::SpecialSelectionWindow << 20)
+                      | (vegetationRulerObj->specialSelectionKind()
+                         << RulerObj::SpecialSelectionKindShift)
+                    : 0;
             gluu->mvPushMatrix();
             Mat4::translate(gluu->mvMatrix, gluu->mvMatrix,
                             2048.0f * offsetX, 0, 2048.0f * offsetZ);
             vegetationRulerObj->render(gluu, lod, lodx, lodz,
-                                       playerW, target, fov, 0, renderMode);
+                                       playerW, target, fov,
+                                       selectionColor, renderMode);
             gluu->mvPopMatrix();
         }
     }
 
-    if(gradeRulerObj != NULL && gradeRulerObj->loaded
-            && renderMode != gluu->RENDER_SELECTION){
+    if(gradeRulerObj != NULL && gradeRulerObj->loaded){
         int offsetX = gradeRulerObj->x - (int)playerT[0];
         int offsetZ = gradeRulerObj->y - (int)playerT[1];
         float lodx = offsetX * 2048.0f
@@ -1409,11 +1387,17 @@ void Route::render(GLUU *gluu, float * playerT, float* playerW, float* target, f
         bool normalObjectRendered = homeTileRendered
                 && (lod < Game::objectLod || gradeRulerObj->isInternalLodControl());
         if(!normalObjectRendered){
+            int selectionColor = renderMode == gluu->RENDER_SELECTION
+                    ? (RulerObj::SpecialSelectionWindow << 20)
+                      | (gradeRulerObj->specialSelectionKind()
+                         << RulerObj::SpecialSelectionKindShift)
+                    : 0;
             gluu->mvPushMatrix();
             Mat4::translate(gluu->mvMatrix, gluu->mvMatrix,
                             2048.0f * offsetX, 0, 2048.0f * offsetZ);
             gradeRulerObj->render(gluu, lod, lodx, lodz,
-                                  playerW, target, fov, 0, renderMode);
+                                  playerW, target, fov,
+                                  selectionColor, renderMode);
             gluu->mvPopMatrix();
         }
     }
@@ -1580,9 +1564,13 @@ bool Route::findNearestDbHeight(int x, int y, float *pos, float maxDistance, flo
         if (ok < 0)
             continue;
 
-        float dx = sample[0] - pos[0];
-        float dz = sample[2] - pos[2];
-        float distance = sqrt(dx * dx + dz * dz);
+        // findNearestPositionOnTDB() returns the snapped local position and
+        // tile in playerT. Near a tile edge that frame can differ from the
+        // query frame, so subtracting local coordinates alone invents an
+        // approximately 2048 m separation and rejects a valid DB hit.
+        const float distance = TerrainTrackMath::distanceBetweenTilePositionsXZ(
+            x, y, pos[0], pos[2],
+            (int)playerT[0], (int)playerT[1], sample[0], sample[2]);
         if (distance <= bestDistance) {
             bestDistance = distance;
             bestHeight = sample[1];
@@ -2643,7 +2631,8 @@ void Route::toggleToTDB(WorldObj* obj) {
             return;
     }
     if(roadDB->ifTrackExist(obj->x, obj->y, obj->UiD) || trackDB->ifTrackExist(obj->x, obj->y, obj->UiD)){
-        removeTrackFromTDB(obj);
+        if(!removeTrackFromTDB(obj))
+            return;
         obj->setModified();   //// EFO added to account for unsaved on TDB edits only
         return;
     }
@@ -3112,6 +3101,8 @@ void Route::fixTDBVectorElevation(WorldObj* obj){
 }
 
 void Route::deleteTDBVector(WorldObj* obj){
+    if(!canRemoveTrackFromTDB(obj, true))
+        return;
     Undo::StateBegin();
     Undo::PushTrackDB(this->trackDB, false);
     Undo::PushTrackDB(this->roadDB, true);
@@ -3145,6 +3136,9 @@ void Route::deleteObj(WorldObj* obj) {
     if(obj == NULL)
         return;
     if(obj->typeObj != WorldObj::worldobj)
+        return;
+    if((obj->type == "trackobj" || obj->type == "dyntrack")
+            && !canRemoveTrackFromTDB(obj, true))
         return;
     if(obj == waterRulerObj)
         waterRulerObj = NULL;
@@ -3346,14 +3340,44 @@ int Route::deleteAllInstances(WorldObj *selected, bool gui) {
     return matches.size();
 }
 
-void Route::removeTrackFromTDB(WorldObj* obj) {
-    if(obj->typeObj != WorldObj::worldobj)
-        return;
-    bool ok;
-    ok = this->roadDB->removeTrackFromTDB(obj->x, obj->y, obj->UiD);
-    ok |= this->trackDB->removeTrackFromTDB(obj->x, obj->y, obj->UiD);
+bool Route::canRemoveTrackFromTDB(WorldObj* obj, bool reportError) const {
+    if(obj == NULL || obj->typeObj != WorldObj::worldobj)
+        return false;
+    const bool blocked = (roadDB != NULL
+            && roadDB->hasTrackItemsForTrack(obj->x, obj->y, obj->UiD))
+        || (trackDB != NULL
+            && trackDB->hasTrackItemsForTrack(obj->x, obj->y, obj->UiD));
+    if(!blocked)
+        return true;
+    if(reportError){
+        const QString heading = QString("Track Edit Stopped");
+        const QString message = QString(
+            "Remove every signal, platform, siding, speedpost, crossing, "
+            "pickup, sound region, and other interactive attached to this "
+            "track before changing or deleting its geometry.");
+        ErrorMessage *error = new ErrorMessage(
+            ErrorMessage::Type_Error,
+            ErrorMessage::Source_Editor,
+            QString("Track edit blocked: remove interactives first."),
+            message);
+        ErrorMessagesLib::PushErrorMessage(error);
+        if(Game::gui)
+            GuiFunct::showEditorStopped(NULL, heading, message);
+    }
+    return false;
+}
+
+bool Route::removeTrackFromTDB(WorldObj* obj) {
+    if(!canRemoveTrackFromTDB(obj, true))
+        return false;
+    bool ok = false;
+    if(roadDB != NULL)
+        ok = roadDB->removeTrackFromTDB(obj->x, obj->y, obj->UiD);
+    if(trackDB != NULL)
+        ok |= trackDB->removeTrackFromTDB(obj->x, obj->y, obj->UiD);
     if(ok)
         obj->removedFromTDB();
+    return true;
 }
 
 int Route::getTileObjCount(int x, int z) {
@@ -3415,7 +3439,18 @@ void Route::save() {
             tTile->setModified(false);
         }
     }
-    Game::terrainLib->save();
+    QString terrainSaveError;
+    if(Game::terrainLib == NULL || !Game::terrainLib->save(&terrainSaveError)){
+        qWarning() << "Terrain save failed:" << terrainSaveError;
+        emit sendMsg("saveError");
+        if(Game::gui)
+            GuiFunct::showEditorStopped(NULL, QObject::tr("Route Save Failed"),
+                QObject::tr("One terrain tile could not be saved. Its previous "
+                            "files were left intact or restored, and the tile "
+                            "remains modified.\n\n%1")
+                    .arg(terrainSaveError));
+        return;
+    }
 
     QString keySaveError;
     if(!saveKeyRouteFiles(keySaveError)){

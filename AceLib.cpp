@@ -15,6 +15,10 @@
 #include <QDebug>
 #include <QOpenGLShaderProgram>
 #include <QString>
+#include <QBuffer>
+#include <QSaveFile>
+#include <limits>
+#include <memory>
 #include "Game.h"
 
 bool AceLib::IsThread = true;
@@ -43,28 +47,33 @@ void AceLib::run() {
     }
     //if(!IsThread)
     //    qDebug() << "ACE: "<<texture->pathid;
-    FileBuffer* data = ReadFile::read(&file);
+    std::unique_ptr<FileBuffer> data(ReadFile::read(&file));
+    if (!data) {
+        texture->missing = true;
+        return;
+    }
     //qDebug() << "Date:" << data->length;
+    if(data->length < 37){
+        texture->error = true;
+        qWarning() << "ACE rejected:" << texture->pathid << "ACE header is truncated.";
+        return;
+    }
     unsigned char* bufor = data->data;
-    int offset = 0;//-16;
-    int typ = 0, dane;
+    int typ = 0;
+    int dane = bufor[20];
     unsigned char tempt;
-
-    dane = bufor[20 + offset];
-    texture->compressed = bufor[32 + offset];
-
-    texture->width = bufor[25 + offset] * 256 + bufor[24 + offset];
-    texture->height = bufor[29 + offset] * 256 + bufor[28 + offset];
-
-    if (bufor[36 + offset] == 3) {
+    texture->compressed = bufor[32];
+    texture->width = bufor[25] * 256 + bufor[24];
+    texture->height = bufor[29] * 256 + bufor[28];
+    if (bufor[36] == 3) {
         texture->bpp = 24;
         texture->typk = typ = 0;
     }
-    if (bufor[36 + offset] == 4) {
+    if (bufor[36] == 4) {
         texture->bpp = 32;
         texture->typk = typ = 2;
     }
-    if (bufor[36 + offset] == 5) {
+    if (bufor[36] == 5) {
         texture->bpp = 32;
         texture->typk = typ = 1;
     }
@@ -72,26 +81,16 @@ void AceLib::run() {
     if(!IsThread)
         qDebug() << "--"<<texture->width<<":"<<texture->height<<" "<<texture->bpp;
 
-    if ((texture->width <= 1) || (texture->height <= 1) || ((texture->bpp != 24) && (texture->bpp != 32))) {
+    if ((texture->width <= 1) || (texture->height <= 1)
+            || ((texture->bpp != 24) && (texture->bpp != 32))) {
         texture->error = true;
-        if(!IsThread)
-            qDebug() << "!!!!!!!!!!!!! mega fail tex: " <<  texture->pathid
-                <<  " " <<  texture->width
-                <<  " " <<  texture->height
-                <<  " " <<  texture->bpp
-                ;
         return;
     }
-    if (/*(texture->width % 2) != 0 || (texture->height % 2) != 0 ||*/ ((texture->width > 8192) && (texture->height > 8192))) {
+    if (texture->width > 8192 || texture->height > 8192) {
         texture->error = true;
-        if(!IsThread)
-            qDebug() << "!!!!!!!!!!!!! mega fail tex: " <<  texture->pathid
-                <<  " " <<  texture->width
-                <<  " " <<  texture->height
-                <<  " " <<  texture->bpp
-                ;
         return;
     }
+
     //// EFO MOD Check to see if texture is square.... 
 
     if ( texture->width % 2 != 0 || texture->height % 2 != 0 ) { 
@@ -117,7 +116,17 @@ void AceLib::run() {
 
     
     texture->bytesPerPixel = (texture->bpp / 8);
-    texture->imageSize = (texture->bytesPerPixel * texture->width * texture->height);
+    constexpr qint64 maximumDecodedBytes = 256ll * 1024ll * 1024ll;
+    const qint64 decodedBytes = qint64(texture->bytesPerPixel)
+        * qint64(texture->width) * qint64(texture->height);
+    if(decodedBytes <= 0 || decodedBytes > maximumDecodedBytes
+            || decodedBytes > std::numeric_limits<int>::max()) {
+        texture->error = true;
+        qWarning() << "ACE rejected:" << texture->pathid
+                   << "decoded image size exceeds the supported limit.";
+        return;
+    }
+    texture->imageSize = static_cast<int>(decodedBytes);
     texture->imageData = new unsigned char[texture->imageSize];
     if (texture->bpp == 24) {
         texture->type = GL_RGB;
@@ -128,9 +137,9 @@ void AceLib::run() {
     int ptr = 0;
     if (texture->compressed != 18) {
         int iw = 0, ite;
-        if (typ == 0) ptr = 216 + offset;
-        if (typ == 1) ptr = 248 + offset;
-        if (typ == 2) ptr = 232 + offset;
+        if (typ == 0) ptr = 216;
+        if (typ == 1) ptr = 248;
+        if (typ == 2) ptr = 232;
         if (dane == 0) ptr += texture->height * 4;
         else if (dane == 1) ptr += texture->height * 8 - 4;
         else if (dane == 4) ptr += texture->height * 4;
@@ -198,7 +207,7 @@ void AceLib::run() {
         //texture->editable = true;        
     } else {
         //var start = new Date().getTime();
-        ptr = 216 + offset;
+        ptr = 216;
         int tempp = texture->height;
         if (texture->bpp == 24) ptr += 4;
         else ptr += 20;
@@ -206,7 +215,6 @@ void AceLib::run() {
             ptr += 4;
             tempp = tempp / 2;
         }
-
         unsigned short c[5] = {0,0,0,0,0};
         unsigned char r[4] = {0,0,0,0};
         unsigned char g[4] = {0,0,0,0};
@@ -263,7 +271,9 @@ void AceLib::run() {
                 for (int ii = 0; ii < 4; ii++) {
                     for (int jj = 0; jj < 4; jj++) {
                         int o = (bits[ii] >> (jj * 2)) & 0x3;
-                        int p = texture->bytesPerPixel * texture->width * (ih + ii) + (iw + jj) * texture->bytesPerPixel + 0;
+                        if(ih + ii >= texture->height || iw + jj >= texture->width)
+                            continue;
+                        int p = texture->bytesPerPixel * texture->width * (ih + ii) + (iw + jj) * texture->bytesPerPixel;
                         texture->imageData[p] = r[o];
                         texture->imageData[p + 1] = g[o];
                         texture->imageData[p + 2] = b[o];
@@ -279,7 +289,9 @@ void AceLib::run() {
     // Do not downsample textures while route editing. Terrain paint saves the
     // editable image back to ACE, so reducing it here can permanently turn a
     // 1024x1024 terrtex patch into 512x512 after painting.
-    if(Game::textureQuality > 1 && !Game::writeEnabled){
+    if(Game::textureQuality > 1 && !Game::writeEnabled
+            && texture->width >= Game::textureQuality
+            && texture->height >= Game::textureQuality){
         int nw = texture->width/Game::textureQuality;
         int nh = texture->height/Game::textureQuality;
         float scalew = (float)texture->width/nw;
@@ -307,18 +319,33 @@ void AceLib::run() {
     texture->loaded = true;
     texture->editable = true;        
     //qDebug() << "--";
-    delete data;
     //qDebug() << "2";
     return;
 }
 
-void AceLib::save(QString path, Texture* t){
-    path.replace("//", "/");
-    QFile *file = new QFile(path);
-    qDebug() << "zapis .ace "<<path;
-    if (!file->open(QIODevice::WriteOnly))
-        return;
-    QDataStream write(file);
+bool AceLib::serialize(Texture *t, QByteArray &data, QString *error){
+    data.clear();
+    if(t == NULL || t->imageData == NULL || t->width <= 0 || t->height <= 0
+            || t->width > 8192 || t->height > 8192
+            || t->bytesPerPixel < 3){
+        if(error)
+            *error = "Texture has no valid editable image data.";
+        return false;
+    }
+    const qint64 pixels = qint64(t->width) * qint64(t->height);
+    if(pixels <= 0 || pixels > std::numeric_limits<int>::max() / t->bytesPerPixel){
+        if(error)
+            *error = "Texture dimensions exceed the ACE encoder limit.";
+        return false;
+    }
+
+    QBuffer buffer(&data);
+    if(!buffer.open(QIODevice::WriteOnly)){
+        if(error)
+            *error = buffer.errorString();
+        return false;
+    }
+    QDataStream write(&buffer);
     write.setByteOrder(QDataStream::LittleEndian);
     write.setFloatingPointPrecision(QDataStream::SinglePrecision);
     
@@ -375,6 +402,41 @@ void AceLib::save(QString path, Texture* t){
         }
     }
     
+    const bool ok = write.status() == QDataStream::Ok;
     write.setDevice(nullptr);
-    file->close();
+    buffer.close();
+    if(!ok || data.isEmpty()){
+        data.clear();
+        if(error)
+            *error = "ACE serialization failed.";
+        return false;
+    }
+    return true;
+}
+
+bool AceLib::save(QString path, Texture* t, QString *error){
+    path.replace("//", "/");
+    qDebug() << "zapis .ace " << path;
+    QByteArray data;
+    if(!serialize(t, data, error))
+        return false;
+    QSaveFile file(path);
+    file.setDirectWriteFallback(false);
+    if(!file.open(QIODevice::WriteOnly)){
+        if(error)
+            *error = file.errorString();
+        return false;
+    }
+    if(file.write(data) != data.size()){
+        if(error)
+            *error = file.errorString();
+        file.cancelWriting();
+        return false;
+    }
+    if(!file.commit()){
+        if(error)
+            *error = file.errorString();
+        return false;
+    }
+    return true;
 }

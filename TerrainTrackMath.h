@@ -144,6 +144,16 @@ inline float nativeSampleCoordinate(int tileOffset, int sampleIndex,
     return tileMinimumCoordinate(tileOffset) + sampleIndex * sampleSize;
 }
 
+inline float distanceBetweenTilePositionsXZ(
+        int firstTileX, int firstTileZ, float firstLocalX, float firstLocalZ,
+        int secondTileX, int secondTileZ, float secondLocalX, float secondLocalZ) {
+    const float dx = (secondTileX - firstTileX) * TileSize
+            + secondLocalX - firstLocalX;
+    const float dz = (secondTileZ - firstTileZ) * TileSize
+            + secondLocalZ - firstLocalZ;
+    return std::sqrt(dx * dx + dz * dz);
+}
+
 inline bool nearestTrack(const float* points, int length, float x, float z, float& distance, float& height) {
     distance = std::numeric_limits<float>::max();
     height = 0.0f;

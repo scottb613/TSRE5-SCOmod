@@ -11,19 +11,25 @@
 #include "TRnode.h"
 #include "GLMatrix.h"
 #include <math.h>
+#include <limits>
 #include "Game.h"
 #include <QString>
 #include <QDebug>
 #include "FileBuffer.h"
 #include "ParserX.h"
+#include "TrackDbFormatValidator.h"
 
 TRnode::TRnode() {
     typ = -1;
     TrP1 = 0;
-    TrP1 = 0;
+    TrP2 = 0;
+    iTrv = 0;
+    trVectorSection = nullptr;
     iTri = 0;
     trItemRef = nullptr;
     args[0] = args[1] = args[2] = 0;
+    for(float &value : UiD)
+        value = 0.0f;
     TrPinS[0] = TrPinS[1] = TrPinS[2] = 0;
     TrPinK[0] = TrPinK[1] = TrPinK[2] = 0;
 }
@@ -33,6 +39,7 @@ TRnode::TRnode(const TRnode& o) {
     memcpy(args, o.args, sizeof(int[3]));
     memcpy(UiD, o.UiD, sizeof(float[12]));
     iTrv = o.iTrv;
+    trVectorSection = nullptr;
     if(iTrv > 0){
         trVectorSection = new TRSect[iTrv];
         for(int i = 0; i < iTrv; i++){
@@ -40,6 +47,7 @@ TRnode::TRnode(const TRnode& o) {
         }
     }
     iTri = o.iTri;
+    trItemRef = nullptr;
     if(iTri > 0){
         trItemRef = new int[iTri];
         memcpy(trItemRef, o.trItemRef, sizeof(int) * iTri);
@@ -58,12 +66,25 @@ TRnode::~TRnode() {
         delete[] trItemRef;
 }
 
-void TRnode::loadUtf16Data(FileBuffer *data){
+bool TRnode::loadUtf16Data(FileBuffer *data){
     bool ok = false;
     QString sh = "";
     int i = 0, j = 0, ii = 0, uu = 0;
     float xx = 0;
-    int t = (int) ParserX::GetNumber(data); // odczytanie numeru sciezki
+    int t = 0;
+    QString validationError;
+    if(!TrackDbFormatValidator::integer(
+            ParserX::GetNumber(data), 1,
+            TrackDbFormatValidator::MaximumNodes,
+            t, &validationError)){
+        qWarning() << "TrackNode update rejected:" << validationError;
+        return false;
+    }
+    if(!TrackDbFormatValidator::nodeId(
+            t, TrackDbFormatValidator::MaximumNodes, &validationError)){
+        qWarning() << "TrackNode update rejected:" << validationError;
+        return false;
+    }
                             while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
                                 if(sh == "trendnode"){
                                     typ = 0; //typ endnode
@@ -74,15 +95,28 @@ void TRnode::loadUtf16Data(FileBuffer *data){
                                     typ = 1; //typ vector 
                                     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
                                         if(sh == "trvectorsections"){
-                                            int uu = (int) ParserX::GetNumberInside(data, &ok);
+                                            const float countValue = ParserX::GetNumberInside(data, &ok);
+                                            int uu = 0;
+                                            if(!ok || !TrackDbFormatValidator::integer(
+                                                    countValue, 0,
+                                                    TrackDbFormatValidator::MaximumSectionsPerNode,
+                                                    uu, &validationError)
+                                                    || !TrackDbFormatValidator::sectionCount(
+                                                    uu, 0, &validationError)){
+                                                qWarning() << "TrackNode update rejected:"
+                                                           << (ok ? validationError
+                                                                  : "missing section count");
+                                                return false;
+                                            }
                                             if(ok){
                                                 iTrv = uu;
                                                 trVectorSection = new TRnode::TRSect[uu]; // przydzielenie pamieci dla sciezki
                                                 for (j = 0; j < uu; j++) {
                                                     for (ii = 0; ii < 16; ii++) {
                                                         xx = ParserX::GetNumber(data);
-                                                        if(std::isnan(xx)){
-                                                            qDebug() << "#TrackDB: NAN found in tracknode: "<<t;
+                                                        if(!std::isfinite(xx)){
+                                                            qWarning() << "TrackNode update rejected: non-finite vector value";
+                                                            return false;
                                                         }
                                                         trVectorSection[j].param[ii] = xx;
                                                     }
@@ -92,12 +126,31 @@ void TRnode::loadUtf16Data(FileBuffer *data){
                                             continue;
                                         }
                                         if(sh == "tritemrefs"){
-                                            uu = (int) ParserX::GetNumber(data);
+                                            if(!TrackDbFormatValidator::integer(
+                                                    ParserX::GetNumber(data), 0,
+                                                    TrackDbFormatValidator::MaximumItemRefsPerNode,
+                                                    uu, &validationError)){
+                                                qWarning() << "TrackNode update rejected:" << validationError;
+                                                return false;
+                                            }
+                                            if(!TrackDbFormatValidator::itemRefCount(
+                                                    uu, 0, &validationError)){
+                                                qWarning() << "TrackNode update rejected:" << validationError;
+                                                return false;
+                                            }
                                             iTri = uu;
                                             trItemRef = new int[uu]; // przydzielenie pamieci dla sciezki
                                             if(uu > 0){
                                                 for (j = 0; j < uu; j++) {
-                                                    trItemRef[j] = ParserX::GetNumber(data);
+                                                    int itemId = 0;
+                                                    if(!TrackDbFormatValidator::integer(
+                                                            ParserX::GetNumber(data), 0,
+                                                            int(TrackDbFormatValidator::MaximumItemRefsTotal),
+                                                            itemId, &validationError)){
+                                                        qWarning() << "TrackNode update rejected:" << validationError;
+                                                        return false;
+                                                    }
+                                                    trItemRef[j] = itemId;
                                                 }
                                                 ParserX::SkipToken(data);
                                             }
@@ -112,19 +165,56 @@ void TRnode::loadUtf16Data(FileBuffer *data){
                                 }
                                 if(sh == "trjunctionnode"){
                                     typ = 2; //typ rozjazd
-                                    args[0] = ParserX::GetNumber(data);
-                                    args[1] = ParserX::GetNumber(data);
-                                    args[2] = ParserX::GetNumber(data);
+                                    for(int argument = 0; argument < 3; ++argument){
+                                        if(!TrackDbFormatValidator::integer(
+                                                ParserX::GetNumber(data),
+                                                std::numeric_limits<int>::min(),
+                                                std::numeric_limits<int>::max(),
+                                                args[argument], &validationError)){
+                                            qWarning() << "TrackNode update rejected:" << validationError;
+                                            return false;
+                                        }
+                                    }
                                     ParserX::SkipToken(data);
                                     continue;
                                 }
                                 if(sh == "trpins"){
-                                    TrP1 = (int) ParserX::GetNumber(data);
-                                    TrP2 = (int) ParserX::GetNumber(data);
-
+                                    if(!TrackDbFormatValidator::integer(
+                                            ParserX::GetNumber(data), 0, 3,
+                                            TrP1, &validationError)
+                                            || !TrackDbFormatValidator::integer(
+                                            ParserX::GetNumber(data), 0, 3,
+                                            TrP2, &validationError)){
+                                        qWarning() << "TrackNode update rejected:" << validationError;
+                                        return false;
+                                    }
+                                    if(!TrackDbFormatValidator::pinCounts(
+                                            typ, TrP1, TrP2, &validationError)){
+                                        qWarning() << "TrackNode update rejected:" << validationError;
+                                        return false;
+                                    }
                                     for (int i = 0; i < TrP1 + TrP2; i++) {
-                                        TrPinS[i] = (int) ParserX::GetNumber(data);
-                                        TrPinK[i] = (int) ParserX::GetNumber(data);
+                                        int target = 0;
+                                        int direction = 0;
+                                        if(!TrackDbFormatValidator::integer(
+                                                ParserX::GetNumber(data), 0,
+                                                TrackDbFormatValidator::MaximumNodes,
+                                                target, &validationError)
+                                                || !TrackDbFormatValidator::integer(
+                                                ParserX::GetNumber(data), 0, 1,
+                                                direction, &validationError)){
+                                            qWarning() << "TrackNode update rejected:" << validationError;
+                                            return false;
+                                        }
+                                        if(!TrackDbFormatValidator::pin(
+                                                target, direction,
+                                                TrackDbFormatValidator::MaximumNodes,
+                                                &validationError)){
+                                            qWarning() << "TrackNode update rejected:" << validationError;
+                                            return false;
+                                        }
+                                        TrPinS[i] = target;
+                                        TrPinK[i] = direction;
                                     }
                                     ParserX::SkipToken(data);
                                     ParserX::SkipToken(data);
@@ -133,8 +223,9 @@ void TRnode::loadUtf16Data(FileBuffer *data){
                                 if(sh == "uid"){
                                     for (ii = 0; ii < 12; ii++) {
                                         xx = ParserX::GetNumber(data);
-                                        if(std::isnan(xx)){
-                                            qDebug() << "#TrackDB: NAN found in tracknode: "<<t;
+                                        if(!std::isfinite(xx)){
+                                            qWarning() << "TrackNode update rejected: non-finite UiD value";
+                                            return false;
                                         }
                                         UiD[ii] = xx;
                                         //qDebug() << "load uid7" << UiD[ii];
@@ -146,7 +237,7 @@ void TRnode::loadUtf16Data(FileBuffer *data){
                                 //trackNodes[t] = NULL;
                                 ParserX::SkipToken(data);
                             }
-    return;
+    return true;
 }
 
 void TRnode::saveToStream(QTextStream &out, int nid){

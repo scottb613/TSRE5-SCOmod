@@ -12,6 +12,7 @@
 #define	ACELIB_H
 
 #include <QThread>
+#include <QByteArray>
 #include "Texture.h"
 
 class AceLib : public QThread
@@ -25,7 +26,8 @@ public:
     virtual ~AceLib();
     //static bool LoadACE(Texture* texture);
     Texture* texture;
-    static void save(QString path, Texture* t);
+    static bool serialize(Texture *texture, QByteArray &data, QString *error = NULL);
+    static bool save(QString path, Texture* t, QString *error = NULL);
     void run();
 private:
     

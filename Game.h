@@ -161,7 +161,6 @@ public:
     static float snapableRadius;
     static bool snapableOnlyRot;
     static float trackElevationMaxPm;    
-    static bool proceduralTracks;
     static QString StyleMainLabel;
     static QString StyleGreenButton;
     static QString StyleGreenButtonHover;
@@ -323,7 +322,6 @@ public:
 private:
     //static RouteEditorWindow* window;
     //static LoadWindow* loadWindow;
-    static void DownloadAppData(QString path);
     static void cleanupLogs();
     
     

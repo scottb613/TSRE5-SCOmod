@@ -19,7 +19,6 @@ struct ForestVegetationDefinition {
     QString id;
     QString name;
     QString shape;
-    QString stratum;
     double proportion = 0.0;
     double normalizedProportion = 0.0;
     ForestNumberRange yawDegrees;
@@ -27,8 +26,6 @@ struct ForestVegetationDefinition {
     double plantingDepthMetres = 0.0;
     bool hasPlantingDepth = false;
     double footprintRadiusMetres = 0.0;
-    double maximumSlopeDegrees = 0.0;
-    bool hasMaximumSlope = false;
 };
 
 struct ForestRecipeDefinition {
@@ -36,14 +33,10 @@ struct ForestRecipeDefinition {
     QString name;
     QString description;
 
-    double defaultWidthMetres = 0.0;
     double defaultDensityPerSquareMetre = 0.0;
-    double defaultTerrainDepthMetres = 0.0;
-    double defaultVariationScale = 0.0;
     double defaultTrackClearanceMetres = 0.0;
     double defaultRoadClearanceMetres = 0.0;
 
-    ForestNumberRange widthLimitsMetres;
     ForestNumberRange densityLimitsPerSquareMetre;
     int defaultMaximumTrees = 0;
     int minimumMaximumTrees = 0;
@@ -52,7 +45,6 @@ struct ForestRecipeDefinition {
     double maximumSlopeDegrees = 0.0;
     double edgeFeatherMetres = 0.0;
     double minimumSeparationMetres = 0.0;
-    bool preventFootprintOverlap = false;
 
     int osmPriority = 0;
     QStringList osmCategories;

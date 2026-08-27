@@ -12,12 +12,16 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <functional>
+#include <vector>
 #include <QDebug>
 #include "Game.h"
 #include <QFile>
 #include <QDir>
 #include <QFileInfo>
+#include <QBuffer>
 #include "ReadFile.h"
+#include "AceLib.h"
 #include "TexLib.h"
 #include "TerrainLib.h"
 #include "GLMatrix.h"
@@ -30,6 +34,8 @@
 #include "TerrainInfo.h"
 #include "RenderItem.h"
 #include "Renderer.h"
+#include "RouteSaveTransaction.h"
+#include "TerrainGridMath.h"
 
 QString Terrain::TileDir[2] = {"tiles", "lo_tiles"};
 Brush* Terrain::DefaultBrush = NULL;
@@ -271,19 +277,6 @@ void Terrain::paintPairedSeasonTexture(Brush* brush, QString textureName, int pa
     texMirrorModified[patchIdx] = true;
 }
 
-void Terrain::savePairedSeasonTexture(int patchIdx) {
-    if (texMirrorId[patchIdx] < 0)
-        return;
-
-    Texture* tex = TexLib::mtex[texMirrorId[patchIdx]];
-    if (tex == NULL)
-        return;
-
-    QFileInfo targetInfo(tex->pathid);
-    QDir().mkpath(targetInfo.absolutePath());
-    TexLib::save("ace", tex->pathid, texMirrorId[patchIdx]);
-}
-
 void Terrain::load(){
     typeObj = this->terrainobj;
     loaded = false;
@@ -318,6 +311,23 @@ void Terrain::load(){
     //qDebug() << filename << x << -y;
     if (!tfile->readT((path + name + ".t"))) {
         //qDebug() << " t fail" << name;
+        return;
+    }
+    TerrainGridMath::RenderLayout terrainLayout;
+    TerrainGridMath::RenderLayoutError terrainLayoutError;
+    if(tfile->nsamples == NULL || tfile->sampleSize == NULL
+            || *tfile->sampleSize <= 0
+            || tfile->patchsetNpatches
+                    != TerrainGridMath::SupportedPatchDimension
+            || !TerrainGridMath::calculateRenderLayout(
+                    *tfile->nsamples, tfile->patchsetNpatches,
+                    terrainLayout, terrainLayoutError)){
+        qWarning() << "Unsupported terrain descriptor" << path + name + ".t"
+                   << "samples"
+                   << (tfile->nsamples == NULL ? 0 : *tfile->nsamples)
+                   << "sample size"
+                   << (tfile->sampleSize == NULL ? 0 : *tfile->sampleSize)
+                   << "patches" << tfile->patchsetNpatches;
         return;
     }
     if(tfile->sampleYbuffer == NULL)
@@ -549,10 +559,6 @@ Terrain::~Terrain() {
         //    //GC::VBO.push_back(VBO[i]);
         //    //GC::VAO.push_back(VAO[i]);
         //}
-        if(VBO != NULL)
-            delete VBO;
-        if(VAO != NULL)
-            delete VAO;
         //delete[] VBO;
         //delete[] VAO;
 
@@ -560,12 +566,37 @@ Terrain::~Terrain() {
         if (this->jestF)
             delete[] fData;
     }
+    delete VBO;
+    VBO = NULL;
+    delete VAO;
+    VAO = NULL;
+    delete tfile;
+    tfile = NULL;
     long timeNow2 = QDateTime::currentMSecsSinceEpoch();
     if(Game::debugOutput) qDebug() << "= release terrain "<< timeNow2 - timeNow1;
 }
 
 void Terrain::SaveEmpty(QString name, int samples, int sampleSize, int patches, bool low) {
     if(Game::debugOutput) qDebug() << "New terrain tile";
+    if(sampleSize <= 0){
+        qWarning() << "Refusing to create terrain tile with invalid sample size"
+                   << name << sampleSize;
+        return;
+    }
+    TerrainGridMath::RenderLayout layout;
+    TerrainGridMath::RenderLayoutError layoutError;
+    std::size_t expectedRawBytes = 0;
+    if(patches != TerrainGridMath::SupportedPatchDimension
+            || !TerrainGridMath::calculateRenderLayout(
+                    samples, patches, layout, layoutError)
+            || !TerrainGridMath::calculateSamplePayloadSize(
+                    samples, sizeof(quint16), expectedRawBytes)){
+        qWarning() << "Refusing to create invalid terrain tile" << name
+                   << "samples" << samples << "sample size" << sampleSize
+                   << "patches" << patches << "reason"
+                   << TerrainGridMath::renderLayoutErrorText(layoutError);
+        return;
+    }
     QString path;
     if(low){
         if(!QDir(Game::root + "/routes/" + Game::route + "/lo_tiles/").exists())
@@ -581,12 +612,21 @@ void Terrain::SaveEmpty(QString name, int samples, int sampleSize, int patches, 
             return;
         }
         QDataStream write(&file);
-        write.setByteOrder(QDataStream::BigEndian);
+        write.setByteOrder(QDataStream::LittleEndian);
         unsigned short value = 128;
         for (int i = 0; i < samples; i++)
             for (int j = 0; j < samples; j++)
                 write << value;
+        const bool writeSucceeded = write.status() == QDataStream::Ok;
         file.close();
+        if(!writeSucceeded
+                || static_cast<std::size_t>(QFileInfo(path).size())
+                        != expectedRawBytes){
+            qWarning() << "Unable to create complete terrain elevation file"
+                       << path << "expected" << expectedRawBytes << "bytes";
+            QFile::remove(path);
+            return;
+        }
     }
     
     TFile *tfile = new TFile();
@@ -598,6 +638,7 @@ void Terrain::SaveEmpty(QString name, int samples, int sampleSize, int patches, 
     } else {
         tfile->save(Game::root + "/routes/" + Game::route + "/tiles/" + name + ".t");
     }
+    delete tfile;
 }
 
 QString Terrain::getTileName(){
@@ -2083,8 +2124,9 @@ void Terrain::pushRenderItem(float lodx, float lodz, int tileX, int tileY, float
         Game::terrainLib->fillRaw(this, (int) mojex, (int) mojez);
         vertexInit();
         normalInit();
-        oglInit();
-        isOgl = true;
+        isOgl = oglInit();
+        if(!isOgl)
+            return;
     }
 
     if (!lines.loaded) {
@@ -2376,8 +2418,9 @@ void Terrain::render(float lodx, float lodz, int tileX, int tileY, float* player
         Game::terrainLib->fillRaw(this, (int) mojex, (int) mojez);
         vertexInit();
         normalInit();
-        oglInit();
-        isOgl = true;
+        isOgl = oglInit();
+        if(!isOgl)
+            return;
     }
 
     GLUU* gluu = GLUU::get();
@@ -3081,20 +3124,88 @@ void Terrain::oglInit() {
     delete[] vertexData;
 }*/
 
-void Terrain::oglInit() {
+bool Terrain::oglInit() {
+    static_assert(sizeof(GLfloat) == sizeof(float));
+    if(tfile == NULL || tfile->nsamples == NULL){
+        qWarning() << "Terrain render initialization rejected: missing terrain descriptor";
+        return false;
+    }
+
+    TerrainGridMath::RenderLayout layout;
+    TerrainGridMath::RenderLayoutError layoutError;
     const int samples = *tfile->nsamples;
     const int patches = tfile->patchsetNpatches;
-    const int patchRes = samples / patches;
-    const int patchFloatCount = patchRes * patchRes * 6 * 8;
+    const auto releaseCpuMesh = [this, samples](){
+        if(vertexData != NULL){
+            for(int i = 0; i < samples + 1; ++i)
+                delete[] vertexData[i];
+            delete[] vertexData;
+            vertexData = NULL;
+        }
+        if(normalData != NULL){
+            for(int i = 0; i < samples + 1; ++i)
+                delete[] normalData[i];
+            delete[] normalData;
+            normalData = NULL;
+        }
+    };
+    if(!TerrainGridMath::calculateRenderLayout(
+            samples, patches, layout, layoutError)){
+        qWarning() << "Terrain render initialization rejected:"
+                   << TerrainGridMath::renderLayoutErrorText(layoutError)
+                   << "samples" << samples << "patches" << patches;
+        releaseCpuMesh();
+        return false;
+    }
+    const int patchRes = layout.patchResolution;
+
+    if(VAO == NULL || VBO == NULL){
+        qWarning() << "Terrain render initialization rejected: missing VAO/VBO objects";
+        releaseCpuMesh();
+        return false;
+    }
+
+    QOpenGLContext *context = QOpenGLContext::currentContext();
+    if(context == NULL){
+        qWarning() << "Terrain render initialization rejected: no current OpenGL context";
+        releaseCpuMesh();
+        return false;
+    }
+    QOpenGLFunctions *f = context->functions();
 
     if(!VAO->isCreated()){
-       VAO->create();
-       VBO->create();
+        if(!VAO->create()){
+            qWarning() << "Terrain render initialization failed to create VAO";
+            releaseCpuMesh();
+            return false;
+        }
+    }
+    if(!VBO->isCreated() && !VBO->create()){
+        qWarning() << "Terrain render initialization failed to create VBO";
+        releaseCpuMesh();
+        return false;
     }
     QOpenGLVertexArrayObject::Binder vaoBinder(VAO);
-    VBO->bind();
-    VBO->allocate(patches * patches * patchFloatCount * sizeof(GLfloat));
-    QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
+    if(!VBO->bind()){
+        qWarning() << "Terrain render initialization failed to bind VBO";
+        releaseCpuMesh();
+        return false;
+    }
+    const GLenum preAllocationError = f->glGetError();
+    if(preAllocationError != GL_NO_ERROR)
+        qWarning() << "Pre-existing OpenGL error before terrain VBO allocation:"
+                   << QString::number(preAllocationError, 16);
+    VBO->allocate(static_cast<int>(layout.totalByteCount));
+    const GLenum allocationError = f->glGetError();
+    if(allocationError != GL_NO_ERROR
+            || VBO->size() != static_cast<int>(layout.totalByteCount)){
+        qWarning() << "Terrain VBO allocation failed: requested"
+                   << layout.totalByteCount << "bytes, allocated" << VBO->size()
+                   << "OpenGL error" << QString::number(allocationError, 16);
+        VBO->release();
+        releaseCpuMesh();
+        return false;
+    }
     f->glEnableVertexAttribArray(0);
     f->glEnableVertexAttribArray(1);
     f->glEnableVertexAttribArray(2);
@@ -3104,18 +3215,24 @@ void Terrain::oglInit() {
     
     //int ilosc = 16 * 16;
     //int suma;
-    float *punkty = new float[patchFloatCount];
+    std::vector<GLfloat> punkty(layout.patchFloatCount);
+    if(Game::debugOutput)
+        qDebug() << "Terrain render buffers: samples" << samples
+                 << "patches" << patches << "patch resolution" << patchRes
+                 << "CPU patch floats" << layout.patchFloatCount
+                 << "VBO bytes" << layout.totalByteCount;
     //  var punkty = Terrain.punkty;
     const float texRes = 16.0f / patchRes;
-    
+
+    std::size_t finalWriteEnd = 0;
     for (int uu = 0; uu < patches; uu++) {
         for (int yy = 0; yy < patches; yy++) {
-            int ptr = 0;
+            std::size_t ptr = 0;
             // Terrain-hole flags omit complete triangles, but rendering keeps a
             // fixed vertex range for every patch. Clear the reusable scratch
             // block so omitted triangles remain degenerate instead of uploading
             // uninitialized heap data as enormous terrain vertices.
-            std::fill_n(punkty, patchFloatCount, 0.0f);
+            std::fill(punkty.begin(), punkty.end(), 0.0f);
             bool fi0j0 = true, fi1j0 = true, fi0j1 = true, fi1j1 = true;
 
             for (int ii = 0; ii < patchRes; ii++) {
@@ -3277,8 +3394,40 @@ void Terrain::oglInit() {
             
             //VBO[0]->bind();
             //VBO[0]->
-            VBO->write((uu * patches + yy) * patchFloatCount * sizeof(GLfloat),
-                       punkty, patchFloatCount * sizeof(GLfloat));
+            if(ptr > layout.patchFloatCount){
+                qCritical() << "Terrain CPU vertex generation exceeded its buffer:"
+                            << ptr << ">" << layout.patchFloatCount
+                            << "patch" << uu << yy;
+                VBO->release();
+                releaseCpuMesh();
+                return false;
+            }
+            const std::size_t patchIndex =
+                    static_cast<std::size_t>(uu) * patches + yy;
+            const std::size_t writeOffset =
+                    patchIndex * layout.patchByteCount;
+            const std::size_t writeEnd = writeOffset + layout.patchByteCount;
+            if(writeEnd > layout.totalByteCount){
+                qCritical() << "Terrain VBO write exceeds allocation:"
+                            << writeEnd << ">" << layout.totalByteCount
+                            << "patch" << uu << yy;
+                VBO->release();
+                releaseCpuMesh();
+                return false;
+            }
+            finalWriteEnd = writeEnd;
+            VBO->write(static_cast<int>(writeOffset), punkty.data(),
+                       static_cast<int>(layout.patchByteCount));
+            const GLenum writeError = f->glGetError();
+            if(writeError != GL_NO_ERROR){
+                qWarning() << "Terrain VBO write failed for patch" << uu << yy
+                           << "offset" << writeOffset
+                           << "bytes" << layout.patchByteCount
+                           << "OpenGL error" << QString::number(writeError, 16);
+                VBO->release();
+                releaseCpuMesh();
+                return false;
+            }
             //VBO[0]->allocate(punkty, 16 * 16 * 6 * 5 * sizeof (GLfloat));
             //f->glEnableVertexAttribArray(0);
             //f->glEnableVertexAttribArray(1);
@@ -3288,8 +3437,15 @@ void Terrain::oglInit() {
         }
     }
 
+    if(finalWriteEnd != layout.totalByteCount){
+        qCritical() << "Terrain VBO writes did not cover the allocation:"
+                    << finalWriteEnd << "!=" << layout.totalByteCount;
+        VBO->release();
+        releaseCpuMesh();
+        return false;
+    }
+
     VBO->release();
-    delete[] punkty;
 
     if(showBlob)
         initBlob();
@@ -3299,12 +3455,8 @@ void Terrain::oglInit() {
     //    delete normalData[i];
     //delete normalData;
 
-    for (int i = 0; i < samples+1; i++){
-        delete[] vertexData[i];
-        delete[] normalData[i];
-    }
-    delete[] vertexData;
-    delete[] normalData;
+    releaseCpuMesh();
+    return true;
 }
 
 void Terrain::initBlob(){
@@ -3364,6 +3516,19 @@ bool Terrain::readRAW(QString fSfile) {
     if (!file.open(QIODevice::ReadOnly))
         return false;
     FileBuffer* data = ReadFile::readRAW(&file);
+    if (data == nullptr)
+        return false;
+    std::size_t expectedBytes = 0;
+    if(tfile == NULL || tfile->nsamples == NULL
+            || !TerrainGridMath::calculateSamplePayloadSize(
+                    *tfile->nsamples, sizeof(quint16), expectedBytes)
+            || data->length < 0
+            || static_cast<std::size_t>(data->length) != expectedBytes){
+        qWarning() << "Terrain RAW size mismatch for" << fSfile
+                   << "expected" << expectedBytes << "bytes, got" << data->length;
+        delete data;
+        return false;
+    }
     readRAW(data);
     delete data;
     return true;
@@ -3431,34 +3596,139 @@ void Terrain::fillHeightMap(float* data){
     this->refresh();
 }
 
-void Terrain::save() {
-    QString path = Game::root + "/routes/" + Game::route + "/" + TileDir[(int)lowTile] + "/";
-    QString filename = name;
+bool Terrain::save(QString *error) {
+    const QString routeRoot = QDir::cleanPath(
+        Game::root + "/routes/" + Game::route);
+    QString path = routeRoot + "/" + TileDir[(int)lowTile] + "/";
+    const QString filename = name;
     if(this->tfile->sampleYbuffer == NULL)
         this->tfile->sampleYbuffer = new QString(filename + "_y.raw");
-    saveRAW(path + *this->tfile->sampleYbuffer );
+
+    const float previousFloor = tfile->floor;
+    const float previousScale = tfile->scale;
+    auto fail = [&](const QString &message){
+        tfile->floor = previousFloor;
+        tfile->scale = previousScale;
+        if(error)
+            *error = message;
+        return false;
+    };
+    auto encode = [&](const std::function<void(QDataStream&)> &writer,
+                      QByteArray &data, const QString &component){
+        data.clear();
+        QBuffer buffer(&data);
+        if(!buffer.open(QIODevice::WriteOnly)){
+            if(error)
+                *error = QString("Could not prepare %1: %2")
+                    .arg(component, buffer.errorString());
+            return false;
+        }
+        QDataStream stream(&buffer);
+        stream.setByteOrder(QDataStream::LittleEndian);
+        stream.setFloatingPointPrecision(QDataStream::SinglePrecision);
+        writer(stream);
+        const bool ok = stream.status() == QDataStream::Ok && !data.isEmpty();
+        stream.setDevice(NULL);
+        buffer.close();
+        if(!ok && error)
+            *error = QString("Could not serialize %1.").arg(component);
+        return ok;
+    };
+
+    RouteSaveTransaction transaction(routeRoot,
+        Game::appDataDir() + "/atomicSaves/" + Game::routeAppDataKey());
+    QByteArray data;
+    std::size_t expectedRawBytes = 0;
+    if(tfile->nsamples == NULL
+            || !TerrainGridMath::calculateSamplePayloadSize(
+                    *tfile->nsamples, sizeof(quint16), expectedRawBytes))
+        return fail("Invalid terrain sample count for RAW serialization.");
+    const QString rawPath = QDir::cleanPath(path + *tfile->sampleYbuffer);
+    if(!encode([this](QDataStream &stream){ saveRAW(stream); }, data, rawPath))
+        return fail(error ? *error : QString("Terrain height encoding failed."));
+    if(static_cast<std::size_t>(data.size()) != expectedRawBytes)
+        return fail(QString("Terrain height encoding produced %1 bytes; expected %2.")
+                    .arg(data.size()).arg(static_cast<qulonglong>(expectedRawBytes)));
+    if(!transaction.addFile(rawPath, data, error))
+        return fail(error ? *error : QString("Terrain height staging failed."));
+
     if(jestF && modifiedF){
         if(this->tfile->sampleFbuffer == NULL)
             this->tfile->sampleFbuffer = new QString(filename + "_f.raw");
-        saveF(path + *this->tfile->sampleFbuffer);
+        const QString flagsPath = QDir::cleanPath(path + *tfile->sampleFbuffer);
+        std::size_t expectedFlagBytes = 0;
+        if(!TerrainGridMath::calculateSamplePayloadSize(
+                *tfile->nsamples, sizeof(quint8), expectedFlagBytes))
+            return fail("Invalid terrain sample count for flag serialization.");
+        if(!encode([this](QDataStream &stream){ saveF(stream); }, data, flagsPath))
+            return fail(error ? *error : QString("Terrain flag encoding failed."));
+        if(static_cast<std::size_t>(data.size()) != expectedFlagBytes)
+            return fail(QString("Terrain flag encoding produced %1 bytes; expected %2.")
+                        .arg(data.size()).arg(static_cast<qulonglong>(expectedFlagBytes)));
+        if(!transaction.addFile(flagsPath, data, error))
+            return fail(error ? *error : QString("Terrain flag staging failed."));
     }
-    if(Game::debugOutput) qDebug() << "writing t start";
-    this->tfile->save(path + filename + ".t");
-    if(Game::debugOutput) qDebug() << "writing t end";
+
+    const QString descriptorPath = QDir::cleanPath(path + filename + ".t");
+    if(!encode([this](QDataStream &stream){ tfile->save(stream); },
+               data, descriptorPath)
+            || !transaction.addFile(descriptorPath, data, error))
+        return fail(error ? *error : QString("Terrain descriptor encoding failed."));
+
+    QVector<int> savedMainTextures;
+    QVector<int> savedMirrorTextures;
     int patches = tfile->patchsetNpatches;
     for (int u = 0; u < patches; u++)
         for (int y = 0; y < patches; y++) {
-            if (!this->texModified[y * patches + u] && !this->texMirrorModified[y * patches + u])
+            const int patch = y * patches + u;
+            if (!texModified[patch] && !texMirrorModified[patch])
                 continue;
-            //QString name = this->getTileName(mojex, -mojez) + "_" + QString::number(y) + "_" + QString::number(u) + ".ace";
-            if (this->texModified[y * patches + u])
-                TexLib::save("ace", TexLib::mtex[texid[y * patches + u]]->pathid, texid[y * patches + u]);
-            if (this->texMirrorModified[y * patches + u]) {
-                savePairedSeasonTexture(y * patches + u);
+            if(texModified[patch]){
+                auto textureIt = TexLib::mtex.find(texid[patch]);
+                Texture *texture = textureIt == TexLib::mtex.end()
+                    ? NULL : textureIt->second;
+                if(texture == NULL)
+                    return fail(QString("Terrain texture %1 is unavailable.")
+                        .arg(texid[patch]));
+                if(!texture->editable)
+                    texture->setEditable();
+                QString aceError;
+                if(!AceLib::serialize(texture, data, &aceError)
+                        || !transaction.addFile(texture->pathid, data, error))
+                    return fail(aceError.isEmpty() && error ? *error : aceError);
+                savedMainTextures.append(patch);
             }
-            this->texModified[y * patches + u] = false;
-            this->texMirrorModified[y * patches + u] = false;
+            if(texMirrorModified[patch]){
+                auto textureIt = TexLib::mtex.find(texMirrorId[patch]);
+                Texture *texture = textureIt == TexLib::mtex.end()
+                    ? NULL : textureIt->second;
+                if(texture == NULL)
+                    return fail(QString("Paired-season terrain texture %1 is unavailable.")
+                        .arg(texMirrorId[patch]));
+                if(!texture->editable)
+                    texture->setEditable();
+                QFileInfo targetInfo(texture->pathid);
+                if(!QDir().mkpath(targetInfo.absolutePath()))
+                    return fail(QString("Could not create terrain texture directory %1")
+                        .arg(targetInfo.absolutePath()));
+                QString aceError;
+                if(!AceLib::serialize(texture, data, &aceError)
+                        || !transaction.addFile(texture->pathid, data, error))
+                    return fail(aceError.isEmpty() && error ? *error : aceError);
+                savedMirrorTextures.append(patch);
+            }
         }
+
+    QString transactionError;
+    if(!transaction.commit(&transactionError))
+        return fail(transactionError);
+
+    modifiedF = false;
+    for(int patch : savedMainTextures)
+        texModified[patch] = false;
+    for(int patch : savedMirrorTextures)
+        texMirrorModified[patch] = false;
+    return true;
 }
 
 void Terrain::saveRAW(QString name) {
@@ -3534,6 +3804,19 @@ bool Terrain::readF(QString fSfile) {
     if (!file.open(QIODevice::ReadOnly))
         return false;
     FileBuffer* data = ReadFile::readRAW(&file);
+    if (data == nullptr)
+        return false;
+    std::size_t expectedBytes = 0;
+    if(tfile == NULL || tfile->nsamples == NULL
+            || !TerrainGridMath::calculateSamplePayloadSize(
+                    *tfile->nsamples, sizeof(quint8), expectedBytes)
+            || data->length < 0
+            || static_cast<std::size_t>(data->length) != expectedBytes){
+        qWarning() << "Terrain flag RAW size mismatch for" << fSfile
+                   << "expected" << expectedBytes << "bytes, got" << data->length;
+        delete data;
+        return false;
+    }
     readF(data);
     delete data;
     return true;

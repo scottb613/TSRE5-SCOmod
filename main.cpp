@@ -16,6 +16,7 @@
 #include <QTextStream>
 #include <QPalette>
 #include <QColor>
+#include <QStyleFactory>
 #include <QStringList>
 #include <QSharedMemory>
 #include <QProcess>
@@ -501,7 +502,8 @@ int main(int argc, char *argv[]){
         app.setStyleSheet(
             "QToolTip { color: #ffffff; background-color: #252525;"
             " border: 1px solid #777777; padding: 3px; }"
-            "QPushButton:checked { color: #232323; background-color: #b47a3b; }");
+            "QPushButton:checked { color: #232323; background-color: #b47a3b; }"
+            + GuiFunct::scoGlobalControlStyle());
         Game::StyleMainLabel = "#c4a480";
         Game::StyleGreenButton = "#4b9b5d";
         Game::StyleGreenButtonHover = "#65b778";

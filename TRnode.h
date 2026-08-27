@@ -38,7 +38,7 @@ public:
     TRnode(const TRnode& orig);
     virtual ~TRnode();
     Vector2i* getTile();
-    void loadUtf16Data(FileBuffer *data);
+    bool loadUtf16Data(FileBuffer *data);
     void saveToStream(QTextStream &out, int nid);
     bool isEnd();
     bool equals(TRnode* r);

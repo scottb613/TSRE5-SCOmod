@@ -78,6 +78,8 @@ void Trk::load(QString path){
     if (!file.open(QIODevice::ReadOnly))
         return;
     FileBuffer* data = ReadFile::read(&file);
+    if (data == nullptr)
+        return;
     data->toUtf16();
     ParserX::NextLine(data);
     loadUtf16Data(data);

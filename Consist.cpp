@@ -171,6 +171,8 @@ void Consist::load(){
     
     
     FileBuffer* data = ReadFile::read(&file);
+    if (data == nullptr)
+        return;
     data->off = 0;
     file.close();
     ParserX::NextLine(data);

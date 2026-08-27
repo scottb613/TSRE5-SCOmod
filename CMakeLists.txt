@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
     TSREvc
-    VERSION 0.13.0
+    VERSION 0.14.0
     DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )
@@ -113,6 +113,63 @@ endif()
 
 if(BUILD_TESTING)
     add_executable(
+        tsre_terrain_track_math_probe
+        tests/TerrainTrackMathTest.cpp
+        TerrainTrackMath.h
+    )
+    target_include_directories(
+        tsre_terrain_track_math_probe
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    add_test(
+        NAME tsre_terrain_track_math_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_terrain_track_math_probe>"
+    )
+
+    add_executable(
+        tsre_water_bed_clearance_math_probe
+        tests/WaterBedClearanceMathProbe.cpp
+        WaterBedClearanceMath.h
+    )
+    target_include_directories(
+        tsre_water_bed_clearance_math_probe
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    add_test(
+        NAME tsre_water_bed_clearance_math_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_water_bed_clearance_math_probe>"
+    )
+
+    add_executable(
+        tsre_terrain_grid_math_probe
+        tests/TerrainGridMathProbe.cpp
+        TerrainGridMath.h
+    )
+    target_include_directories(
+        tsre_terrain_grid_math_probe
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    add_test(
+        NAME tsre_terrain_grid_math_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_terrain_grid_math_probe>"
+    )
+
+    add_executable(
         tsre_text_encoding_probe
         tests/TextStreamEncodingProbe.cpp
     )
@@ -168,6 +225,92 @@ if(BUILD_TESTING)
             -E env
             "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
             "$<TARGET_FILE:tsre_parser_unicode_whitespace_probe>"
+    )
+
+    add_executable(
+        tsre_read_file_safety_probe
+        tests/ReadFileSafetyProbe.cpp
+        ReadFile.cpp
+        ReadFile.h
+        FileBuffer.h
+    )
+    target_include_directories(
+        tsre_read_file_safety_probe
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    target_link_libraries(tsre_read_file_safety_probe PRIVATE Qt6::Core)
+    add_test(
+        NAME tsre_read_file_safety_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_read_file_safety_probe>"
+    )
+
+    add_executable(
+        tsre_ace_format_validator_probe
+        tests/AceFormatValidatorProbe.cpp
+        AceFormatValidator.cpp
+        AceFormatValidator.h
+    )
+    target_include_directories(
+        tsre_ace_format_validator_probe
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+    target_link_libraries(tsre_ace_format_validator_probe PRIVATE Qt6::Core)
+    add_test(
+        NAME tsre_ace_format_validator_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_ace_format_validator_probe>"
+    )
+
+    add_executable(
+        tsre_trackdb_format_validator_probe
+        tests/TrackDbFormatValidatorProbe.cpp
+        TrackDbFormatValidator.cpp
+        TrackDbFormatValidator.h
+    )
+    target_include_directories(
+        tsre_trackdb_format_validator_probe
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+    target_link_libraries(tsre_trackdb_format_validator_probe PRIVATE Qt6::Core)
+    add_test(
+        NAME tsre_trackdb_format_validator_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_trackdb_format_validator_probe>"
+    )
+
+    add_executable(
+        tsre_route_save_transaction_probe
+        tests/RouteSaveTransactionTest.cpp
+        RouteSaveTransaction.cpp
+        RouteSaveTransaction.h
+    )
+    target_include_directories(
+        tsre_route_save_transaction_probe
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}"
+            "${TSRE_SOURCE_DIR}"
+    )
+    target_link_libraries(tsre_route_save_transaction_probe PRIVATE Qt6::Core)
+    add_test(
+        NAME tsre_route_save_transaction_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_route_save_transaction_probe>"
     )
 
     add_executable(
@@ -234,6 +377,14 @@ if(BUILD_TESTING)
             "${TSRE_SOURCE_DIR}"
     )
     target_link_libraries(tsre_forest_patch_baker_probe PRIVATE Qt6::Core Qt6::Gui)
+    add_test(
+        NAME tsre_forest_patch_baker_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_forest_patch_baker_probe>"
+    )
 
     add_executable(
         tsre_bake_forest_patch

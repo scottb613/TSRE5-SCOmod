@@ -101,7 +101,7 @@ public:
     void updateTrackSectionData(FileBuffer *data);
     void saveTit();
     void loadTdb();
-    void loadUtf16Data(FileBuffer *data);
+    bool loadUtf16Data(FileBuffer *data);
     void loadTit();
     void updateUiDs(QVector<int*> &trackObjUpdates, int startNode);
     void updateSectionAndShapeIds( QHash<unsigned int,unsigned int>& fixedSectionIds, QHash<unsigned int,unsigned int>& fixedShapeIds );
@@ -112,6 +112,7 @@ public:
     static void saveEmpty(bool road);
     void fillTrackAngles(int x, int z, int UiD, QMap<int, float>& angles);
     bool ifTrackExist(int x, int y, int UiD);
+    bool hasTrackItemsForTrack(int x, int y, int UiD) const;
     int getGradeMarkerTransition(int x, int y, int UiD);
     bool removeTrackFromTDB(int x, int y, int UiD);
     int findNearestNode(int &x, int &z, float* p, float* q, float maxD = 4, bool updatePosition = true);
@@ -195,7 +196,8 @@ protected:
     void addToDeletedTree(int* drzewo, int d);
     int getLineBufferSize(int idx, int pointSize, int offset, int step = 0);
     void checkSignals();
-    void drawLine(GLUU *gluu, float* &ptr, Vector3f p, Vector3f o, int idx);
+    void drawLine(GLUU *gluu, float* &ptr, Vector3f p, Vector3f o, int idx,
+                  bool useCompleteGradeFrame = false);
     void getLine(float* &ptr, Vector3f p, Vector3f o, int idx, int id, int vid, float offset = 0, int step = 0);
     void addItemToTrNode(int tid, int iid);
     void replaceSignalDirJunctionId(int oldId, int newId);

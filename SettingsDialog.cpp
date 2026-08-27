@@ -26,11 +26,28 @@
 #include <QDateTime>
 #include <QMessageBox>
 #include <QRegularExpression>
+#include <QGuiApplication>
+#include <QScreen>
+
+static QSize settingsWindowSize(QWidget *parent){
+    const QSize preferred(1100, 850);
+    const QSize minimum(840, 560);
+    QScreen *screen = parent != nullptr ? parent->screen() : QGuiApplication::primaryScreen();
+    if(screen == nullptr)
+        return preferred;
+
+    // Preserve the established Settings dimensions whenever they fit. Smaller
+    // effective desktops are clamped inside the work area; each tab already
+    // owns a resizable scroll area, so all settings remain reachable.
+    const QSize available = screen->availableGeometry().size();
+    return QSize(qMin(preferred.width(), qMax(minimum.width(), available.width() - 32)),
+                 qMin(preferred.height(), qMax(minimum.height(), available.height() - 48)));
+}
 
 SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent) {
     GuiFunct::applyEditorPanelStyle(this);
     setWindowTitle(Game::AppName + " Settings");
-    resize(1100, 850);
+    resize(settingsWindowSize(parent));
     setupUi();
 }
 
@@ -108,9 +125,9 @@ void SettingsDialog::addRow(QFormLayout* l, const QString& key, const QString& t
             " width: 13px; height: 13px; background-color: #202020;"
             " border: 1px solid #9a9a9a; border-radius: 0px;"
             "}"
-            "QRadioButton::indicator:hover { border-color: #f08200; }"
+            "QRadioButton::indicator:hover { border-color: #b76512; }"
             "QRadioButton::indicator:checked {"
-            " background-color: #f08200; border-color: #ffad3b; border-radius: 0px;"
+            " background-color: #b76512; border-color: #d47a1c; border-radius: 0px;"
             "}";
         rbTrue->setStyleSheet(squareRadioStyle);
         rbFalse->setStyleSheet(squareRadioStyle);
@@ -309,7 +326,6 @@ QString SettingsDialog::helpForSetting(const QString& key, const QString& fallba
     if (k == "routerebuildtdb") return "Allows route TDB rebuild operations. This requires unsafe mode and should be used only with backups.";
     if (k == "sorttileobjects") return "Sorts tile objects by detail level when saving world files.";
     if (k == "fpslimit") return "Caps the editor refresh rate to reduce unnecessary CPU and GPU load.";
-    if (k == "proceduraltracks") return "Enables procedural track support where TSRE uses that path.";
     if (k == "serverauth") return "Authentication mode for network/server editing. Leave blank for none or enter file for file-based authentication.";
     if (k == "serverlogin") return "Login string used by network/server editing modes.";
     if (k == "cewindowlayout") return "Controls Consist Editor panel layout. C is Consists, 1 is Main List, and 2 is Second List.";
@@ -424,10 +440,11 @@ QString SettingsDialog::keyAssignmentsText() const {
         "F2            Show Terrain Mesh tools\n"
         "F3            Show Terrain Texture tools\n"
         "F4            Show Geo tools\n"
-        "F5            Toggle full-screen Activity Builder\n"
-        "F6            Toggle Auto Place\n"
-        "F7            Toggle PolyVeg Planter\n"
-        "F8            Toggle Errors/Messages window\n"
+        "F5            Toggle Auto Place\n"
+        "F6            Toggle PolyVeg Planter\n"
+        "Shift+F6      Toggle full-screen PolyVeg Schema Editor\n"
+        "F10           Toggle full-screen Activity Builder\n"
+        "F11           Toggle Errors/Messages window\n"
         "F12           Toggle Settings window\n"
         "/             Toggle Stick Camera To Terrain\n"
         "\n"
@@ -442,6 +459,7 @@ QString SettingsDialog::keyAssignmentsText() const {
         "R             Toggle Rotate mode\n"
         "T             Toggle Translate mode\n"
         "Y             Toggle Resize mode\n"
+        "M             Toggle saved route map tiles\n"
         "Ctrl+Q        Toggle auto-add-to-TDB\n"
         "Shift+Q       Toggle stick pointer to terrain\n"
         "Home          Jump camera/pointer upward by 40m\n"
@@ -519,9 +537,9 @@ void SettingsDialog::setupUi() {
         "QRadioButton::indicator {"
         " width: 13px; height: 13px; background-color: #202020; border: 1px solid #9a9a9a; border-radius: 0px;"
         "}"
-        "QRadioButton::indicator:hover { border-color: #f08200; }"
+        "QRadioButton::indicator:hover { border-color: #b76512; }"
         "QRadioButton::indicator:checked {"
-        " background-color: #f08200; border-color: #ffad3b; border-radius: 0px;"
+        " background-color: #b76512; border-color: #d47a1c; border-radius: 0px;"
         "}"
     ));
     QFormLayout* l = nullptr;
@@ -646,7 +664,6 @@ void SettingsDialog::setupUi() {
 
     createScrollTab(l, tabs, "Advanced");
     addRow(l, "fpsLimit", "number", "FPS Limit", "");
-    addRow(l, "proceduralTracks", "bool", "Procedural Tracks", "");
     addRow(l, "serverAuth", "string", "Server Auth Mode", "blank or file");
     addRow(l, "serverLogin", "string", "Server Login", "");
 
@@ -848,7 +865,6 @@ bool SettingsDialog::save(const QString& filename) {
 
     out << "\n\n//// Advanced / Network / Multi-User\n\n";
     writeSetting(out, "fpsLimit", "59");
-    writeOptionalSetting(out, "proceduralTracks", "true");
     writeOptionalSetting(out, "serverAuth", "");
     writeOptionalSetting(out, "serverLogin", "");
 
@@ -1133,7 +1149,6 @@ QString SettingsDialog::getGameValue(const QString& key) {
     if (key == "snapableradius") return QString::number(Game::snapableRadius);
     if (key == "snapableonlyrot") return Game::snapableOnlyRot ? "true" : "false";
     if (key == "trackelevationmaxpm") return QString::number(Game::trackElevationMaxPm);
-    if (key == "proceduraltracks") return Game::proceduralTracks ? "true" : "false";
     if (key == "fullscreen") return Game::fullscreen ? "true" : "false";
     if (key == "markerlines") return Game::markerLines ? "true" : "false";
     if (key == "loadallwfiles") return Game::loadAllWFiles ? "true" : "false";

@@ -98,6 +98,8 @@ bool TFile::readT(QString fSfile) {
             return false;
         }
         FileBuffer* data = ReadFile::read(&file);
+        if (data == nullptr)
+            return false;
         //qDebug() << "Date:" << data->length;
         load(data);
         delete data;

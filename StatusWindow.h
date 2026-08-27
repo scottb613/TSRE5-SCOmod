@@ -29,6 +29,7 @@ public:
 public slots:
 
     void recStatus(QString statName, QString statVal );
+    void setPrimaryEditorToolsEnabled(bool enabled);
     void cameraButtonAction(bool val);
     void selectButtonAction();
     void placeButtonAction();
@@ -117,9 +118,6 @@ private:
     QLineEdit tyBox;
     QLineEdit latBox;
     QLineEdit lonBox;
-    QLineEdit xBox;
-    QLineEdit yBox;
-    QLineEdit zBox;
     QLineEdit pxBox;
     QLineEdit pyBox;
     QLineEdit pyBoxx;

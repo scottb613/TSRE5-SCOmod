@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -57,6 +58,18 @@ int main(int argc, char **argv) {
     RouteSaveTransaction invalid(routeRoot, backupRoot);
     if(invalid.addFile(temp.path() + "/outside.tdb", "bad", &error))
         return fail("A destination outside the route was accepted.");
+
+    RouteSaveTransaction laterFailure(routeRoot, backupRoot);
+    const QString missingParent = routeRoot + "/missing/sample_f.raw";
+    if(!laterFailure.addFile(tdb, "partial-write", &error)
+            || !laterFailure.addFile(missingParent, "cannot-write", &error))
+        return fail("Could not prepare later-component failure test.");
+    if(laterFailure.commit(&error))
+        return fail("Transaction unexpectedly committed through a missing directory.");
+    if(readFile(tdb) != "new-tdb")
+        return fail("Earlier component was not restored after a later failure.");
+    if(QFileInfo::exists(missingParent))
+        return fail("Failed later component was unexpectedly published.");
 
     const QString interruptedDir = backupRoot + "/99999999-interrupted";
     QDir().mkpath(interruptedDir);

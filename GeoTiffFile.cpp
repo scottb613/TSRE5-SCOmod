@@ -55,6 +55,8 @@ bool GeoTiffFile::load(int lat, int lon){
     return false;
     
     FileBuffer* data = ReadFile::readRAW(&file);
+    if (data == nullptr)
+        return false;
     this->rowSize = sqrt(data->length/2);
     qDebug() << this->rowSize;
     terrainData = new short int*[rowSize];

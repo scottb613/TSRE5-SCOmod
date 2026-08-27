@@ -130,7 +130,8 @@ void ErrorMessagesWindow::refreshErrorList(){
         list.append(msg->description);
         QTreeWidgetItem *item = new QTreeWidgetItem((QTreeWidget*)0, list, i );
         // Send items in the error log window to the logfile:
-        qDebug() << "Route Error Msg " << i << ": " << ErrorMessage::TypeNames[msg->type] << ":" <<  ErrorMessage::SourceNames[msg->source] << ":" << msg->description  ;
+        if(Game::debugOutput)
+            qDebug() << "Route Error Msg " << i << ": " << ErrorMessage::TypeNames[msg->type] << ":" <<  ErrorMessage::SourceNames[msg->source] << ":" << msg->description;
         //item->setCheckState(0, Qt::Unchecked);
         //item->setCheckState(1, Qt::Unchecked);
         //item->setCheckState(2, Qt::Unchecked);

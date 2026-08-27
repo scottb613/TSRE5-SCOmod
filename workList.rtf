@@ -1,34 +1,83 @@
-{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Consolas;}}\viewkind4\uc1\pard\f0\fs20 TSRE GenX v0.13 Community Source Checkpoint Work List\par
+{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Consolas;}}\viewkind4\uc1\pard\f0\fs20 TSRE GenX v0.14 Community Source Checkpoint Work List\par
 \par
 ======================================================================================================\par
 \par
 SCOPE\par
 \par
-TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.13 is the current source checkpoint from tsre-scomod-wip.\par
+TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.14 is the current source checkpoint from `tsre-scomod-wip`.\par
 \par
-TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Gr\'f8nb\'e6k Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.\par
+TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Gr\unb\uk Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.\par
 \par
 ======================================================================================================\par
 \par
-COMPLETED SOURCE CHECKPOINT: V0.13\par
+COMPLETED SOURCE CHECKPOINT: V0.14\par
+\par
+Terrain and Water Tools\par
+\par
+- Corrected TrackDB/RoadDB terrain conforming across world-tile borders by using one tiled coordinate frame.\par
+- Made F2 Size and Intensity edits reject blank/intermediate/invalid text without desynchronizing the brush and sliders.\par
+- Completed F7 Water Tools with New/Add/Edit ruler modes, Process Water Tiles, Adjust Terrain, independent Undo, and direct map access through the global M shortcut.\par
+- Corrected long special-ruler selection, arbitrary-distance tile normalization, drag/release terrain snapping, restored-ruler Undo ownership, and synchronous operation/save ordering.\par
+- Reworked 4 m and 8 m water-mask coverage around native posts, shared tile corners, bounded traversal, shoreline frontier sampling, mixed-grid rejection, and idempotent bed clearance.\par
+- Made modified terrain saves transactional across RAW heights, flags, metadata, current TERRTEX, and paired-season TERRTEX components.\par
+\par
+PolyVeg\par
+\par
+- Added the full-screen PolyVeg Schema Editor with route-local schema lifecycle, asset search, static thumbnail caching, recipe defaults/limits/distribution, and atomic loader validation.\par
+- Simplified schema data and controls while preserving legacy JSON input compatibility and stable generated schema/asset identities.\par
+- Added transactional generated-file and manifest ownership across bake, rebake, Discard/Quit, cleanup, and successful route Save.\par
+- Hardened bake geometry, numeric ranges, stream output, manifest rollback, unreadable-world fail-safe behavior, orphan-only cleanup, and failed-delete accounting.\par
+- Registered the self-contained ForestPatchBaker probe and expanded the release suite to fifteen tests.\par
+\par
+Editing, rendering, and interface\par
+\par
+- Consolidated function-key assignments: Auto Place F5, PolyVeg F6, Schema Editor Shift+F6, Water Tools F7, Activity Builder F10, Errors F11, and Settings F12.\par
+- Added global M saved-map-overlay control and removed duplicate panel-local overlay buttons while preserving Geo Tools per-tile editing.\par
+- Standardized GenX checkboxes and spin controls, responsive desktop sizing, selection labels, Schema Editor navigation, and focused special-ruler status/actions.\par
+- Corrected Dynamic Track grade-guide transforms and restored authored static-track rendering instead of the incomplete procedural replacement.\par
+- Corrected missing/loading/failed shape-texture branches so the active legacy renderer draws the standard magenta material rather than sampling stale terrain state.\par
+\par
+Reliability, validation, and release engineering\par
+\par
+- Hardened ReadFile malformed/compressed input and removed obsolete remote app-data/template bootstrapping and Tar extraction.\par
+- Added TrackDB/RoadDB structural limits and safer geometry mutation, including checked references, allocation bounds, finite coordinates, and interactive-object guards.\par
+- Added fail-closed close-time Save handling, transactional terrain and PolyVeg publication, thumbnail decoded-pixel ownership, and terrain/map cleanup corrections.\par
+- Added ACE structural validation and independent dimension/allocation limits. Complete pixel-payload validation remains accepted inherited debt pending a representative real-world parity corpus.\par
+- Replaced the legacy TST convention with a versioned unpacked distribution under `dist/tsre-scomod-v0.14` and guarded source export through the clean public worktree.\par
+- Corrected release-pack promotion so the verified runtime-only `tsre_assets/templateRoute_0.6` payload is retained and required; v0.14 restores its 123 manifest-matched files from the immutable v0.12 local package.\par
+- Clean Qt 6.11.1 MinGW and VS2026/MSVC Release lanes completed. Both registered suites passed 15/15; exact hashes and timings are frozen in `TEST-MATRIX-v0.14.md`.\par
+- The operator accepted v0.14 with no outstanding release testing. Local binary/source packages and checksums were retained; the source branch/tag were pushed without creating or uploading a GitHub Release.\par
+\par
+======================================================================================================\par
+\par
+PREVIOUS SOURCE CHECKPOINT: V0.13\par
 \par
 Route Editor workflow and interface\par
 \par
 - Completed the PolyVeg-derived GenX style pass across remaining object properties, helpers, Errors & Messages, and F5 map panels.\par
-- Standardized aligned fields, compact labels, tooltips, overwrite typing, and latching pinned/snapped/mutually-exclusive popups.\par
-- Added paired Control Panel coordinate copy, copied feedback, compact Location labeling, and a centered route title.\par
-- Moved styled Errors & Messages to F11 and retained Settings on F12.\par
+- Standardized aligned fields, compact labels, black button borders, tooltips, select-on-entry typing, and latching pinned/snapped/mutually-exclusive `...` popups.\par
+- Added paired Control Panel coordinate copy, orange copied feedback, compact Location labeling, and a centered low-contrast route title.\par
+- Moved styled Errors & Messages to F11, retained Settings on F12, and added direct removal for identified invalid TrackDB/RoadDB items.\par
 \par
 Terrain, maps, PolyVeg, and route sessions\par
 \par
-- Completed experimental editable 512-sample/4 m terrain handling and native 2048/4096 bounded map overlays.\par
-- Added explicit Map Tiles ownership and map-off purge; Main Load now performs a guarded restart.\par
-- Shortened PolyVeg controls and refreshed F5 as a map-first workspace with compact fixed panels.\par
+- Completed editable experimental 512-sample/4 m terrain handling across conforming, Undo, gaps, patch outlines, coordinate math, and renderer lifetime.\par
+- Added native 2048/4096 overlay drawing with bounded residency, explicit Map Tiles ownership, and map-off purge.\par
+- Changed Exit to Main Load into a guarded process restart for clean route-owned state.\par
+- Shortened the PolyVeg stack, added Map Tiles and the Edit Schema placeholder, and retained deterministic planting and hard-commit baking.\par
+\par
+Activity Builder, consist, and cleanup\par
+\par
+- Refreshed F5 as a map-first workspace with fixed compact side panels, clearer path controls and legends, and unclipped short labels.\par
+- Improved long Consist and Activity Consist selection, including unresolved stock cards.\par
+- Removed the unfinished in-editor activity simulator and unused OpenAL dependency.\par
 \par
 Verification\par
 \par
-- Clean MinGW and MSVC Release builds completed on 2026-08-19; both registered suites passed 7/7.\par
-- v0.13 is source-only on GitHub. No v0.13 binary or GitHub Release is uploaded.\par
+- Clean Qt 6.11.1 MinGW 13.1 and VS2026/MSVC v143 Release builds completed on 2026-08-19.\par
+- Both registered CTest suites passed 7/7.\par
+- MinGW and promoted TST SHA-256: C6DDD2BA7C5E68FE7412C1BB98A4457A915ECC409254F412A1FADCE36B121D9F.\par
+- MSVC SHA-256: 062B82FFFBF945DCB52C617B9010E88C082E97FA180C1BEBF7F0CB96D6FDEE15.\par
 \par
 ======================================================================================================\par
 \par
@@ -71,7 +120,7 @@ CAPPED PLATFORM RELEASE: V0.9\par
 - Completed controlled parity checks for application startup, no-edit save/reload, scenery placement/Undo/retention/deletion, Place Guard, Camera Terrain Lock, and Activity Path Editor create/save/reload/extension.\par
 - Stabilized native captions, dropdown anchoring, helper shutdown, rejected-Load feedback, Terrain Brush sizing, and Water Helper height steps.\par
 - Updated the codebase for current MSYS2/MinGW tooling and added independently testable terrain math.\par
-- Built v0.9 from the complementary work of Piotr Gadecki (GokuMK), Eric Olesen (eric-from-trainsim), and Peter Gr\'f8nb\'e6k Andersen, acknowledged in detail below.\par
+- Built v0.9 from the complementary work of Piotr Gadecki (GokuMK), Eric Olesen (eric-from-trainsim), and Peter Gr\unb\uk Andersen, acknowledged in detail below.\par
 \par
 ======================================================================================================\par
 \par
@@ -146,8 +195,23 @@ The immutable v0.12 source tag is the latest completed checkpoint. Continuing de
 \par
 WORK DETAIL\par
 \par
-CURRENT RELEASE - v0.12 COMMUNITY OPEN TESTING\par
+CURRENT RELEASE - v0.13 SOURCE CHECKPOINT\par
 ==============================================\par
+\par
+   --- v0.13 Route Editor Production Pass ---\par
+The remaining Route Editor panels and helpers now use one compact GenX visual and behavioral language. Ellipsis controls latch orange while their pinned/snapped popup is open, close on a second press, remain mutually exclusive, and close when the active property panel no longer owns them. Editable fields select their current contents on entry. Dynamic Track, Signal, Terrain, Static, Forest, Transform, Height Helper, Errors & Messages, and the F5 side panels received focused alignment and framing work.\par
+\par
+   --- v0.13 Terrain, Maps, and Route Lifetime ---\par
+Experimental native 4 m terrain now follows its real sample resolution through conforming, Undo, gaps, patch outlines, coordinate math, and rendering. Native 2048/4096 map overlays use indexed drawing and bounded residency; Map Tiles remain explicitly user-controlled and purge when disabled. Exit to Main Load performs a guarded restart so the next route does not inherit route-owned memory or helpers.\par
+\par
+   --- v0.13 PolyVeg, F5, and Diagnostics ---\par
+PolyVeg retains deterministic planting and hard-commit baking in a shorter panel with direct Map Tiles control and an Edit Schema placeholder. F5 is a map-first workspace with compact fixed panels and clearer path tools. F11 now owns the styled Errors & Messages window and can remove identified invalid database items. Control Panel coordinate pairs copy directly with brief orange confirmation.\par
+\par
+   --- v0.13 Verification and Distribution ---\par
+Both clean maintained Release lanes compiled and passed 7/7 CTest probes on 2026-08-19. v0.13 is a source-only GitHub checkpoint: the public branch and immutable tag are pushed directly, a local MinGW distributable is retained for verification, and no v0.13 binary or GitHub Release is uploaded.\par
+\par
+PREVIOUS RELEASE - v0.12 COMMUNITY OPEN TESTING\par
+================================================\par
 \par
    --- v0.12 PolyVeg Planter ---\par
 F6 opens the full-height POLYVEG PLANTER in the right tools column. It consumes route-owned OpenRails/polyveg.json definitions and SCO LIDEX contract-v2 planting/exclusion GeoJSON. Pointer planting is tile-clipped; Flood Fill is limited to the same category and fill style. The tile-locked ruler supports a corridor or closed Area, and Unrestricted retains permanent exclusion and database-clearance rules.\par
@@ -249,7 +313,7 @@ Piotr Gadecki, known as GokuMK, is the original author of TSRE5. He created the 
 \par
 Eric Olesen, known as eric-from-trainsim, carried TSRE forward through the TSRE 8.006 line that directly precedes GenX. His continuing editor, compatibility, imagery, rolling-stock, route-reporting, and dedicated 8.006n Qt6 work provided the primary source/API reference for preserving the behavior of the immediate GenX parent line.\par
 \par
-Peter Gr\'f8nb\'e6k Andersen produced the independent Eric-line Qt6/CMake port used as the primary build-structure and dependency-management reference. His CMake, vcpkg, deployment, and DDS-loading work supplied proven solutions that were reviewed and narrowly adapted to the GenX source rather than copied wholesale.\par
+Peter Gr\unb\uk Andersen produced the independent Eric-line Qt6/CMake port used as the primary build-structure and dependency-management reference. His CMake, vcpkg, deployment, and DDS-loading work supplied proven solutions that were reviewed and narrowly adapted to the GenX source rather than copied wholesale.\par
 \par
 TSRE GenX v0.9 exists because these three bodies of work complement one another: Piotr's original application and technical foundation, Eric's sustained TSRE 8.x development, and Peter's independent modern build and Qt6 migration work.\par
 \par

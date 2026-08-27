@@ -27,6 +27,15 @@ public:
 
     static bool TwoPointRuler;
     static bool DrawPoints;
+
+    enum SpecialSelectionKind {
+        WaterSelection = 0,
+        VegetationSelection = 1,
+        GradeSelection = 2
+    };
+    static constexpr int SpecialSelectionWindow = 14;
+    static constexpr int SpecialSelectionKindShift = 18;
+    static constexpr int SpecialSelectionPointMask = (1 << 18) - 1;
     
     RulerObj();
     RulerObj(const RulerObj& o);
@@ -65,8 +74,9 @@ public:
     void setGradeRuler(bool enabled);
     void appendGradePoint(int x, int z, float *p);
     bool isSpecialRuler() const;
+    int specialSelectionKind() const;
     void selectSpecialPoint(int encodedIndex, int x, int z, const float *p);
-    void snapSelectedSpecialPointToTerrain();
+    bool snapSelectedSpecialPointToTerrain();
     void createRoadPaths();
     void removeRoadPaths();
     void enableShape();
@@ -105,6 +115,7 @@ private:
     float vegetationWidth = 100.0f;
     bool gradeRuler = false;
     bool specialPointMoved = false;
+    float specialPointStartPosition[3] {0.0f, 0.0f, 0.0f};
     
     void refreshLength();
     void appendSpecialPoint(int x, int z, float *p);

@@ -70,7 +70,7 @@ public:
     void fillTerrainDataX(Terrain* adjacent);
     void fillTerrainDataY(Terrain* adjacent);
     void fillTerrainDataXY(Terrain* adjacent);
-    void save();
+    bool save(QString *error = NULL);
     void refresh();
     bool isModified();
     void setModified(bool value = true);
@@ -181,8 +181,8 @@ protected:
     bool modified = false;
     QString texturepath;
     QString rootTexturepath;
-    Vector3f **vertexData;//[257][257];
-    Vector3f **normalData;//[257][257];
+    Vector3f **vertexData = NULL;//[257][257];
+    Vector3f **normalData = NULL;//[257][257];
     bool hidden[256];
     bool uniqueTex[256];
     int texid[256];
@@ -230,7 +230,7 @@ protected:
     void newF();
     void vertexInit();
     void normalInit();
-    void oglInit();
+    bool oglInit();
     void initBlob();
     void rotateTex(int idx);
     void mirrorXTex(int idx);
@@ -248,7 +248,6 @@ protected:
     static int loadTextureForPainting(QString path);
     void ensurePairedSeasonPlaceholder(QString textureName);
     void paintPairedSeasonTexture(Brush* brush, QString textureName, int patchIdx, float x, float z);
-    void savePairedSeasonTexture(int patchIdx);
     void reloadLines();
     
     virtual void load();

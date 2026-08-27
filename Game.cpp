@@ -13,7 +13,6 @@
 #include <QFile>
 #include <QDir>
 #include <QString>
-#include <QEventLoop>
 #include <QStandardPaths>
 #include <QCryptographicHash>
 #include <QRandomGenerator>
@@ -25,9 +24,6 @@
 #include <QGuiApplication>
 #include <QScreen>
 //#include <QCoreApplication>
-#include <QNetworkAccessManager>
-#include <QNetworkRequest>
-#include <QNetworkReply>
 //#include <QUrl>
 //#include <QUrlQuery>
 //#include "RouteEditorWindow.h"ad
@@ -37,7 +33,6 @@
 #include "EngLib.h"
 #include <QtWidgets>
 #include <QColor>
-#include "TarFile.h"
 #include "Renderer.h"
 #include "RouteEditorWindow.h"
 #include "StatusWindow.h"
@@ -48,7 +43,7 @@
 //////// Version
 //////////////////////////////////
 
-QString Game::AppVersion = "v0.13";  // over-ride from main.cpp
+QString Game::AppVersion = "v0.14";  // over-ride from main.cpp
 
 
 bool Game::ServerMode = false;
@@ -142,7 +137,6 @@ int Game::textureQuality = 1;
 float Game::snapableRadius = 20;
 bool Game::snapableOnlyRot = false;
 float Game::trackElevationMaxPm = 700.0;
-bool Game::proceduralTracks = false;
 bool Game::fullscreen = false;
 float Game::uiScale = 1.00f;
 bool Game::markerLines = false;
@@ -742,35 +736,21 @@ QStringList getFilesInDirectory(const QString& directoryPath) {
 }    
     
 void Game::InitAssets() {
-    QString path;
-    path = "./tsre_assets/";
-    QFile appFile3(path);
-    if (!appFile3.exists()){
-        QDir().mkdir(path);
+    const QString assetsPath = "./tsre_assets/";
+    if (!QFileInfo::exists(assetsPath)) {
+        QDir().mkdir(assetsPath);
     }
-    
-    path = "./tsre_appdata/";
-    
-    QFile appFile1(path);
-    if (!appFile1.exists()){
-        QMessageBox msgBox;
-        msgBox.setWindowTitle("TSRE");
-        msgBox.setText("Welcome in TSRE!\n\nThis is experimental version.\nUsing it may seriously damage your data."
-                       "\nMake backup first!\n\n\nNow TSRE will download app data.");
-        msgBox.setIcon(QMessageBox::Warning);
-        msgBox.exec();
-        QDir().mkdir(path);
-    }
-    
-    path += Game::AppDataVersion;
-    
-    QFile appFile2(path);
-    if (!appFile2.exists()){
-        qDebug() << "no appdata";
-        DownloadAppData(path);
-    }
-    if (!appFile2.exists()){
-        qDebug() << "appdata failed to load";
+
+    const QString appDataPath = "./tsre_appdata/" + Game::AppDataVersion;
+    if (!QFileInfo(appDataPath).isDir()) {
+        qCritical() << "Required bundled app data is missing:" << appDataPath;
+        QMessageBox::critical(
+            nullptr,
+            "TSRE - Missing App Data",
+            "The required bundled application data is missing:\n\n"
+                + QDir::toNativeSeparators(QFileInfo(appDataPath).absoluteFilePath())
+                + "\n\nReinstall or restore the matching TSRE application-data folder."
+                  " TSRE no longer downloads executable data from the Internet.");
         return;
     }
 }
@@ -1004,12 +984,6 @@ void Game::load() {
 
             if(setname =="mstsshadows"){
                 mstsShadows = (setval == "true") || (setval == "1") || (setval == "on");
-            }
-            if(setname =="proceduraltracks"){
-                if((setval == "true") or (setval == "1") or (setval == "on"))
-                    proceduralTracks = true;
-                else
-                    proceduralTracks = false; 
             }
             if(setname =="fullscreen"){
                 if((setval == "true") or (setval == "1") or (setval == "on"))
@@ -1857,42 +1831,6 @@ template void Game::check_coords(int& x, int& z, int& px, int& pz);
 template void Game::check_coords(int& x, int& z, float& px, float& pz);
 template void Game::check_coords(float& x, float& z, float& px, float& pz);
 
-
-void Game::DownloadAppData(QString path){
-    QDir().mkdir(path);
-    
-    // Download and extract AppData
-    QNetworkAccessManager* mgr = new QNetworkAccessManager();
-    qDebug() << "Wait ..";
-    QString Url = "http://koniec.org/tsre5/data/appdata/"+ Game::AppDataVersion + ".tar";
-    qDebug() << Url;
-    QNetworkRequest req;//(QUrl(Url));
-    req.setUrl(QUrl(Url));
-    qDebug() << req.url();
-    QNetworkReply* r = mgr->get(req);
-    QEventLoop loop;
-    QObject::connect(r, SIGNAL(finished()), &loop, SLOT(quit()));
-    loop.exec();
-    
-    qDebug() << "Network Reply Loop End";
-    QByteArray data = r->readAll();
-    FileBuffer *fileData = new FileBuffer((unsigned char*)data.data(), data.length());
-    TarFile tarFile(fileData);
-    tarFile.extractTo("./tsre_appdata/");
-    
-    // Create bat file for Shape Viewer.
-    QString conBatFile = QFileInfo(QCoreApplication::applicationFilePath()).fileName()+" --shapeview";
-    QFile file2("./ShapeViewer.bat");
-    if(!file2.open(QIODevice::WriteOnly | QIODevice::Text)){
-        qWarning() << "Unable to create Shape Viewer launcher" << file2.fileName() << file2.errorString();
-        return;
-    }
-    QTextStream out;
-    out.setDevice(&file2);
-    out << conBatFile;
-    out.flush();
-    file2.close();
-}
 
 void Game::cleanupLogs(){
     qDebug() << "";

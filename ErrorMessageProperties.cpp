@@ -12,6 +12,7 @@
 #include <QDebug>
 #include "Game.h"
 #include "ErrorMessage.h"
+#include "ErrorMessagesLib.h"
 #include "GeoCoordinates.h"
 #include "GameObj.h"
 #include "GuiFunct.h"
@@ -174,14 +175,21 @@ void ErrorMessageProperties::deleteCurrentItem(){
                 .arg(databaseName).arg(itemId)))
         return;
 
+    QVector<ErrorMessage*> matchingMessages;
+    for(ErrorMessage *message : ErrorMessagesLib::ErrorMessages)
+        if(message != NULL && message->obj == item)
+            matchingMessages.append(message);
+
     database->deleteTrItem(itemId);
-    currentMessage->type = ErrorMessage::Type_AutoFix;
-    if(!currentMessage->action.isEmpty())
-        currentMessage->action += "\n";
-    currentMessage->action +=
-        QString("Resolved manually: %1 item %2 removed.")
-            .arg(databaseName).arg(itemId);
-    currentMessage->obj = NULL;
+    const QString resolution = QString("Resolved manually: %1 item %2 removed.")
+        .arg(databaseName).arg(itemId);
+    for(ErrorMessage *message : matchingMessages){
+        message->type = ErrorMessage::Type_AutoFix;
+        if(!message->action.isEmpty())
+            message->action += "\n";
+        message->action += resolution;
+        message->obj = NULL;
+    }
     eAction.setPlainText(currentMessage->action);
     lAction.show();
     eAction.show();

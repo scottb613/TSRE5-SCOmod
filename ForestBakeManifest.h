@@ -3,6 +3,8 @@
 
 #include "ForestPatchBaker.h"
 
+#include <QByteArray>
+#include <QHash>
 #include <QString>
 #include <QStringList>
 
@@ -21,8 +23,24 @@ struct ForestBakePruneResult {
     int remainingBlocks = 0;
     int removedBlocks = 0;
     int removedAssets = 0;
+    bool removedManifest = false;
     QStringList retainedShapes;
     QStringList removedShapes;
+};
+
+class ForestBakeSession {
+public:
+    bool rememberFile(const QString &path, QString &error);
+    bool rollback(QString &error);
+    void commit();
+    bool isEmpty() const;
+
+private:
+    struct FileState {
+        bool existed = false;
+        QByteArray contents;
+    };
+    QHash<QString, FileState> files;
 };
 
 class ForestBakeManifest {

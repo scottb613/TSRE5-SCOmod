@@ -19,6 +19,7 @@
 #include <QMatrix4x4>
 #include <QBasicTimer>
 #include <QJsonObject>
+#include "ForestBakeManifest.h"
 #include "CameraFree.h"
 #include "CameraConsist.h"
 #include "WorldObj.h"
@@ -65,6 +66,8 @@ public:
     void cameraInit();
     QJsonObject getSessionCameraState() const;
     void getUnsavedInfo(QVector<QString> &items);
+    bool discardUnsavedPolyVegBakeFiles(QString &error);
+    bool saveRoute();
 
 public slots:
     void cleanup();
@@ -145,6 +148,8 @@ public slots:
     void refreshPolyVegTileCounts();
     void requestPolyVegHelper();
     void placePolyVegRuler(double widthMetres, bool closedShape);
+    void addPolyVegRulerPoints();
+    void editPolyVegRulerPoints();
     void setPolyVegRulerWidth(double widthMetres);
     void setPolyVegRulerArea(bool closedShape);
     void plantPolyVegRuler(bool overrideForestCoverage);
@@ -175,7 +180,10 @@ public slots:
 
     void initRoute2(); 
     void placeWaterRuler();
+    void addWaterRulerPoints();
+    void editWaterRulerPoints();
     void scanWaterRuler(float heightAboveBed, int tileRadius);
+    void adjustWaterTerrain(float clearance, int tileRadius);
     void undoWaterScan();
     void removeWaterRuler();
      
@@ -194,7 +202,8 @@ signals:
     void mkrList(QMap<QString, Coords*> list);
     void refreshObjLists();
     void reloadMkrLists();
-    void waterRulerPlacementRequested(Terrain *terrain);
+    void waterRulerPlacementRequested();
+    void polyVegRulerPlacementRequested();
     
     void sendMsg(QString name);
     void sendMsg(QString name, bool val);
@@ -206,10 +215,13 @@ signals:
     void updStatus(QString statName, QString statValue);
     void preloadTexturesSignal();
     void resetGradeHelperRequested();
-    void waterHelperProgress(int value, int maximum, QString text);
+    void waterPanelProgress(int value, int maximum, QString text);
+    void waterPanelStatus(QString text);
     void waterHelperStatus(QString text);
     void polyVegHelperRequested();
+    void polyVegPanelStatus(QString text);
     void polyVegTileCounts(int rawCount, int bakedCount, int bakedTileCount);
+    void primaryEditorToolsEnabled(bool enabled);
 
     
 protected:
@@ -231,7 +243,7 @@ protected:
     void pushRenderPointer();
 private:
     void setupVertexAttribs();
-    void setSelectedObj(GameObj* o);
+    void setSelectedObj(GameObj* o, bool refreshProperties = true);
     bool validatePlacement(WorldObj* obj, Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);
     bool pointerNearPlacementDb(Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);
     void playPlacementSound(QString fileName);
@@ -243,10 +255,14 @@ private:
     void showPlacementSuccess();
     void showPlacementGuardError();
     void rejectPlacement();
-    void runWaterRulerScan(float heightAboveBed, int tileRadius);
+    void queueWaterRulerOperation(float heightAboveBed, int tileRadius,
+                                  bool terrainOnly);
+    void runWaterRulerScan(float heightAboveBed, int tileRadius,
+                           bool terrainOnly);
     void showWaterMessage(const QString &text, int visibleMilliseconds = 4500);
     void positionWaterMessage();
     void renderPolyVegBakeMarkers();
+    void setSpecialRulerPanelControlsActive(bool active);
     bool bakeVegetationTile(bool usePointerTile);
     QString polyVegRecipeId;
     double polyVegDensity = -1.0;
@@ -277,6 +293,7 @@ private:
     int polyVegBatchTileZ = 0;
     int polyVegBatchSourceCount = 0;
     int polyVegBatchBlockCount = 0;
+    ForestBakeSession polyVegBakeSession;
     QBasicTimer timer;
     unsigned long long int lastTime = 0;
     unsigned long long int timeNow = 0;
@@ -321,6 +338,7 @@ private:
     RulerObj* activeGradeRuler = NULL;
     bool waterScanUndoAvailable = false;
     bool waterScanPending = false;
+    bool specialRulerPanelControlsActive = false;
     QLabel* waterMessageLabel = NULL;
     int waterMessageGeneration = 0;
     GroupObj* groupObj = NULL;

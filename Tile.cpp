@@ -299,6 +299,8 @@ void Tile::load() {
         return;
     }
     FileBuffer* data = ReadFile::read(file);
+    if (data == nullptr)
+        return;
 
     data->setTokenOffset(261844);
     data->off = 32;
@@ -443,6 +445,8 @@ void Tile::loadWS() {
         return;
     }
     FileBuffer* data = ReadFile::read(&file);
+    if (data == nullptr)
+        return;
     //qDebug() << "Date:" << data->length;
     //data->off = 0;
     //for(int i = 0; i < 64; i++){

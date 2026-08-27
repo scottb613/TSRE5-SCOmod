@@ -22,7 +22,6 @@
 #include "TDB.h"
 #include "TrackItemObj.h"
 #include "TSectionDAT.h"
-#include "ProceduralShape.h"
 #include "ComplexLine.h"
 #include "ErrorMessagesLib.h"
 #include "ErrorMessage.h"
@@ -203,20 +202,8 @@ bool TrackObj::allowNew(){
     return true;
 }
 
-void TrackObj::setTemplate(QString name){
-    templateName = name;
-    templateDisabled = false;
-    setModified();
-    reload();
-}
-
 void TrackObj::reload(){
-    if(!Game::proceduralTracks || roadShape ) {
-        Game::currentShapeLib->shape[shape]->reload();
-    } else {
-        proceduralShapeInit = false;
-        procShape.clear();
-    }
+    Game::currentShapeLib->shape[shape]->reload();
 }
 
 float TrackObj::getElevation(){
@@ -405,9 +392,8 @@ void TrackObj::pushRenderItems(float lod, float posx, float posz, float* playerW
             if ((ccos > 0) && (xxx > size) && (skipLevel == 1)) return;
         }
     } else {
-        //if (!Game::proceduralTracks)
-            if (Game::currentShapeLib->shape[shape]->loaded)
-                size = Game::currentShapeLib->shape[shape]->size;
+        if (Game::currentShapeLib->shape[shape]->loaded)
+            size = Game::currentShapeLib->shape[shape]->size;
     }
     
     //if(Game::viewSnapable)
@@ -429,27 +415,8 @@ void TrackObj::pushRenderItems(float lod, float posx, float posz, float* playerW
     } else {
         gluu->enableTextures();
     }*/
-    if(!Game::proceduralTracks || roadShape || templateDisabled ) {
-        if(shapePointer != NULL){
-            shapePointer->pushRenderItem(selectionColor, 0);
-        }
-    } else {
-        if (!proceduralShapeInit) {
-            if(templateName == "DISABLED"){
-                templateDisabled = true;
-                return;
-            }
-            TrackShape *tsh = Game::trackDB->tsection->shape[sectionIdx];
-            QMap<int, float> angles;
-            if(Game::useSuperelevation)
-                Game::trackDB->fillTrackAngles(x, -y, UiD, angles);
-            ProceduralShape::GetShape(templateName, procShape, tsh, angles);
-            proceduralShapeInit = true;
-        } else {
-            for(int i = 0; i < procShape.size(); i++){
-                procShape[i]->pushRenderItem(selectionColor, lod);
-            }
-        }
+    if(shapePointer != NULL){
+        shapePointer->pushRenderItem(selectionColor, 0);
     }
 
 
@@ -492,9 +459,8 @@ void TrackObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
             if ((ccos > 0) && (xxx > size) && (skipLevel == 1)) return;
         }
     } else {
-        //if (!Game::proceduralTracks)
-            if (Game::currentShapeLib->shape[shape]->loaded)
-                size = Game::currentShapeLib->shape[shape]->size;
+        if (Game::currentShapeLib->shape[shape]->loaded)
+            size = Game::currentShapeLib->shape[shape]->size;
     }
 
     Mat4::multiply(gluu->mvMatrix, gluu->mvMatrix, matrix);
@@ -514,26 +480,7 @@ void TrackObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
         gluu->enableTextures();
     }
     
-    if(!Game::proceduralTracks || roadShape || templateDisabled ) {
-        Game::currentShapeLib->shape[shape]->render(selectionColor, 0);
-    } else {
-        if (!proceduralShapeInit) {
-            if(templateName == "DISABLED"){
-                templateDisabled = true;
-                return;
-            }
-            TrackShape *tsh = Game::trackDB->tsection->shape[sectionIdx];
-            QMap<int, float> angles;
-            if(Game::useSuperelevation)
-                Game::trackDB->fillTrackAngles(x, -y, UiD, angles);
-            ProceduralShape::GetShape(templateName, procShape, tsh, angles);
-            proceduralShapeInit = true;
-        } else {
-            for(int i = 0; i < procShape.size(); i++){
-                procShape[i]->render(selectionColor, lod);
-            }
-        }
-    }
+    Game::currentShapeLib->shape[shape]->render(selectionColor, 0);
     
     if(selected){
         drawBox();

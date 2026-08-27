@@ -1,16 +1,56 @@
-TSRE GenX v0.13 Community Source Checkpoint Work List
+TSRE GenX v0.14 Community Source Checkpoint Work List
 
 ======================================================================================================
 
 SCOPE
 
-TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.13 is the current source checkpoint from `tsre-scomod-wip`.
+TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.14 is the current source checkpoint from `tsre-scomod-wip`.
 
 TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Grønbæk Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.
 
 ======================================================================================================
 
-COMPLETED SOURCE CHECKPOINT: V0.13
+COMPLETED SOURCE CHECKPOINT: V0.14
+
+Terrain and Water Tools
+
+- Corrected TrackDB/RoadDB terrain conforming across world-tile borders by using one tiled coordinate frame.
+- Made F2 Size and Intensity edits reject blank/intermediate/invalid text without desynchronizing the brush and sliders.
+- Completed F7 Water Tools with New/Add/Edit ruler modes, Process Water Tiles, Adjust Terrain, independent Undo, and direct map access through the global M shortcut.
+- Corrected long special-ruler selection, arbitrary-distance tile normalization, drag/release terrain snapping, restored-ruler Undo ownership, and synchronous operation/save ordering.
+- Reworked 4 m and 8 m water-mask coverage around native posts, shared tile corners, bounded traversal, shoreline frontier sampling, mixed-grid rejection, and idempotent bed clearance.
+- Made modified terrain saves transactional across RAW heights, flags, metadata, current TERRTEX, and paired-season TERRTEX components.
+
+PolyVeg
+
+- Added the full-screen PolyVeg Schema Editor with route-local schema lifecycle, asset search, static thumbnail caching, recipe defaults/limits/distribution, and atomic loader validation.
+- Simplified schema data and controls while preserving legacy JSON input compatibility and stable generated schema/asset identities.
+- Added transactional generated-file and manifest ownership across bake, rebake, Discard/Quit, cleanup, and successful route Save.
+- Hardened bake geometry, numeric ranges, stream output, manifest rollback, unreadable-world fail-safe behavior, orphan-only cleanup, and failed-delete accounting.
+- Registered the self-contained ForestPatchBaker probe and expanded the release suite to fifteen tests.
+
+Editing, rendering, and interface
+
+- Consolidated function-key assignments: Auto Place F5, PolyVeg F6, Schema Editor Shift+F6, Water Tools F7, Activity Builder F10, Errors F11, and Settings F12.
+- Added global M saved-map-overlay control and removed duplicate panel-local overlay buttons while preserving Geo Tools per-tile editing.
+- Standardized GenX checkboxes and spin controls, responsive desktop sizing, selection labels, Schema Editor navigation, and focused special-ruler status/actions.
+- Corrected Dynamic Track grade-guide transforms and restored authored static-track rendering instead of the incomplete procedural replacement.
+- Corrected missing/loading/failed shape-texture branches so the active legacy renderer draws the standard magenta material rather than sampling stale terrain state.
+
+Reliability, validation, and release engineering
+
+- Hardened ReadFile malformed/compressed input and removed obsolete remote app-data/template bootstrapping and Tar extraction.
+- Added TrackDB/RoadDB structural limits and safer geometry mutation, including checked references, allocation bounds, finite coordinates, and interactive-object guards.
+- Added fail-closed close-time Save handling, transactional terrain and PolyVeg publication, thumbnail decoded-pixel ownership, and terrain/map cleanup corrections.
+- Added ACE structural validation and independent dimension/allocation limits. Complete pixel-payload validation remains accepted inherited debt pending a representative real-world parity corpus.
+- Replaced the legacy TST convention with a versioned unpacked distribution under `dist/tsre-scomod-v0.14` and guarded source export through the clean public worktree.
+- Corrected release-pack promotion so the verified runtime-only `tsre_assets/templateRoute_0.6` payload is retained and required; v0.14 restores its 123 manifest-matched files from the immutable v0.12 local package.
+- Clean Qt 6.11.1 MinGW and VS2026/MSVC Release lanes completed. Both registered suites passed 15/15; exact hashes and timings are frozen in `TEST-MATRIX-v0.14.md`.
+- The operator accepted v0.14 with no outstanding release testing. Local binary/source packages and checksums were retained; the source branch/tag were pushed without creating or uploading a GitHub Release.
+
+======================================================================================================
+
+PREVIOUS SOURCE CHECKPOINT: V0.13
 
 Route Editor workflow and interface
 

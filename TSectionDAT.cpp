@@ -60,6 +60,8 @@ bool TSectionDAT::loadGlobal() {
 
     FileBuffer* data = ReadFile::read(file);
     file->close();
+    if (data == nullptr)
+        return false;
     data->toUtf16();
     data->skipBOM();
 
@@ -304,6 +306,8 @@ bool TSectionDAT::loadRoute(bool autoFix) {
     if (!file.open(QIODevice::ReadOnly))
         return false;
     FileBuffer* data = ReadFile::read(&file);
+    if (data == nullptr)
+        return false;
     ParserX::NextLine(data);
     
     loadRouteUtf16Data(data, autoFix);

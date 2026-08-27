@@ -57,7 +57,10 @@ const char* GLUU::getShader(QString shaderScript, QString type) {
         qDebug() << "Shader file not found " << shaderData->fileName();
         return "";
     }
-    return (const char*) ReadFile::readRAW(shaderData)->data;
+    FileBuffer* data = ReadFile::readRAW(shaderData);
+    if (data == nullptr)
+        return "";
+    return reinterpret_cast<const char*>(data->data);
 }
 
 void GLUU::initShader() {

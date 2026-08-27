@@ -78,6 +78,16 @@ int main() {
     assert(last8m - first8m + 1 == 5);
     assert(almostEqual(TerrainTrackMath::nativeSampleCoordinate(0, first8m, 8), -16.0f));
 
+    assert(almostEqual(TerrainTrackMath::distanceBetweenTilePositionsXZ(
+        10, 20, 1000.0f, 30.0f,
+        10, 20, 1006.0f, 38.0f), 10.0f));
+    assert(almostEqual(TerrainTrackMath::distanceBetweenTilePositionsXZ(
+        10, 20, 1018.0f, 30.0f,
+        11, 20, -1022.0f, 30.0f), 8.0f));
+    assert(almostEqual(TerrainTrackMath::distanceBetweenTilePositionsXZ(
+        10, 20, 30.0f, -1018.0f,
+        10, 19, 30.0f, 1022.0f), 8.0f));
+
     std::cout << "TerrainTrackMathTest passed\n";
     return 0;
 }

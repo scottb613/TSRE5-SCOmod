@@ -26,6 +26,8 @@ SigCfg::SigCfg() {
     if (!file.open(QIODevice::ReadOnly))
         return;
     FileBuffer* bufor = ReadFile::read(&file);
+    if (bufor == nullptr)
+        return;
     bufor->off += 46+16;
     //szukanie sigcfg
 

@@ -14,7 +14,6 @@
 #include "PropertiesAbstract.h"
 
 class Terrain;
-class TerrainWaterWindow2;
 class TerrainHeightHelperWindow;
 
 class PropertiesTerrain : public PropertiesAbstract{
@@ -29,10 +28,7 @@ public:
     
 public slots:
     void naviInfo(int all, int hidden);
-    void startWaterRuler(Terrain *terrain);
-    void bWaterEditorEnabled();
     void bHeightMapResetEnabled();
-    void waterHelperClosed();
     void heightHelperClosed();
     void bRotateEnabled();
     void bCopyEnabled();
@@ -51,10 +47,6 @@ public slots:
     void eAvgWaterEnabled(QString val);
 signals:
     void hacksToggled(GameObj *selection, QPushButton *button, bool checked);
-    void placeWaterRulerRequested();
-    void scanWaterRulerRequested(float heightAboveBed, int tileRadius);
-    void undoWaterScanRequested();
-    void removeWaterRulerRequested();
 
 private:
     Terrain* terrainObj = NULL;
@@ -73,9 +65,7 @@ private:
     QDoubleSpinBox eScalex;
     QDoubleSpinBox eScaley;
     QLineEdit eRotation;
-    TerrainWaterWindow2* waterWindow = NULL;
     TerrainHeightHelperWindow* heightWindow = NULL;
-    QPushButton waterHelperButton;
     QPushButton heightHelperButton;
     QPushButton hacks;
 };

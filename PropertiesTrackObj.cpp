@@ -19,8 +19,6 @@
 #include "Undo.h"
 #include "Game.h"
 #include "Route.h"
-#include "ProceduralShape.h"
-#include "ShapeTemplates.h"
 #include "GuiFunct.h"
 #include "TextEditDialog.h"
 #include <QScreen>
@@ -59,14 +57,10 @@ public:
         currentGrade.setAlignment(Qt::AlignCenter);
         nextGrade.setAlignment(Qt::AlignCenter);
         const QString gradeInputStyle =
-            "QDoubleSpinBox { border: 1px solid #70590e; padding-right: 18px; }"
+            "QDoubleSpinBox { border: 1px solid #70590e; }"
             "QDoubleSpinBox:hover { border: 1px solid #f08200; }"
             "QDoubleSpinBox:focus { border: 1px solid #8a7116; }"
-            "QDoubleSpinBox:focus:hover { border: 1px solid #f08200; }"
-            "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {"
-            " width: 16px; background-color: #414141; border-left: 1px solid #555555; }"
-            "QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover { background-color: #555555; }"
-            "QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 7px; height: 7px; }";
+            "QDoubleSpinBox:focus:hover { border: 1px solid #f08200; }";
         targetGrade.setStyleSheet(gradeInputStyle);
         stepGrade.setStyleSheet(gradeInputStyle);
         targetGrade.setToolTip("Enter the grade you want the transition to reach.");
@@ -633,30 +627,6 @@ PropertiesTrackObj::PropertiesTrackObj(){
     filenameList->addWidget(editF, 0, 1);
     vbox->addWidget(filenameActionsCard);
     
-    QGridLayout *templateGrid = new QGridLayout;
-    templateGrid->setContentsMargins(3,0,3,0);
-    templateGrid->setColumnMinimumWidth(0, alignedLabelWidth);
-    templateGrid->setColumnStretch(1, 1);
-    templateGrid->addWidget(new QLabel("Template:"), 0, 0);
-    templateGrid->addWidget(&eTemplate, 0, 1);
-    vbox->addLayout(templateGrid);
-    eTemplate.setStyleSheet("combobox-popup: 0;");
-    eTemplate.addItem("DEFAULT");
-    eTemplate.addItem("DISABLED");
-    
-    ProceduralShape::Load();
-    if(ProceduralShape::ShapeTemplateFile != NULL){
-        QMapIterator<QString, ShapeTemplate*> i(ProceduralShape::ShapeTemplateFile->templates);
-        while (i.hasNext()) {
-            i.next();
-            if(i.value() == NULL)
-                continue;
-            eTemplate.addItem(i.value()->name);
-        }
-    }
-    QObject::connect(&eTemplate, SIGNAL(currentTextChanged(QString)),
-                      this, SLOT(eTemplateEdited(QString)));
-
     addRule();
     label = new QLabel("Position & Rotation");
     label->setStyleSheet(QString("QLabel { color : ")+Game::StyleMainLabel+"; font-weight: bold; }");
@@ -940,15 +910,6 @@ PropertiesTrackObj::PropertiesTrackObj(){
     GuiFunct::styleEditorActionButton(copyF);
     QObject::connect(copyF, SIGNAL(released()),
                       this, SLOT(copyFileNameEnabled()));
-}
-
-void PropertiesTrackObj::eTemplateEdited(QString val){
-    if(trackObj == NULL){
-        return;
-    }
-    Undo::SinglePushWorldObjData(worldObj);
-    trackObj->setTemplate(val);
-    Undo::StateEnd();
 }
 
 void PropertiesTrackObj::elevTypeEdited(QString val){
@@ -1265,11 +1226,6 @@ void PropertiesTrackObj::showObj(GameObj* obj){
     this->cCollisionType.setCurrentIndex(collisionType);
     this->cCollisionType.blockSignals(false);
     
-    QString templateName = worldObj->getTemplate();
-    if(templateName.length() == 0)
-        eTemplate.setCurrentText("DEFAULT");
-    else
-        eTemplate.setCurrentText(templateName);
 }
 
 void PropertiesTrackObj::setStepValue(float step){

@@ -72,7 +72,7 @@ public:
     virtual int getTexture(int x, int z, float* p);
     virtual bool load(int x, int z);
     virtual void getUnsavedInfo(QVector<QString> &items);
-    virtual void save();
+    virtual bool save(QString *error = NULL);
     virtual void refresh(int x, int z);
     virtual bool reload(int x, int z);
     virtual int reloadLoaded();

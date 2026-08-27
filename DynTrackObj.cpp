@@ -21,7 +21,6 @@
 #include "TrackItemObj.h"
 #include "Game.h"
 #include "ProceduralMstsDyntrack.h"
-#include "ProceduralShape.h"
 #include "TSection.h"
 #include "TDB.h"
 #include "TSectionDAT.h"
@@ -460,31 +459,8 @@ void DynTrackObj::render(GLUU* gluu, float lod, float posx, float posz, float* p
                 continue;
             tsections.push_back(TSection(0, sections[i].type, sections[i].a, sections[i].r));
         }
-        if (Game::proceduralTracks) {
-            TrackShape *tsh = Game::trackDB->tsection->shape[sectionIdx];
-            QMap<int, float> angles;
-            if(Game::useSuperelevation){
-                Game::trackDB->fillTrackAngles(x, -y, UiD, angles);
-                bool positiveAngles = false;
-                for(int i = 0; i < tsections.size(); i++){
-                    if(tsections[i].angle > 0)
-                        positiveAngles = true;
-                }
-                if(positiveAngles){
-                    QList<int> keys = angles.keys();
-                    for(int j = 0; j < keys.size(); j++){
-                        angles[keys[j]] = -angles[keys[j]];
-                    }
-                }
-            }
-            ProceduralShape::GetShape(templateName, shape, tsh, angles);
-            // ProceduralShape owns and caches these objects. DynTrackObj only
-            // borrows them and must never destroy their VBOs or pointers.
-            shapeIsShared = true;
-        } else {
-            ProceduralMstsDyntrack::GenShape(shape, tsections);
-            shapeIsShared = false;
-        }
+        ProceduralMstsDyntrack::GenShape(shape, tsections);
+        shapeIsShared = false;
         init = true;
     } else {
         for(int i = 0; i < shape.size(); i++){

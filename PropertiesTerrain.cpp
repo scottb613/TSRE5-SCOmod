@@ -11,7 +11,6 @@
 #include "PropertiesTerrain.h"
 #include "Terrain.h"
 #include "Game.h"
-#include "TerrainWaterWindow2.h"
 #include "GuiFunct.h"
 
 class TerrainHeightHelperWindow : public EditorPopupWindow {
@@ -169,20 +168,12 @@ PropertiesTerrain::PropertiesTerrain() {
     alignValueColumn(vlist);
     QObject::connect(&eAvgWater, SIGNAL(textEdited(QString)),
                       this, SLOT(eAvgWaterEnabled(QString)));
-    waterHelperButton.setText("Water Helper...");
-    waterHelperButton.setCheckable(true);
-    waterHelperButton.setProperty("editorPopupKey", "waterHelper");
-    waterHelperButton.setFocusPolicy(Qt::NoFocus);
-    GuiFunct::styleEditorActionButton(&waterHelperButton);
-    QObject::connect(&waterHelperButton, SIGNAL(toggled(bool)),
-                      this, SLOT(bWaterEditorEnabled()));
     QFrame *waterCard = new QFrame(this);
     GuiFunct::styleEditorPanelCard(waterCard);
     QVBoxLayout *waterCardLayout = new QVBoxLayout(waterCard);
     waterCardLayout->setContentsMargins(4,3,4,3);
     waterCardLayout->setSpacing(2);
     waterCardLayout->addLayout(vlist);
-    waterCardLayout->addWidget(&waterHelperButton);
     vbox->addWidget(waterCard);
     
     label = new QLabel(QString(QChar(0x2022)) + " Tile Elevation");
@@ -398,8 +389,6 @@ void PropertiesTerrain::showObj(GameObj* obj){
     this->eRotation.setText(terrainObj->getPatchRotationName());
     syncVisibilityButtons();
     
-    if(waterWindow != NULL)
-        waterWindow->setTerrain(terrainObj);
     if(heightWindow != NULL && heightWindow->isVisible())
         heightWindow->setTerrain(terrainObj);
 }
@@ -431,8 +420,6 @@ void PropertiesTerrain::updateObj(GameObj* obj){
     this->eRotation.setText(terrainObj->getPatchRotationName());
     syncVisibilityButtons();
     
-    if(waterWindow != NULL)
-        waterWindow->setTerrain(terrainObj);
     if(heightWindow != NULL && heightWindow->isVisible())
         heightWindow->setTerrain(terrainObj);
 }
@@ -443,50 +430,6 @@ bool PropertiesTerrain::support(GameObj* obj){
     if(obj->typeObj == GameObj::terrainobj)
         return true;
     return false;
-}
-
-void PropertiesTerrain::startWaterRuler(Terrain *terrain){
-    if(terrain == NULL)
-        return;
-
-    showObj(terrain);
-    if(!waterHelperButton.isChecked())
-        waterHelperButton.setChecked(true);
-    else
-        bWaterEditorEnabled();
-
-    if(waterWindow != NULL)
-        waterWindow->activateRuler();
-}
-
-void PropertiesTerrain::bWaterEditorEnabled(){
-    if(terrainObj == NULL){
-        waterHelperButton.setChecked(false);
-        return;
-    }
-    GuiFunct::setEditorPopupButtonActive(
-        &waterHelperButton, waterHelperButton.isChecked());
-    if(waterWindow == NULL){
-        waterWindow = new TerrainWaterWindow2(window());
-        QObject::connect(waterWindow, SIGNAL(helperClosed()),
-                         this, SLOT(waterHelperClosed()));
-        QObject::connect(waterWindow, &TerrainWaterWindow2::userButtonPressed,
-                         this, [this](){ emit userButtonPressed(); });
-        QObject::connect(waterWindow, &TerrainWaterWindow2::placeRulerRequested,
-                         this, &PropertiesTerrain::placeWaterRulerRequested);
-        QObject::connect(waterWindow, &TerrainWaterWindow2::scanRequested,
-                         this, &PropertiesTerrain::scanWaterRulerRequested);
-        QObject::connect(waterWindow, &TerrainWaterWindow2::undoScanRequested,
-                         this, &PropertiesTerrain::undoWaterScanRequested);
-        QObject::connect(waterWindow, &TerrainWaterWindow2::removeRulerRequested,
-                         this, &PropertiesTerrain::removeWaterRulerRequested);
-    }
-    if(waterHelperButton.isChecked()){
-        waterWindow->setTerrain(terrainObj);
-        waterWindow->showExclusive();
-    } else {
-        waterWindow->close();
-    }
 }
 
 void PropertiesTerrain::bHeightMapResetEnabled(){
@@ -503,12 +446,6 @@ void PropertiesTerrain::bHeightMapResetEnabled(){
     } else {
         heightWindow->close();
     }
-}
-
-void PropertiesTerrain::waterHelperClosed(){
-    waterHelperButton.blockSignals(true);
-    waterHelperButton.setChecked(false);
-    waterHelperButton.blockSignals(false);
 }
 
 void PropertiesTerrain::heightHelperClosed(){

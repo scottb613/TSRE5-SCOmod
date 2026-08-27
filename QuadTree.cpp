@@ -38,6 +38,8 @@ void QuadTree::load() {
         return;
     }
     FileBuffer* data = ReadFile::read(&file);
+    if (data == nullptr)
+        return;
     //qDebug() << "Date:" << data->length;
     //data->off = 0;
     //for(int i = 0; i < 64; i++){
@@ -332,6 +334,8 @@ void QuadTree::QuadTile::addTile(int tileX, int tileY, int dLevel) {
         return;
     }
     FileBuffer* data = ReadFile::read(file);
+    if (data == nullptr)
+        return;
     TdFile* ttd = new TdFile();
     ttd->x = x*512;
     ttd->y = y*512;
@@ -475,6 +479,8 @@ void QuadTree::loadTD(int x, int y) {
         return;
     }
     FileBuffer* data = ReadFile::read(&file);
+    if (data == nullptr)
+        return;
     loadTD(x*512, y*512, data);
     delete data;
 }

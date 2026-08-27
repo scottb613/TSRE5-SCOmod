@@ -165,18 +165,20 @@ void TerrainLibSimple::getUnsavedInfo(QVector<QString> &items){
     }
 }
 
-void TerrainLibSimple::save(){
-    if (!Game::writeEnabled) return;
+bool TerrainLibSimple::save(QString *error){
+    if (!Game::writeEnabled) return true;
     qDebug() << "save terrain";
     for (auto it = terrain.begin(); it != terrain.end(); ++it) {
         //console.log(obj.type);
         Terrain* tTile = (Terrain*) it->second;
         if (tTile == NULL) continue;
         if (tTile->loaded && tTile->isModified()) {
-            tTile->save();
+            if(!tTile->save(error))
+                return false;
             tTile->setModified(false);
         }
     }
+    return true;
 }
 
 bool TerrainLibSimple::reload(int x, int z) {

@@ -441,7 +441,7 @@ ActivityBuilderWindow::ActivityBuilderWindow(ActivityTools *tools, QWidget *pare
     });
 
     QAction *toggleActivityBuilder = new QAction(this);
-    toggleActivityBuilder->setShortcut(QKeySequence(Qt::Key_F5));
+    toggleActivityBuilder->setShortcut(QKeySequence(Qt::Key_F10));
     toggleActivityBuilder->setShortcutContext(Qt::WindowShortcut);
     addAction(toggleActivityBuilder);
     QObject::connect(toggleActivityBuilder, &QAction::triggered, this, [this]() {

@@ -63,7 +63,6 @@ private:
     IghCoordinate* igh = NULL;
     LatitudeLongitudeCoordinate* latlon = NULL;
     PreciseTileCoordinate* aCoords = NULL;
-    void downloadTemplateRoute(QString path);
     void listRoots();
     bool hasSelectedRoute() const;
 };

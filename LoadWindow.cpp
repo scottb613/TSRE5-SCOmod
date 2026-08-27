@@ -10,9 +10,6 @@
 
 #include "LoadWindow.h"
 #include <QtWidgets>
-#include <QNetworkAccessManager>
-#include <QNetworkRequest>
-#include <QNetworkReply>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QFile>
@@ -25,12 +22,26 @@
 #include <QDebug>
 #include "NewRouteWindow.h"
 #include "GeoCoordinates.h"
-#include "TarFile.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <mmsystem.h>
 #endif
+
+static QSize launcherWindowSize(){
+    const QSize preferred(600, 700);
+    const QSize minimum(520, 560);
+    QScreen *screen = QApplication::primaryScreen();
+    if(screen == NULL)
+        return preferred;
+
+    // Leave room for the native frame and taskbar. At the established desktop
+    // sizes this returns the original 600x700 exactly; only smaller effective
+    // workspaces receive a reduced launcher.
+    const QSize available = screen->availableGeometry().size();
+    return QSize(qMin(preferred.width(), qMax(minimum.width(), available.width() - 32)),
+                 qMin(preferred.height(), qMax(minimum.height(), available.height() - 48)));
+}
 
 static void playLoadWindowSound(const QString &fileName, bool alwaysPlay = false){
     if(!alwaysPlay && !Game::scoSoundEnabled)
@@ -70,7 +81,7 @@ LoadWindow::LoadWindow() {
     // windows may close while this screen is hidden without ending the app.
     QApplication::setQuitOnLastWindowClosed(false);
     setWindowTitle(Game::AppName+" "+Game::AppVersion+" Route Editor");
-    this->setFixedSize(600, 700);
+    this->setFixedSize(launcherWindowSize());
     QImage* myImage = new QImage();
     myImage->load(Game::sessionSplashImagePath());
 
@@ -589,9 +600,15 @@ void LoadWindow::setNewRoute(){
     
     //Check if template route available.
     QString path = "./tsre_assets/templateRoute_0.6";
-    QFile appFile(path);
-    if (!appFile.exists()){
-        downloadTemplateRoute(path);
+    if (!QFileInfo(path).isDir()) {
+        GuiFunct::showEditorStopped(
+            this,
+            "New Route Template Missing",
+            "The bundled new-route template is missing:\n\n"
+                + QDir::toNativeSeparators(QFileInfo(path).absoluteFilePath())
+                + "\n\nReinstall or restore the TSRE assets. The editor no longer downloads"
+                  " route templates from the Internet.");
+        return;
     }
 
     NewRouteWindow newWindow;
@@ -642,30 +659,6 @@ void LoadWindow::setNewRoute(){
 
 void LoadWindow::exitNow(){
     this->hide();
-}
-
-void LoadWindow::downloadTemplateRoute(QString path){
-    QDir().mkdir(path);
-    
-    // Download and extract Route Data
-    QNetworkAccessManager* mgr = new QNetworkAccessManager();
-    qDebug() << "Wait ..";
-    QString Url = "http://koniec.org/tsre5/data/appdata/templateRoute_0.6.tar";
-    qDebug() << Url;
-    QNetworkRequest req;
-    req.setUrl(QUrl(Url));
-    qDebug() << req.url();
-    QNetworkReply* r = mgr->get(req);
-    QEventLoop loop;
-    QObject::connect(r, SIGNAL(finished()), &loop, SLOT(quit()));
-    loop.exec();
-    
-    qDebug() << "Network Reply Loop End";
-    QByteArray data = r->readAll();
-    FileBuffer *fileData = new FileBuffer((unsigned char*)data.data(), data.length());
-    TarFile tarFile(fileData);
-    tarFile.extractTo("./tsre_assets/");
-
 }
 
 void LoadWindow::listRoots(){

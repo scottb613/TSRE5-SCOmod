@@ -78,6 +78,8 @@
 #include "TexLib.h"
 #include "PropertiesHazard.h"
 #include "PolyVegHelper.h"
+#include "PolyVegSchemaEditor.h"
+#include "TerrainWaterWindow2.h"
 
 static int scaledUiSize(int base){
     return qRound(base * qBound(0.75f, Game::uiScale, 1.25f));
@@ -167,7 +169,9 @@ RouteEditorWindow::RouteEditorWindow() {
     activityBuilderWindow = new ActivityBuilderWindow(activityTools, this);
     //naviBox = new NaviBox();
     glWidget = new RouteEditorGLWidget(this);
+    waterHelper = new TerrainWaterWindow2(this);
     polyVegHelper = new PolyVegHelper(this);
+    polyVegSchemaEditor = new PolyVegSchemaEditor(this);
     QObject::connect(polyVegHelper, &PolyVegHelper::settingsChanged,
                      glWidget, &RouteEditorGLWidget::setPolyVegSettings);
     QObject::connect(polyVegHelper, &PolyVegHelper::bakeRequested,
@@ -180,6 +184,10 @@ RouteEditorWindow::RouteEditorWindow() {
                      glWidget, &RouteEditorGLWidget::placePolyVegRuler);
     QObject::connect(polyVegHelper, &PolyVegHelper::removeRulerRequested,
                      glWidget, &RouteEditorGLWidget::removePolyVegRuler);
+    QObject::connect(polyVegHelper, &PolyVegHelper::addRulerPointsRequested,
+                     glWidget, &RouteEditorGLWidget::addPolyVegRulerPoints);
+    QObject::connect(polyVegHelper, &PolyVegHelper::editRulerPointsRequested,
+                     glWidget, &RouteEditorGLWidget::editPolyVegRulerPoints);
     QObject::connect(polyVegHelper, &PolyVegHelper::rulerAreaChanged,
                      glWidget, &RouteEditorGLWidget::setPolyVegRulerArea);
     QObject::connect(polyVegHelper, &PolyVegHelper::rulerWidthChanged,
@@ -194,12 +202,68 @@ RouteEditorWindow::RouteEditorWindow() {
                      glWidget, &RouteEditorGLWidget::jumpNextPolyVegBakeTile);
     QObject::connect(polyVegHelper, &PolyVegHelper::resetBakeJumpRequested,
                      glWidget, &RouteEditorGLWidget::resetPolyVegBakeJump);
-    QObject::connect(polyVegHelper, &PolyVegHelper::toggleMapTilesRequested,
-                     glWidget, &RouteEditorGLWidget::toggleRouteMapOverlays);
     QObject::connect(glWidget, &RouteEditorGLWidget::polyVegHelperRequested,
                      this, [this](){ showPolyVegHelper(true); });
     QObject::connect(glWidget, &RouteEditorGLWidget::polyVegTileCounts,
                      polyVegHelper, &PolyVegHelper::setTileCounts);
+    QObject::connect(glWidget, &RouteEditorGLWidget::polyVegPanelStatus,
+                     this, [this](const QString &text){
+        if(polyVegDock != NULL && polyVegDock->isVisible())
+            polyVegHelper->setStatus(text);
+    });
+    QObject::connect(polyVegHelper, &PolyVegHelper::schemaEditorRequested,
+                     this, [this](){ showPolyVegSchemaEditor(true); });
+    QObject::connect(polyVegSchemaEditor, &PolyVegSchemaEditor::schemaSaved,
+                     polyVegHelper, &PolyVegHelper::openForCurrentRoute);
+    QObject::connect(polyVegSchemaEditor,
+                     &PolyVegSchemaEditor::exitToPlanterRequested,
+                     this, [this]() {
+        showPolyVegSchemaEditor(false);
+        if(polyVegHelperAction != NULL)
+            polyVegHelperAction->setChecked(true);
+        else
+            showPolyVegHelper(true);
+    });
+    QObject::connect(polyVegSchemaEditor, &PolyVegSchemaEditor::userToggleSoundRequested,
+                     glWidget, &RouteEditorGLWidget::userPanelToggleSound);
+    QObject::connect(polyVegSchemaEditor, &PolyVegSchemaEditor::userButtonSoundRequested,
+                     glWidget, &RouteEditorGLWidget::userModeChangeSound);
+    QObject::connect(waterHelper, &TerrainWaterWindow2::placeRulerRequested,
+                     glWidget, &RouteEditorGLWidget::placeWaterRuler);
+    QObject::connect(waterHelper, &TerrainWaterWindow2::removeRulerRequested,
+                     glWidget, &RouteEditorGLWidget::removeWaterRuler);
+    QObject::connect(waterHelper, &TerrainWaterWindow2::addPointsRequested,
+                     glWidget, &RouteEditorGLWidget::addWaterRulerPoints);
+    QObject::connect(waterHelper, &TerrainWaterWindow2::editPointsRequested,
+                     glWidget, &RouteEditorGLWidget::editWaterRulerPoints);
+    QObject::connect(waterHelper, &TerrainWaterWindow2::scanRequested,
+                     glWidget, &RouteEditorGLWidget::scanWaterRuler);
+    QObject::connect(waterHelper, &TerrainWaterWindow2::adjustTerrainRequested,
+                     glWidget, &RouteEditorGLWidget::adjustWaterTerrain);
+    QObject::connect(waterHelper, &TerrainWaterWindow2::undoScanRequested,
+                     glWidget, &RouteEditorGLWidget::undoWaterScan);
+    QObject::connect(waterHelper, &TerrainWaterWindow2::userButtonPressed,
+                     glWidget, &RouteEditorGLWidget::userModeChangeSound);
+    QObject::connect(glWidget, &RouteEditorGLWidget::waterPanelStatus,
+                     this, [this](const QString &text){
+        if(waterHelperDock != NULL && waterHelperDock->isVisible())
+            waterHelper->setStatus(text);
+    });
+    QObject::connect(glWidget, &RouteEditorGLWidget::waterPanelProgress,
+                     this, [this](int value, int maximum, const QString &text){
+        if(waterHelperDock != NULL && waterHelperDock->isVisible())
+            waterHelper->setProgress(value, maximum, text);
+    });
+    QObject::connect(glWidget, &RouteEditorGLWidget::waterRulerPlacementRequested,
+                     this, [this](){
+        showWaterHelper(true);
+        waterHelper->activateRuler();
+    });
+    QObject::connect(glWidget, &RouteEditorGLWidget::polyVegRulerPlacementRequested,
+                     this, [this](){
+        showPolyVegHelper(true);
+        polyVegHelper->activateRuler();
+    });
     
     shapeViewWindow = new ShapeViewWindow(this);
     aboutWindow = new AboutWindow(this);
@@ -306,16 +370,6 @@ RouteEditorWindow::RouteEditorWindow() {
     if(terrainProperties != NULL){
         QObject::connect(glWidget, &RouteEditorGLWidget::naviInfo,
                          terrainProperties, &PropertiesTerrain::naviInfo);
-        QObject::connect(glWidget, &RouteEditorGLWidget::waterRulerPlacementRequested,
-                         terrainProperties, &PropertiesTerrain::startWaterRuler);
-        QObject::connect(terrainProperties, &PropertiesTerrain::placeWaterRulerRequested,
-                         glWidget, &RouteEditorGLWidget::placeWaterRuler);
-        QObject::connect(terrainProperties, &PropertiesTerrain::scanWaterRulerRequested,
-                         glWidget, &RouteEditorGLWidget::scanWaterRuler);
-        QObject::connect(terrainProperties, &PropertiesTerrain::undoWaterScanRequested,
-                         glWidget, &RouteEditorGLWidget::undoWaterScan);
-        QObject::connect(terrainProperties, &PropertiesTerrain::removeWaterRulerRequested,
-                         glWidget, &RouteEditorGLWidget::removeWaterRuler);
         if(trackProperties != NULL){
             QObject::connect(terrainProperties, &PropertiesTerrain::hacksToggled,
                              trackProperties, &PropertiesTrackObj::toggleHacksForSelection);
@@ -389,6 +443,8 @@ RouteEditorWindow::RouteEditorWindow() {
         if(visible){
             if(polyVegDock != NULL && polyVegDock->isVisible())
                 polyVegDock->hide();
+            if(waterHelperDock != NULL && waterHelperDock->isVisible())
+                waterHelperDock->hide();
             if(box != NULL)
                 box->hide();
             if(activityBuilderWindow != NULL && activityBuilderWindow->isVisible())
@@ -427,6 +483,8 @@ RouteEditorWindow::RouteEditorWindow() {
         if(visible){
             if(autoPlacementDock != NULL && autoPlacementDock->isVisible())
                 autoPlacementDock->hide();
+            if(waterHelperDock != NULL && waterHelperDock->isVisible())
+                waterHelperDock->hide();
             if(box != NULL)
                 box->hide();
             if(activityBuilderWindow != NULL && activityBuilderWindow->isVisible())
@@ -439,6 +497,47 @@ RouteEditorWindow::RouteEditorWindow() {
         if(!visible) {
             polyVegHelper->clearPlacementTools();
             glWidget->removePolyVegRuler();
+        }
+    });
+
+    waterHelperDock = new QDockWidget(tr("WATER TOOLS"), this);
+    waterHelperDock->setObjectName("waterHelperDock");
+    waterHelperDock->setAllowedAreas(Qt::RightDockWidgetArea);
+    waterHelperDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    QWidget *waterHelperDockTitle = new QWidget(waterHelperDock);
+    waterHelperDockTitle->setFixedHeight(0);
+    waterHelperDock->setTitleBarWidget(waterHelperDockTitle);
+    waterHelperDock->setFixedWidth(scaledUiSize(250));
+    QScrollArea *waterHelperScroll = new QScrollArea(waterHelperDock);
+    waterHelperScroll->setObjectName("waterHelperScroll");
+    waterHelperScroll->setWidgetResizable(true);
+    waterHelperScroll->setFrameShape(QFrame::NoFrame);
+    waterHelperScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    waterHelperScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    waterHelper->setParent(waterHelperScroll, Qt::Widget);
+    waterHelperScroll->setWidget(waterHelper);
+    waterHelperDock->setWidget(waterHelperScroll);
+    addDockWidget(Qt::RightDockWidgetArea, waterHelperDock);
+    waterHelperDock->hide();
+    QObject::connect(waterHelperDock, &QDockWidget::visibilityChanged,
+                     this, [this](bool visible){
+        if(visible){
+            if(autoPlacementDock != NULL && autoPlacementDock->isVisible())
+                autoPlacementDock->hide();
+            if(polyVegDock != NULL && polyVegDock->isVisible())
+                polyVegDock->hide();
+            if(box != NULL)
+                box->hide();
+            if(activityBuilderWindow != NULL && activityBuilderWindow->isVisible())
+                activityBuilderWindow->hide();
+            waterHelper->setStatus("Ready.");
+        } else {
+            glWidget->removeWaterRuler();
+            waterHelper->resetSession();
+        }
+        if(waterHelperAction != NULL){
+            const QSignalBlocker blocker(waterHelperAction);
+            waterHelperAction->setChecked(visible);
         }
     });
     setWindowTitle(Game::AppName+" "+Game::AppVersion+" Route Editor");
@@ -595,19 +694,16 @@ RouteEditorWindow::RouteEditorWindow() {
     toolsMenu = menuBar()->addMenu(tr("&Tools"));
     propertiesAction = GuiFunct::newMenuCheckAction(tr("&Properties"), this); 
     propertiesAction->setShortcut(QKeySequence("Shift+F1"));
-    toolsMenu->addAction(propertiesAction);
     QObject::connect(propertiesAction, SIGNAL(triggered(bool)), this, SLOT(hideShowPropertiesWidget(bool)));
 
     statAction = GuiFunct::newMenuCheckAction(tr("Control &Panel"), this, false); 
     statAction->setShortcut(QKeySequence("Ctrl+F1"));
-    toolsMenu->addAction(statAction);
     QObject::connect(statAction, SIGNAL(triggered(bool)), this, SLOT(hideShowStatWidget(bool)));
     
     settingsAction = GuiFunct::newMenuCheckAction(tr("S&ettings Window"), this, false); 
     settingsAction->setShortcut(QKeySequence("F12"));
     settingsAction->setShortcutContext(Qt::ApplicationShortcut);
     settingsAction->setToolTip(tr("Settings (F12)"));
-    toolsMenu->addAction(settingsAction);
     QObject::connect(settingsAction, SIGNAL(triggered(bool)), this, SLOT(hideShowSettingsDialog(bool)));
     QObject::connect(settingsDialog, &QDialog::finished, this, [this](int){
         settingsAction->setChecked(false);
@@ -616,37 +712,29 @@ RouteEditorWindow::RouteEditorWindow() {
     errorViewAction = GuiFunct::newMenuCheckAction(tr("Errors && Messages"), this, false);
     errorViewAction->setShortcut(QKeySequence("F11"));
     errorViewAction->setToolTip(tr("Errors & Messages (F11)"));
-    toolsMenu->addAction(errorViewAction);
     QObject::connect(errorViewAction, SIGNAL(triggered(bool)), this, SLOT(hideShowErrorMsgWidget(bool)));
 
     shapeViewAction = GuiFunct::newMenuCheckAction(tr("&Shape View Window"), this, false); 
-    toolsMenu->addAction(shapeViewAction);
     QObject::connect(shapeViewAction, SIGNAL(triggered(bool)), this, SLOT(hideShowShapeViewWidget(bool)));
-    toolsMenu->addSeparator();
     objectsAction = GuiFunct::newMenuCheckAction(tr("&Objects"), this); 
     objectsAction->setShortcut(QKeySequence("F1"));
-    toolsMenu->addAction(objectsAction);
     QObject::connect(objectsAction, SIGNAL(triggered(bool)), this, SLOT(showToolsObject(bool)));
     terrainAction = GuiFunct::newMenuCheckAction(tr("Terrain &Mesh"), this);
     terrainAction->setChecked(false);    
     terrainAction->setShortcut(QKeySequence("F2"));
-    toolsMenu->addAction(terrainAction);
     QObject::connect(terrainAction, SIGNAL(triggered(bool)), this, SLOT(showToolsTerrain(bool)));
     terrainTextureAction = GuiFunct::newMenuCheckAction(tr("Terrain &Texture"), this);
     terrainTextureAction->setChecked(false);
     terrainTextureAction->setShortcut(QKeySequence("F3"));
-    toolsMenu->addAction(terrainTextureAction);
     QObject::connect(terrainTextureAction, SIGNAL(triggered(bool)),
                      this, SLOT(showToolsTerrainTexture(bool)));
     geoAction = GuiFunct::newMenuCheckAction(tr("&Geo"), this); 
     geoAction->setChecked(false);    
     geoAction->setShortcut(QKeySequence("F4"));
-    toolsMenu->addAction(geoAction);
     QObject::connect(geoAction, SIGNAL(triggered(bool)), this, SLOT(showToolsGeo(bool)));
     activityAction = GuiFunct::newMenuCheckAction(tr("&Activity"), this); 
     activityAction->setChecked(false);
-    activityAction->setShortcut(QKeySequence("F5"));
-    toolsMenu->addAction(activityAction);
+    activityAction->setShortcut(QKeySequence("F10"));
     QObject::connect(activityAction, SIGNAL(triggered(bool)), this, SLOT(showToolsActivity(bool)));
     QObject::connect(activityBuilderWindow, SIGNAL(visibilityChanged(bool)),
                      activityAction, SLOT(setChecked(bool)));
@@ -657,8 +745,7 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(activityBuilderWindow, SIGNAL(userErrorSoundRequested()),
                      glWidget, SLOT(userErrorSound()));
     autoPlacementAction = GuiFunct::newMenuCheckAction(tr("Auto &Place"), this, false);
-    autoPlacementAction->setShortcut(QKeySequence("F6"));
-    toolsMenu->addAction(autoPlacementAction);
+    autoPlacementAction->setShortcut(QKeySequence("F5"));
     QObject::connect(autoPlacementAction, &QAction::toggled,
                      this, [this](bool visible){
         if(autoPlacementDock == NULL)
@@ -673,8 +760,7 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(autoPlacementAction, &QAction::triggered,
                      glWidget, &RouteEditorGLWidget::userPanelToggleSound);
     polyVegHelperAction = GuiFunct::newMenuCheckAction(tr("PolyVeg Planter"), this, false);
-    polyVegHelperAction->setShortcut(QKeySequence("F7"));
-    toolsMenu->addAction(polyVegHelperAction);
+    polyVegHelperAction->setShortcut(QKeySequence("F6"));
     QObject::connect(polyVegHelperAction, &QAction::toggled,
                      this, [this](bool visible){
         if(visible)
@@ -682,6 +768,36 @@ RouteEditorWindow::RouteEditorWindow() {
         else
             showPolyVegHelper(false);
     });
+    polyVegSchemaEditorAction = GuiFunct::newMenuCheckAction(
+        tr("PolyVeg Schema"), this, false);
+    polyVegSchemaEditorAction->setShortcut(QKeySequence("Shift+F6"));
+    QObject::connect(polyVegSchemaEditorAction, &QAction::toggled,
+                     this, &RouteEditorWindow::showPolyVegSchemaEditor);
+    QObject::connect(polyVegSchemaEditor, &PolyVegSchemaEditor::visibilityChanged,
+                     polyVegSchemaEditorAction, &QAction::setChecked);
+    waterHelperAction = GuiFunct::newMenuCheckAction(
+        tr("Water Tools"), this, false);
+    waterHelperAction->setShortcut(QKeySequence("F7"));
+    QObject::connect(waterHelperAction, &QAction::toggled,
+                     this, &RouteEditorWindow::showWaterHelper);
+    QObject::connect(waterHelperAction, &QAction::triggered,
+                     glWidget, &RouteEditorGLWidget::userPanelToggleSound);
+
+    toolsMenu->addAction(objectsAction);
+    toolsMenu->addAction(propertiesAction);
+    toolsMenu->addAction(statAction);
+    toolsMenu->addAction(terrainAction);
+    toolsMenu->addAction(terrainTextureAction);
+    toolsMenu->addAction(geoAction);
+    toolsMenu->addAction(autoPlacementAction);
+    toolsMenu->addAction(polyVegHelperAction);
+    toolsMenu->addAction(polyVegSchemaEditorAction);
+    toolsMenu->addAction(waterHelperAction);
+    toolsMenu->addAction(activityAction);
+    toolsMenu->addAction(errorViewAction);
+    toolsMenu->addAction(settingsAction);
+    toolsMenu->addSeparator();
+    toolsMenu->addAction(shapeViewAction);
 
     QActionGroup *toolModeActions = new QActionGroup(this);
     toolModeActions->setExclusionPolicy(QActionGroup::ExclusionPolicy::ExclusiveOptional);
@@ -692,18 +808,9 @@ RouteEditorWindow::RouteEditorWindow() {
     toolModeActions->addAction(activityAction);
     toolModeActions->addAction(autoPlacementAction);
     toolModeActions->addAction(polyVegHelperAction);
+    toolModeActions->addAction(polyVegSchemaEditorAction);
+    toolModeActions->addAction(waterHelperAction);
 
-    toolsMenu->addSeparator();
-    QMenu *polyVegMenu = toolsMenu->addMenu(tr("PolyVeg Actions"));
-    QAction *plantPolyVegAction = polyVegMenu->addAction(tr("Plant PolyVeg"));
-    QObject::connect(plantPolyVegAction, &QAction::triggered,
-                     glWidget, &RouteEditorGLWidget::plantConfiguredPolyVeg);
-    QAction *bakePolyVegAction = polyVegMenu->addAction(tr("Bake PolyVeg Tile"));
-    QObject::connect(bakePolyVegAction, &QAction::triggered,
-                     glWidget, &RouteEditorGLWidget::bakeVegetationPointerTile);
-    QAction *bakeAllPolyVegAction = polyVegMenu->addAction(tr("Bake PolyVeg LOD"));
-    QObject::connect(bakeAllPolyVegAction, &QAction::triggered,
-                     glWidget, &RouteEditorGLWidget::bakeAllVegetation);
     // Settings
     terrainCameraAction = GuiFunct::newMenuCheckAction(tr("&Stick Camera To Terrain"), this); 
     terrainCameraAction->setChecked(Game::cameraStickToTerrain);
@@ -816,9 +923,6 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(geoTools, SIGNAL(createNewLoTiles(QMap<int, QPair<int, int>*>)),
                       glWidget, SLOT(createNewLoTiles(QMap<int, QPair<int, int>*>)));
 
-    QObject::connect(geoTools, SIGNAL(toggleRouteMapOverlays()),
-                      glWidget, SLOT(toggleRouteMapOverlays()));
-    
     QObject::connect(glWidget, SIGNAL(routeLoaded(Route*)),
                       objTools, SLOT(routeLoaded(Route*)));
 
@@ -941,6 +1045,8 @@ RouteEditorWindow::RouteEditorWindow() {
                       this, SLOT(statusWindowClosed()));     
     QObject::connect(statusWindow, SIGNAL(statusCommand(QString)),
                       glWidget, SLOT(statusPanelCommand(QString)));
+    QObject::connect(glWidget, &RouteEditorGLWidget::primaryEditorToolsEnabled,
+                     statusWindow, &StatusWindow::setPrimaryEditorToolsEnabled);
 
     QObject::connect(errorMessagesWindow, SIGNAL(windowClosed()),
                       this, SLOT(errorMessagesWindowClosed())); 
@@ -1046,6 +1152,8 @@ void RouteEditorWindow::exitToLoadWindow(){
 void RouteEditorWindow::hideRouteSessionWindows(){
     if(polyVegDock != NULL)
         polyVegDock->hide();
+    if(waterHelperDock != NULL)
+        waterHelperDock->hide();
     const QWidgetList windows = QApplication::topLevelWidgets();
     for(QWidget *window : windows){
         if(window == NULL || window == this)
@@ -1079,9 +1187,22 @@ void RouteEditorWindow::completeEditorClose(QCloseEvent *event){
 void RouteEditorWindow::closeEvent(QCloseEvent * event ){
     QVector<QString> unsavedItems;
     glWidget->getUnsavedInfo(unsavedItems);
+    auto discardUnsavedBakeFiles = [this, event]() {
+        QString cleanupError;
+        if(glWidget->discardUnsavedPolyVegBakeFiles(cleanupError))
+            return true;
+        GuiFunct::showEditorStopped(this, tr("Discard Route Changes Failed"),
+            tr("TSRE could not restore the pre-bake generated files, so the "
+               "editor will remain open. No additional route save was "
+               "attempted.\n\n%1").arg(cleanupError));
+        event->ignore();
+        return false;
+    };
     
     if(unsavedItems.size() == 0){
         if(Game::debugOutput) qDebug() << "Nothing to Save";
+        if(!discardUnsavedBakeFiles())
+            return;
         completeEditorClose(event);
         return;
     }
@@ -1097,14 +1218,17 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
         return;
     }
     if(unsavedDialog.changed == 2){
+        if(!discardUnsavedBakeFiles())
+            return;
         completeEditorClose(event);
         return;
     }
 
     //// EFO  need to flesh this out for saving terrain and world separately
-    save();
-
-
+    if(!glWidget->saveRoute()){
+        event->ignore();
+        return;
+    }
     completeEditorClose(event);
     
 }
@@ -1264,7 +1388,7 @@ void RouteEditorWindow::applyRestoredSessionGeometry(){
 }
 
 void RouteEditorWindow::save(){
-    emit sendMsg(QString("save"));
+    glWidget->saveRoute();
 }
 
 void RouteEditorWindow::openRouteFolder(){
@@ -1551,6 +1675,8 @@ void RouteEditorWindow::showToolsGeo(bool show){
 void RouteEditorWindow::showToolsActivity(bool show){
     if(show){
         if(Game::serverClient == NULL){
+            if(polyVegSchemaEditor != NULL && polyVegSchemaEditor->isVisible())
+                polyVegSchemaEditor->hide();
             hideShowToolWidget(false);
             activityBuilderWindow->showMaximized();
             activityBuilderWindow->raise();
@@ -1610,6 +1736,8 @@ void RouteEditorWindow::hideAllTools(){
         autoPlacementDock->hide();
     if(polyVegDock != NULL)
         polyVegDock->hide();
+    if(waterHelperDock != NULL)
+        waterHelperDock->hide();
     objTools->hide();
     terrainTools->hide();
     terrainTextureTools->hide();
@@ -1640,6 +1768,44 @@ void RouteEditorWindow::showPolyVegHelper(bool show){
     polyVegHelper->openForCurrentRoute();
     polyVegDock->show();
     polyVegDock->raise();
+}
+
+void RouteEditorWindow::showWaterHelper(bool show){
+    if(waterHelperDock == NULL || waterHelper == NULL)
+        return;
+    if(!show){
+        waterHelperDock->hide();
+        return;
+    }
+    hideAllTools();
+    waterHelperDock->show();
+    waterHelperDock->raise();
+}
+
+void RouteEditorWindow::showPolyVegSchemaEditor(bool show){
+    if(polyVegSchemaEditor == NULL)
+        return;
+    if(!show){
+        polyVegSchemaEditor->hide();
+        if(polyVegSchemaEditorAction != NULL)
+            polyVegSchemaEditorAction->setChecked(false);
+        return;
+    }
+    if(Game::serverClient != NULL){
+        if(polyVegSchemaEditorAction != NULL)
+            polyVegSchemaEditorAction->setChecked(false);
+        return;
+    }
+    if(activityBuilderWindow != NULL && activityBuilderWindow->isVisible())
+        activityBuilderWindow->hide();
+    hideShowToolWidget(false);
+    if(polyVegDock != NULL)
+        polyVegDock->hide();
+    if(waterHelperDock != NULL)
+        waterHelperDock->hide();
+    polyVegSchemaEditor->showForCurrentRoute();
+    if(polyVegSchemaEditorAction != NULL)
+        polyVegSchemaEditorAction->setChecked(true);
 }
 
 void RouteEditorWindow::showProperties(GameObj* obj){
@@ -1754,6 +1920,8 @@ void RouteEditorWindow::hideShowToolWidget(bool show){
             autoPlacementDock->hide();
         if(polyVegDock != NULL && polyVegDock->isVisible())
             polyVegDock->hide();
+        if(waterHelperDock != NULL && waterHelperDock->isVisible())
+            waterHelperDock->hide();
         box->show();
     }
     else     { box->hide();    }

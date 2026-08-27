@@ -301,7 +301,13 @@ bool MapWindow::LoadMapFromDisk(int x, int z){
                 img->setPixel(i, j, pix);
         }
     }
-    MapWindow::mapTileImages[hash] = img;
+    auto existingImage = MapWindow::mapTileImages.find(hash);
+    if(existingImage != MapWindow::mapTileImages.end()){
+        delete existingImage->second;
+        existingImage->second = img;
+    } else {
+        MapWindow::mapTileImages[hash] = img;
+    }
     MapWindow::diskLoadedMapTiles.insert(hash);
     return true;
 }

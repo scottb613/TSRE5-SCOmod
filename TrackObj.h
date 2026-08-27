@@ -27,7 +27,6 @@ public:
     WorldObj* clone();
     virtual ~TrackObj();
     bool allowNew();
-    void setTemplate(QString val);
     void reload();
     void loadingFixes();
     void load(int x, int y);
@@ -63,10 +62,7 @@ private:
     bool getBoxPoints(QVector<float> &points);
     void renderGradeMarker(float lod, int renderMode, int selectionColor);
     void rebuildGradeMarker(int direction, int transition);
-    bool proceduralShapeInit = false;
-    QVector<OglObj*> procShape;
     bool roadShape = false;
-    bool templateDisabled = false;
 };
 
 #endif	/* TRACKOBJ_H */

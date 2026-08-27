@@ -10,8 +10,24 @@
 #include <QSet>
 #include <QStringConverter>
 #include <QRegularExpression>
+#include <QtEndian>
 
 namespace {
+constexpr quint32 MaximumExpandedWorldBytes = 256u * 1024u * 1024u;
+
+bool uncompressWorldPayload(const QByteArray &data, int offset,
+                            QByteArray &payload) {
+    if(offset < 0 || data.size() - offset < 4)
+        return false;
+    const quint32 expandedSize = qFromBigEndian<quint32>(
+        reinterpret_cast<const uchar*>(data.constData() + offset));
+    if(expandedSize == 0 || expandedSize > MaximumExpandedWorldBytes)
+        return false;
+    payload = qUncompress(data.mid(offset));
+    return !payload.isEmpty()
+        && static_cast<quint32>(payload.size()) == expandedSize;
+}
+
 QJsonObject sourceObject(const ForestBakeInstance &source) {
     QJsonObject object;
     object["shape"] = source.shapePath;
@@ -41,8 +57,9 @@ QJsonObject entryObject(const ForestBakeManifestEntry &entry) {
     return object;
 }
 
-QByteArray expandedWorldFile(QByteArray data) {
-    if(data.size() < 18) return data;
+bool expandedWorldFile(QByteArray data, QByteArray &expanded) {
+    expanded = data;
+    if(data.size() < 18) return true;
     const bool hasBom = static_cast<unsigned char>(data[0]) == 0xFF
         && static_cast<unsigned char>(data[1]) == 0xFE;
     if(!hasBom && data.size() > 16 && data[7] == 'F') {
@@ -50,33 +67,44 @@ QByteArray expandedWorldFile(QByteArray data) {
         data[13] = data[10];
         data[14] = data[9];
         data[15] = data[8];
-        return data.left(16) + qUncompress(data.mid(12));
+        QByteArray payload;
+        if(!uncompressWorldPayload(data, 12, payload)) return false;
+        expanded = data.left(16) + payload;
+        return true;
     }
     if(hasBom && data.size() > 34 && data[16] == 'F') {
         data[30] = data[19];
         data[31] = data[18];
         data[32] = data[17];
         data[33] = data[13];
-        return data.left(34) + qUncompress(data.mid(30));
+        QByteArray payload;
+        if(!uncompressWorldPayload(data, 30, payload)) return false;
+        expanded = data.left(34) + payload;
+        return true;
     }
-    return data;
+    return true;
 }
 
-QString decodedWorldFile(const QByteArray &input) {
-    const QByteArray data = expandedWorldFile(input);
+bool decodedWorldFile(const QByteArray &input, QString &text) {
+    QByteArray data;
+    if(!expandedWorldFile(input, data)) return false;
     if(data.size() >= 2
             && static_cast<unsigned char>(data[0]) == 0xFF
             && static_cast<unsigned char>(data[1]) == 0xFE) {
         QStringDecoder decoder(QStringDecoder::Utf16LE);
-        return decoder(data);
+        text = decoder(data);
+        return !decoder.hasError();
     }
     if(data.size() >= 2
             && static_cast<unsigned char>(data[0]) == 0xFE
             && static_cast<unsigned char>(data[1]) == 0xFF) {
         QStringDecoder decoder(QStringDecoder::Utf16BE);
-        return decoder(data);
+        text = decoder(data);
+        return !decoder.hasError();
     }
-    return QString::fromUtf8(data);
+    QStringDecoder decoder(QStringDecoder::Utf8);
+    text = decoder(data);
+    return !decoder.hasError();
 }
 
 bool isGeneratedBakeName(const QString &name) {
@@ -85,6 +113,72 @@ bool isGeneratedBakeName(const QString &name) {
         QRegularExpression::CaseInsensitiveOption);
     return QFileInfo(name).fileName() == name && pattern.match(name).hasMatch();
 }
+}
+
+bool ForestBakeSession::rememberFile(const QString &path, QString &error) {
+    error.clear();
+    const QString cleanPath = QDir::cleanPath(path);
+    if(files.contains(cleanPath))
+        return true;
+
+    FileState state;
+    const QFileInfo info(cleanPath);
+    state.existed = info.exists();
+    if(state.existed) {
+        if(!info.isFile()) {
+            error = "PolyVeg bake output is not a file: " + cleanPath;
+            return false;
+        }
+        QFile file(cleanPath);
+        if(!file.open(QIODevice::ReadOnly)) {
+            error = "Unable to preserve PolyVeg bake file before replacement: "
+                    + cleanPath;
+            return false;
+        }
+        state.contents = file.readAll();
+        if(file.error() != QFileDevice::NoError) {
+            error = "Unable to read PolyVeg bake file before replacement: "
+                    + cleanPath;
+            return false;
+        }
+    }
+    files.insert(cleanPath, state);
+    return true;
+}
+
+bool ForestBakeSession::rollback(QString &error) {
+    error.clear();
+    QStringList failures;
+    for(auto it = files.constBegin(); it != files.constEnd(); ++it) {
+        const QString path = it.key();
+        const FileState &state = it.value();
+        if(!state.existed) {
+            if(QFileInfo::exists(path) && !QFile::remove(path))
+                failures.append("Unable to remove unsaved PolyVeg bake file: " + path);
+            continue;
+        }
+
+        QSaveFile file(path);
+        if(!file.open(QIODevice::WriteOnly)
+                || file.write(state.contents) != state.contents.size()
+                || !file.commit()) {
+            failures.append("Unable to restore saved PolyVeg bake file: " + path);
+        }
+    }
+    if(!failures.isEmpty()) {
+        error = failures.join('\n');
+        return false;
+    }
+    files.clear();
+    return true;
+}
+
+void ForestBakeSession::commit() {
+    files.clear();
+}
+
+bool ForestBakeSession::isEmpty() const {
+    return files.isEmpty();
 }
 
 bool ForestBakeManifest::upsert(const QString &path,
@@ -126,8 +220,8 @@ bool ForestBakeManifest::upsert(const QString &path,
         error = "Unable to create forest bake manifest: " + path;
         return false;
     }
-    output.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    if(!output.commit()) {
+    const QByteArray document = QJsonDocument(root).toJson(QJsonDocument::Indented);
+    if(output.write(document) != document.size() || !output.commit()) {
         error = "Unable to publish forest bake manifest: " + path;
         return false;
     }
@@ -142,20 +236,25 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
     const QString manifestPath = cleanRoutePath
         + "/OpenRails/forest-bakes.json";
     QFile input(manifestPath);
-    if(!input.exists()) return true;
-    if(!input.open(QIODevice::ReadOnly)) {
-        error = "Unable to read forest bake manifest: " + manifestPath;
-        return false;
+    QJsonObject root;
+    if(input.exists()) {
+        if(!input.open(QIODevice::ReadOnly)) {
+            error = "Unable to read forest bake manifest: " + manifestPath;
+            return false;
+        }
+        QJsonParseError parseError;
+        const QJsonDocument document =
+            QJsonDocument::fromJson(input.readAll(), &parseError);
+        input.close();
+        if(parseError.error != QJsonParseError::NoError
+                || !document.isObject()) {
+            error = "Invalid forest bake manifest: " + parseError.errorString();
+            return false;
+        }
+        root = document.object();
+    } else {
+        root["version"] = 1;
     }
-    QJsonParseError parseError;
-    QJsonDocument document = QJsonDocument::fromJson(input.readAll(), &parseError);
-    input.close();
-    if(parseError.error != QJsonParseError::NoError || !document.isObject()) {
-        error = "Invalid forest bake manifest: " + parseError.errorString();
-        return false;
-    }
-
-    QJsonObject root = document.object();
     const QJsonArray entries = root["blocks"].toArray();
     result.originalBlocks = entries.size();
     QSet<QString> manifestShapes;
@@ -168,6 +267,26 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
         manifestShapes.insert(shape.toLower());
     }
 
+    // Older PolyVeg bakes can predate the manifest. Discover their narrowly
+    // defined generated names directly so route cleanup does not depend on
+    // bookkeeping that may never have existed.
+    const QDir shapesDirectory(cleanRoutePath + "/shapes");
+    const QStringList generatedShapeFiles = shapesDirectory.entryList(
+        QStringList() << "V*.s", QDir::Files, QDir::Name);
+    for(const QString &shape : generatedShapeFiles)
+        if(isGeneratedBakeName(shape))
+            manifestShapes.insert(shape.toLower());
+    const QStringList generatedDescriptorFiles = shapesDirectory.entryList(
+        QStringList() << "V*.sd", QDir::Files, QDir::Name);
+    for(const QString &descriptor : generatedDescriptorFiles) {
+        const QString shape =
+            QFileInfo(descriptor).completeBaseName() + ".s";
+        if(isGeneratedBakeName(shape))
+            manifestShapes.insert(shape.toLower());
+    }
+    if(manifestShapes.isEmpty())
+        return true;
+
     QSet<QString> referencedShapes;
     const QDir worldDirectory(cleanRoutePath + "/world");
     const QStringList worldFiles = worldDirectory.entryList(
@@ -178,7 +297,19 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
             error = "Unable to scan saved world file: " + worldFile.fileName();
             return false;
         }
-        const QString worldText = decodedWorldFile(worldFile.readAll()).toLower();
+        if(worldFile.size() < 0
+                || worldFile.size() > MaximumExpandedWorldBytes) {
+            error = "Saved world file exceeds the safe cleanup scan limit: "
+                    + worldFile.fileName();
+            return false;
+        }
+        QString worldText;
+        if(!decodedWorldFile(worldFile.readAll(), worldText)) {
+            error = "Unable to decode saved world file safely: "
+                    + worldFile.fileName();
+            return false;
+        }
+        worldText = worldText.toLower();
         for(const QString &shape : manifestShapes)
             if(worldText.contains(shape)) referencedShapes.insert(shape);
     }
@@ -199,7 +330,30 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
     }
     result.remainingBlocks = retainedEntries.size();
     result.removedBlocks = result.originalBlocks-result.remainingBlocks;
-    if(result.removedBlocks == 0) return true;
+
+    // Add generated assets discovered outside the manifest. Manifest-backed
+    // entries are already present in these result lists, so de-duplicate by
+    // case-folded shape name before staging the pair.
+    QSet<QString> scheduledShapes;
+    for(const QString &shape : result.removedShapes)
+        scheduledShapes.insert(shape.toLower());
+    for(const QString &shape : manifestShapes) {
+        if(referencedShapes.contains(shape)
+                || scheduledShapes.contains(shape))
+            continue;
+        const QString actualShape = [&shapesDirectory, shape]() {
+            const QStringList matches = shapesDirectory.entryList(
+                QStringList() << shape, QDir::Files, QDir::Name);
+            return matches.isEmpty() ? shape : matches.first();
+        }();
+        assetsToRemove.append(shapesDirectory.filePath(actualShape));
+        assetsToRemove.append(shapesDirectory.filePath(
+            QFileInfo(actualShape).completeBaseName() + ".sd"));
+        result.removedShapes.append(actualShape);
+        scheduledShapes.insert(shape);
+    }
+    if(result.removedBlocks == 0 && assetsToRemove.isEmpty())
+        return true;
 
     struct StagedAsset { QString original; QString staged; };
     QVector<StagedAsset> stagedAssets;
@@ -227,17 +381,37 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
         error = "Unable to update forest bake manifest: " + manifestPath;
         return false;
     }
-    output.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    if(!output.commit()) {
+    const QByteArray document = QJsonDocument(root).toJson(QJsonDocument::Indented);
+    if(output.write(document) != document.size() || !output.commit()) {
         restoreStagedAssets();
         error = "Unable to publish pruned forest bake manifest: " + manifestPath;
         return false;
     }
 
+    QStringList removalFailures;
     for(const StagedAsset &asset : stagedAssets) {
-        if(!QFile::remove(asset.staged))
-            qWarning() << "Unable to remove staged PolyVeg asset" << asset.staged;
-        ++result.removedAssets;
+        if(QFile::remove(asset.staged)) {
+            ++result.removedAssets;
+            continue;
+        }
+        if(!QFile::rename(asset.staged, asset.original))
+            removalFailures.append("Unable to remove or restore staged PolyVeg asset: "
+                                   + asset.staged);
+        else
+            removalFailures.append("Unable to remove generated PolyVeg asset: "
+                                   + asset.original);
+    }
+    if(retainedEntries.isEmpty() && QFileInfo::exists(manifestPath)) {
+        if(!QFile::remove(manifestPath)) {
+            error = "Unable to remove empty forest bake manifest: "
+                + manifestPath;
+            return false;
+        }
+        result.removedManifest = true;
+    }
+    if(!removalFailures.isEmpty()) {
+        error = removalFailures.join('\n');
+        return false;
     }
     return true;
 }

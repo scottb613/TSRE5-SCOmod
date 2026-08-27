@@ -30,6 +30,8 @@ CoordsMkr::CoordsMkr(QString path) {
     if (!file->open(QIODevice::ReadOnly))
         return;
     FileBuffer* data = ReadFile::read(file);
+    if (data == nullptr)
+        return;
     ParserX::NextLine(data);
 
     QString sh = "";

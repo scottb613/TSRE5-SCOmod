@@ -273,8 +273,8 @@ void TerrainLibQt::getUnsavedInfo(QVector<QString> &items) {
     }
 }
 
-void TerrainLibQt::save() {
-    if (!Game::writeEnabled) return;
+bool TerrainLibQt::save(QString *error) {
+    if (!Game::writeEnabled) return true;
     qDebug() << "save terrain";
     QHashIterator<unsigned int, TerrainInfo*> i(terrainQt);
     while (i.hasNext()) {
@@ -283,7 +283,8 @@ void TerrainLibQt::save() {
         Terrain* tTile = (Terrain*) i.value()->t;
         if (tTile == NULL) continue;
         if (tTile->loaded && tTile->isModified()) {
-            tTile->save();
+            if(!tTile->save(error))
+                return false;
             tTile->setModified(false);
         }
     }
@@ -295,10 +296,12 @@ void TerrainLibQt::save() {
         Terrain* tTile = (Terrain*) i2.value()->t;
         if (tTile == NULL) continue;
         if (tTile->loaded && tTile->isModified()) {
-            tTile->save();
+            if(!tTile->save(error))
+                return false;
             tTile->setModified(false);
         }
     }
+    return true;
 }
 
 bool TerrainLibQt::reload(int x, int z) {

@@ -886,6 +886,15 @@ TerrainTools::TerrainTools(QString name)
     QObject::connect(leIntensity, SIGNAL(textEdited(QString)),
                       this, SLOT(setBrushAlpha(QString)));
 
+    QObject::connect(leSize, &QLineEdit::editingFinished, this, [this](){
+        leSize->setText(QString::number(meshBrush->size, 10));
+    });
+
+    QObject::connect(leIntensity, &QLineEdit::editingFinished, this, [this](){
+        leIntensity->setText(QString::number(
+            qRound(meshBrush->alpha * 100.0f), 10));
+    });
+
     QObject::connect(leTextureRotation, SIGNAL(textEdited(QString)),
                       this, SLOT(setTextureRotation(QString)));
     QObject::connect(textureSizeSlider, SIGNAL(valueChanged(int)),
@@ -1302,33 +1311,38 @@ void TerrainTools::setTexToolEnabled(){
 // brush
 
 void TerrainTools::setBrushSize(QString val){
-    emit setPaintBrush(this->meshBrush);
-    //qDebug() << "a";
-    int ival = val.toInt(0, 10);
-    this->sSize->setValue(ival);
-    this->meshBrush->size = ival;
+    bool valid = false;
+    const int ival = val.toInt(&valid, 10);
+    if(!valid || ival < sSize->minimum() || ival > sSize->maximum())
+        return;
+    setBrushSize(ival);
 }
 
 void TerrainTools::setBrushAlpha(QString val){
-    emit setPaintBrush(this->meshBrush);
-    //qDebug() << "a";
-    int ival = val.toInt(0, 10);
-    this->sIntensity->setValue(ival);
-    this->meshBrush->alpha = (float)ival/100;
+    bool valid = false;
+    const int ival = val.toInt(&valid, 10);
+    if(!valid || ival < sIntensity->minimum()
+            || ival > sIntensity->maximum())
+        return;
+    setBrushAlpha(ival);
 }
 
 void TerrainTools::setBrushSize(int val){
-    emit setPaintBrush(this->meshBrush);
-    //qDebug() << "a";
+    val = qBound(sSize->minimum(), val, sSize->maximum());
+    const QSignalBlocker blocker(sSize);
+    sSize->setValue(val);
     this->leSize->setText(QString::number(val,10));
     this->meshBrush->size = val;
+    emit setPaintBrush(this->meshBrush);
 }
 
 void TerrainTools::setBrushAlpha(int val){
-    emit setPaintBrush(this->meshBrush);
-    //qDebug() << "a";
+    val = qBound(sIntensity->minimum(), val, sIntensity->maximum());
+    const QSignalBlocker blocker(sIntensity);
+    sIntensity->setValue(val);
     this->leIntensity->setText(QString::number(val,10));
     this->meshBrush->alpha = (float)val/100;
+    emit setPaintBrush(this->meshBrush);
 }
 
 void TerrainTools::setTextureRotation(QString val){
@@ -1427,7 +1441,7 @@ void TerrainTools::setHtype(int val){
             this->meshBrush->hFixed = 0.0f;
         }
     }
-    emit setPaintBrush(this->paintBrush);
+    emit setPaintBrush(this->meshBrush);
 }
 
 void TerrainTools::setSeasonType(int val){

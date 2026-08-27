@@ -60,6 +60,7 @@
 #include "Undo.h"
 #include "Environment.h"
 #include "Terrain.h"
+#include "WaterBedClearanceMath.h"
 #include "RulerObj.h"
 #include <QQueue>
 #include <QSet>
@@ -371,12 +372,6 @@ m_zRot(0) {
     connect(this, &RouteEditorGLWidget::waterHelperStatus,
             this, [this](const QString &text){
         showWaterMessage(text);
-    });
-    connect(this, &RouteEditorGLWidget::waterHelperProgress,
-            this, [this](int, int, const QString &text){
-        // Progress is intentionally text-only. The old percentage display
-        // obscured the helper window after reaching 100%.
-        showWaterMessage(text, 3000);
     });
 }
 
@@ -915,8 +910,14 @@ void RouteEditorGLWidget::paintGL2() {
     //gluu->currentShader->setUniformValue(gluu->currentShader->lod, -0.5f);
     Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, 0, route->getDistantTerrainYOffset(), 0);
     Game::terrainLib->renderLo(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode);
+    // Water and shallow terrain can converge to the same depth value as the
+    // camera pulls back. Bias only the rendered water toward the camera; saved
+    // elevations and terrain geometry remain unchanged.
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(-1.0f, -1.0f);
     for(int i = 0; i < route->env->waterCount; i++)
         Game::terrainLib->renderWaterLo(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode, i);
+    glDisable(GL_POLYGON_OFFSET_FILL);
     Mat4::identity(gluu->mvMatrix);
     glClear(GL_DEPTH_BUFFER_BIT);
 
@@ -938,8 +939,11 @@ void RouteEditorGLWidget::paintGL2() {
     renderPolyVegBakeMarkers();
 
     //if (!selection)
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(-1.0f, -1.0f);
     for(int i = 0; i < route->env->waterCount; i++)
         Game::terrainLib->renderWater(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode, i);
+    glDisable(GL_POLYGON_OFFSET_FILL);
 
     if (!stickPointerToTerrain || !Game::viewTerrainShape)
         if (!selection) drawPointer();
@@ -1102,7 +1106,11 @@ void RouteEditorGLWidget::handleSelection() {
                     }
                 }
                 lastSelectedObj = selectedObj;
-                setSelectedObj(twobj);
+                RulerObj *clickedRuler = dynamic_cast<RulerObj*>(twobj);
+                const bool refreshObjectProperties = clickedRuler == NULL
+                        || (!clickedRuler->isWaterRuler()
+                            && !clickedRuler->isVegetationRuler());
+                setSelectedObj(twobj, refreshObjectProperties);
                 if (selectedObj == NULL) {
                     if(Game::debugOutput) qDebug() << "brak obiektu";
                 } else {
@@ -1119,6 +1127,33 @@ void RouteEditorGLWidget::handleSelection() {
                     }
                   }
                 }
+            }
+        } else if(ww == RulerObj::SpecialSelectionWindow){
+            const int rulerKind =
+                    (colorHash >> RulerObj::SpecialSelectionKindShift) & 0x3;
+            const int pointIndex =
+                    colorHash & RulerObj::SpecialSelectionPointMask;
+            RulerObj *clickedRuler = NULL;
+            if(rulerKind == RulerObj::WaterSelection){
+                if(activeWaterRuler == NULL || !activeWaterRuler->loaded)
+                    activeWaterRuler = route->findWaterRuler(false);
+                clickedRuler = activeWaterRuler;
+            } else if(rulerKind == RulerObj::VegetationSelection){
+                if(activeVegetationRuler == NULL || !activeVegetationRuler->loaded)
+                    activeVegetationRuler = route->findVegetationRuler(false);
+                clickedRuler = activeVegetationRuler;
+            } else if(rulerKind == RulerObj::GradeSelection){
+                if(activeGradeRuler == NULL || !activeGradeRuler->loaded)
+                    activeGradeRuler = route->findGradeRuler(false);
+                clickedRuler = activeGradeRuler;
+            }
+            if(clickedRuler != NULL
+                    && pointIndex < clickedRuler->getPointCount()){
+                if(selectedObj != NULL && selectedObj != clickedRuler)
+                    selectedObj->unselect();
+                lastSelectedObj = selectedObj;
+                setSelectedObj(clickedRuler, false);
+                clickedRuler->select(pointIndex);
             }
         } else if( ww == 10 ){
             int wx = camera->pozT[0] - 1 + ((colorHash >> 10) & 0x3);
@@ -1462,7 +1497,7 @@ bool RouteEditorGLWidget::applyGradeLockToPlacedTrack(bool previousTrackValid, i
 }
 
 void RouteEditorGLWidget::showPlacementSuccess() {
-    playPlacementSound("SCOpluck.wav");
+    playPlacementSound("SCOprogress.wav");
 }
 
 void RouteEditorGLWidget::showModeChange() {
@@ -1507,7 +1542,10 @@ void RouteEditorGLWidget::flexResult(bool success) {
            selectedObj->typeObj == GameObj::worldobj &&
            ((WorldObj*)selectedObj)->type == "dyntrack") {
             WorldObj* dyntrack = (WorldObj*)selectedObj;
-            route->removeTrackFromTDB(dyntrack);
+            if(!route->removeTrackFromTDB(dyntrack)) {
+                showPlacementGuardError();
+                return;
+            }
             route->addToTDB(dyntrack);
         }
         showPlacementSuccess();
@@ -1550,6 +1588,7 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
                 case Qt::Key_R:
                 case Qt::Key_T:
                 case Qt::Key_Y:
+                case Qt::Key_M:
                     event->accept();
                     return;
                 default:
@@ -1576,6 +1615,10 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
                 return;
             case Qt::Key_Y:
                 statusPanelCommand("resize");
+                event->accept();
+                return;
+            case Qt::Key_M:
+                toggleRouteMapOverlays();
                 event->accept();
                 return;
             default:
@@ -1957,13 +2000,13 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             Terrain *pointTerrain = Game::terrainLib->getTerrainByXY(
                 pointTileX, pointTileZ, true);
             if(pointTerrain == NULL || !pointTerrain->loaded){
-                emit waterHelperStatus("Unable to load terrain beneath the ruler point.");
+                emit waterPanelStatus("Terrain unavailable at this point.");
             } else {
-                // Open Water Helper and press its Ruler (water) button through
+                // Open Water Tools and start its water-ruler mode through
                 // the same signal path used by the user-facing controls. The
                 // independent waterRulerTool block below consumes this click
                 // as the first terrain-snapped point.
-                emit waterRulerPlacementRequested(pointTerrain);
+                emit waterRulerPlacementRequested();
             }
         }
 
@@ -1979,22 +2022,9 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             Terrain *pointTerrain = Game::terrainLib->getTerrainByXY(
                 pointTileX, pointTileZ, true);
             if(pointTerrain == NULL || !pointTerrain->loaded){
-                emit waterHelperStatus("Unable to load terrain beneath the vegetation ruler point.");
+                emit polyVegPanelStatus("Terrain unavailable at this point.");
             } else {
-                RulerObj *selectedRuler = selectedObj != NULL
-                    ? dynamic_cast<RulerObj*>(selectedObj) : NULL;
-                const bool selectedSpecialRuler = selectedRuler != NULL
-                    && selectedRuler->isSpecialRuler();
-                route->deleteSpecialRulers();
-                if(selectedSpecialRuler)
-                    setSelectedObj(NULL);
-                activeWaterRuler = NULL;
-                activeVegetationRuler = NULL;
-                activeGradeRuler = NULL;
-                enableTool("vegetationRulerTool");
-                requestPolyVegHelper();
-                emit waterHelperStatus(
-                    "Ruler (polyveg) active - click terrain to add control points.");
+                emit polyVegRulerPlacementRequested();
             }
         }
 
@@ -2145,7 +2175,7 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             Game::check_coords(pointTileX, pointTileZ, point);
             Terrain *pointTerrain = Game::terrainLib->getTerrainByXY(pointTileX, pointTileZ, true);
             if(pointTerrain == NULL || !pointTerrain->loaded){
-                emit waterHelperStatus("Unable to load terrain beneath the ruler point.");
+                emit waterPanelStatus("Terrain unavailable at this point.");
             } else {
                 float bedHeight = Game::terrainLib->getHeight(
                     pointTileX, pointTileZ, point[0], point[2], false);
@@ -2168,13 +2198,15 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                     activeGradeRuler = NULL;
                     if(selectedObj != NULL && selectedObj != activeWaterRuler)
                         selectedObj->unselect();
-                    setSelectedObj(activeWaterRuler);
+                    // Ruler placement does not need to replace the currently
+                    // displayed Object Properties panel on every added point.
+                    setSelectedObj(activeWaterRuler, false);
                     activeWaterRuler->select(
                         activeWaterRuler->getPointCount() - 1);
                     if(rulerWaterPlacement)
                         showPlacementSuccess();
                 } else {
-                    emit waterHelperStatus("Unable to create the water ruler.");
+                    emit waterPanelStatus("Could not create the water ruler.");
                 }
             }
         }
@@ -2187,7 +2219,7 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             Terrain *pointTerrain = Game::terrainLib->getTerrainByXY(
                 pointTileX, pointTileZ, true);
             if(pointTerrain == NULL || !pointTerrain->loaded){
-                emit waterHelperStatus("Unable to load terrain beneath the vegetation ruler point.");
+                emit polyVegPanelStatus("Terrain unavailable at this point.");
             } else {
                 float terrainHeight = Game::terrainLib->getHeight(
                     pointTileX, pointTileZ, point[0], point[2], false);
@@ -2200,8 +2232,8 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                         && !activeVegetationRuler->acceptsVegetationTile(
                             pointTileX, pointTileZ)) {
                     playPlacementSound("SCOpluck.wav");
-                    emit waterHelperStatus(
-                        "PolyVeg ruler points must remain on the first point's tile.");
+                    emit polyVegPanelStatus(
+                        "Points must stay on the first tile.");
                 } else if(activeVegetationRuler == NULL){
                     activeVegetationRuler = route->placeVegetationRuler(
                         pointTileX, pointTileZ, point);
@@ -2220,13 +2252,13 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                     activeGradeRuler = NULL;
                     if(selectedObj != NULL && selectedObj != activeVegetationRuler)
                         selectedObj->unselect();
-                    setSelectedObj(activeVegetationRuler);
+                    setSelectedObj(activeVegetationRuler, false);
                     activeVegetationRuler->select(
                         activeVegetationRuler->getPointCount() - 1);
                     if(rulerVegetationPlacement)
-                        showPlacementSuccess();
+                        playPlacementSound("SCOpluck.wav");
                 } else {
-                    emit waterHelperStatus("Unable to create the vegetation ruler.");
+                    emit polyVegPanelStatus("Could not create the PolyVeg ruler.");
                 }
             }
         }
@@ -2304,6 +2336,14 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             enableTool("");
         }
         if (toolEnabled == "FlexTool") {
+            if(route != NULL && selectedObj != NULL
+                    && selectedObj->typeObj == GameObj::worldobj
+                    && !route->canRemoveTrackFromTDB(
+                        static_cast<WorldObj*>(selectedObj), true)) {
+                showPlacementGuardError();
+                enableTool("selectTool");
+                return;
+            }
             emit flexData((int) camera->pozT[0], (int) camera->pozT[1], aktPointerPos);
         }
         if (toolEnabled == "heightTool") {
@@ -2441,7 +2481,10 @@ void RouteEditorGLWidget::mouseReleaseEvent(QMouseEvent* event) {
         if(selectedObj != NULL && selectedObj->typeObj == GameObj::worldobj){
             RulerObj *selectedRuler = dynamic_cast<RulerObj*>((WorldObj*)selectedObj);
             if(selectedRuler != NULL && selectedRuler->isSpecialRuler()){
-                selectedRuler->snapSelectedSpecialPointToTerrain();
+                const bool pointDragCompleted =
+                    selectedRuler->snapSelectedSpecialPointToTerrain();
+                if(pointDragCompleted && selectedRuler->isWaterRuler())
+                    waterScanUndoAvailable = false;
                 selectedRuler->setMartix();
             }
         }
@@ -2567,6 +2610,13 @@ void RouteEditorGLWidget::enableTool(QString name) {
     emit sendMsg("toolEnabled", name);
 }
 
+void RouteEditorGLWidget::setSpecialRulerPanelControlsActive(bool active) {
+    if(specialRulerPanelControlsActive == active)
+        return;
+    specialRulerPanelControlsActive = active;
+    emit primaryEditorToolsEnabled(!active);
+}
+
 void RouteEditorGLWidget::toggleRouteMapOverlays() {
     if(Game::terrainLib == NULL)
         return;
@@ -2624,6 +2674,10 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
         QTimer::singleShot(0, this, SLOT(focusEditor()));
         return;
     }
+    if((name == "select" || name == "place")
+            && specialRulerPanelControlsActive){
+        return;
+    }
     if(name == "select"){
         if(toolEnabled == "selectTool" && !resizeTool && !rotateTool && !translateTool){
             enableTool("");
@@ -2636,6 +2690,26 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
         return;
     }
     if(name == "place"){
+        const bool waterRulerSelected = route != NULL
+                && route->ref != NULL
+                && route->ref->selected != NULL
+                && route->ref->selected->type.compare(
+                    "rulerwater", Qt::CaseInsensitive) == 0;
+        if(waterRulerSelected){
+            emit waterRulerPlacementRequested();
+            showModeChange();
+            return;
+        }
+        const bool polyVegRulerSelected = route != NULL
+                && route->ref != NULL
+                && route->ref->selected != NULL
+                && route->ref->selected->type.compare(
+                    "rulervegetation", Qt::CaseInsensitive) == 0;
+        if(polyVegRulerSelected){
+            emit polyVegRulerPlacementRequested();
+            showModeChange();
+            return;
+        }
         if(toolEnabled == "placeTool"){
             enableTool("");
             showModeChange();
@@ -2758,14 +2832,39 @@ void RouteEditorGLWidget::jumpTo(int X, int Z, float x, float y, float z) {
 
 /// EFO Object Selected
 void RouteEditorGLWidget::objectSelected(GameObj* obj){
+    RulerObj *restoredRuler = obj != NULL
+            ? dynamic_cast<RulerObj*>(obj) : NULL;
+    const bool restoredSpecialRuler = restoredRuler != NULL
+            && restoredRuler->isSpecialRuler();
     if (selectedObj != NULL) {
         selectedObj->unselect();
-        setSelectedObj(NULL);
+        setSelectedObj(NULL, !restoredSpecialRuler);
     }
-    toolEnabled = "selectTool";   /// set the selected tool
-
     if(obj == NULL)
         return;
+
+    if(restoredSpecialRuler){
+        activeWaterRuler = restoredRuler->isWaterRuler()
+                ? restoredRuler : NULL;
+        activeVegetationRuler = restoredRuler->isVegetationRuler()
+                ? restoredRuler : NULL;
+        activeGradeRuler = restoredRuler->isGradeRuler()
+                ? restoredRuler : NULL;
+        const bool matchingPlacementMode =
+                (restoredRuler->isWaterRuler()
+                    && toolEnabled == "waterRulerTool")
+                || (restoredRuler->isVegetationRuler()
+                    && toolEnabled == "vegetationRulerTool")
+                || (restoredRuler->isGradeRuler()
+                    && toolEnabled == "gradeRulerTool");
+        if(!matchingPlacementMode)
+            toolEnabled = "selectTool";
+        restoredRuler->select();
+        setSelectedObj(restoredRuler, false);
+        return;
+    }
+
+    toolEnabled = "selectTool";   /// set the selected tool
     obj->select();
     setSelectedObj(obj);
 }
@@ -2789,10 +2888,11 @@ void RouteEditorGLWidget::setPaintBrush(Brush* brush) {
     Terrain::DefaultBrush = brush;
 }
 
-void RouteEditorGLWidget::setSelectedObj(GameObj* o) {
+void RouteEditorGLWidget::setSelectedObj(GameObj* o, bool refreshProperties) {
     selectedObj = o;
     Game::currentSelectedGameObj = selectedObj;
-    emit showProperties(selectedObj);
+    if(refreshProperties)
+        emit showProperties(selectedObj);
     if (o != NULL)
         if (o->typeObj == o->worldobj)
            emit sendMsg("showShape", ((WorldObj*) o)->getShapePath());
@@ -3442,7 +3542,6 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
                 .arg(recipe.densityLimitsPerSquareMetre.maximum*1000000.0, 0, 'f', 0));
         return;
     }
-    settings.variationScale = recipe.defaultVariationScale;
     settings.rowsEnabled = polyVegRowsEnabled;
     settings.rowWidthMetres = polyVegRowWidthMetres;
     settings.rowSpacingMetres = polyVegRowSpacingMetres;
@@ -3770,11 +3869,60 @@ void RouteEditorGLWidget::placePolyVegRuler(
     polyVegRulerWidth = std::clamp(
         widthMetres, closedShape ? 0.0 : 1.0, 2000.0);
     removePolyVegRuler();
+    RulerObj *selectedRuler = selectedObj != NULL
+        ? dynamic_cast<RulerObj*>(selectedObj) : NULL;
+    const bool selectedSpecialRuler = selectedRuler != NULL
+        && selectedRuler->isSpecialRuler();
+    route->deleteSpecialRulers();
+    if(selectedSpecialRuler)
+        setSelectedObj(NULL);
+    activeWaterRuler = NULL;
+    activeVegetationRuler = NULL;
+    activeGradeRuler = NULL;
+    setSpecialRulerPanelControlsActive(true);
     enableTool("vegetationRulerTool");
-    emit waterHelperStatus(
+    emit polyVegPanelStatus(
         closedShape
-            ? "Area ruler active - click terrain to outline a closed PolyVeg area."
-            : "PolyVeg ruler active - click terrain to add corridor control points.");
+            ? "New Area ruler: click to add points."
+            : "New Corridor ruler: click to add points.");
+}
+
+void RouteEditorGLWidget::addPolyVegRulerPoints() {
+    if(route == NULL)
+        return;
+    if(activeVegetationRuler == NULL || !activeVegetationRuler->loaded)
+        activeVegetationRuler = route->findVegetationRuler(false);
+    if(activeVegetationRuler == NULL){
+        emit polyVegPanelStatus("No ruler. Choose New Ruler.");
+        return;
+    }
+    setSpecialRulerPanelControlsActive(true);
+    if(selectedObj != NULL && selectedObj != activeVegetationRuler)
+        selectedObj->unselect();
+    setSelectedObj(activeVegetationRuler, false);
+    activeVegetationRuler->select(
+        qMax(0, activeVegetationRuler->getPointCount() - 1));
+    enableTool("vegetationRulerTool");
+    emit polyVegPanelStatus(
+        QString("Add Points: %1 points.")
+        .arg(activeVegetationRuler->getPointCount()));
+}
+
+void RouteEditorGLWidget::editPolyVegRulerPoints() {
+    if(route == NULL)
+        return;
+    if(activeVegetationRuler == NULL || !activeVegetationRuler->loaded)
+        activeVegetationRuler = route->findVegetationRuler(false);
+    if(activeVegetationRuler == NULL){
+        emit polyVegPanelStatus("No ruler. Choose New Ruler.");
+        return;
+    }
+    setSpecialRulerPanelControlsActive(true);
+    enableTool("selectTool");
+    if(selectedObj != NULL && selectedObj != activeVegetationRuler)
+        selectedObj->unselect();
+    setSelectedObj(activeVegetationRuler, false);
+    emit polyVegPanelStatus("Edit Points: drag a control point.");
 }
 
 void RouteEditorGLWidget::setPolyVegRulerWidth(double widthMetres) {
@@ -3797,12 +3945,11 @@ void RouteEditorGLWidget::setPolyVegRulerArea(bool closedShape) {
             ? route->findVegetationRuler(false) : NULL;
     if(activeVegetationRuler != NULL)
         activeVegetationRuler->setVegetationArea(closedShape);
-    emit waterHelperStatus(closedShape
-        ? "Area mode - the polygon interior plus exterior Width will be planted."
-        : "Corridor mode - Width is centered on the ruler line.");
+    emit polyVegPanelStatus(closedShape ? "Area mode." : "Corridor mode.");
 }
 
 void RouteEditorGLWidget::removePolyVegRuler() {
+    setSpecialRulerPanelControlsActive(false);
     if(route == NULL) return;
     RulerObj *ruler = route->findVegetationRuler(false);
     if(ruler != NULL) {
@@ -3975,7 +4122,6 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         ? polyVegDensity : recipe->defaultDensityPerSquareMetre;
     settings.maximumTrees = polyVegMaximumTrees > 0
         ? polyVegMaximumTrees : recipe->defaultMaximumTrees;
-    settings.variationScale = recipe->defaultVariationScale;
     settings.rowsEnabled = polyVegRowsEnabled;
     settings.rowWidthMetres = polyVegRowWidthMetres;
     settings.rowSpacingMetres = polyVegRowSpacingMetres;
@@ -4655,23 +4801,37 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
 
     QString error;
     QStringList generatedFiles;
-    for(int index = 0; index < baked.patches.size(); ++index) {
-        const QString shapePath = shapesPath + '/' + outputNames[index];
-        if(!ForestShapeTextIO::writePatch(shapePath, baked.patches[index], error)
-                || !ForestShapeTextIO::writeDescriptor(shapePath, error)) {
-            generatedFiles.append(shapePath);
-            generatedFiles.append(shapesPath + '/'
-                + QFileInfo(outputNames[index]).completeBaseName() + ".sd");
-            for(const QString &generatedFile : generatedFiles)
-                QFile::remove(generatedFile);
+    ForestBakeSession operationFiles;
+    const QString manifestPath = routePath + "/OpenRails/forest-bakes.json";
+    for(const QString &outputName : outputNames) {
+        generatedFiles.append(shapesPath + '/' + outputName);
+        generatedFiles.append(shapesPath + '/'
+            + QFileInfo(outputName).completeBaseName() + ".sd");
+    }
+    QStringList transactionFiles = generatedFiles;
+    transactionFiles.append(manifestPath);
+    for(const QString &path : transactionFiles) {
+        if(!operationFiles.rememberFile(path, error)
+                || !polyVegBakeSession.rememberFile(path, error)) {
             if(!polyVegBatchBake)
                 singleBakeDialog.close();
             GuiFunct::showEditorStopped(this, "Bake PolyVeg Tile", error);
             return false;
         }
-        generatedFiles.append(shapePath);
-        generatedFiles.append(shapesPath + '/'
-            + QFileInfo(outputNames[index]).completeBaseName() + ".sd");
+    }
+
+    for(int index = 0; index < baked.patches.size(); ++index) {
+        const QString shapePath = shapesPath + '/' + outputNames[index];
+        if(!ForestShapeTextIO::writePatch(shapePath, baked.patches[index], error)
+                || !ForestShapeTextIO::writeDescriptor(shapePath, error)) {
+            QString rollbackError;
+            if(!operationFiles.rollback(rollbackError))
+                error += "\n\n" + rollbackError;
+            if(!polyVegBatchBake)
+                singleBakeDialog.close();
+            GuiFunct::showEditorStopped(this, "Bake PolyVeg Tile", error);
+            return false;
+        }
     }
 
     // A delete/replant/rebake cycle reuses the same short V- shape names.
@@ -4709,16 +4869,19 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     if(placedBlocks != baked.patches.size()) {
         Undo::UndoLast();
         worldTile->purgeObjects(placedBakeObjects);
-        for(const QString &generatedFile : generatedFiles)
-            QFile::remove(generatedFile);
+        QString rollbackError;
+        operationFiles.rollback(rollbackError);
         if(!polyVegBatchBake)
             singleBakeDialog.close();
         GuiFunct::showEditorStopped(this, "Bake PolyVeg Tile",
-            "The baked blocks could not all be placed. The partial bake was "
-            "removed and the raw vegetation was left intact.");
+            QString("The baked blocks could not all be placed. The partial "
+                    "bake was removed and the raw vegetation was left intact.")
+            + (rollbackError.isEmpty() ? QString()
+                : "\n\n" + rollbackError));
         return false;
     }
 
+    bool manifestPublished = true;
     for(int index = 0; index < baked.patches.size(); ++index) {
         const ForestBakedPatch &patch = baked.patches[index];
         const float worldFilePositionZ = static_cast<float>(
@@ -4735,10 +4898,27 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
         entry.positionY = patch.originY;
         entry.positionZ = worldFilePositionZ;
         QDir().mkpath(routePath + "/OpenRails");
-        if(!ForestBakeManifest::upsert(
-                routePath + "/OpenRails/forest-bakes.json", entry, error))
-            emit sendMsg("msg", "Baked vegetation manifest warning: " + error);
+        if(!ForestBakeManifest::upsert(manifestPath, entry, error)) {
+            manifestPublished = false;
+            break;
+        }
     }
+    if(!manifestPublished) {
+        Undo::UndoLast();
+        worldTile->purgeObjects(placedBakeObjects);
+        QString rollbackError;
+        if(!operationFiles.rollback(rollbackError))
+            error += "\n\n" + rollbackError;
+        if(!polyVegBatchBake)
+            singleBakeDialog.close();
+        GuiFunct::showEditorStopped(this, "Bake PolyVeg Tile",
+            "The generated bake manifest could not be published. The partial "
+            "bake was removed and the raw vegetation was left intact.\n\n"
+            + error);
+        return false;
+    }
+
+    operationFiles.commit();
 
     if(selectedObj != NULL && selectedObj->typeObj == GameObj::worldobj
             && sourceObjects.contains(static_cast<WorldObj*>(selectedObj)))
@@ -4854,8 +5034,30 @@ void RouteEditorGLWidget::deleteAllPolyVegBakes() {
     refreshPolyVegTileCounts();
     update();
     if(removed == 0) {
+        ForestBakePruneResult cleanup;
+        QString cleanupError;
+        const QString routePath =
+            Game::root + "/routes/" + Game::route;
+        if(!ForestBakeManifest::pruneUnreferenced(
+                routePath, cleanup, cleanupError)) {
+            GuiFunct::showEditorNotice(this, "Delete All PolyVeg Bakes",
+                "No PolyVeg bake objects were found, and orphan cleanup "
+                "could not complete.\n\n" + cleanupError);
+            return;
+        }
+        if(cleanup.removedAssets > 0 || cleanup.removedManifest) {
+            GuiFunct::showEditorNotice(this, "Delete All PolyVeg Bakes",
+                QString("No PolyVeg bake objects were found.\n\n"
+                        "Removed %1 orphaned generated bake file(s)%2.")
+                    .arg(cleanup.removedAssets)
+                    .arg(cleanup.removedManifest
+                        ? " and the empty forest-bakes.json manifest"
+                        : ""));
+            return;
+        }
         GuiFunct::showEditorNotice(this, "Delete All PolyVeg Bakes",
-            "No PolyVeg bake objects were found on the route.");
+            "No PolyVeg bake objects or orphaned generated bake files "
+            "were found on the route.");
         return;
     }
     GuiFunct::showEditorNotice(this, "Delete All PolyVeg Bakes",
@@ -4891,6 +5093,10 @@ void RouteEditorGLWidget::editUndo() {
         &RouteEditorGLWidget::refreshPolyVegTileCounts);
 }
 
+bool RouteEditorGLWidget::discardUnsavedPolyVegBakeFiles(QString &error) {
+    return polyVegBakeSession.rollback(error);
+}
+
 void RouteEditorGLWidget::showTrkEditr() {
     if (route != NULL)
         route->showTrkEditr();
@@ -4921,7 +5127,7 @@ void RouteEditorGLWidget::placeWaterRuler(){
     if(route == NULL)
         return;
     if(waterScanPending){
-        emit waterHelperStatus("Water ruler changes are locked until processing finishes.");
+        emit waterPanelStatus("Ruler locked while processing.");
         return;
     }
     RulerObj *selectedRuler = selectedObj != NULL
@@ -4936,45 +5142,107 @@ void RouteEditorGLWidget::placeWaterRuler(){
     activeVegetationRuler = NULL;
     activeGradeRuler = NULL;
     waterScanUndoAvailable = false;
+    setSpecialRulerPanelControlsActive(true);
     enableTool("waterRulerTool");
-    emit waterHelperStatus(
-        "Water ruler active — click along the watercourse bottom, then Process Water Tiles.");
+    emit waterPanelStatus("New Ruler: click to add points.");
 }
 
-void RouteEditorGLWidget::scanWaterRuler(float heightAboveBed, int tileRadius){
+void RouteEditorGLWidget::addWaterRulerPoints(){
     if(route == NULL)
         return;
-    enableTool("selectTool");
     if(waterScanPending){
-        emit waterHelperStatus("The water scan is already preparing to start.");
+        emit waterPanelStatus("Ruler locked while processing.");
         return;
     }
     if(activeWaterRuler == NULL || !activeWaterRuler->loaded)
         activeWaterRuler = route->findWaterRuler(true);
     if(activeWaterRuler == NULL){
-        emit waterHelperStatus("No saved water ruler was found. Place a ruler first.");
+        enableTool("selectTool");
+        emit waterPanelStatus("No ruler. Choose New Water Ruler.");
+        return;
+    }
+    setSpecialRulerPanelControlsActive(true);
+    if(selectedObj != NULL && selectedObj != activeWaterRuler)
+        selectedObj->unselect();
+    setSelectedObj(activeWaterRuler, false);
+    activeWaterRuler->select(
+        qMax(0, activeWaterRuler->getPointCount() - 1));
+    enableTool("waterRulerTool");
+    emit waterPanelStatus(
+        QString("Add Points: %1 points.")
+        .arg(activeWaterRuler->getPointCount()));
+}
+
+void RouteEditorGLWidget::editWaterRulerPoints(){
+    if(route == NULL)
+        return;
+    if(waterScanPending){
+        emit waterPanelStatus("Ruler locked while processing.");
+        return;
+    }
+    if(activeWaterRuler == NULL || !activeWaterRuler->loaded)
+        activeWaterRuler = route->findWaterRuler(true);
+    if(activeWaterRuler == NULL){
+        enableTool("selectTool");
+        emit waterPanelStatus("No ruler. Choose New Water Ruler.");
+        return;
+    }
+    setSpecialRulerPanelControlsActive(true);
+    enableTool("selectTool");
+    if(selectedObj != NULL && selectedObj != activeWaterRuler)
+        selectedObj->unselect();
+    setSelectedObj(activeWaterRuler, false);
+    emit waterPanelStatus("Edit Points: drag a control point.");
+}
+
+void RouteEditorGLWidget::scanWaterRuler(float heightAboveBed, int tileRadius){
+    queueWaterRulerOperation(heightAboveBed, tileRadius, false);
+}
+
+void RouteEditorGLWidget::adjustWaterTerrain(
+        float clearance, int tileRadius){
+    queueWaterRulerOperation(clearance, tileRadius, true);
+}
+
+void RouteEditorGLWidget::queueWaterRulerOperation(
+        float heightAboveBed, int tileRadius, bool terrainOnly){
+    if(route == NULL)
+        return;
+    enableTool("selectTool");
+    if(waterScanPending){
+        emit waterPanelStatus("Processing is already pending.");
+        return;
+    }
+    if(activeWaterRuler == NULL || !activeWaterRuler->loaded)
+        activeWaterRuler = route->findWaterRuler(true);
+    if(activeWaterRuler == NULL){
+        emit waterPanelStatus("No ruler to process.");
         return;
     }
     if(activeWaterRuler->getPointCount() < 2){
-        emit waterHelperStatus("The water ruler needs at least two points before scanning.");
+        emit waterPanelStatus("At least two points are required.");
         return;
     }
     waterScanPending = true;
-    emit waterHelperStatus(
-        QString("Found the %1-point water ruler. Processing starts in 2 seconds...")
-        .arg(activeWaterRuler->getPointCount()));
-    QTimer::singleShot(2000, this, [this, heightAboveBed, tileRadius](){
-        if(route == NULL || activeWaterRuler == NULL || !activeWaterRuler->loaded){
-            waterScanPending = false;
-            emit waterHelperStatus("The water ruler was removed before the scan started.");
-            return;
-        }
-        runWaterRulerScan(heightAboveBed, tileRadius);
-        waterScanPending = false;
-    });
+    emit waterPanelStatus(
+        terrainOnly
+            ? QString("Adjusting terrain from %1 ruler points...")
+                .arg(activeWaterRuler->getPointCount())
+            : QString("Processing water from %1 ruler points...")
+                .arg(activeWaterRuler->getPointCount()));
+
+    // Paint the pending message before entering the synchronous operation, but
+    // do not accept another click or a Save command in between. The previous
+    // two-second timer allowed Save to complete before terrain adjustment had
+    // even started, leaving the adjusted height map dirty but absent from the
+    // route save that the operator had just requested.
+    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    runWaterRulerScan(heightAboveBed, tileRadius, terrainOnly);
+    waterScanPending = false;
 }
 
-void RouteEditorGLWidget::runWaterRulerScan(float heightAboveBed, int tileRadius){
+void RouteEditorGLWidget::runWaterRulerScan(
+        float heightAboveBed, int tileRadius, bool terrainOnly){
     heightAboveBed = qMax(0.01f, heightAboveBed);
     tileRadius = qBound(0, tileRadius, 50);
 
@@ -4988,7 +5256,7 @@ void RouteEditorGLWidget::runWaterRulerScan(float heightAboveBed, int tileRadius
         float p[3] = {0,0,0};
         activeWaterRuler->getPointWorldPosition(i, p);
         if(!std::isfinite(p[0]) || !std::isfinite(p[1]) || !std::isfinite(p[2])){
-            emit waterHelperStatus("The water ruler contains an invalid point. Restart the ruler before scanning.");
+            emit waterPanelStatus("Invalid point. Start a new ruler.");
             return;
         }
         WaterPathPoint wp = {p[0], p[1], p[2]};
@@ -5048,16 +5316,15 @@ void RouteEditorGLWidget::runWaterRulerScan(float heightAboveBed, int tileRadius
     }
     const int maximumCorridorTiles = 4096;
     if(corridorTiles.isEmpty() || corridorTiles.size() > maximumCorridorTiles){
-        emit waterHelperStatus(
-            QString("Water scan stopped: the ruler corridor requires %1 terrain tiles; "
-                    "the safety limit is %2. Shorten the ruler or reduce Scan Distance.")
+        emit waterPanelStatus(
+            QString("Stopped: %1 tiles exceeds the %2-tile limit.")
             .arg(corridorTiles.size()).arg(maximumCorridorTiles));
         return;
     }
 
     int tileTotal = corridorTiles.size();
     QHash<quint64, Terrain*> corridorTerrain;
-    emit waterHelperProgress(0, tileTotal, "Loading terrain inside the search boundary...");
+    emit waterPanelProgress(0, tileTotal, "Loading search tiles...");
     for(quint64 tileKey : corridorTiles){
         int tx = (int)(qint32)(tileKey >> 32);
         int tz = (int)(qint32)(tileKey & 0xffffffffu);
@@ -5066,14 +5333,14 @@ void RouteEditorGLWidget::runWaterRulerScan(float heightAboveBed, int tileRadius
             corridorTerrain.insert(tileKey, terrain);
     }
     if(corridorTerrain.isEmpty()){
-        emit waterHelperStatus("No terrain tiles were available inside the search boundary.");
+        emit waterPanelStatus("No terrain tiles were available.");
         return;
     }
 
     Terrain *referenceTerrain = corridorTerrain.constBegin().value();
     float patchSize = (float)referenceTerrain->getPatchSize();
     if(!std::isfinite(patchSize) || patchSize < 1.0f){
-        emit waterHelperStatus("Water scan stopped: the loaded terrain has an invalid patch size.");
+        emit waterPanelStatus("Stopped: invalid terrain patch size.");
         return;
     }
     auto patchGrid = [patchSize](float world) {
@@ -5102,64 +5369,161 @@ void RouteEditorGLWidget::runWaterRulerScan(float heightAboveBed, int tileRadius
         }
     }
 
-    auto proposedTileLevels = [&guidedSurface](int tx, int tz, float *levels) {
+    // Every patch on a tile uses the same four ruler-derived corner heights.
+    // Cache them once per tile so long rulers do not rescan every ruler segment
+    // for every shoreline probe.
+    QHash<quint64, QVector<float>> proposedLevelCache;
+    proposedLevelCache.reserve(corridorTerrain.size());
+    auto proposedTileLevels = [&guidedSurface, &proposedLevelCache, &coordKey](
+            int tx, int tz) {
+        const quint64 tileKey = coordKey(tx, tz);
+        auto cached = proposedLevelCache.constFind(tileKey);
+        if(cached != proposedLevelCache.constEnd())
+            return cached.value();
         float west = tx * 2048.0f - 1024.0f;
         float east = west + 2048.0f;
         float north = tz * 2048.0f - 1024.0f;
         float south = north + 2048.0f;
+        QVector<float> levels(4);
         levels[0] = guidedSurface(west, north);
         levels[1] = guidedSurface(east, north);
         levels[2] = guidedSurface(west, south);
         levels[3] = guidedSurface(east, south);
+        proposedLevelCache.insert(tileKey, levels);
+        return levels;
     };
-    auto proposedWaterHeight = [&proposedTileLevels](int tx, int tz, float lx, float lz) {
-        float levels[4];
-        proposedTileLevels(tx, tz, levels);
-        float x = lx + 1024.0f;
-        float z = lz + 1024.0f;
-        float inv = 1.0f / (2048.0f * 2048.0f);
-        return (x * z) * inv * levels[3]
-             + ((2048.0f - x) * z) * inv * levels[2]
-             + ((2048.0f - x) * (2048.0f - z)) * inv * levels[0]
-             + (x * (2048.0f - z)) * inv * levels[1];
-    };
+    const float shorelineClearance = 0.05f;
     auto patchTouchesWater = [&corridorTerrain, &coordKey, &tileForWorld,
-                              &proposedWaterHeight, patchSize](float worldX, float worldZ) {
-        // A center-only test misses narrow watercourses that cross the edge or
-        // corner of a terrain patch. Check the center and eight inset points;
-        // an inset keeps the samples inside this patch and avoids borrowing a
-        // low point from its neighbor.
-        const float inset = patchSize * 0.38f;
-        // This is only a numerical/seam tolerance. It must remain much
-        // smaller than the user's Above bed value (0.25 m is a useful river
-        // setting) so the scan does not artificially widen the watercourse.
-        const float shorelineClearance = 0.05f;
-        const float offsets[3] = {-inset, 0.0f, inset};
-        for(int oz = 0; oz < 3; oz++){
-            for(int ox = 0; ox < 3; ox++){
-                float sampleWorldX = worldX + offsets[ox];
-                float sampleWorldZ = worldZ + offsets[oz];
-                int sampleTileX = tileForWorld(sampleWorldX);
-                int sampleTileZ = tileForWorld(sampleWorldZ);
-                Terrain *sampleTerrain = corridorTerrain.value(
-                    coordKey(sampleTileX, sampleTileZ), NULL);
-                if(sampleTerrain == NULL)
-                    continue;
-                float sampleLocalX = sampleWorldX - sampleTileX * 2048.0f;
-                float sampleLocalZ = sampleWorldZ - sampleTileZ * 2048.0f;
-                float terrainHeight = Game::terrainLib->getHeight(
-                    sampleTileX, sampleTileZ, sampleLocalX, sampleLocalZ, false);
-                float waterHeight = proposedWaterHeight(
-                    sampleTileX, sampleTileZ, sampleLocalX, sampleLocalZ);
-                // The complete sample grid must stand clearly above the
-                // intended river surface before this patch becomes shoreline.
-                // The clearance absorbs terrain interpolation and rounding at
-                // patch seams, which otherwise leaves isolated dry holes.
-                if(terrainHeight <= waterHeight + shorelineClearance)
+                              &proposedTileLevels, patchSize,
+                              shorelineClearance](float worldX, float worldZ) {
+        const int tx = tileForWorld(worldX);
+        const int tz = tileForWorld(worldZ);
+        Terrain *terrain = corridorTerrain.value(coordKey(tx, tz), NULL);
+        if(terrain == NULL || terrain->getSampleSize() <= 0)
+            return false;
+
+        const int sampleSize = terrain->getSampleSize();
+        const int samplesAcross = qRound(patchSize / sampleSize);
+        if(samplesAcross < 2 || terrain->getSampleCount() * sampleSize != 2048)
+            return false;
+
+        // Terrain patches and native posts share the same exact grid. Inspect
+        // every post strictly inside this patch, avoiding its shared boundary
+        // so a low post belonging to the neighboring patch cannot widen the
+        // shoreline. This is a bounded one-shot scan, not brush-time work.
+        const float west = worldX - tx * 2048.0f - patchSize * 0.5f;
+        const float north = worldZ - tz * 2048.0f - patchSize * 0.5f;
+        const int firstSampleX = qRound((west + 1024.0f) / sampleSize);
+        const int firstSampleZ = qRound((north + 1024.0f) / sampleSize);
+        if(firstSampleX < 0 || firstSampleZ < 0
+                || firstSampleX + samplesAcross > terrain->getSampleCount()
+                || firstSampleZ + samplesAcross > terrain->getSampleCount())
+            return false;
+        const QVector<float> waterLevels = proposedTileLevels(tx, tz);
+        for(int offsetZ = 1; offsetZ < samplesAcross; ++offsetZ){
+            const int sampleZ = firstSampleZ + offsetZ;
+            const float localZ = sampleZ * sampleSize - 1024.0f;
+            for(int offsetX = 1; offsetX < samplesAcross; ++offsetX){
+                const int sampleX = firstSampleX + offsetX;
+                const float localX = sampleX * sampleSize - 1024.0f;
+                if(terrain->terrainData[sampleZ][sampleX]
+                        <= WaterBedClearanceMath::bilinearWaterHeight(
+                               waterLevels.constData(), localX, localZ)
+                           + shorelineClearance)
                     return true;
             }
         }
         return false;
+    };
+    auto edgePatchCellsEnterBedBand = [
+            &corridorTerrain, &coordKey, &tileForWorld,
+            &proposedTileLevels, patchSize,
+            heightAboveBed](float worldX, float worldZ) {
+        const int tx = tileForWorld(worldX);
+        const int tz = tileForWorld(worldZ);
+        Terrain *terrain = corridorTerrain.value(coordKey(tx, tz), NULL);
+        if(terrain == NULL)
+            return false;
+
+        const int sampleSize = terrain->getSampleSize();
+        const int samplesAcross = qRound(patchSize / sampleSize);
+        constexpr int probeSpacing = 2;
+        constexpr int minimumSubmergedProbes = 4;
+        if(samplesAcross < 2 || sampleSize < probeSpacing * 2
+                || sampleSize % probeSpacing != 0
+                || terrain->getSampleCount() * sampleSize != 2048)
+            return false;
+
+        const float west = worldX - tx * 2048.0f - patchSize * 0.5f;
+        const float north = worldZ - tz * 2048.0f - patchSize * 0.5f;
+        const int firstSampleX = qRound((west + 1024.0f) / sampleSize);
+        const int firstSampleZ = qRound((north + 1024.0f) / sampleSize);
+        if(firstSampleX < 0 || firstSampleZ < 0
+                || firstSampleX + samplesAcross > terrain->getSampleCount()
+                || firstSampleZ + samplesAcross > terrain->getSampleCount())
+            return false;
+
+        const QVector<float> waterLevels = proposedTileLevels(tx, tz);
+        int submergedProbes = 0;
+        for(int offsetZ = 0; offsetZ < samplesAcross; ++offsetZ){
+            for(int offsetX = 0; offsetX < samplesAcross; ++offsetX){
+                // The post test already covers the patch interior. Only the
+                // first terrain cell inside each edge can contain a visible
+                // crossing that falls between a shared edge post and the
+                // first interior post. Probe those cells on the same physical
+                // 2 m lattice for both 4 m and 8 m terrain. Four probes inside
+                // the adjustable bed band represent about 16 square metres of
+                // evidence, rejecting isolated contacts without hiding an inlet.
+                if(offsetX != 0 && offsetX != samplesAcross - 1
+                        && offsetZ != 0 && offsetZ != samplesAcross - 1)
+                    continue;
+                const int sampleX = firstSampleX + offsetX;
+                const int sampleZ = firstSampleZ + offsetZ;
+                const float h00 = terrain->terrainData[sampleZ][sampleX];
+                const float h10 = terrain->terrainData[sampleZ][sampleX + 1];
+                const float h01 = terrain->terrainData[sampleZ + 1][sampleX];
+                const float h11 = terrain->terrainData[sampleZ + 1][sampleX + 1];
+                for(int probeZ = probeSpacing; probeZ < sampleSize;
+                        probeZ += probeSpacing){
+                    const float fractionZ =
+                        static_cast<float>(probeZ) / sampleSize;
+                    for(int probeX = probeSpacing; probeX < sampleSize;
+                            probeX += probeSpacing){
+                        const float fractionX =
+                            static_cast<float>(probeX) / sampleSize;
+                        const float terrainHeight =
+                            h00 * (1.0f - fractionX) * (1.0f - fractionZ)
+                          + h10 * fractionX * (1.0f - fractionZ)
+                          + h01 * (1.0f - fractionX) * fractionZ
+                          + h11 * fractionX * fractionZ;
+                        const float localX =
+                            (sampleX + fractionX) * sampleSize - 1024.0f;
+                        const float localZ =
+                            (sampleZ + fractionZ) * sampleSize - 1024.0f;
+                        if(terrainHeight
+                                < WaterBedClearanceMath::bilinearWaterHeight(
+                                      waterLevels.constData(), localX, localZ)
+                                  + heightAboveBed
+                                && ++submergedProbes
+                                   >= minimumSubmergedProbes)
+                            return true;
+                    }
+                }
+            }
+        }
+        return false;
+    };
+    auto patchHasWater = [&corridorTerrain, &coordKey, &tileForWorld](
+            float worldX, float worldZ) {
+        const int tx = tileForWorld(worldX);
+        const int tz = tileForWorld(worldZ);
+        Terrain *terrain = corridorTerrain.value(coordKey(tx, tz), NULL);
+        if(terrain == NULL)
+            return false;
+        float localX = worldX - tx * 2048.0f;
+        float localZ = worldZ - tz * 2048.0f;
+        return (terrain->getPatchFlags(tx, tz, localX, localZ)
+                & 0x10000c0) == 0x10000c0;
     };
 
     QSet<quint64> visited;
@@ -5168,7 +5532,7 @@ void RouteEditorGLWidget::runWaterRulerScan(float heightAboveBed, int tileRadius
     int patchesPerTile = qMax(1, (int)std::ceil(2048.0f / patchSize));
     const int maximumVisited = qMin(
         500000, qMax(1024, corridorTiles.size() * patchesPerTile * patchesPerTile));
-    emit waterHelperProgress(0, 0, "Scanning outward for the raised shoreline...");
+    emit waterPanelProgress(0, 0, "Finding shoreline...");
     while(!open.isEmpty() && visited.size() < maximumVisited){
         QPair<int,int> cell = open.dequeue();
         quint64 cellKey = coordKey(cell.first, cell.second);
@@ -5183,8 +5547,10 @@ void RouteEditorGLWidget::runWaterRulerScan(float heightAboveBed, int tileRadius
         Terrain *terrain = corridorTerrain.value(coordKey(tx, tz), NULL);
         if(terrain == NULL)
             continue;
-        bool wet = seedKeys.contains(cellKey)
-                || patchTouchesWater(worldX, worldZ);
+        const bool wet = terrainOnly
+                ? patchHasWater(worldX, worldZ)
+                : seedKeys.contains(cellKey)
+                    || patchTouchesWater(worldX, worldZ);
         if(!wet)
             continue;
 
@@ -5200,135 +5566,450 @@ void RouteEditorGLWidget::runWaterRulerScan(float heightAboveBed, int tileRadius
         open.enqueue(qMakePair(cell.first + 1, cell.second + 1));
 
     }
+    if(!open.isEmpty()){
+        emit waterPanelStatus(
+            "Stopped: shoreline exceeds the processing limit.");
+        return;
+    }
+    if(!terrainOnly && !wetPatches.isEmpty()){
+        // A shallow terrain cell can enter the bed-adjustment band between its
+        // shared edge post and first interior post even though every strict
+        // interior post is currently dry. Use the same Above bed limit that
+        // Adjust Terrain will apply, so placement anticipates the posts that
+        // the following operation may lower instead of leaving a raised shelf.
+        // Check only the immediate frontier produced by the normal flood and
+        // add all confirmed cells together so the fallback cannot cascade into
+        // high banks or island cores.
+        QSet<quint64> edgeCandidates;
+        for(quint64 patchKey : wetPatches){
+            const int gx = (int)(qint32)(patchKey >> 32);
+            const int gz = (int)(qint32)(patchKey & 0xffffffffu);
+            for(int offsetZ = -1; offsetZ <= 1; ++offsetZ){
+                for(int offsetX = -1; offsetX <= 1; ++offsetX){
+                    if(offsetX == 0 && offsetZ == 0)
+                        continue;
+                    const quint64 candidate = coordKey(
+                        gx + offsetX, gz + offsetZ);
+                    if(!wetPatches.contains(candidate))
+                        edgeCandidates.insert(candidate);
+                }
+            }
+        }
+        QSet<quint64> edgeAdditions;
+        for(quint64 candidate : edgeCandidates){
+            const int gx = (int)(qint32)(candidate >> 32);
+            const int gz = (int)(qint32)(candidate & 0xffffffffu);
+            if(edgePatchCellsEnterBedBand(
+                    patchCenter(gx), patchCenter(gz)))
+                edgeAdditions.insert(candidate);
+        }
+        for(quint64 addition : edgeAdditions){
+            const int gx = (int)(qint32)(addition >> 32);
+            const int gz = (int)(qint32)(addition & 0xffffffffu);
+            wetPatches.insert(addition);
+            wetTiles.insert(coordKey(
+                tileForWorld(patchCenter(gx)),
+                tileForWorld(patchCenter(gz))));
+        }
+    }
     if(wetPatches.isEmpty()){
-        emit waterHelperStatus("The scan found no connected water patches.");
+        emit waterPanelStatus(terrainOnly
+            ? "No processed water found. Process Water Tiles first."
+            : "No connected water patches found.");
         return;
     }
 
-    // Keep water from earlier sections unchanged. New strips inherit every
-    // shared edge from neighboring existing water tiles, so extending a river
-    // cannot introduce a height step at the join.
-    QSet<quint64> existingWaterTiles;
-    for(auto it = corridorTerrain.constBegin(); it != corridorTerrain.constEnd(); ++it){
-        if(it.value() != NULL && it.value()->hasAnyWater())
-            existingWaterTiles.insert(it.key());
-    }
-    // Existing water is a seam reference only when it is at essentially the
-    // same surface predicted by this ruler. A tile can contain unrelated lake
-    // or river water at a very different elevation; inheriting that edge makes
-    // the new water plane plunge underground and appear invisible.
-    const float seamMatchTolerance = qBound(
-        0.02f, heightAboveBed * 0.20f, 0.05f);
     QHash<quint64, QVector<float>> finalTileLevels;
     for(quint64 tileKey : wetTiles){
         int tx = (int)(qint32)(tileKey >> 32);
         int tz = (int)(qint32)(tileKey & 0xffffffffu);
-        QVector<float> levels(4);
         Terrain *terrain = corridorTerrain.value(tileKey, NULL);
         if(terrain == NULL)
             continue;
-        float proposed[4];
-        proposedTileLevels(tx, tz, proposed);
-        bool compatibleExistingSurface = false;
-        if(existingWaterTiles.contains(tileKey)){
-            float preserved[4];
-            terrain->getWaterLevels(preserved);
-            compatibleExistingSurface = true;
-            float preservedAverage = 0.0f;
-            float proposedAverage = 0.0f;
-            for(int corner = 0; corner < 4; corner++){
-                if(!std::isfinite(preserved[corner])){
-                    compatibleExistingSurface = false;
-                    break;
-                }
-                preservedAverage += preserved[corner] * 0.25f;
-                proposedAverage += proposed[corner] * 0.25f;
-            }
-            compatibleExistingSurface = compatibleExistingSurface
-                    && std::fabs(preservedAverage - proposedAverage)
-                       <= seamMatchTolerance;
-            if(compatibleExistingSurface){
-                for(int corner = 0; corner < 4; corner++)
-                    levels[corner] = preserved[corner];
-            }
-        }
-        if(!compatibleExistingSurface){
-            for(int corner = 0; corner < 4; corner++)
-                levels[corner] = proposed[corner];
-
-            auto inheritEdge = [&corridorTerrain, &existingWaterTiles, &coordKey,
-                                &levels, &proposed, seamMatchTolerance](
-                    int adjacentX, int adjacentZ, int targetA, int targetB,
-                    int sourceA, int sourceB) {
-                quint64 adjacentKey = coordKey(adjacentX, adjacentZ);
-                if(!existingWaterTiles.contains(adjacentKey))
-                    return;
-                Terrain *adjacent = corridorTerrain.value(adjacentKey, NULL);
-                if(adjacent == NULL)
-                    return;
-                float adjacentLevels[4];
-                adjacent->getWaterLevels(adjacentLevels);
-                if(!std::isfinite(adjacentLevels[sourceA])
-                        || !std::isfinite(adjacentLevels[sourceB])
-                        || std::fabs(adjacentLevels[sourceA] - proposed[targetA])
-                           > seamMatchTolerance
-                        || std::fabs(adjacentLevels[sourceB] - proposed[targetB])
-                           > seamMatchTolerance)
-                    return;
-                levels[targetA] = adjacentLevels[sourceA];
-                levels[targetB] = adjacentLevels[sourceB];
-            };
-            inheritEdge(tx - 1, tz, 0, 2, 1, 3); // west
-            inheritEdge(tx + 1, tz, 1, 3, 0, 2); // east
-            inheritEdge(tx, tz - 1, 0, 1, 2, 3); // north
-            inheritEdge(tx, tz + 1, 2, 3, 0, 1); // south
+        QVector<float> levels(4);
+        if(terrainOnly){
+            terrain->getWaterLevels(levels.data());
+        } else {
+            levels = proposedTileLevels(tx, tz);
         }
         finalTileLevels.insert(tileKey, levels);
     }
 
+    if(!terrainOnly){
+        struct CornerLevel {
+            double sum = 0.0;
+            int count = 0;
+        };
+        QHash<quint64, CornerLevel> cornerLevels;
+        for(auto it = finalTileLevels.constBegin();
+                it != finalTileLevels.constEnd(); ++it){
+            const int tx = (int)(qint32)(it.key() >> 32);
+            const int tz = (int)(qint32)(it.key() & 0xffffffffu);
+            const int cornerX[4] = {tx, tx + 1, tx, tx + 1};
+            const int cornerZ[4] = {tz, tz, tz + 1, tz + 1};
+            for(int corner = 0; corner < 4; ++corner){
+                CornerLevel &level = cornerLevels[
+                    coordKey(cornerX[corner], cornerZ[corner])];
+                level.sum += it.value()[corner];
+                level.count++;
+            }
+        }
+        for(auto it = finalTileLevels.begin();
+                it != finalTileLevels.end(); ++it){
+            const int tx = (int)(qint32)(it.key() >> 32);
+            const int tz = (int)(qint32)(it.key() & 0xffffffffu);
+            const int cornerX[4] = {tx, tx + 1, tx, tx + 1};
+            const int cornerZ[4] = {tz, tz, tz + 1, tz + 1};
+            for(int corner = 0; corner < 4; ++corner){
+                const CornerLevel level = cornerLevels.value(
+                    coordKey(cornerX[corner], cornerZ[corner]));
+                if(level.count > 0)
+                    it.value()[corner] = (float)(level.sum / level.count);
+            }
+        }
+    }
+
+    QSet<quint64> waterPatchesToClear;
+    if(!terrainOnly){
+        QQueue<QPair<int,int>> replacementOpen;
+        for(quint64 patchKey : wetPatches){
+            const int gx = (int)(qint32)(patchKey >> 32);
+            const int gz = (int)(qint32)(patchKey & 0xffffffffu);
+            if(patchHasWater(patchCenter(gx), patchCenter(gz)))
+                replacementOpen.enqueue(qMakePair(gx, gz));
+        }
+        for(quint64 patchKey : seedKeys){
+            const int gx = (int)(qint32)(patchKey >> 32);
+            const int gz = (int)(qint32)(patchKey & 0xffffffffu);
+            if(patchHasWater(patchCenter(gx), patchCenter(gz)))
+                replacementOpen.enqueue(qMakePair(gx, gz));
+        }
+
+        QSet<quint64> examinedExisting;
+        QSet<quint64> connectedExisting;
+        while(!replacementOpen.isEmpty()
+                && examinedExisting.size() < maximumVisited){
+            const QPair<int,int> cell = replacementOpen.dequeue();
+            const quint64 key = coordKey(cell.first, cell.second);
+            if(examinedExisting.contains(key))
+                continue;
+            examinedExisting.insert(key);
+            if(!patchHasWater(
+                    patchCenter(cell.first), patchCenter(cell.second)))
+                continue;
+            connectedExisting.insert(key);
+            for(int offsetZ = -1; offsetZ <= 1; ++offsetZ)
+                for(int offsetX = -1; offsetX <= 1; ++offsetX)
+                    if(offsetX != 0 || offsetZ != 0)
+                        replacementOpen.enqueue(qMakePair(
+                            cell.first + offsetX, cell.second + offsetZ));
+        }
+        if(!replacementOpen.isEmpty()){
+            emit waterPanelStatus(
+                "Stopped: existing water exceeds the replacement limit.");
+            return;
+        }
+        waterPatchesToClear = connectedExisting;
+        waterPatchesToClear.subtract(wetPatches);
+    }
+
+    struct BedSample {
+        float height = 0.0f;
+        float waterHeight = 0.0f;
+        float newHeight = 0.0f;
+        bool waterMaskEdge = false;
+    };
+    QHash<quint64, BedSample> bedSamples;
+    int adjustedBedPosts = 0;
+    float largestBedDrop = 0.0f;
+    Terrain *bedReferenceTerrain = wetTiles.isEmpty()
+        ? NULL : corridorTerrain.value(*wetTiles.constBegin(), NULL);
+    const int bedSampleSize = bedReferenceTerrain != NULL
+        ? bedReferenceTerrain->getSampleSize() : 0;
+    const int integerPatchSize = qRound(patchSize);
+    bool bedGridSupported = bedSampleSize > 0
+        && 2048 % bedSampleSize == 0
+        && integerPatchSize > 0
+        && integerPatchSize % bedSampleSize == 0;
+    if(terrainOnly && bedGridSupported){
+        const int expectedSamples = 2048 / bedSampleSize;
+        for(quint64 tileKey : wetTiles){
+            Terrain *terrain = corridorTerrain.value(tileKey, NULL);
+            if(terrain == NULL
+                    || terrain->getSampleSize() != bedSampleSize
+                    || terrain->getSampleCount() != expectedSamples
+                    || finalTileLevels.value(tileKey).size() != 4){
+                bedGridSupported = false;
+                break;
+            }
+        }
+    }
+    if(terrainOnly && !bedGridSupported){
+        emit waterPanelStatus("Stopped: unsupported terrain sample grid.");
+        return;
+    }
+    if(terrainOnly && bedSampleSize > 0){
+        emit waterPanelProgress(0, 0, "Checking bed clearance...");
+        const int samplesPerTile = 2048 / bedSampleSize;
+        const int samplesPerPatch = integerPatchSize / bedSampleSize;
+        auto floorDivide = [](int value, int divisor) {
+            int quotient = value / divisor;
+            if(value % divisor < 0)
+                --quotient;
+            return quotient;
+        };
+        auto touchesWetPatch = [&wetPatches, &coordKey, &floorDivide,
+                                samplesPerPatch](int gridX, int gridZ) {
+            const int eastPatch = floorDivide(gridX, samplesPerPatch);
+            const int southPatch = floorDivide(gridZ, samplesPerPatch);
+            const bool onXBoundary = gridX % samplesPerPatch == 0;
+            const bool onZBoundary = gridZ % samplesPerPatch == 0;
+            const int xCount = onXBoundary ? 2 : 1;
+            const int zCount = onZBoundary ? 2 : 1;
+            for(int zIndex = 0; zIndex < zCount; ++zIndex){
+                for(int xIndex = 0; xIndex < xCount; ++xIndex){
+                    if(wetPatches.contains(coordKey(
+                            eastPatch - xIndex,
+                            southPatch - zIndex)))
+                        return true;
+                }
+            }
+            return false;
+        };
+        auto sampleKey = [&coordKey, samplesPerTile](
+                int tileX, int tileZ, int sampleX, int sampleZ) {
+            // Patch coordinates use (world + 1024) / patch size. Terrain
+            // sample zero therefore aligns with tile * samplesPerTile for
+            // both 512/4 m and 256/8 m terrain.
+            return coordKey(tileX * samplesPerTile + sampleX,
+                            tileZ * samplesPerTile + sampleZ);
+        };
+        auto waterHeightForTile = [](const QVector<float> &levels,
+                                     float localX, float localZ) {
+            return WaterBedClearanceMath::bilinearWaterHeight(
+                levels.constData(), localX, localZ);
+        };
+
+        for(quint64 tileKey : wetTiles){
+            Terrain *terrain = corridorTerrain.value(tileKey, NULL);
+            const QVector<float> levels = finalTileLevels.value(tileKey);
+            if(terrain == NULL || terrain->getSampleSize() != bedSampleSize
+                    || terrain->getSampleCount() != samplesPerTile
+                    || levels.size() != 4)
+                continue;
+            const int tx = (int)(qint32)(tileKey >> 32);
+            const int tz = (int)(qint32)(tileKey & 0xffffffffu);
+            const int sampleCount = terrain->getSampleCount();
+            for(int sampleZ = 0; sampleZ <= sampleCount; ++sampleZ){
+                const float localZ = sampleZ * bedSampleSize - 1024.0f;
+                for(int sampleX = 0; sampleX <= sampleCount; ++sampleX){
+                    const float localX = sampleX * bedSampleSize - 1024.0f;
+                    const int gridX = tx * samplesPerTile + sampleX;
+                    const int gridZ = tz * samplesPerTile + sampleZ;
+                    if(!touchesWetPatch(gridX, gridZ))
+                        continue;
+                    const quint64 key = sampleKey(
+                        tx, tz, sampleX, sampleZ);
+                    const float terrainHeight =
+                        terrain->terrainData[sampleZ][sampleX];
+                    const float waterHeight = waterHeightForTile(
+                        levels, localX, localZ);
+                    auto existing = bedSamples.find(key);
+                    if(existing != bedSamples.end()){
+                        // Shared tile samples should already agree. If legacy
+                        // data does not, the highest terrain and lowest water
+                        // interpretation is the conservative, deterministic
+                        // choice and cannot erase an exposed seam post.
+                        existing.value().height = qMax(
+                            existing.value().height, terrainHeight);
+                        existing.value().waterHeight = qMin(
+                            existing.value().waterHeight, waterHeight);
+                        existing.value().newHeight = existing.value().height;
+                        continue;
+                    }
+                    BedSample sample;
+                    sample.height = terrainHeight;
+                    sample.waterHeight = waterHeight;
+                    sample.newHeight = sample.height;
+                    bedSamples.insert(key, sample);
+                }
+            }
+        }
+
+        // Terrain that stands meaningfully above water is rejected later as a
+        // protected bank/island core. A water-mask edge remains repairable but
+        // receives half clearance to soften the transition into that core.
+        const int neighborOffsets[8][2] = {
+            {-1,-1}, {0,-1}, {1,-1}, {-1,0},
+            {1,0}, {-1,1}, {0,1}, {1,1}
+        };
+        for(auto it = bedSamples.begin(); it != bedSamples.end(); ++it){
+            const int gridX = (int)(qint32)(it.key() >> 32);
+            const int gridZ = (int)(qint32)(it.key() & 0xffffffffu);
+            bool maskEdge = false;
+            for(const auto &offset : neighborOffsets){
+                if(!bedSamples.contains(coordKey(
+                        gridX + offset[0], gridZ + offset[1]))){
+                    maskEdge = true;
+                    break;
+                }
+            }
+            it.value().waterMaskEdge = maskEdge;
+        }
+
+        for(auto it = bedSamples.begin(); it != bedSamples.end(); ++it){
+            BedSample &sample = it.value();
+            const float depth = sample.waterHeight - sample.height;
+            if(depth <= -heightAboveBed || depth >= heightAboveBed)
+                continue;
+
+            const float taper = WaterBedClearanceMath::shoreTaperFactor(
+                sample.waterMaskEdge);
+            const float drop = WaterBedClearanceMath::shallowBedDrop(
+                sample.height, sample.waterHeight, heightAboveBed, taper);
+            if(drop < 0.001f)
+                continue;
+            sample.newHeight = sample.height - drop;
+            largestBedDrop = qMax(largestBedDrop, drop);
+            adjustedBedPosts++;
+        }
+    }
+
+    if(terrainOnly && adjustedBedPosts == 0){
+        emit waterPanelStatus("Terrain already meets the selected clearance.");
+        return;
+    }
+
     Undo::StateBegin();
-    for(quint64 tileKey : wetTiles){
-        Terrain *terrain = corridorTerrain.value(tileKey, NULL);
-        if(terrain == NULL)
-            continue;
-        Undo::PushTerrainWater(terrain);
-        QVector<float> levels = finalTileLevels.value(tileKey);
-        if(levels.size() == 4)
-            terrain->setWaterLevel(levels[0], levels[1], levels[2], levels[3]);
+    QSet<quint64> affectedWaterTiles = wetTiles;
+    if(!terrainOnly){
+        for(quint64 patchKey : waterPatchesToClear){
+            const int gx = (int)(qint32)(patchKey >> 32);
+            const int gz = (int)(qint32)(patchKey & 0xffffffffu);
+            affectedWaterTiles.insert(coordKey(
+                tileForWorld(patchCenter(gx)),
+                tileForWorld(patchCenter(gz))));
+        }
+        for(quint64 tileKey : affectedWaterTiles){
+            Terrain *terrain = corridorTerrain.value(tileKey, NULL);
+            if(terrain != NULL)
+                Undo::PushTerrainWater(terrain);
+        }
+        for(quint64 tileKey : wetTiles){
+            Terrain *terrain = corridorTerrain.value(tileKey, NULL);
+            const QVector<float> levels = finalTileLevels.value(tileKey);
+            if(terrain != NULL && levels.size() == 4)
+                terrain->setWaterLevel(
+                    levels[0], levels[1], levels[2], levels[3]);
+        }
     }
     int applied = 0;
-    for(quint64 patchKey : wetPatches){
-        int gx = (int)(qint32)(patchKey >> 32);
-        int gz = (int)(qint32)(patchKey & 0xffffffffu);
-        float worldX = patchCenter(gx);
-        float worldZ = patchCenter(gz);
-        int tx = tileForWorld(worldX);
-        int tz = tileForWorld(worldZ);
-        Terrain *terrain = corridorTerrain.value(coordKey(tx, tz), NULL);
-        if(terrain == NULL)
-            continue;
-        float lx = worldX - tx * 2048.0f;
-        float lz = worldZ - tz * 2048.0f;
-        terrain->toggleWaterDraw(tx, tz, lx, lz, 1);
-        applied++;
+    if(!terrainOnly){
+        for(quint64 patchKey : waterPatchesToClear){
+            const int gx = (int)(qint32)(patchKey >> 32);
+            const int gz = (int)(qint32)(patchKey & 0xffffffffu);
+            const float worldX = patchCenter(gx);
+            const float worldZ = patchCenter(gz);
+            const int tx = tileForWorld(worldX);
+            const int tz = tileForWorld(worldZ);
+            Terrain *terrain = corridorTerrain.value(coordKey(tx, tz), NULL);
+            if(terrain != NULL)
+                terrain->toggleWaterDraw(
+                    tx, tz, worldX - tx * 2048.0f,
+                    worldZ - tz * 2048.0f, -1);
+        }
+        for(quint64 patchKey : wetPatches){
+            const int gx = (int)(qint32)(patchKey >> 32);
+            const int gz = (int)(qint32)(patchKey & 0xffffffffu);
+            const float worldX = patchCenter(gx);
+            const float worldZ = patchCenter(gz);
+            const int tx = tileForWorld(worldX);
+            const int tz = tileForWorld(worldZ);
+            Terrain *terrain = corridorTerrain.value(coordKey(tx, tz), NULL);
+            if(terrain == NULL)
+                continue;
+            terrain->toggleWaterDraw(
+                tx, tz, worldX - tx * 2048.0f,
+                worldZ - tz * 2048.0f, 1);
+            applied++;
+        }
     }
-    for(quint64 tileKey : wetTiles){
-        Terrain *terrain = corridorTerrain.value(tileKey, NULL);
-        if(terrain != NULL)
-            terrain->refreshWaterShapes();
+    QSet<Terrain*> changedBedTerrains;
+    if(terrainOnly && adjustedBedPosts > 0){
+        const int sampleSize = bedSampleSize;
+        const int samplesPerTile = 2048 / sampleSize;
+        auto sampleKey = [&coordKey, samplesPerTile](
+                int tileX, int tileZ, int sampleX, int sampleZ) {
+            return coordKey(tileX * samplesPerTile + sampleX,
+                            tileZ * samplesPerTile + sampleZ);
+        };
+        for(quint64 tileKey : wetTiles){
+            Terrain *terrain = corridorTerrain.value(tileKey, NULL);
+            if(terrain == NULL || terrain->getSampleSize() != sampleSize
+                    || terrain->getSampleCount() != samplesPerTile)
+                continue;
+            const int tx = (int)(qint32)(tileKey >> 32);
+            const int tz = (int)(qint32)(tileKey & 0xffffffffu);
+            const int sampleCount = terrain->getSampleCount();
+            for(int sampleZ = 0; sampleZ <= sampleCount; ++sampleZ){
+                for(int sampleX = 0; sampleX <= sampleCount; ++sampleX){
+                    const auto sample = bedSamples.constFind(
+                        sampleKey(tx, tz, sampleX, sampleZ));
+                    if(sample == bedSamples.constEnd()
+                            || sample.value().newHeight
+                               >= terrain->terrainData[sampleZ][sampleX] - 0.0005f)
+                        continue;
+                    if(!changedBedTerrains.contains(terrain)){
+                        Undo::PushTerrainHeightMap(
+                            terrain->mojex, terrain->mojez,
+                            terrain->terrainData, terrain->getSampleCount());
+                        changedBedTerrains.insert(terrain);
+                    }
+                    terrain->terrainData[sampleZ][sampleX] =
+                        qMin(terrain->terrainData[sampleZ][sampleX],
+                             sample.value().newHeight);
+                    const float localX = sampleX * sampleSize - 1024.0f;
+                    const float localZ = sampleZ * sampleSize - 1024.0f;
+                    terrain->setErrorBias(
+                        tx, tz,
+                        qMin(localX, 1024.0f - 0.001f),
+                        qMin(localZ, 1024.0f - 0.001f), 0);
+                }
+            }
+        }
+    }
+    if(!terrainOnly){
+        for(quint64 tileKey : affectedWaterTiles){
+            Terrain *terrain = corridorTerrain.value(tileKey, NULL);
+            if(terrain != NULL)
+                terrain->refreshWaterShapes();
+        }
+    }
+    for(Terrain *terrain : changedBedTerrains){
+        terrain->setModified(true);
+        terrain->refresh();
+        Game::terrainLib->updateTerrainHeightmap(terrain);
     }
     Undo::StateEnd();
     waterScanUndoAvailable = true;
     playPlacementSound("SCOchirp.wav");
-    emit waterHelperStatus(
-        QString("Water scan complete: %1 patch(es) across %2 terrain tile(s). "
-                "Shared tile-corner levels were matched for seamless joins.")
-        .arg(applied).arg(wetTiles.size()));
+    if(terrainOnly){
+        emit waterPanelStatus(
+            QString("Terrain adjusted: %1 posts lowered.")
+            .arg(adjustedBedPosts));
+        if(Game::debugOutput)
+            qDebug() << "Water shallow-bed repair" << adjustedBedPosts
+                     << "posts; max drop" << largestBedDrop;
+    } else {
+        emit waterPanelStatus(
+            QString("Water processed: %1 patches; %2 old cleared.")
+            .arg(applied).arg(waterPatchesToClear.size()));
+    }
 }
 
 void RouteEditorGLWidget::undoWaterScan(){
     if(!waterScanUndoAvailable){
-        emit waterHelperStatus("There is no Water Helper scan waiting to be undone.");
+        emit waterPanelStatus("Nothing to undo.");
         return;
     }
     Undo::UndoLast();
@@ -5336,6 +6017,7 @@ void RouteEditorGLWidget::undoWaterScan(){
 }
 
 void RouteEditorGLWidget::removeWaterRuler(){
+    setSpecialRulerPanelControlsActive(false);
     if(route == NULL)
         return;
     enableTool("selectTool");
@@ -6126,6 +6808,23 @@ void RouteEditorGLWidget::getUnsavedInfo(QVector<QString> &items) {
     route->getUnsavedInfo(items);
 }
 
+bool RouteEditorGLWidget::saveRoute() {
+    if(route == NULL){
+        emit updStatus(QString("stat0"), QString("SAVE FAILED"));
+        return false;
+    }
+    route->save();
+    if(!route->lastSaveSucceeded()){
+        emit updStatus(QString("stat0"), QString("SAVE FAILED"));
+        return false;
+    }
+
+    polyVegBakeSession.commit();
+    timeSaved = timeNow;
+    emit updStatus(QString("stat0"), QString("Saved"));
+    return true;
+}
+
 void RouteEditorGLWidget::msg(QString text) {
     if(Game::debugOutput) qDebug() << text;
     if (text == "saveError") {
@@ -6133,13 +6832,7 @@ void RouteEditorGLWidget::msg(QString text) {
         return;
     }
     if (text == "save") {
-        route->save();
-        if(route->lastSaveSucceeded()){
-            timeSaved = timeNow;
-            emit updStatus(QString("stat0"), QString("Saved"));
-        } else {
-            emit updStatus(QString("stat0"), QString("SAVE FAILED"));
-        }
+        saveRoute();
         return;
     }
     if (text == "unselect") {

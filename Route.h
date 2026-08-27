@@ -65,7 +65,6 @@ public:
     virtual void load();
     virtual void load(QString name);
     Route(const Route& orig);
-    virtual ~Route();
     void loadAddons();
     void loadTdbData(FileBuffer *data, QString type);
     void loadTSectionData(FileBuffer *data);
@@ -107,7 +106,8 @@ public:
     int deleteAllInstances(WorldObj *selected, bool gui = true);
     int deleteAllPolyVegBakes(bool gui = true);
     void undoPlaceObj(int x, int y, int UiD);
-    void removeTrackFromTDB(WorldObj* obj);
+    bool canRemoveTrackFromTDB(WorldObj* obj, bool reportError = true) const;
+    bool removeTrackFromTDB(WorldObj* obj);
     void fillWorldObjectsByTrackItemId(QVector<WorldObj*> &objects, int tdbId, int id);
     void fillWorldObjectsByTrackItemIds(QHash<int, QVector<WorldObj*>> &objects, int tdbId);
     void findSimilar(WorldObj* obj, GroupObj* group, float *playerT, int tileRadius = 0);

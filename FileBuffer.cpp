@@ -170,6 +170,8 @@ bool FileBuffer::insertFile(QString incPath, QString alternativePath, QString* l
         *loaded = incPath;
     }
     std::unique_ptr<FileBuffer> incData(ReadFile::readRAW(&file));
+    if (!incData)
+        return false;
     incData->toUtf16();
     int remaining = length-off;
     unsigned char * newData = new unsigned char[incData->length + remaining ];

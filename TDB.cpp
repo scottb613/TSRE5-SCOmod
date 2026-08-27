@@ -9,6 +9,7 @@
  */
 
 #include "TDB.h"
+#include "TrackDbFormatValidator.h"
 #include <QDebug>
 #include <array>
 #include <cmath>
@@ -147,6 +148,16 @@ bool vectorSectionOwnerIsMissing(const float *sectionData) {
             ownerX, ownerY, (unsigned int)sectionData[4]) == NULL;
 }
 
+bool vectorSectionOwnerIsDyntrack(const float *sectionData) {
+    if(Game::currentRoute == NULL)
+        return false;
+
+    WorldObj *owner = Game::currentRoute->findWorldObjByUid(
+            (int)sectionData[2], -(int)sectionData[3],
+            (unsigned int)sectionData[4]);
+    return dynamic_cast<DynTrackObj*>(owner) != NULL;
+}
+
 }
 
 TDB::TDB(TSectionDAT* tsection, bool road) {
@@ -185,6 +196,8 @@ void TDB::loadTdb(){
         return;
     FileBuffer* data = ReadFile::read(&file);
     file.close();
+    if (data == nullptr)
+        return;
     data->toUtf16();
     data->skipBOM();
     ParserX::NextLine(data);
@@ -198,7 +211,12 @@ void TDB::loadTdb(){
     
     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
         if (sh == "trackdb") {
-            loadUtf16Data(data);
+            if(!loadUtf16Data(data)){
+                qWarning() << "Track database rejected because its declared"
+                           << "counts or pins are invalid:" << path;
+                delete data;
+                return;
+            }
             ParserX::SkipToken(data);
             continue;
             
@@ -226,25 +244,56 @@ void TDB::loadTdb(){
         //checkSignals();
     }  
     //save();
+    delete data;
     loaded = true;
 }
 
-void TDB::loadUtf16Data(FileBuffer *data){
+bool TDB::loadUtf16Data(FileBuffer *data){
     int j, ii, uu;
     float xx;
     int t;
     bool ok;
     QString sh;
+    qint64 totalSections = 0;
+    qint64 totalItemRefs = 0;
+    auto reject = [this](const QString &message){
+        qWarning() << "Track database parse rejected:" << message;
+        for(auto &entry : trackNodes)
+            delete entry.second;
+        trackNodes.clear();
+        for(auto &entry : trackItems)
+            delete entry.second;
+        trackItems.clear();
+        iTRnodes = 0;
+        iTRitems = 0;
+        return false;
+    };
             while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
             // qDebug() << "TDB122: " << sh;    
                 if(sh == "tracknodes"){
-                    iTRnodes = (int) ParserX::GetNumber(data); //odczytanie ilosci sciezek
+                    QString validationError;
+                    if(!TrackDbFormatValidator::integer(
+                            ParserX::GetNumber(data), 0,
+                            TrackDbFormatValidator::MaximumNodes,
+                            iTRnodes, &validationError))
+                        return reject(validationError);
+                    if(!TrackDbFormatValidator::nodeCount(iTRnodes, &validationError))
+                        return reject(validationError);
                     if(Game::debugOutput) qDebug() << "TDB TrackNodes count " << iTRnodes;
 
                     int prevnode = 1;
                     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
                         if(sh == "tracknode"){
-                            t = (int) ParserX::GetNumber(data); // odczytanie numeru sciezki
+                            if(!TrackDbFormatValidator::integer(
+                                    ParserX::GetNumber(data), 1, iTRnodes,
+                                    t, &validationError))
+                                return reject(validationError);
+                            if(!TrackDbFormatValidator::nodeId(
+                                    t, iTRnodes, &validationError))
+                                return reject(validationError);
+                            if(trackNodes.find(t) != trackNodes.end()
+                                    && trackNodes[t] != NULL)
+                                return reject(QString("Duplicate TrackNode ID %1.").arg(t));
                             trackNodes[t] = new TRnode();
                             if(t > prevnode + 1)
                                 qDebug() << "TDB132: Node out of sequence: expecting"
@@ -260,16 +309,24 @@ void TDB::loadUtf16Data(FileBuffer *data){
                                     trackNodes[t]->typ = 1; //typ vector 
                                     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
                                         if(sh == "trvectorsections"){
-                                            uu = (int) ParserX::GetNumberInside(data, &ok);
+                                            const float countValue = ParserX::GetNumberInside(data, &ok);
+                                            if(!ok || !TrackDbFormatValidator::integer(
+                                                    countValue, 0,
+                                                    TrackDbFormatValidator::MaximumSectionsPerNode,
+                                                    uu, &validationError)
+                                                    || !TrackDbFormatValidator::sectionCount(
+                                                    uu, totalSections, &validationError))
+                                                return reject(ok ? validationError
+                                                    : QString("Missing vector-section count."));
                                             if(ok){
+                                                totalSections += uu;
                                                 trackNodes[t]->iTrv = uu;
                                                 trackNodes[t]->trVectorSection = new TRnode::TRSect[uu]; // przydzielenie pamieci dla sciezki
                                                 for (j = 0; j < uu; j++) {
                                                     for (ii = 0; ii < 16; ii++) {
                                                         xx = ParserX::GetNumber(data);
-                                                        if(std::isnan(xx)){
-                                                            if(Game::debugOutput) qDebug() << "#TrackDB: NAN found in tracknode: "<<t;
-                                                        }
+                                                        if(!std::isfinite(xx))
+                                                            return reject(QString("Non-finite TrackNode %1 vector value.").arg(t));
                                                         trackNodes[t]->trVectorSection[j].param[ii] = xx;
                                                     }
                                                 }
@@ -278,12 +335,26 @@ void TDB::loadUtf16Data(FileBuffer *data){
                                             continue;
                                         }
                                         if(sh == "tritemrefs"){
-                                            uu = (int) ParserX::GetNumber(data);
+                                            if(!TrackDbFormatValidator::integer(
+                                                    ParserX::GetNumber(data), 0,
+                                                    TrackDbFormatValidator::MaximumItemRefsPerNode,
+                                                    uu, &validationError))
+                                                return reject(validationError);
+                                            if(!TrackDbFormatValidator::itemRefCount(
+                                                    uu, totalItemRefs, &validationError))
+                                                return reject(validationError);
+                                            totalItemRefs += uu;
                                             trackNodes[t]->iTri = uu;
                                             trackNodes[t]->trItemRef = new int[uu]; // przydzielenie pamieci dla sciezki
                                             if(uu > 0){
                                                 for (j = 0; j < uu; j++) {
-                                                    trackNodes[t]->trItemRef[j] = ParserX::GetNumber(data);
+                                                    int itemId = 0;
+                                                    if(!TrackDbFormatValidator::integer(
+                                                            ParserX::GetNumber(data), 0,
+                                                            int(TrackDbFormatValidator::MaximumItemRefsTotal),
+                                                            itemId, &validationError))
+                                                        return reject(validationError);
+                                                    trackNodes[t]->trItemRef[j] = itemId;
                                                 }
                                                 ParserX::SkipToken(data);
                                             }
@@ -298,19 +369,51 @@ void TDB::loadUtf16Data(FileBuffer *data){
                                 }
                                 if(sh == "trjunctionnode"){
                                     trackNodes[t]->typ = 2; //typ junction
-                                    trackNodes[t]->args[0] = ParserX::GetNumber(data);
-                                    trackNodes[t]->args[1] = ParserX::GetNumber(data);
-                                    trackNodes[t]->args[2] = ParserX::GetNumber(data);
+                                    for(int argument = 0; argument < 3; ++argument){
+                                        if(!TrackDbFormatValidator::integer(
+                                                ParserX::GetNumber(data),
+                                                std::numeric_limits<int>::min(),
+                                                std::numeric_limits<int>::max(),
+                                                trackNodes[t]->args[argument],
+                                                &validationError))
+                                            return reject(validationError);
+                                    }
                                     ParserX::SkipToken(data);
                                     continue;
                                 }
                                 if(sh == "trpins"){
-                                    trackNodes[t]->TrP1 = (int) ParserX::GetNumber(data);
-                                    trackNodes[t]->TrP2 = (int) ParserX::GetNumber(data);
+                                    if(!TrackDbFormatValidator::integer(
+                                            ParserX::GetNumber(data), 0, 3,
+                                            trackNodes[t]->TrP1, &validationError)
+                                            || !TrackDbFormatValidator::integer(
+                                            ParserX::GetNumber(data), 0, 3,
+                                            trackNodes[t]->TrP2, &validationError))
+                                        return reject(validationError);
+                                    if(!TrackDbFormatValidator::pinCounts(
+                                            trackNodes[t]->typ,
+                                            trackNodes[t]->TrP1,
+                                            trackNodes[t]->TrP2,
+                                            &validationError))
+                                        return reject(validationError);
 
-                                    for (int i = 0; i < (trackNodes[t]->TrP1 + trackNodes[t]->TrP2); i++) {
-                                        trackNodes[t]->TrPinS[i] = (int) ParserX::GetNumber(data);
-                                        trackNodes[t]->TrPinK[i] = (int) ParserX::GetNumber(data);
+                                    const int pinCount = trackNodes[t]->TrP1
+                                        + trackNodes[t]->TrP2;
+                                    for (int i = 0; i < pinCount; i++) {
+                                        int target = 0;
+                                        int direction = 0;
+                                        if(!TrackDbFormatValidator::integer(
+                                                ParserX::GetNumber(data), 0, iTRnodes,
+                                                target, &validationError)
+                                                || !TrackDbFormatValidator::integer(
+                                                ParserX::GetNumber(data), 0, 1,
+                                                direction, &validationError))
+                                            return reject(validationError);
+                                        if(!TrackDbFormatValidator::pin(
+                                                target, direction, iTRnodes,
+                                                &validationError))
+                                            return reject(validationError);
+                                        trackNodes[t]->TrPinS[i] = target;
+                                        trackNodes[t]->TrPinK[i] = direction;
                                     }
                                     ParserX::SkipToken(data);
                                     ParserX::SkipToken(data);
@@ -319,9 +422,8 @@ void TDB::loadUtf16Data(FileBuffer *data){
                                 if(sh == "uid"){
                                     for (ii = 0; ii < 12; ii++) {
                                         xx = ParserX::GetNumber(data);
-                                        if(std::isnan(xx)){
-                                            if(Game::debugOutput) qDebug() << "#TrackDB: NAN found in tracknode: "<<t;
-                                        }
+                                        if(!std::isfinite(xx))
+                                            return reject(QString("Non-finite TrackNode %1 UiD value.").arg(t));
                                         trackNodes[t]->UiD[ii] = xx;
                                     }
                                     ParserX::SkipToken(data);
@@ -331,6 +433,13 @@ void TDB::loadUtf16Data(FileBuffer *data){
                                 //trackNodes[t] = NULL;
                                 ParserX::SkipToken(data);
                             }
+                            if(!TrackDbFormatValidator::pinCounts(
+                                    trackNodes[t]->typ,
+                                    trackNodes[t]->TrP1,
+                                    trackNodes[t]->TrP2,
+                                    &validationError))
+                                return reject(QString("TrackNode %1: %2")
+                                    .arg(t).arg(validationError));
                             ParserX::SkipToken(data);
                             continue;
                         }
@@ -341,12 +450,26 @@ void TDB::loadUtf16Data(FileBuffer *data){
                     continue;
                 }
                 if(sh == "serial"){
-                    this->serial = (int) ParserX::GetNumber(data);
+                    QString validationError;
+                    if(!TrackDbFormatValidator::integer(
+                            ParserX::GetNumber(data),
+                            std::numeric_limits<int>::min(),
+                            std::numeric_limits<int>::max(),
+                            serial, &validationError))
+                        return reject(validationError);
                     ParserX::SkipToken(data);
                     continue;
                 }
                 if(sh == "tritemtable"){
-                    iTRitems = (int) ParserX::GetNumber(data); //odczytanie ilosci sciezek
+                    QString validationError;
+                    if(!TrackDbFormatValidator::integer(
+                            ParserX::GetNumber(data), 0,
+                            int(TrackDbFormatValidator::MaximumItemRefsTotal),
+                            iTRitems, &validationError))
+                        return reject(validationError);
+                    if(!TrackDbFormatValidator::itemRefCount(
+                            iTRitems, 0, &validationError))
+                        return reject(validationError);
                     TRitem* nowy;
                     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
                         //qDebug() <<"ssh1 "<< sh;
@@ -365,6 +488,15 @@ void TDB::loadUtf16Data(FileBuffer *data){
                             ParserX::SkipToken(data);
                         }
 
+                        if(nowy->trItemId < 0 || nowy->trItemId > iTRitems){
+                            delete nowy;
+                            return reject("Track-item ID is outside the declared item range.");
+                        }
+                        if(trackItems.find(nowy->trItemId) != trackItems.end()
+                                && trackItems[nowy->trItemId] != NULL){
+                            delete nowy;
+                            return reject("Duplicate track-item ID.");
+                        }
                         this->trackItems[nowy->trItemId] = nowy;
                         ParserX::SkipToken(data);
                         continue;
@@ -375,6 +507,46 @@ void TDB::loadUtf16Data(FileBuffer *data){
                 if(Game::debugOutput) qDebug() << "#TDB trackdb undefined token " << sh;
                 ParserX::SkipToken(data);
             }
+
+    for(const auto &entry : trackNodes){
+        TRnode *node = entry.second;
+        if(node == NULL)
+            continue;
+        const int pinCount = node->TrP1 + node->TrP2;
+        for(int pin = 0; pin < pinCount; ++pin){
+            const int target = node->TrPinS[pin];
+            if(target == 0)
+                continue;
+            auto targetIt = trackNodes.find(target);
+            if(targetIt == trackNodes.end() || targetIt->second == NULL)
+                return reject(QString("TrackNode %1 references missing node %2.")
+                    .arg(entry.first).arg(target));
+        }
+        if(node->typ != 1)
+            continue;
+        for(int section = 0; section < node->iTrv; ++section){
+            int sectionId = 0;
+            QString validationError;
+            if(!TrackDbFormatValidator::integer(
+                    node->trVectorSection[section].param[0], 0,
+                    std::numeric_limits<int>::max(), sectionId,
+                    &validationError))
+                return reject(QString("TrackNode %1 has an invalid section ID.")
+                    .arg(entry.first));
+            auto sectionIt = tsection->sekcja.find(sectionId);
+            if(sectionId < 0 || sectionIt == tsection->sekcja.end()
+                    || sectionIt->second == NULL)
+                return reject(QString("TrackNode %1 references missing section %2.")
+                    .arg(entry.first).arg(sectionId));
+        }
+        for(int ref = 0; ref < node->iTri; ++ref){
+            const int itemId = node->trItemRef[ref];
+            if(itemId < 0 || itemId > iTRitems)
+                return reject(QString("TrackNode %1 has out-of-range item reference %2.")
+                    .arg(entry.first).arg(itemId));
+        }
+    }
+    return true;
 }
 
 void TDB::updateUiDs(QVector<int*> &trackObjUpdates, int startNode){
@@ -439,6 +611,8 @@ void TDB::loadTit(){
         return;
     FileBuffer* bufor = ReadFile::read(&file);
     file.close();
+    if (bufor == nullptr)
+        return;
     bufor->toUtf16();
     bufor->skipBOM();
     ParserX::NextLine(bufor);
@@ -1034,7 +1208,7 @@ int TDB::appendTrack(int id, int* ends, int r, int sect, int uid) {
         } else {
             std::copy(n->trVectorSection, n->trVectorSection + n->iTrv - 1, newV);
         }
-        delete n->trVectorSection;
+        delete[] n->trVectorSection;
         n->trVectorSection = newV;
         //qDebug() <<"sect"<< sect;
         float dlugosc = this->tsection->sekcja[sect]->getDlugosc();
@@ -1401,8 +1575,8 @@ int TDB::joinVectorSections(int id1, int id2) {
     std::copy(section2->trVectorSection, section2->trVectorSection + section2->iTrv, newV + section1->iTrv);
     section1->iTrv = section1->iTrv + section2->iTrv;
     
-    delete section1->trVectorSection;
-    delete section2->trVectorSection;
+    delete[] section1->trVectorSection;
+    delete[] section2->trVectorSection;
     
     
     section1->trVectorSection = newV;
@@ -1590,7 +1764,7 @@ int TDB::splitVectorSection(int id, int j){
     newNode->TrPinS[0] = vecId;
     newNode->TrPinK[0] = 1;
     
-    delete vect->trVectorSection;
+    delete[] vect->trVectorSection;
     vect->trVectorSection = newV;
     
     updateTrNode(id);
@@ -1662,8 +1836,12 @@ void TDB::deleteJunction(int id){
 
 void TDB::deleteVectorSection(int id){
     TRnode* vect = trackNodes[id];
-    TRnode* end1 = trackNodes[vect->TrPinS[0]];
-    TRnode* end2 = trackNodes[vect->TrPinS[1]];
+    if(vect == NULL || vect->iTri > 0)
+        return;
+    const int endNId1 = vect->TrPinS[0];
+    const int endNId2 = vect->TrPinS[1];
+    TRnode* end1 = trackNodes[endNId1];
+    TRnode* end2 = trackNodes[endNId2];
     
     deleteAllTrItemsFromVectorSection(id);
     
@@ -1671,24 +1849,24 @@ void TDB::deleteVectorSection(int id){
     trackNodes[id] = NULL;
     
     if(end1->typ == 0){
-        delete trackNodes[vect->TrPinS[0]];
-        trackNodes[vect->TrPinS[0]] = NULL;
+        delete trackNodes[endNId1];
+        trackNodes[endNId1] = NULL;
     } else if (end1->typ == 2) {
         end1->podmienTrPin(id, 0);
         end1->setTrPinK(0, 0);
     } 
     
     if(end2->typ == 0){
-        delete trackNodes[vect->TrPinS[1]];
-        trackNodes[vect->TrPinS[1]] = NULL;
+        delete trackNodes[endNId2];
+        trackNodes[endNId2] = NULL;
     } else if (end2->typ == 2) {
         end2->podmienTrPin(id, 0);
         end2->setTrPinK(0, 0);
     }
     
     updateTrNode(id);
-    updateTrNode(vect->TrPinS[0]);
-    updateTrNode(vect->TrPinS[1]);
+    updateTrNode(endNId1);
+    updateTrNode(endNId2);
     
 }
 
@@ -1714,6 +1892,8 @@ bool TDB::deleteAllTrItemsFromVectorSection(int id){
 
 bool TDB::deleteFromVectorSection(int id, int j){
     TRnode* vect = trackNodes[id];
+    if(vect == NULL || j < 0 || j >= vect->iTrv || vect->iTri > 0)
+        return false;
     if(vect->iTrv == 1){
         deleteVectorSection(id);
         return false;
@@ -1731,26 +1911,6 @@ bool TDB::deleteFromVectorSection(int id, int j){
     //deleteAllTrItemsFromVectorSection(id);
     TRnode::TRSect *newV = new TRnode::TRSect[vect->iTrv - 1];
     if(j == 0){
-        // move & check items
-        if(vect->iTri > 0){
-            float sectDlugosc = this->tsection->sekcja[vect->trVectorSection[0].param[0]]->getDlugosc();
-            TRitem* trit;
-            for(int i = 0; i < vect->iTri; i++){
-                trit = this->trackItems[vect->trItemRef[i]];
-                if(trit == NULL) 
-                    continue;
-                trit->addToTrackPos(-sectDlugosc);
-                if(trit->getTrackPosition() < 0){
-                    if(Game::debugOutput) qDebug() << "delete item? - before section";
-                    // item delete
-                    if(Game::debugOutput) qDebug() << "item delete " << trit->trItemId;
-                    this->deleteTrItem(trit->trItemId);
-                    i--;
-                }
-                updateTrItem(vect->trItemRef[i]);
-            }
-        }
-        
         std::copy(vect->trVectorSection + 1, vect->trVectorSection + vect->iTrv, newV);
         
         if(end1->typ == 2){
@@ -1785,24 +1945,6 @@ bool TDB::deleteFromVectorSection(int id, int j){
             
             
     } else if(j == vect->iTrv - 1) {
-        // check items
-        if(vect->iTri > 0){
-            float vectDlugosc = this->getVectorSectionLengthToIdx(id, j);
-            TRitem* trit;
-            for(int i = 0; i < vect->iTri; i++){
-                trit = this->trackItems[vect->trItemRef[i]];
-                if(trit == NULL) 
-                    continue;
-                if(trit->getTrackPosition() > vectDlugosc){
-                    if(Game::debugOutput) qDebug() << "delete item? - behind section";
-                    // item delete
-                    if(Game::debugOutput) qDebug() << "item delete " << trit->trItemId;
-                    this->deleteTrItem(trit->trItemId);
-                    i--;
-                }
-            }
-        }
-        
         std::copy(vect->trVectorSection , vect->trVectorSection + vect->iTrv - 1, newV);
         if(end2->typ == 2){
             end2->podmienTrPin(id, 0);
@@ -1835,7 +1977,7 @@ bool TDB::deleteFromVectorSection(int id, int j){
     }
     
     vect->iTrv -= 1;
-    delete vect->trVectorSection;
+    delete[] vect->trVectorSection;
     vect->trVectorSection = newV;
     updateTrNode(id);
     if(vid >= 0)
@@ -2342,7 +2484,28 @@ bool TDB::placeTrack(int x, int z, float* p, float* q, int sectionIdx, int uid, 
     return true;
 }
 
+bool TDB::hasTrackItemsForTrack(int x, int y, int UiD) const {
+    const int databaseY = -y;
+    for(int i = 1; i <= iTRnodes; ++i){
+        auto nodeIt = trackNodes.find(i);
+        if(nodeIt == trackNodes.end() || nodeIt->second == NULL)
+            continue;
+        TRnode *node = nodeIt->second;
+        if(node->typ != 1 || node->trVectorSection == NULL || node->iTri <= 0)
+            continue;
+        for(int j = 0; j < node->iTrv; ++j){
+            const float *section = node->trVectorSection[j].param;
+            if(section[2] == x && section[3] == databaseY
+                    && section[4] == UiD)
+                return true;
+        }
+    }
+    return false;
+}
+
 bool TDB::removeTrackFromTDB(int x, int y, int UiD){
+    if(hasTrackItemsForTrack(x, y, UiD))
+        return false;
     y = -y;
     if(Game::debugOutput) qDebug() << "Removing from TDB: " << x << " " << y << " " << UiD; 
     
@@ -2941,7 +3104,10 @@ void TDB::renderLines(GLUU *gluu, float* playerT, float) {
                             n->trVectorSection[i].param[15]
                             );
                     //if (sqrt(p.x * p.x + p.z * p.z) > Game::objectLod) continue;
-                    drawLine(gluu, ptr, p, o, (int) n->trVectorSection[i].param[0]);
+                    drawLine(gluu, ptr, p, o,
+                            (int)n->trVectorSection[i].param[0],
+                            vectorSectionOwnerIsDyntrack(
+                                    n->trVectorSection[i].param));
                 }
             } /*else if (n.typ == 0 || n.typ == 2) {
                 float x = (n.UiD[4] - aktwx)*2048 + n.UiD[6];
@@ -3143,31 +3309,39 @@ void TDB::getLine(float* &ptr, Vector3f p, Vector3f o, int idx, int id, int vid,
     }
 }
 
-void TDB::drawLine(GLUU *gluu, float* &ptr, Vector3f p, Vector3f o, int idx) {
+void TDB::drawLine(GLUU *gluu, float* &ptr, Vector3f p, Vector3f o, int idx,
+        bool useCompleteGradeFrame) {
     Q_UNUSED(gluu);
 
     float matrix[16];
-    float q[4];
-    q[0] = q[1] = q[2] = 0; q[3] = 1;
-    float rot[3];
-    rot[0] = M_PI;
-    rot[1] = -o.y;
-    rot[2] = 0;
+    if(useCompleteGradeFrame){
+        // Dynamic Track serializes the complete subsection frame. Reproduce
+        // the same Z/X/Y transform used to advance its TDB endpoints; the
+        // legacy quaternion shortcut loses the grade as a curved parent plane
+        // changes heading.
+        Mat4::identity(matrix);
+        Mat4::translate(matrix, matrix, p.x, p.y, p.z);
+        Mat4::rotateY(matrix, matrix, -(float)M_PI - o.y);
+        Mat4::rotateX(matrix, matrix, o.x);
+        Mat4::rotate(matrix, matrix, -o.z, 0, 0, 1);
+    } else {
+        float q[4];
+        q[0] = q[1] = q[2] = 0;
+        q[3] = 1;
+        float rot[3];
+        rot[0] = M_PI;
+        rot[1] = -o.y;
+        rot[2] = 0;
 
-    Quat::fromRotationXYZ(q, rot);
-    Mat4::fromRotationTranslation(matrix, q, reinterpret_cast<float *> (&p));
-    //Mat4::rotate(matrix, matrix, -o.y+M_PI, 0, 1, 0);
-    Mat4::rotate(matrix, matrix, o.x, 1, 0, 0);
-    Mat4::rotate(matrix, matrix, o.z, 0, 0, 1);
+        Quat::fromRotationXYZ(q, rot);
+        Mat4::fromRotationTranslation(
+                matrix, q, reinterpret_cast<float *>(&p));
+        Mat4::rotate(matrix, matrix, o.x, 1, 0, 0);
+        Mat4::rotate(matrix, matrix, o.z, 0, 0, 1);
+    }
 
-    float point1[3];
-    point1[0] = 0;
-    point1[1] = 0;
-    point1[2] = 0;
-    float point2[3];
-    point2[0] = 0;
-    point2[1] = 0;
-    point2[2] = 0;
+    float point1[3] = { 0, 0, 0 };
+    float point2[3] = { 0, 0, 0 };
     Vec3::transformMat4(point1, point1, matrix);
     Vec3::transformMat4(point2, point2, matrix);
     point2[1] += lwireLineHeight;
@@ -4071,6 +4245,8 @@ void TDB::fixTDBVectorElevation(TRnode *n){
 }
 
 void TDB::deleteVectorSection(int x, int y, int UiD){
+    if(hasTrackItemsForTrack(x, y, UiD))
+        return;
     y = -y;
     
     TRnode *n;
@@ -4360,7 +4536,20 @@ int TDB::updateTrNodeData(FileBuffer *data){
     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
         if(Game::debugOutput) qDebug() << "TDB3544: "<< sh;
         if (sh == ("id")) {
-            nid = ParserX::GetNumber(data);
+            QString validationError;
+            if(!TrackDbFormatValidator::integer(
+                    ParserX::GetNumber(data), 1,
+                    TrackDbFormatValidator::MaximumNodes,
+                    nid, &validationError)){
+                qWarning() << "Rejected TrackNode update ID:" << validationError;
+                return 0;
+            }
+            if(!TrackDbFormatValidator::nodeId(
+                    nid, TrackDbFormatValidator::MaximumNodes,
+                    &validationError)){
+                qWarning() << "Rejected TrackNode update ID:" << validationError;
+                return 0;
+            }
             ParserX::SkipToken(data);
             continue;
         }
@@ -4373,7 +4562,12 @@ int TDB::updateTrNodeData(FileBuffer *data){
         if (sh == ("tracknode")) {
             //objloaded = false;
             nowy = new TRnode();
-            nowy->loadUtf16Data(data);
+            if(!nowy->loadUtf16Data(data)){
+                delete nowy;
+                qWarning() << "Rejected invalid TrackNode network update" << nid;
+                ParserX::SkipToken(data);
+                continue;
+            }
             trackNodes[nid] = nowy;
             ParserX::SkipToken(data);
             continue;

@@ -185,12 +185,8 @@ bool parseVegetation(
     entry.id = requiredString(object, "id", context, errors);
     entry.name = requiredString(object, "name", context, errors);
     entry.shape = requiredString(object, "shape", context, errors);
-    entry.stratum = requiredString(object, "stratum", context, errors).toLower();
     if(!validId(entry.id))
         errors.append(context + ": 'id' contains unsupported characters.");
-    if(!QSet<QString>({"canopy", "understory", "ground", "edge"})
-            .contains(entry.stratum))
-        errors.append(context + ": unsupported stratum '" + entry.stratum + "'.");
 
     requiredNumber(object, "proportion", context, entry.proportion, errors);
     if(entry.proportion <= 0.0)
@@ -208,15 +204,6 @@ bool parseVegetation(
         if(entry.hasPlantingDepth && entry.plantingDepthMetres < 0.0)
             errors.append(context + ": 'plantingDepthMetres' cannot be negative.");
     }
-    if(object.contains("maximumSlopeDegrees")) {
-        entry.hasMaximumSlope = requiredNumber(object, "maximumSlopeDegrees",
-            context, entry.maximumSlopeDegrees, errors);
-        if(entry.hasMaximumSlope
-                && (entry.maximumSlopeDegrees < 0.0
-                    || entry.maximumSlopeDegrees > 90.0))
-            errors.append(context + ": 'maximumSlopeDegrees' must be in 0..90.");
-    }
-
     const QFileInfo shapeInfo(entry.shape);
     if(shapeInfo.fileName() != entry.shape
             || entry.shape.contains('/') || entry.shape.contains('\\')
@@ -301,20 +288,15 @@ ForestCatalogLoadResult ForestDefinitionLoader::loadFile(
 
         const QJsonObject defaults = object.value("defaults").toObject();
         const QString defaultsContext = context + ".defaults";
+        // Accept retired keys silently so older route catalogs remain readable.
         warnUnknown(defaults,
             {"widthMetres", "densityPerSquareKilometre", "terrainDepthMetres",
              "variationScale", "trackClearanceMetres", "roadClearanceMetres",
              "maximumTrees"},
             defaultsContext, result.warnings);
-        requiredNumber(defaults, "widthMetres", defaultsContext,
-            recipe.defaultWidthMetres, result.errors);
         requiredNumber(defaults, "densityPerSquareKilometre", defaultsContext,
             recipe.defaultDensityPerSquareMetre, result.errors);
         recipe.defaultDensityPerSquareMetre /= 1000000.0;
-        requiredNumber(defaults, "terrainDepthMetres", defaultsContext,
-            recipe.defaultTerrainDepthMetres, result.errors);
-        requiredNumber(defaults, "variationScale", defaultsContext,
-            recipe.defaultVariationScale, result.errors);
         requiredNumber(defaults, "trackClearanceMetres", defaultsContext,
             recipe.defaultTrackClearanceMetres, result.errors);
         requiredNumber(defaults, "roadClearanceMetres", defaultsContext,
@@ -323,22 +305,17 @@ ForestCatalogLoadResult ForestDefinitionLoader::loadFile(
         if(defaults.contains("maximumTrees"))
             requiredNumber(defaults, "maximumTrees", defaultsContext,
                 defaultMaximumTrees, result.errors);
-        if(recipe.defaultWidthMetres <= 0.0
-                || recipe.defaultDensityPerSquareMetre <= 0.0
-                || recipe.defaultTerrainDepthMetres < 0.0
-                || recipe.defaultVariationScale < 0.0
-                || recipe.defaultVariationScale > 1.0
+        if(recipe.defaultDensityPerSquareMetre <= 0.0
                 || recipe.defaultTrackClearanceMetres < 0.0
                 || recipe.defaultRoadClearanceMetres < 0.0)
             result.errors.append(defaultsContext + ": defaults are outside safe ranges.");
 
         const QJsonObject limits = object.value("limits").toObject();
         const QString limitsContext = context + ".limits";
+        // widthMetres is retained only as an ignored legacy key.
         warnUnknown(limits,
             {"widthMetres", "densityPerSquareKilometre", "maximumTrees"},
             limitsContext, result.warnings);
-        requiredRange(limits, "widthMetres", limitsContext,
-            recipe.widthLimitsMetres, result.errors, true);
         requiredRange(limits, "densityPerSquareKilometre", limitsContext,
             recipe.densityLimitsPerSquareMetre, result.errors, true);
         recipe.densityLimitsPerSquareMetre.minimum /= 1000000.0;
@@ -358,8 +335,6 @@ ForestCatalogLoadResult ForestDefinitionLoader::loadFile(
                 || recipe.defaultMaximumTrees > recipe.maximumMaximumTrees)
             result.errors.append(context
                 + ": default 'maximumTrees' is outside its limits.");
-        validateDefaultInsideRange(recipe.defaultWidthMetres,
-            recipe.widthLimitsMetres, "widthMetres", context, result.errors);
         validateDefaultInsideRange(recipe.defaultDensityPerSquareMetre,
             recipe.densityLimitsPerSquareMetre, "densityPerSquareKilometre",
             context, result.errors);
@@ -376,20 +351,11 @@ ForestCatalogLoadResult ForestDefinitionLoader::loadFile(
             recipe.edgeFeatherMetres, result.errors);
         requiredNumber(distribution, "minimumSeparationMetres", distributionContext,
             recipe.minimumSeparationMetres, result.errors);
-        if(!distribution.value("preventFootprintOverlap").isBool())
-            result.errors.append(distributionContext
-                + ": 'preventFootprintOverlap' must be boolean.");
-        recipe.preventFootprintOverlap =
-            distribution.value("preventFootprintOverlap").toBool();
         if(recipe.maximumSlopeDegrees < 0.0 || recipe.maximumSlopeDegrees > 90.0
                 || recipe.edgeFeatherMetres < 0.0
                 || recipe.minimumSeparationMetres <= 0.0)
             result.errors.append(distributionContext
                 + ": distribution values are outside safe ranges.");
-        if(!recipe.preventFootprintOverlap)
-            result.errors.append(distributionContext
-                + ": version 1 requires global footprint-overlap prevention.");
-
         if(object.contains("osm"))
             parseOsm(object.value("osm").toObject(), recipe,
                 context + ".osm", result.errors, result.warnings);

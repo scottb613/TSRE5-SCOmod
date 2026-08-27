@@ -4,6 +4,34 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.14 community source checkpoint
+
+- CMakeLists.txt / CMakePresets.json / vcpkg.json
+- TSRE5_resource.rc / Game.cpp
+- TerrainGridMath.h / TerrainTrackMath.h / WaterBedClearanceMath.h
+- Terrain*.cpp / Terrain*.h / Tile.cpp / Tile.h / TFile.cpp / TFile.h / Undo.cpp / Undo.h
+- Route.cpp / Route.h / RouteEditorGLWidget.cpp / RouteEditorGLWidget.h
+- RouteEditorWindow.cpp / RouteEditorWindow.h / RouteSaveTransaction.cpp / RouteSaveTransaction.h
+- PolyVegHelper.cpp / PolyVegHelper.h / PolyVegObject.cpp / PolyVegObject.h
+- PolyVegSchemaEditor.cpp / PolyVegSchemaEditor.h
+- ForestDefinition.cpp / ForestDefinition.h / ForestGenerator.cpp / ForestGenerator.h
+- ForestPatchBaker.cpp / ForestPatchBaker.h / ForestBakeManifest.cpp / ForestBakeManifest.h
+- ForestOsmCache.cpp / ForestOsmCache.h
+- AceFormatValidator.cpp / AceFormatValidator.h / AceLib.cpp / AceLib.h
+- DdsDecoder.cpp / DdsDecoder.h / DdsLib.cpp / DdsLib.h
+- TrackDbFormatValidator.cpp / TrackDbFormatValidator.h / TDB.cpp / TDB.h / TRnode.cpp / TRnode.h
+- ReadFile.cpp / ReadFile.h / FileBuffer.cpp
+- SFile.cpp / SFile.h / StaticObj.cpp / StaticObj.h / DynTrackObj.cpp / DynTrackObj.h
+- PropertiesTerrain.cpp / PropertiesTerrain.h / TerrainTools.cpp / TerrainTools.h
+- GuiFunct.cpp / GuiFunct.h / GenXControls.qrc / SettingsDialog.cpp
+- tests/*.cpp / TSREvcWIP/tests/*.cpp / tools/BakeForestPatch.cpp
+- scripts/Invoke-CMake.ps1 / scripts/Invoke-RouteRegression.ps1 / scripts/Prepare-SourceRelease.ps1
+- AAA_Compile.ps1
+
+The v0.14 public manifest is authoritative for the complete file set. This
+consolidated ledger lists the principal implementation groups rather than
+duplicating every source-file touch from the detailed development log.
+
 v0.13 community source checkpoint
 
 - GuiFunct.cpp / GuiFunct.h

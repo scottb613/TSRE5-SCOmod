@@ -373,9 +373,6 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     QObject::connect(&markerList, SIGNAL(textActivated(QString)), this, SLOT(mkrListSelected(QString)));
     QObject::connect(&txBox, SIGNAL(textEdited(QString)), this, SLOT(xyChanged(QString)));
     QObject::connect(&tyBox, SIGNAL(textEdited(QString)), this, SLOT(xyChanged(QString)));
-    QObject::connect(&xBox, SIGNAL(textEdited(QString)), this, SLOT(xyChanged(QString)));
-    QObject::connect(&yBox, SIGNAL(textEdited(QString)), this, SLOT(xyChanged(QString)));
-    QObject::connect(&zBox, SIGNAL(textEdited(QString)), this, SLOT(xyChanged(QString)));
     QObject::connect(&latBox, SIGNAL(textEdited(QString)), this, SLOT(latLonChanged(QString)));
     QObject::connect(&lonBox, SIGNAL(textEdited(QString)), this, SLOT(latLonChanged(QString)));
 }
@@ -478,6 +475,11 @@ void StatusWindow::selectButtonAction(){
     emit statusCommand("select");
 }
 
+void StatusWindow::setPrimaryEditorToolsEnabled(bool enabled){
+    status4.setEnabled(enabled);
+    status9.setEnabled(enabled);
+}
+
 void StatusWindow::placeButtonAction(){
     emit statusCommand("place");
 }
@@ -574,7 +576,7 @@ void StatusWindow::jumpTileSelected(){
 
     bool jumped = false;
     if(jumpType == "xy"){
-        aCoords->setWxyz(xBox.text().toInt(), yBox.text().toInt(), zBox.text().toInt());
+        aCoords->setWxyz(lastX, lastY, -lastZ);
         aCoords->TileX = txBox.text().toInt();
         aCoords->TileZ = tyBox.text().toInt();
         emit jumpTo(aCoords);
@@ -613,7 +615,7 @@ void StatusWindow::pointerInfo(float* coords){
     pointerInfoValid = true;
     pxBox.setText(QString::number(coords[0]));
     pyBox.setText(QString::number(coords[1]));
-    pyBoxx.setText(QString::number(coords[1] * Game::convertDistance, 'f', 0) + " " + Game::convertUnitD);
+    pyBoxx.setText(QString::number(coords[1] * Game::convertDistance, 'f', 2) + " " + Game::convertUnitD);
     pzBox.setText(QString::number(-coords[2]));
 }
 
@@ -630,9 +632,6 @@ void StatusWindow::posInfo(PreciseTileCoordinate* coords){
     posInfoValid = true;
     txBox.setText(QString::number(lastTX));
     tyBox.setText(QString::number(lastTZ));
-    xBox.setText(QString::number(lastX));
-    yBox.setText(QString::number(lastY));
-    zBox.setText(QString::number(-lastZ));
     igh = Game::GeoCoordConverter->ConvertToInternal(coords);
     latlon = Game::GeoCoordConverter->ConvertToLatLon(igh);
     latBox.setText(QString::number(latlon->Latitude));

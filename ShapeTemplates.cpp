@@ -41,6 +41,8 @@ ShapeTemplates::ShapeTemplates() {
 
     FileBuffer* data = ReadFile::read(file);
     file->close();
+    if (data == nullptr)
+        return;
     data->toUtf16();
     data->skipBOM();
 

@@ -417,7 +417,7 @@ void ObjTools::routeLoaded(Route* a){
        
     QStringList hash;
     const int fullDatabaseIndex = refClass.count();
-    refClass.addItem(QString::fromUtf8("•  Full Database  •"),
+    refClass.addItem(QString::fromUtf8("•  FULL DATABASE  •"),
                      QString("__ALL_OBJECTS__"));
     refClass.setItemData(fullDatabaseIndex, Qt::AlignLeft, Qt::TextAlignmentRole);
     QMapIterator<QString, QVector<Ref::RefItem>> i(route->ref->refItems);
@@ -613,7 +613,7 @@ void ObjTools::routeLoaded(Route* a){
     waterRulerItem.filename.push_back("");
     waterRulerItem.description = "Ruler (water)";
     waterRulerItem.clas = "tsre tools";
-    // This is a launcher for the Water Helper workflow, not a serialized
+    // This is a launcher for the Water Tools workflow, not a serialized
     // world-object type. RouteEditorGLWidget intercepts it before placement.
     waterRulerItem.type = "rulerwater";
     route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(waterRulerItem);
@@ -642,9 +642,9 @@ void ObjTools::routeLoaded(Route* a){
     refOther.addItem("SpeedWarning");
     refOther.addItem("Milepost");
     refOther.addItem("Route/Shapes Directory");
-    refOther.addItem(QString::fromUtf8("•  NextGen Dynamic Track  •"),
+    refOther.addItem(QString::fromUtf8("•  NEXGEN TRACK  •"),
                      QString("nextgen dynamic track"));
-    refOther.addItem(QString::fromUtf8("•  TSRE Tools  •"),
+    refOther.addItem(QString::fromUtf8("•  TSRE TOOLS  •"),
                      QString("tsre tools"));
     refOther.setMaxVisibleItems(35);
     

@@ -44,7 +44,6 @@ public slots:
     
 signals:
     void enableTool(QString name);
-    void toggleRouteMapOverlays();
     void createNewTiles(QMap<int, QPair<int, int>*> list);
     void createNewLoTiles(QMap<int, QPair<int, int>*> list);
     

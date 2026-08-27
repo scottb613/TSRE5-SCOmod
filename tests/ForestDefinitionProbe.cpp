@@ -12,7 +12,6 @@
 #include <QTemporaryDir>
 
 #include <algorithm>
-#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -125,14 +124,44 @@ int main(int argc, char **argv) {
         "Schema version was not retained.");
     passed &= check(valid.catalog.polyVeg.size() == 1,
         "Expected one recipe.");
+
+    QJsonObject legacyRoot = example.object();
+    QJsonArray legacyRecipes = legacyRoot.value("polyVeg").toArray();
+    QJsonObject legacyRecipe = legacyRecipes.first().toObject();
+    QJsonObject legacyDefaults = legacyRecipe.value("defaults").toObject();
+    legacyDefaults.insert("widthMetres", 100.0);
+    legacyDefaults.insert("terrainDepthMetres", 0.1);
+    legacyDefaults.insert("variationScale", 0.5);
+    legacyRecipe.insert("defaults", legacyDefaults);
+    QJsonObject legacyLimits = legacyRecipe.value("limits").toObject();
+    legacyLimits.insert("widthMetres", QJsonArray {10.0, 500.0});
+    legacyRecipe.insert("limits", legacyLimits);
+    QJsonObject legacyDistribution = legacyRecipe.value("distribution").toObject();
+    legacyDistribution.insert("preventFootprintOverlap", false);
+    legacyRecipe.insert("distribution", legacyDistribution);
+    QJsonArray legacyVegetation = legacyRecipe.value("vegetation").toArray();
+    QJsonObject legacyAsset = legacyVegetation.first().toObject();
+    legacyAsset.insert("stratum", "canopy");
+    legacyAsset.insert("maximumSlopeDegrees", 30.0);
+    legacyVegetation.replace(0, legacyAsset);
+    legacyRecipe.insert("vegetation", legacyVegetation);
+    legacyRecipes.replace(0, legacyRecipe);
+    legacyRoot.insert("polyVeg", legacyRecipes);
+    const QString legacyRoute = temporary.path() + "/LegacyRoute";
+    passed &= check(prepareRoute(
+            legacyRoute, QJsonDocument(legacyRoot), true),
+        "Unable to prepare legacy-key compatibility fixture.");
+    const ForestCatalogLoadResult legacy =
+        ForestDefinitionLoader::loadRoute(legacyRoute);
+    passed &= check(legacy.isValid(),
+        "Legacy inactive keys were not accepted:\n" + legacy.errors.join('\n'));
+
     if(valid.catalog.polyVeg.size() == 1) {
         const ForestRecipeDefinition &recipe = valid.catalog.polyVeg.first();
         passed &= check(recipe.vegetation.size() == 10,
             "Expected ten vegetation entries.");
         passed &= check(recipe.minimumSeparationMetres > 0.0,
             "Global minimum separation was not loaded.");
-        passed &= check(recipe.preventFootprintOverlap,
-            "Global footprint overlap prevention was not loaded.");
         passed &= check(recipe.osmMatchAny.size() == 2,
             "Expected natural=wood and landuse=forest OSM rules.");
         double normalizedTotal = 0.0;
@@ -149,7 +178,6 @@ int main(int argc, char **argv) {
         ForestGenerationSettings settings;
         settings.densityPerSquareMetre = recipe.defaultDensityPerSquareMetre;
         settings.maximumTrees = recipe.defaultMaximumTrees;
-        settings.variationScale = recipe.defaultVariationScale;
         settings.seed = 0x123456789abcdef0ULL;
 
         const ForestGenerationResult first =
@@ -267,17 +295,6 @@ int main(int argc, char **argv) {
         passed &= check(selectedVegetation.size() == recipe.vegetation.size(),
             "Weighted selection did not exercise every example vegetation entry.");
 
-        ForestGenerationSettings noVariation = settings;
-        noVariation.variationScale = 0.0;
-        const ForestGenerationResult midpoint =
-            ForestGenerator::generate(recipe, boundary, noVariation);
-        for(const ForestCandidate &candidate : midpoint.candidates) {
-            const ForestNumberRange range =
-                recipe.vegetation.at(candidate.vegetationIndex).uniformScale;
-            passed &= check(candidate.uniformScale
-                    == (range.minimum + range.maximum) * 0.5,
-                "Zero variation did not use each entry's scale midpoint.");
-        }
     }
 
     QJsonObject contractCategoryRoot = example.object();
@@ -341,7 +358,6 @@ int main(int argc, char **argv) {
     QJsonObject overlapForest = overlapForests.at(0).toObject();
     QJsonObject distribution = overlapForest.value("distribution").toObject();
     distribution.insert("minimumSeparationMetres", 0.0);
-    distribution.insert("preventFootprintOverlap", false);
     overlapForest.insert("distribution", distribution);
     overlapForests.replace(0, overlapForest);
     overlapRoot.insert("polyVeg", overlapForests);
@@ -350,8 +366,8 @@ int main(int argc, char **argv) {
     const ForestCatalogLoadResult overlap =
         ForestDefinitionLoader::loadRoute(overlapRoute);
     passed &= check(!overlap.isValid()
-            && containsError(overlap, "global footprint-overlap prevention"),
-        "A recipe permitting coincident cross-stratum placement was accepted.");
+            && containsError(overlap, "outside safe ranges"),
+        "A recipe with zero global separation was accepted.");
 
     if(app.arguments().size() >= 3) {
         const ForestCatalogLoadResult routeResult =

@@ -1,4 +1,4 @@
-TSRE GenX v0.13 - ROUTE EDITOR - MENU SHORTCUTS
+TSRE GenX v0.14 - ROUTE EDITOR - MENU SHORTCUTS
 Shift+Ctrl+S  Save route
 Alt+F4        Exit/close route editor
 Ctrl+Z        Undo
@@ -10,9 +10,11 @@ Ctrl+F1       Toggle Control Panel
 F2            Show Terrain Mesh tools
 F3            Show Terrain Texture tools
 F4            Show Geo tools
-F5            Toggle full-screen Activity Builder
-F6            Toggle Auto Place
-F7            Toggle PolyVeg Planter
+F5            Toggle Auto Place
+F6            Toggle PolyVeg Planter
+Shift+F6      Toggle full-screen PolyVeg Schema Editor
+F7            Toggle Water Tools
+F10           Toggle full-screen Activity Builder
 F11           Toggle Errors/Messages window
 F12           Toggle Settings window
 /             Toggle Stick Camera To Terrain
@@ -28,6 +30,7 @@ Q             Toggle Place tool
 R             Toggle Rotate mode
 T             Toggle Translate mode
 Y             Toggle Resize mode
+M             Toggle saved route map tiles
 Ctrl+Q        Toggle auto-add-to-TDB
 Shift+Q       Toggle stick pointer to terrain
 Home          Jump camera/pointer upward by 40m
@@ -82,8 +85,8 @@ E / Shift     Key release restores normal speed
 ROUTE EDITOR WINDOW
 Esc           Close route editor window when handled by RouteEditorWindow
 
-F4 ACTIVITY BUILDER / PATH EDITING
-F4            Close the full-screen Activity Builder
+F10 ACTIVITY BUILDER / PATH EDITING
+F10           Close the full-screen Activity Builder
 Ctrl+Z        Undo the last path-building or path-editing operation
 Ctrl+Y        Redo the last undone path operation
 Delete        Remove the selected start/end, reverse, wait/advanced, or passing-path control

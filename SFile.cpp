@@ -14,6 +14,7 @@
 #include "ReadFile.h"
 #include "ParserX.h"
 #include "TexLib.h"
+#include "Texture.h"
 #include <QDebug>
 #include <QtCore>
 #include <iostream>
@@ -87,6 +88,11 @@ void SFile::load() {
         return;
     }
     FileBuffer* data = ReadFile::read(file);
+    if (data == nullptr) {
+        Route::missingList.append(QFileInfo(pathid).fileName());
+        file->close();
+        return;
+    }
     int loadingCount = 0;
     //qDebug() << "--" << pathid << "--" << data->length;
 
@@ -541,6 +547,8 @@ void SFile::loadSd() {
     }
     FileBuffer* data = ReadFile::read(&file);
     file.close();
+    if (data == nullptr)
+        return;
     data->toUtf16();
     data->skipBOM();
     QString sh;
@@ -1192,44 +1200,53 @@ void SFile::render(int selectionColor, unsigned int stateId) {
             else 
                 gluu->currentShader->setUniformValue(gluu->currentShader->shaderAlphaTest, gluu->alphaTest);
             */
-            //if(gluu->textureEnabled)
-            if(primstate[prim_state].arg4 == -1 || !texEnabled || TexLib::disabledTextures[image[texture[primstate[prim_state].arg4].image].texAddr] == 1){
+            const auto useUntexturedMaterial = [gluu, selectionColor]() {
                 if(selectionColor == 0)
                     gluu->disableTextures(1.0, 0.0, 1.0, 1.0);
-                //glDisable(GL_TEXTURE_2D);
-            } else if (image[texture[primstate[prim_state].arg4].image].texAddr >= 0) {
-                //glEnable(GL_TEXTURE_2D);
-                gluu->bindTexture(f, image[texture[primstate[prim_state].arg4].image].texAddr);
-                //f->glBindTexture(GL_TEXTURE_2D, image[texture[primstate[prim_state].arg4].image].texAddr);
-            } else if (image[texture[primstate[prim_state].arg4].image].tex == -2) {
-                //glDisable(GL_TEXTURE_2D);
-            } else if (image[texture[primstate[prim_state].arg4].image].tex == -1) {
-                //image[texture[primstate[prim_state].arg4].image].tex = -2;
-                //qDebug() << this->nazwa;
-                //if(this->nazwa.contains("pared1_I.s", Qt::CaseInsensitive)){
-                //    qDebug() << vtxstate[vtx_state].arg2;
-                //    qDebug() << "=========" << image[texture[primstate[prim_state].arg4].image].name;
-                //}
-                image[texture[primstate[prim_state].arg4].image].tex = TexLib::addTex(
-                        resolveTexturePath(image[texture[primstate[prim_state].arg4].image].name)
-                        );
-                //glDisable(GL_TEXTURE_2D);
-            } else if (TexLib::mtex[image[texture[primstate[prim_state].arg4].image].tex]->glLoaded) {
-                image[texture[primstate[prim_state].arg4].image].texAddr = TexLib::mtex[image[texture[primstate[prim_state].arg4].image].tex]->tex[0];
-                //glDisable(GL_TEXTURE_2D);
-            } else if (TexLib::mtex[image[texture[primstate[prim_state].arg4].image].tex]->loaded) {
-                //if(allowLag) {
-                //    allowLag = false;
-                //if(TexLib::mtex[image[texture[primstate[prim_state].arg4].image].tex]->missing || TexLib::mtex[image[texture[primstate[prim_state].arg4].image].tex]->error){
-                //    image[texture[primstate[prim_state].arg4].image].tex = -2;
-                //} else {
-                TexLib::mtex[image[texture[primstate[prim_state].arg4].image].tex]->GLTextures();
-                //}
-                //glDisable(GL_TEXTURE_2D);
-                //}
+            };
+            const int textureSlot = primstate[prim_state].arg4;
+            const int imageId = textureSlot >= 0 && textureSlot < ilosct
+                    ? texture[textureSlot].image
+                    : -1;
+            const bool validImage = imageId >= 0 && imageId < ilosci;
+
+            if(!validImage || !texEnabled){
+                useUntexturedMaterial();
+            } else if(TexLib::disabledTextures.value(image[imageId].texAddr) == 1){
+                useUntexturedMaterial();
+            } else if(image[imageId].texAddr >= 0){
+                if(selectionColor == 0){
+                    gluu->enableTextures();
+                    gluu->bindTexture(f, image[imageId].texAddr);
+                }
+            } else if(image[imageId].tex == -2){
+                useUntexturedMaterial();
+            } else if(image[imageId].tex == -1){
+                image[imageId].tex = TexLib::addTex(
+                        resolveTexturePath(image[imageId].name));
+                useUntexturedMaterial();
             } else {
-                //glDisable(GL_TEXTURE_2D);
-            }/**/
+                const auto textureIt = TexLib::mtex.find(image[imageId].tex);
+                Texture *shapeTexture = textureIt == TexLib::mtex.end()
+                        ? nullptr
+                        : textureIt->second;
+                if(shapeTexture == nullptr){
+                    useUntexturedMaterial();
+                } else {
+                    if(!shapeTexture->glLoaded && shapeTexture->loaded)
+                        shapeTexture->GLTextures();
+
+                    if(shapeTexture->glLoaded){
+                        image[imageId].texAddr = shapeTexture->tex[0];
+                        if(selectionColor == 0){
+                            gluu->enableTextures();
+                            gluu->bindTexture(f, image[imageId].texAddr);
+                        }
+                    } else {
+                        useUntexturedMaterial();
+                    }
+                }
+            }
             
             //QOpenGLVertexArrayObject::Binder vaoBinder(&distancelevel[0].subobiekty[i].czesci[j].VAO);
             f->glDrawArrays(GL_TRIANGLES, distancelevel[currentDlevel].subobiekty[i].czesci[j].offset, distancelevel[currentDlevel].subobiekty[i].czesci[j].iloscv);/**/

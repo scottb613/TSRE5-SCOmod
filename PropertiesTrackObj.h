@@ -51,7 +51,6 @@ public slots:
         GameObj *obj, QPushButton *button, bool checked);
     void adoptHacksButton(QPushButton *button);
     void setHacksSelection(GameObj *obj);
-    void eTemplateEdited(QString val);
     void openGradeHelper();
     void gradeHelperWindowClosed();
     void hacksWindowClosed();

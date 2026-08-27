@@ -44,6 +44,8 @@ void CarSpawnerObj::LoadCarSpawnerList(){
         return;
     FileBuffer* data = ReadFile::read(&file);
     file.close();
+    if (data == nullptr)
+        return;
     data->toUtf16();
     ParserX::NextLine(data);
     QString sh = "";
@@ -58,6 +60,8 @@ void CarSpawnerObj::LoadCarSpawnerList(){
         return;
     data = ReadFile::read(&file);
     file.close();
+    if (data == nullptr)
+        return;
     data->toUtf16();
     ParserX::NextLine(data);
     

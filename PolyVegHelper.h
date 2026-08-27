@@ -4,9 +4,11 @@
 #include <QWidget>
 
 class QComboBox;
+class QButtonGroup;
 class QCheckBox;
 class QDoubleSpinBox;
 class QLabel;
+class QPlainTextEdit;
 class QSpinBox;
 class QPushButton;
 class QRadioButton;
@@ -18,10 +20,12 @@ class PolyVegHelper : public QWidget
 
 public:
     explicit PolyVegHelper(QWidget *parent = nullptr);
+    void activateRuler();
 
 public slots:
     void openForCurrentRoute();
     void clearPlacementTools();
+    void setStatus(const QString &text);
     void setTileCounts(int rawCount, int bakedCount, int bakedTileCount);
 
 signals:
@@ -35,6 +39,8 @@ signals:
     void countsRequested();
     void placeRulerRequested(double widthMetres, bool closedShape);
     void removeRulerRequested();
+    void addRulerPointsRequested();
+    void editRulerPointsRequested();
     void rulerAreaChanged(bool closedShape);
     void rulerWidthChanged(double widthMetres);
     void plantRulerRequested(bool overrideForestCoverage);
@@ -42,7 +48,7 @@ signals:
     void resetRawJumpRequested();
     void jumpBakeRequested();
     void resetBakeJumpRequested();
-    void toggleMapTilesRequested();
+    void schemaEditorRequested();
 
 private slots:
     void loadDefinitions();
@@ -50,6 +56,7 @@ private slots:
 
 private:
     void applyDefinitionSettings(bool restoreSavedValues);
+    void selectRulerMode(QPushButton *button);
 
     QComboBox *definition = nullptr;
     QLabel *densityLabel = nullptr;
@@ -73,8 +80,12 @@ private:
     QLabel *statusRawValue = nullptr;
     QLabel *statusBakedValue = nullptr;
     QLabel *statusBakedTilesValue = nullptr;
+    QPlainTextEdit *statusMessage = nullptr;
     QRadioButton *rulerOverride = nullptr;
     QPushButton *placeRuler = nullptr;
+    QPushButton *addRulerPoints = nullptr;
+    QPushButton *editRulerPoints = nullptr;
+    QButtonGroup *rulerModeButtons = nullptr;
     QCheckBox *rulerArea = nullptr;
 };
 

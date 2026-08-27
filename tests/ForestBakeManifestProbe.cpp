@@ -47,15 +47,57 @@ int main(int argc, char **argv) {
     QDir().mkpath(route + "/world");
     QDir().mkpath(route + "/shapes");
 
+    const QString replacedFile = route + "/shapes/session-existing.s";
+    const QString newFile = route + "/shapes/session-new.sd";
+    bool passed = true;
+    passed &= check(touch(replacedFile), "session existing file should write");
+    ForestBakeSession session;
+    QString error;
+    passed &= check(session.rememberFile(replacedFile, error),
+                    "session should preserve existing file");
+    passed &= check(session.rememberFile(newFile, error),
+                    "session should remember absent file");
+    QFile replaced(replacedFile);
+    passed &= check(replaced.open(QIODevice::WriteOnly | QIODevice::Truncate),
+                    "session existing file should reopen");
+    replaced.write("replacement");
+    replaced.close();
+    passed &= check(touch(newFile), "session new file should write");
+    passed &= check(session.rollback(error), "session rollback should succeed");
+    QFile restored(replacedFile);
+    passed &= check(restored.open(QIODevice::ReadOnly),
+                    "session existing file should reopen after rollback");
+    passed &= check(restored.readAll() == QByteArray("generated"),
+                    "session rollback should restore existing contents");
+    restored.close();
+    passed &= check(!QFileInfo::exists(newFile),
+                    "session rollback should remove newly created file");
+
+    ForestBakeSession committedSession;
+    passed &= check(committedSession.rememberFile(replacedFile, error),
+                    "committed session should preserve existing file");
+    replaced.setFileName(replacedFile);
+    passed &= check(replaced.open(QIODevice::WriteOnly | QIODevice::Truncate),
+                    "committed file should reopen");
+    replaced.write("committed");
+    replaced.close();
+    committedSession.commit();
+    passed &= check(committedSession.rollback(error),
+                    "committed session rollback should be empty");
+    restored.setFileName(replacedFile);
+    passed &= check(restored.open(QIODevice::ReadOnly),
+                    "committed file should reopen after empty rollback");
+    passed &= check(restored.readAll() == QByteArray("committed"),
+                    "session commit should retain replacement contents");
+    restored.close();
+
     ForestBakeManifestEntry kept;
     kept.id = "kept";
     kept.shapeFile = "V-00001+00002-00.s";
     ForestBakeManifestEntry removed;
     removed.id = "removed";
     removed.shapeFile = "V-00001+00002-01.s";
-    QString error;
     const QString manifest = route + "/OpenRails/forest-bakes.json";
-    bool passed = true;
     passed &= check(ForestBakeManifest::upsert(manifest, kept, error),
                     "kept entry should write");
     passed &= check(ForestBakeManifest::upsert(manifest, removed, error),
@@ -84,8 +126,8 @@ int main(int argc, char **argv) {
     passed &= check(result.originalBlocks == 2 && result.remainingBlocks == 1
                     && result.removedBlocks == 1,
                     "only unreferenced manifest block should be pruned");
-    passed &= check(result.removedAssets == 2,
-                    "exact shape and descriptor should be removed");
+    passed &= check(result.removedAssets == 3,
+                    "manifest pair and orphaned generated shape should be removed");
     passed &= check(QFileInfo::exists(route + "/shapes/" + kept.shapeFile),
                     "referenced shape should remain");
     passed &= check(QFileInfo::exists(route + "/shapes/"
@@ -93,8 +135,56 @@ int main(int argc, char **argv) {
                     "referenced descriptor should remain");
     passed &= check(!QFileInfo::exists(route + "/shapes/" + removed.shapeFile),
                     "unreferenced shape should be removed");
-    passed &= check(QFileInfo::exists(route + "/shapes/V-99999+99999-99.s"),
-                    "unowned generated-looking asset should remain");
+    passed &= check(!QFileInfo::exists(route + "/shapes/V-99999+99999-99.s"),
+                    "orphaned generated shape should be removed");
+
+    const QString manifestlessOrphan = "V-88888+88888-88.s";
+    passed &= check(touch(route + "/shapes/" + manifestlessOrphan),
+                    "post-prune orphan shape should write");
+    passed &= check(touch(route + "/shapes/"
+                    + QFileInfo(manifestlessOrphan).completeBaseName() + ".sd"),
+                    "post-prune orphan descriptor should write");
+    ForestBakePruneResult orphanResult;
+    passed &= check(ForestBakeManifest::pruneUnreferenced(
+                    route, orphanResult, error),
+                    "orphan-only prune should succeed with no removable blocks");
+    passed &= check(orphanResult.removedBlocks == 0
+                    && orphanResult.removedAssets == 2,
+                    "orphan-only prune should remove the generated pair");
+    passed &= check(!QFileInfo::exists(route + "/shapes/" + manifestlessOrphan),
+                    "orphan-only prune should remove the shape");
+
+    QTemporaryDir corruptTemporary;
+    passed &= check(corruptTemporary.isValid(),
+                    "corrupt-world temporary route should exist");
+    const QString corruptRoute = corruptTemporary.path();
+    QDir().mkpath(corruptRoute + "/OpenRails");
+    QDir().mkpath(corruptRoute + "/world");
+    QDir().mkpath(corruptRoute + "/shapes");
+    ForestBakeManifestEntry protectedEntry;
+    protectedEntry.id = "protected";
+    protectedEntry.shapeFile = "V-77777+77777-77.s";
+    const QString corruptManifest = corruptRoute
+        + "/OpenRails/forest-bakes.json";
+    passed &= check(ForestBakeManifest::upsert(
+                    corruptManifest, protectedEntry, error),
+                    "protected entry should write");
+    const QString protectedShape = corruptRoute + "/shapes/"
+        + protectedEntry.shapeFile;
+    passed &= check(touch(protectedShape), "protected shape should write");
+    QFile corruptWorld(corruptRoute + "/world/w-000001+000002.w");
+    passed &= check(corruptWorld.open(QIODevice::WriteOnly),
+                    "corrupt compressed world should open");
+    QByteArray corruptData(40, '\0');
+    corruptData.replace(0, 8, QByteArray("SIMISA@F", 8));
+    corruptWorld.write(corruptData);
+    corruptWorld.close();
+    ForestBakePruneResult corruptResult;
+    passed &= check(!ForestBakeManifest::pruneUnreferenced(
+                    corruptRoute, corruptResult, error),
+                    "corrupt compressed world should stop destructive prune");
+    passed &= check(QFileInfo::exists(protectedShape),
+                    "failed world decode should preserve generated assets");
     if(passed) std::cout << "Forest bake manifest prune probe passed.\n";
     return passed ? 0 : 1;
 }

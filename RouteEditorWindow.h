@@ -39,6 +39,8 @@ class ActivityTimetableWindow;
 class ErrorMessagesWindow;
 class ClientUsersWindow;
 class PolyVegHelper;
+class PolyVegSchemaEditor;
+class TerrainWaterWindow2;
 class QDockWidget;
 
 class RouteEditorWindow : public QMainWindow
@@ -96,6 +98,8 @@ public slots:
     void showToolsGeo(bool show);
     void showToolsActivity(bool show);
     void showPolyVegHelper(bool show = true);
+    void showPolyVegSchemaEditor(bool show = true);
+    void showWaterHelper(bool show = true);
     
     void showTerrainTreeEditr();
     void showWorldObjPivotPointsEnabled(bool show);
@@ -222,8 +226,13 @@ private:
     QDockWidget* autoPlacementDock = nullptr;
     QAction* autoPlacementAction = nullptr;
     PolyVegHelper* polyVegHelper = nullptr;
+    PolyVegSchemaEditor* polyVegSchemaEditor = nullptr;
     QDockWidget* polyVegDock = nullptr;
     QAction* polyVegHelperAction = nullptr;
+    QAction* polyVegSchemaEditorAction = nullptr;
+    TerrainWaterWindow2* waterHelper = nullptr;
+    QDockWidget* waterHelperDock = nullptr;
+    QAction* waterHelperAction = nullptr;
     QTimer pinPositionTimer;
     bool applyingWindowPosition = false;
 };

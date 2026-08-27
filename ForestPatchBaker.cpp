@@ -8,10 +8,23 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace {
 constexpr double TileSize = 2048.0;
 constexpr double PatchSize = 128.0;
+
+bool finiteFloat(double value) {
+    return std::isfinite(value)
+        && std::fabs(value) <= std::numeric_limits<float>::max();
+}
+
+bool tileCoordinateFits(double coordinate) {
+    if(!std::isfinite(coordinate)) return false;
+    const double tile = std::floor((coordinate + 1024.0) / TileSize);
+    return tile >= std::numeric_limits<int>::min()
+        && tile <= std::numeric_limits<int>::max();
+}
 
 QString block(const QString &text, const QString &name, int start = 0) {
     const QRegularExpression re("\\b" + QRegularExpression::escape(name) + "\\s*\\(");
@@ -106,15 +119,29 @@ bool ForestShapeTextIO::readCruciform(const QString &path, ForestShapeMesh &mesh
     QVector<QPointF> uvs;
     for(const QString &entry : repeatedBlocks(block(text, "points"), "point")) {
         const QVector<double> n = numbers(entry);
-        if(n.size() >= 3) points.append(QVector3D(n[0], n[1], n[2]));
+        if(n.size() < 3 || !finiteFloat(n[0]) || !finiteFloat(n[1])
+                || !finiteFloat(n[2])) {
+            error = "Shape contains an invalid point: " + path;
+            return false;
+        }
+        points.append(QVector3D(n[0], n[1], n[2]));
     }
     for(const QString &entry : repeatedBlocks(block(text, "normals"), "vector")) {
         const QVector<double> n = numbers(entry);
-        if(n.size() >= 3) normals.append(QVector3D(n[0], n[1], n[2]));
+        if(n.size() < 3 || !finiteFloat(n[0]) || !finiteFloat(n[1])
+                || !finiteFloat(n[2])) {
+            error = "Shape contains an invalid normal: " + path;
+            return false;
+        }
+        normals.append(QVector3D(n[0], n[1], n[2]));
     }
     for(const QString &entry : repeatedBlocks(block(text, "uv_points"), "uv_point")) {
         const QVector<double> n = numbers(entry);
-        if(n.size() >= 2) uvs.append(QPointF(n[0], n[1]));
+        if(n.size() < 2 || !finiteFloat(n[0]) || !finiteFloat(n[1])) {
+            error = "Shape contains an invalid UV coordinate: " + path;
+            return false;
+        }
+        uvs.append(QPointF(n[0], n[1]));
     }
     const QString verticesText = block(text, "vertices", text.indexOf("sub_objects"));
     for(const QString &entry : repeatedBlocks(verticesText, "vertex")) {
@@ -122,14 +149,28 @@ bool ForestShapeTextIO::readCruciform(const QString &path, ForestShapeMesh &mesh
             "^\\s*[0-9A-Fa-f]+\\s+(-?\\d+)\\s+(-?\\d+)\\s+"
             "[0-9A-Fa-f]+\\s+[0-9A-Fa-f]+");
         const QRegularExpressionMatch header = vertexHeader.match(entry);
-        if(!header.hasMatch()) continue;
-        const int pointIndex = header.captured(1).toInt();
-        const int normalIndex = header.captured(2).toInt();
+        if(!header.hasMatch()) {
+            error = "Shape contains an unsupported vertex record: " + path;
+            return false;
+        }
+        bool pointIndexOk = false;
+        bool normalIndexOk = false;
+        const int pointIndex = header.captured(1).toInt(&pointIndexOk);
+        const int normalIndex = header.captured(2).toInt(&normalIndexOk);
         const QVector<double> uvn = numbers(block(entry, "vertex_uvs"));
-        if(pointIndex < 0 || pointIndex >= points.size() || normalIndex < 0
-                || normalIndex >= normals.size() || uvn.size() < 2) continue;
-        const int uvIndex = static_cast<int>(uvn[1]);
-        if(uvIndex < 0 || uvIndex >= uvs.size()) continue;
+        if(!pointIndexOk || !normalIndexOk
+                || pointIndex < 0 || pointIndex >= points.size() || normalIndex < 0
+                || normalIndex >= normals.size() || uvn.size() < 2) {
+            error = "Shape vertex references missing geometry data: " + path;
+            return false;
+        }
+        const double uvValue = uvn[1];
+        if(!std::isfinite(uvValue) || std::floor(uvValue) != uvValue
+                || uvValue < 0.0 || uvValue >= uvs.size()) {
+            error = "Shape vertex references an invalid UV coordinate: " + path;
+            return false;
+        }
+        const int uvIndex = static_cast<int>(uvValue);
         ForestShapeVertex vertex;
         vertex.x = points[pointIndex].x(); vertex.y = points[pointIndex].y();
         vertex.z = points[pointIndex].z(); vertex.nx = normals[normalIndex].x();
@@ -137,10 +178,25 @@ bool ForestShapeTextIO::readCruciform(const QString &path, ForestShapeMesh &mesh
         vertex.u = uvs[uvIndex].x(); vertex.v = uvs[uvIndex].y();
         sourceVertices.append(vertex);
     }
-    const QVector<double> indexNumbers = numbers(block(block(text, "indexed_trilist"), "vertex_idxs"));
-    for(int i = 1; i < indexNumbers.size(); ++i)
-        mesh.indices.append(static_cast<int>(indexNumbers[i]));
     mesh.vertices = sourceVertices;
+    const QVector<double> indexNumbers = numbers(
+        block(block(text, "indexed_trilist"), "vertex_idxs"));
+    if(indexNumbers.isEmpty() || !std::isfinite(indexNumbers.first())
+            || std::floor(indexNumbers.first()) != indexNumbers.first()
+            || indexNumbers.first() != indexNumbers.size() - 1
+            || (indexNumbers.size() - 1) % 3 != 0) {
+        error = "Shape contains an invalid triangle-index count: " + path;
+        return false;
+    }
+    for(int i = 1; i < indexNumbers.size(); ++i) {
+        const double value = indexNumbers[i];
+        if(!std::isfinite(value) || std::floor(value) != value
+                || value < 0.0 || value >= mesh.vertices.size()) {
+            error = "Shape contains an out-of-range triangle index: " + path;
+            return false;
+        }
+        mesh.indices.append(static_cast<int>(value));
+    }
     const QString imageEntry = block(block(text, "images"), "image").trimmed();
     mesh.texture = imageEntry.section(QRegularExpression("\\s+"), 0, 0);
     if(mesh.vertices.isEmpty() || mesh.indices.isEmpty() || mesh.texture.isEmpty()) {
@@ -159,8 +215,19 @@ ForestPatchBakeResult ForestPatchBaker::bake(const QVector<ForestBakeInstance> &
     }
     QHash<QString, ForestShapeMesh> templates;
     QHash<ForestPatchKey, QVector<ForestBakeInstance>> groups;
-    for(const ForestBakeInstance &instance : instances)
+    for(const ForestBakeInstance &instance : instances) {
+        if(instance.shapePath.trimmed().isEmpty()
+                || !tileCoordinateFits(instance.x)
+                || !tileCoordinateFits(instance.z)
+                || !finiteFloat(instance.y)
+                || !std::isfinite(instance.yawDegrees)
+                || !std::isfinite(instance.uniformScale)
+                || instance.uniformScale <= 0.0) {
+            result.errors.append("Forest bake instance contains invalid coordinates or scale.");
+            continue;
+        }
         groups[patchFor(instance.x, instance.z, patchSpan)].append(instance);
+    }
 
     for(auto group = groups.constBegin(); group != groups.constEnd(); ++group) {
         ForestBakedPatch patch;
@@ -179,6 +246,39 @@ ForestPatchBakeResult ForestPatchBaker::bake(const QVector<ForestBakeInstance> &
                 templates.insert(instance.shapePath, source);
             }
             const ForestShapeMesh &source = templates[instance.shapePath];
+            const double yaw = instance.yawDegrees*M_PI/180.0;
+            const double c = std::cos(yaw), s = std::sin(yaw);
+            QVector<ForestShapeVertex> transformed;
+            transformed.reserve(source.vertices.size());
+            bool transformValid = true;
+            for(const ForestShapeVertex &v : source.vertices) {
+                const double x = instance.x - patch.originX
+                    + instance.uniformScale*(c*v.x + s*v.z);
+                const double y = instance.y - patch.originY
+                    + instance.uniformScale*v.y;
+                const double z = instance.z - patch.originZ
+                    + instance.uniformScale*(-s*v.x + c*v.z);
+                const double nx = c*v.nx + s*v.nz;
+                const double nz = -s*v.nx + c*v.nz;
+                if(!finiteFloat(x) || !finiteFloat(y) || !finiteFloat(z)
+                        || !finiteFloat(nx) || !finiteFloat(nz)) {
+                    transformValid = false;
+                    break;
+                }
+                ForestShapeVertex out = v;
+                out.x = static_cast<float>(x);
+                out.y = static_cast<float>(y);
+                out.z = static_cast<float>(z);
+                out.nx = static_cast<float>(nx);
+                out.nz = static_cast<float>(nz);
+                transformed.append(out);
+            }
+            if(!transformValid) {
+                result.errors.append(
+                    "Forest bake transform exceeds the supported numeric range: "
+                    + instance.shapePath);
+                continue;
+            }
             int meshIndex = meshByTexture.value(source.texture, -1);
             if(meshIndex < 0) {
                 meshIndex = patch.meshes.size(); meshByTexture.insert(source.texture, meshIndex);
@@ -186,19 +286,7 @@ ForestPatchBakeResult ForestPatchBaker::bake(const QVector<ForestBakeInstance> &
             }
             ForestShapeMesh &target = patch.meshes[meshIndex];
             const int offset = target.vertices.size();
-            const double yaw = instance.yawDegrees*M_PI/180.0;
-            const double c = std::cos(yaw), s = std::sin(yaw);
-            for(const ForestShapeVertex &v : source.vertices) {
-                ForestShapeVertex out = v;
-                out.x = static_cast<float>(instance.x - patch.originX
-                    + instance.uniformScale*(c*v.x + s*v.z));
-                out.y = static_cast<float>(instance.y - patch.originY + instance.uniformScale*v.y);
-                out.z = static_cast<float>(instance.z - patch.originZ
-                    + instance.uniformScale*(-s*v.x + c*v.z));
-                out.nx = static_cast<float>(c*v.nx + s*v.nz);
-                out.nz = static_cast<float>(-s*v.nx + c*v.nz);
-                target.vertices.append(out);
-            }
+            target.vertices += transformed;
             for(int index : source.indices) target.indices.append(offset + index);
             ++patch.sourceInstanceCount;
         }
@@ -210,16 +298,42 @@ ForestPatchBakeResult ForestPatchBaker::bake(const QVector<ForestBakeInstance> &
 bool ForestShapeTextIO::writePatch(const QString &path,
                                    const ForestBakedPatch &patch,
                                    QString &error) {
-    int vertexCount = 0, indexCount = 0;
+    qint64 vertexTotal = 0, indexTotal = 0;
     double radius = 1.0;
     for(const ForestShapeMesh &mesh : patch.meshes) {
-        vertexCount += mesh.vertices.size();
-        indexCount += mesh.indices.size();
-        for(const ForestShapeVertex &v : mesh.vertices)
+        if(mesh.vertices.isEmpty() || mesh.indices.isEmpty()
+                || mesh.indices.size() % 3 != 0) {
+            error = "Baked patch contains an incomplete mesh.";
+            return false;
+        }
+        for(int index : mesh.indices) {
+            if(index < 0 || index >= mesh.vertices.size()) {
+                error = "Baked patch contains an out-of-range triangle index.";
+                return false;
+            }
+        }
+        vertexTotal += mesh.vertices.size();
+        indexTotal += mesh.indices.size();
+        if(vertexTotal > std::numeric_limits<int>::max()
+                || indexTotal > std::numeric_limits<int>::max()) {
+            error = "Baked patch exceeds the supported shape-size limit.";
+            return false;
+        }
+        for(const ForestShapeVertex &v : mesh.vertices) {
+            if(!finiteFloat(v.x) || !finiteFloat(v.y) || !finiteFloat(v.z)
+                    || !finiteFloat(v.nx) || !finiteFloat(v.ny)
+                    || !finiteFloat(v.nz) || !finiteFloat(v.u)
+                    || !finiteFloat(v.v)) {
+                error = "Baked patch contains a non-finite vertex.";
+                return false;
+            }
             radius = std::max(radius, std::sqrt(static_cast<double>(v.x)*v.x
                                                 + static_cast<double>(v.y)*v.y
                                                 + static_cast<double>(v.z)*v.z));
+        }
     }
+    const int vertexCount = static_cast<int>(vertexTotal);
+    const int indexCount = static_cast<int>(indexTotal);
     if(vertexCount == 0 || indexCount == 0 || indexCount % 3 != 0) {
         error = "Baked patch contains no valid triangles.";
         return false;
@@ -229,7 +343,11 @@ bool ForestShapeTextIO::writePatch(const QString &path,
         error = "Unable to create baked shape: " + path;
         return false;
     }
-    file.write("\xff\xfe", 2);
+    if(file.write("\xff\xfe", 2) != 2) {
+        error = "Unable to write baked shape header: " + path;
+        file.cancelWriting();
+        return false;
+    }
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf16LE);
     out.setGenerateByteOrderMark(false);
@@ -302,6 +420,11 @@ bool ForestShapeTextIO::writePatch(const QString &path,
     }
     out << "    ) ) ) ) ) ) )\r\n)\r\n";
     out.flush();
+    if(out.status() != QTextStream::Ok) {
+        error = "Unable to serialize baked shape: " + path;
+        file.cancelWriting();
+        return false;
+    }
     if(!file.commit()) {
         error = "Unable to publish baked shape: " + path;
         return false;
@@ -325,6 +448,11 @@ bool ForestShapeTextIO::writeDescriptor(const QString &shapePath, QString &error
         << "\tESD_Alternative_Texture ( 252 )\r\n"
         << ")\r\n";
     out.flush();
+    if(out.status() != QTextStream::Ok) {
+        error = "Unable to serialize baked shape descriptor: " + descriptorPath;
+        file.cancelWriting();
+        return false;
+    }
     if(!file.commit()) {
         error = "Unable to publish baked shape descriptor: " + descriptorPath;
         return false;

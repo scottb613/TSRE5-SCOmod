@@ -107,8 +107,9 @@ void TerrainLib::getUnsavedInfo(QVector<QString> &items){
 
 }
 
-void TerrainLib::save(){
-
+bool TerrainLib::save(QString *error){
+    Q_UNUSED(error);
+    return true;
 }
 
 bool TerrainLib::reload(int x, int z) {

@@ -1,60 +1,59 @@
 /*  This file is part of TSRE5.
  *
- *  TSRE5 - train sim game engine and MSTS/OR Editors. 
+ *  TSRE5 - train sim game engine and MSTS/OR Editors.
  *  Copyright (C) 2016 Piotr Gadecki <pgadecki@gmail.com>
  *
- *  Licensed under GNU General Public License 3.0 or later. 
+ *  Licensed under GNU General Public License 3.0 or later.
  *
  *  See LICENSE.md or https://www.gnu.org/licenses/gpl.html
  */
 
-
 #ifndef TERRAINWATERWINDOW2_H
-#define	TERRAINWATERWINDOW2_H
+#define TERRAINWATERWINDOW2_H
 
-#include <QtWidgets>
-#include "GuiFunct.h"
+#include <QString>
+#include <QWidget>
 
-class Terrain;
+class QButtonGroup;
+class QDoubleSpinBox;
+class QLabel;
+class QPlainTextEdit;
+class QProgressBar;
+class QPushButton;
+class QSpinBox;
 
-class TerrainWaterWindow2 : public EditorPopupWindow {
+class TerrainWaterWindow2 : public QWidget {
     Q_OBJECT
 public:
-    TerrainWaterWindow2(QWidget* parent);
+    explicit TerrainWaterWindow2(QWidget *parent = nullptr);
     ~TerrainWaterWindow2() override;
-    void setTerrain(Terrain *t);
     void activateRuler();
-    void deactivateRuler();
+    void resetSession();
 
 signals:
-    void helperClosed();
     void userButtonPressed();
     void placeRulerRequested();
-    void scanRequested(float heightAboveBed, int tileRadius);
-    void undoScanRequested();
     void removeRulerRequested();
-    
-public slots:
-    void eAvgTextEdited(QString val);   
-    void eWaterEdited(QString val);    
-    void bAdjustEdited();
+    void addPointsRequested();
+    void editPointsRequested();
+    void scanRequested(float heightAboveBed, int tileRadius);
+    void adjustTerrainRequested(float clearance, int tileRadius);
+    void undoScanRequested();
 
-protected:
-    void closeEvent(QCloseEvent *event) override;
-    
+public slots:
+    void setStatus(const QString &text);
+    void setProgress(int value, int maximum, const QString &text);
+
 private:
-    Terrain *terrain = NULL;
-    QLineEdit e[12];
-    float we[12];
-    QLineEdit eAvg;
-    QLineEdit eSW;
-    QLineEdit eSE;
-    QLineEdit eNE;
-    QLineEdit eNW;
-    QDoubleSpinBox waterHeight;
-    QSpinBox searchDistance;
-    QPushButton *placeRulerButton = NULL;
+    void selectMode(QPushButton *button);
+    QDoubleSpinBox *waterHeight = nullptr;
+    QSpinBox *searchDistance = nullptr;
+    QPlainTextEdit *messageCell = nullptr;
+    QProgressBar *progress = nullptr;
+    QPushButton *newRulerButton = nullptr;
+    QPushButton *addPointsButton = nullptr;
+    QPushButton *editPointsButton = nullptr;
+    QButtonGroup *modeButtons = nullptr;
 };
 
-#endif	/* TERRAINWATERWINDOW2_H */
-
+#endif /* TERRAINWATERWINDOW2_H */
