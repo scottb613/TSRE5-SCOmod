@@ -9,6 +9,7 @@
         "densityPerSquareKilometre": 18000,
         "trackClearanceMetres": 8.0,
         "roadClearanceMetres": 4.0,
+        "waterClearanceMetres": 8.0,
         "maximumTrees": 60000
       },
       "limits": {

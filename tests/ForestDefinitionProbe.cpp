@@ -125,6 +125,25 @@ int main(int argc, char **argv) {
     passed &= check(valid.catalog.polyVeg.size() == 1,
         "Expected one recipe.");
 
+    QJsonObject missingWaterRoot = example.object();
+    QJsonArray missingWaterRecipes = missingWaterRoot.value("polyVeg").toArray();
+    QJsonObject missingWaterRecipe = missingWaterRecipes.first().toObject();
+    QJsonObject missingWaterDefaults =
+        missingWaterRecipe.value("defaults").toObject();
+    missingWaterDefaults.remove("waterClearanceMetres");
+    missingWaterRecipe.insert("defaults", missingWaterDefaults);
+    missingWaterRecipes.replace(0, missingWaterRecipe);
+    missingWaterRoot.insert("polyVeg", missingWaterRecipes);
+    const QString missingWaterRoute = temporary.path() + "/MissingWaterRoute";
+    passed &= check(prepareRoute(missingWaterRoute,
+            QJsonDocument(missingWaterRoot), true),
+        "Unable to prepare missing-water-clearance fixture.");
+    const ForestCatalogLoadResult missingWater =
+        ForestDefinitionLoader::loadRoute(missingWaterRoute);
+    passed &= check(!missingWater.isValid()
+            && containsError(missingWater, "waterClearanceMetres"),
+        "Missing required water clearance was not rejected.");
+
     QJsonObject legacyRoot = example.object();
     QJsonArray legacyRecipes = legacyRoot.value("polyVeg").toArray();
     QJsonObject legacyRecipe = legacyRecipes.first().toObject();
@@ -162,6 +181,8 @@ int main(int argc, char **argv) {
             "Expected ten vegetation entries.");
         passed &= check(recipe.minimumSeparationMetres > 0.0,
             "Global minimum separation was not loaded.");
+        passed &= check(recipe.defaultWaterClearanceMetres == 8.0,
+            "Default water clearance was not loaded.");
         passed &= check(recipe.osmMatchAny.size() == 2,
             "Expected natural=wood and landuse=forest OSM rules.");
         double normalizedTotal = 0.0;

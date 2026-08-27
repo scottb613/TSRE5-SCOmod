@@ -335,6 +335,9 @@ PolyVegSchemaEditor::PolyVegSchemaEditor(QWidget *parent)
     addScalar(defaultsForm, "Road clear:", "defaults", "roadClearanceMetres",
               0.0, 100.0, 2, 0.5,
               "Minimum planting distance from road in metres.");
+    addScalar(defaultsForm, "Water clear:", "defaults", "waterClearanceMetres",
+              0.0, 100.0, 2, 0.5,
+              "Minimum planting distance from submerged water terrain in metres.");
     GuiFunct::alignEditorForm(defaultsForm, 75);
     controls->addWidget(defaultsCard);
 
@@ -555,6 +558,7 @@ PolyVegSchemaEditor::PolyVegSchemaEditor(QWidget *parent)
         defaults["densityPerSquareKilometre"] = 10000.0;
         defaults["trackClearanceMetres"] = 8.0;
         defaults["roadClearanceMetres"] = 4.0;
+        defaults["waterClearanceMetres"] = 8.0;
         defaults["maximumTrees"] = 50000;
         recipe["defaults"] = defaults;
         QJsonObject limits;

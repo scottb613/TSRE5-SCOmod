@@ -200,6 +200,43 @@ foreach ($document in @(
     }
 }
 
+# Private route recovery evidence belongs only in the development checkout.
+# Fail closed if its known identifiers enter any public path or text input.
+$privateMarkers = @(
+    ('SCO_' + 'LHR4'),
+    ('SCO_' + 'LHR_' + 'Bad'),
+    ('ORTS' + 'mini_F'),
+    ('polyveg-removal-' + 'backup-')
+)
+$publicFiles = @(Get-ChildItem -Recurse -Force -File -LiteralPath $destinationPath)
+$privateLeaks = [Collections.Generic.HashSet[string]]::new(
+    [StringComparer]::OrdinalIgnoreCase
+)
+foreach ($file in $publicFiles) {
+    $relative = Get-ReleaseRelativePath -Path $file.FullName
+    foreach ($marker in $privateMarkers) {
+        if ($relative.IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            [void]$privateLeaks.Add($relative)
+        }
+    }
+
+    if ($file.Extension -notin @(
+        '.bat', '.cmake', '.cpp', '.h', '.ini', '.json', '.md', '.ps1',
+        '.qrc', '.rc', '.txt', '.xml', '.yml', '.yaml'
+    )) {
+        continue
+    }
+    $text = [IO.File]::ReadAllText($file.FullName)
+    foreach ($marker in $privateMarkers) {
+        if ($text.IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            [void]$privateLeaks.Add($relative)
+        }
+    }
+}
+if ($privateLeaks.Count -ne 0) {
+    throw "Private route evidence was exported: $(@($privateLeaks) -join ', ')"
+}
+
 Copy-Item -Force -LiteralPath (Join-Path $PSScriptRoot 'SourceRelease.gitignore') -Destination (Join-Path $destinationPath '.gitignore')
 Copy-Item -Force -LiteralPath (Join-Path $PSScriptRoot 'SourceRelease.gitattributes') -Destination (Join-Path $destinationPath '.gitattributes')
 

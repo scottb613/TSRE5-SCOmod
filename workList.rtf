@@ -1,16 +1,40 @@
-{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Consolas;}}\viewkind4\uc1\pard\f0\fs20 TSRE GenX v0.14 Community Source Checkpoint Work List\par
+{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Consolas;}}\viewkind4\uc1\pard\f0\fs20 TSRE GenX v0.15 Corrective Development Work List\par
 \par
 ======================================================================================================\par
 \par
 SCOPE\par
 \par
-TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.14 is the current source checkpoint from `tsre-scomod-wip`.\par
+TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.15 is the current open development line on `tsre-scomod-wip`.\par
 \par
-TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Gr\unb\uk Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.\par
+TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Grønbæk Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.\par
 \par
 ======================================================================================================\par
 \par
-COMPLETED SOURCE CHECKPOINT: V0.14\par
+CORRECTIVE DEVELOPMENT LINE: V0.15\par
+\par
+PolyVeg safety\par
+\par
+- Corrected generated-asset cleanup for valid compressed-binary MSTS world files and made malformed or unsupported inputs stop before deletion.\par
+- Committed generated bake-file ownership when Save begins so a later failed save cannot make Discard delete a shape that a written world may reference.\par
+- Expanded the bake-manifest probe with compressed-binary retention and malformed-root fail-closed cases.\par
+\par
+PolyVeg water clearance and baking\par
+\par
+- Added required schema-controlled submerged-water clearance beside TDB/RDB clearances, with an 8 m default for new schemas.\par
+- Built the exclusion from current water-enabled terrain below its bilinear water surface, including setback expansion across tile borders.\par
+- Shared water rejection between OSM/flood and ruler/area planting and reported its count separately.\par
+- Blank/froze the viewport during single-tile and loaded-LOD bakes while keeping progress responsive, and moved patch conversion after confirmation.\par
+\par
+Release disposition\par
+\par
+- The operator confirmed the corrected working editor, water setback, bake viewport behavior, save, and reload.\par
+- The flawed remote v0.14 tag was withdrawn. Its exact annotated tag and frozen evidence remain local; public branch history was not rewritten.\par
+- v0.15 is authorized for a branch-and-tag source safety push and remains open development after the tagged commit. The annotated tag stores the exact reviewed source; no frozen binary release, GitHub Actions run, binary upload, or GitHub Release is included.\par
+- Final clean MinGW and MSVC Release builds passed all 15 registered tests in both lanes; exact executable hashes and timings are recorded in TEST-MATRIX-v0.15.md.\par
+\par
+======================================================================================================\par
+\par
+WITHDRAWN SOURCE CHECKPOINT: V0.14\par
 \par
 Terrain and Water Tools\par
 \par
@@ -46,7 +70,7 @@ Reliability, validation, and release engineering\par
 - Replaced the legacy TST convention with a versioned unpacked distribution under `dist/tsre-scomod-v0.14` and guarded source export through the clean public worktree.\par
 - Corrected release-pack promotion so the verified runtime-only `tsre_assets/templateRoute_0.6` payload is retained and required; v0.14 restores its 123 manifest-matched files from the immutable v0.12 local package.\par
 - Clean Qt 6.11.1 MinGW and VS2026/MSVC Release lanes completed. Both registered suites passed 15/15; exact hashes and timings are frozen in `TEST-MATRIX-v0.14.md`.\par
-- The operator accepted v0.14 with no outstanding release testing. Local binary/source packages and checksums were retained; the source branch/tag were pushed without creating or uploading a GitHub Release.\par
+- The operator accepted and capped v0.14 on the recorded release-time evidence. A valid compressed-binary world subsequently exposed a PolyVeg cleanup/save-ownership regression absent from that corpus; the immutable v0.14 tag remains historical, and the correction is tracked on v0.15 pending rebuild and focused editor verification. Local binary/source packages and checksums were retained; the source branch/tag were pushed without creating or uploading a GitHub Release.\par
 \par
 ======================================================================================================\par
 \par
@@ -120,7 +144,7 @@ CAPPED PLATFORM RELEASE: V0.9\par
 - Completed controlled parity checks for application startup, no-edit save/reload, scenery placement/Undo/retention/deletion, Place Guard, Camera Terrain Lock, and Activity Path Editor create/save/reload/extension.\par
 - Stabilized native captions, dropdown anchoring, helper shutdown, rejected-Load feedback, Terrain Brush sizing, and Water Helper height steps.\par
 - Updated the codebase for current MSYS2/MinGW tooling and added independently testable terrain math.\par
-- Built v0.9 from the complementary work of Piotr Gadecki (GokuMK), Eric Olesen (eric-from-trainsim), and Peter Gr\unb\uk Andersen, acknowledged in detail below.\par
+- Built v0.9 from the complementary work of Piotr Gadecki (GokuMK), Eric Olesen (eric-from-trainsim), and Peter Grønbæk Andersen, acknowledged in detail below.\par
 \par
 ======================================================================================================\par
 \par
@@ -313,7 +337,7 @@ Piotr Gadecki, known as GokuMK, is the original author of TSRE5. He created the 
 \par
 Eric Olesen, known as eric-from-trainsim, carried TSRE forward through the TSRE 8.006 line that directly precedes GenX. His continuing editor, compatibility, imagery, rolling-stock, route-reporting, and dedicated 8.006n Qt6 work provided the primary source/API reference for preserving the behavior of the immediate GenX parent line.\par
 \par
-Peter Gr\unb\uk Andersen produced the independent Eric-line Qt6/CMake port used as the primary build-structure and dependency-management reference. His CMake, vcpkg, deployment, and DDS-loading work supplied proven solutions that were reviewed and narrowly adapted to the GenX source rather than copied wholesale.\par
+Peter Grønbæk Andersen produced the independent Eric-line Qt6/CMake port used as the primary build-structure and dependency-management reference. His CMake, vcpkg, deployment, and DDS-loading work supplied proven solutions that were reviewed and narrowly adapted to the GenX source rather than copied wholesale.\par
 \par
 TSRE GenX v0.9 exists because these three bodies of work complement one another: Piotr's original application and technical foundation, Eric's sustained TSRE 8.x development, and Peter's independent modern build and Qt6 migration work.\par
 \par
@@ -870,4 +894,5 @@ GOAL\par
 The general direction is to make TSRE more practical as a production route editor: better track terrain shaping, faster tile-based painting, cleaner shoreline texturing, safer texture handling, safer route database saves, and fewer repetitive manual cleanup steps.\par
 \par
 ======================================================================================================\par
+\par
 }

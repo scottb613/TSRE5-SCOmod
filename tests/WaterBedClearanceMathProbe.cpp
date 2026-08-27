@@ -58,6 +58,10 @@ int main() {
     assert(almostEqual(WaterBedClearanceMath::shallowBedDrop(
         49.95f, 50.0f, 0.25f, 0.0f), 0.0f));
 
+    assert(WaterBedClearanceMath::terrainIsSubmerged(true, 9.0f, 10.0f));
+    assert(!WaterBedClearanceMath::terrainIsSubmerged(false, 9.0f, 10.0f));
+    assert(!WaterBedClearanceMath::terrainIsSubmerged(true, 10.0f, 10.0f));
+
     std::cout << "WaterBedClearanceMathProbe passed\n";
     return 0;
 }

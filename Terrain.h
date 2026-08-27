@@ -89,6 +89,9 @@ public:
     void setWaterLevel(float nw, float ne, float sw, float se);
     float getAvgVaterLevel();
     void getWaterLevels(float *w);
+    bool isTerrainSubmergedAt(int tileX, int tileZ,
+                              float localX, float localZ,
+                              float terrainHeight) const;
     float getWaterLevelNW();
     float getWaterLevelNE();
     float getWaterLevelSW();

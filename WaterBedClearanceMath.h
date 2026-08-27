@@ -2,6 +2,7 @@
 #define WATERBEDCLEARANCEMATH_H
 
 #include <algorithm>
+#include <cmath>
 
 namespace WaterBedClearanceMath {
 
@@ -30,6 +31,12 @@ inline float shallowBedDrop(float terrainHeight, float waterHeight,
         return 0.0f;
     return std::max(0.0f, clearance
         * std::clamp(taperFactor, 0.0f, 1.0f) - depth);
+}
+
+inline bool terrainIsSubmerged(bool waterPatchVisible,
+                               float terrainHeight, float waterHeight) {
+    return waterPatchVisible && std::isfinite(terrainHeight)
+        && std::isfinite(waterHeight) && terrainHeight < waterHeight;
 }
 
 } // namespace WaterBedClearanceMath

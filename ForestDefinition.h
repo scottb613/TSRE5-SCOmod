@@ -36,6 +36,7 @@ struct ForestRecipeDefinition {
     double defaultDensityPerSquareMetre = 0.0;
     double defaultTrackClearanceMetres = 0.0;
     double defaultRoadClearanceMetres = 0.0;
+    double defaultWaterClearanceMetres = 0.0;
 
     ForestNumberRange densityLimitsPerSquareMetre;
     int defaultMaximumTrees = 0;

@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QTextStream>
+#include <QStringConverter>
 
 #include <iostream>
 
@@ -21,6 +22,47 @@ bool touch(const QString &path) {
     if(!file.open(QIODevice::WriteOnly)) return false;
     file.write("generated");
     return true;
+}
+
+void appendLittleEndian16(QByteArray &data, quint16 value) {
+    data.append(static_cast<char>(value & 0xff));
+    data.append(static_cast<char>((value >> 8) & 0xff));
+}
+
+void appendLittleEndian32(QByteArray &data, quint32 value) {
+    data.append(static_cast<char>(value & 0xff));
+    data.append(static_cast<char>((value >> 8) & 0xff));
+    data.append(static_cast<char>((value >> 16) & 0xff));
+    data.append(static_cast<char>((value >> 24) & 0xff));
+}
+
+QByteArray compressedBinaryWorld(const QString &shapeFile,
+                                 bool validRootLength = true) {
+    // Representative MSTS binary token field: FileName token 0x0004005f,
+    // empty label byte, UTF-16 character count, then UTF-16LE filename data.
+    QStringEncoder encoder(QStringEncoder::Utf16LE);
+    const QByteArray encodedName = encoder(shapeFile);
+    QByteArray rootPayload;
+    rootPayload.append('\0');
+    appendLittleEndian32(rootPayload, 0x0004005f);
+    appendLittleEndian32(rootPayload,
+                         static_cast<quint32>(1 + 2 + encodedName.size()));
+    rootPayload.append('\0');
+    appendLittleEndian16(rootPayload, static_cast<quint16>(shapeFile.size()));
+    rootPayload.append(encodedName);
+
+    QByteArray payload("JINX0w0b______\r\n", 16);
+    appendLittleEndian32(payload, 0x0004004b);
+    appendLittleEndian32(payload, static_cast<quint32>(rootPayload.size()
+                         + (validRootLength ? 0 : 1)));
+    payload.append(rootPayload);
+
+    const QByteArray compressed = qCompress(payload);
+    QByteArray world("SIMISA@F", 8);
+    appendLittleEndian32(world, static_cast<quint32>(payload.size()));
+    world.append("@@@@", 4);
+    world.append(compressed.sliced(4));
+    return world;
 }
 }
 
@@ -137,6 +179,77 @@ int main(int argc, char **argv) {
                     "unreferenced shape should be removed");
     passed &= check(!QFileInfo::exists(route + "/shapes/V-99999+99999-99.s"),
                     "orphaned generated shape should be removed");
+
+    QTemporaryDir binaryTemporary;
+    passed &= check(binaryTemporary.isValid(),
+                    "binary-world temporary route should exist");
+    const QString binaryRoute = binaryTemporary.path();
+    QDir().mkpath(binaryRoute + "/OpenRails");
+    QDir().mkpath(binaryRoute + "/world");
+    QDir().mkpath(binaryRoute + "/shapes");
+    ForestBakeManifestEntry binaryEntry;
+    binaryEntry.id = "binary-protected";
+    binaryEntry.shapeFile = "V-12345+23456-12.s";
+    const QString binaryManifest = binaryRoute
+        + "/OpenRails/forest-bakes.json";
+    passed &= check(ForestBakeManifest::upsert(
+                    binaryManifest, binaryEntry, error),
+                    "binary-world entry should write");
+    const QString binaryShape = binaryRoute + "/shapes/"
+        + binaryEntry.shapeFile;
+    passed &= check(touch(binaryShape), "binary-world shape should write");
+    QFile binaryWorld(binaryRoute + "/world/w-000001+000002.w");
+    passed &= check(binaryWorld.open(QIODevice::WriteOnly),
+                    "binary world should open");
+    const QByteArray binaryWorldData =
+        compressedBinaryWorld(binaryEntry.shapeFile);
+    passed &= check(binaryWorld.write(binaryWorldData) == binaryWorldData.size(),
+                    "binary world should write completely");
+    binaryWorld.close();
+    ForestBakePruneResult binaryResult;
+    passed &= check(ForestBakeManifest::pruneUnreferenced(
+                    binaryRoute, binaryResult, error),
+                    "valid compressed binary world should scan safely");
+    passed &= check(binaryResult.remainingBlocks == 1
+                    && binaryResult.removedBlocks == 0,
+                    "binary world reference should retain its manifest block");
+    passed &= check(QFileInfo::exists(binaryShape),
+                    "binary world reference should retain its generated shape");
+
+    QTemporaryDir malformedBinaryTemporary;
+    passed &= check(malformedBinaryTemporary.isValid(),
+                    "malformed-binary temporary route should exist");
+    const QString malformedBinaryRoute = malformedBinaryTemporary.path();
+    QDir().mkpath(malformedBinaryRoute + "/OpenRails");
+    QDir().mkpath(malformedBinaryRoute + "/world");
+    QDir().mkpath(malformedBinaryRoute + "/shapes");
+    ForestBakeManifestEntry malformedBinaryEntry;
+    malformedBinaryEntry.id = "malformed-binary-protected";
+    malformedBinaryEntry.shapeFile = "V-23456+34567-23.s";
+    passed &= check(ForestBakeManifest::upsert(
+                    malformedBinaryRoute + "/OpenRails/forest-bakes.json",
+                    malformedBinaryEntry, error),
+                    "malformed-binary entry should write");
+    const QString malformedBinaryShape = malformedBinaryRoute + "/shapes/"
+        + malformedBinaryEntry.shapeFile;
+    passed &= check(touch(malformedBinaryShape),
+                    "malformed-binary shape should write");
+    QFile malformedBinaryWorld(malformedBinaryRoute
+        + "/world/w-000001+000002.w");
+    passed &= check(malformedBinaryWorld.open(QIODevice::WriteOnly),
+                    "malformed binary world should open");
+    const QByteArray malformedBinaryData = compressedBinaryWorld(
+        malformedBinaryEntry.shapeFile, false);
+    passed &= check(malformedBinaryWorld.write(malformedBinaryData)
+                    == malformedBinaryData.size(),
+                    "malformed binary world should write completely");
+    malformedBinaryWorld.close();
+    ForestBakePruneResult malformedBinaryResult;
+    passed &= check(!ForestBakeManifest::pruneUnreferenced(
+                    malformedBinaryRoute, malformedBinaryResult, error),
+                    "malformed binary root should stop destructive prune");
+    passed &= check(QFileInfo::exists(malformedBinaryShape),
+                    "malformed binary root should preserve generated assets");
 
     const QString manifestlessOrphan = "V-88888+88888-88.s";
     passed &= check(touch(route + "/shapes/" + manifestlessOrphan),

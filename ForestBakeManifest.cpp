@@ -10,6 +10,7 @@
 #include <QSet>
 #include <QStringConverter>
 #include <QRegularExpression>
+#include <QVector>
 #include <QtEndian>
 
 namespace {
@@ -85,9 +86,38 @@ bool expandedWorldFile(QByteArray data, QByteArray &expanded) {
     return true;
 }
 
-bool decodedWorldFile(const QByteArray &input, QString &text) {
+bool decodedWorldFile(const QByteArray &input, QString &text,
+                      QByteArray &binaryPayload) {
     QByteArray data;
     if(!expandedWorldFile(input, data)) return false;
+    text.clear();
+    binaryPayload.clear();
+
+    // MSTS binary world files carry the JINX0w0b marker ahead of a binary
+    // token stream whose string values are UTF-16LE. Treating that stream as
+    // UTF-8 rejects otherwise valid files (for example on byte 0x95). Keep the
+    // bytes intact and let the narrowly scoped generated-name scan below look
+    // for the exact ASCII/UTF-16LE filename encodings instead.
+    const QByteArray header = data.left(48).toLower();
+    const QByteArray asciiBinaryMarker("jinx0w0b", 8);
+    const qsizetype markerOffset = header.indexOf(asciiBinaryMarker);
+    if(markerOffset >= 0) {
+        constexpr quint32 BinaryWorldRootToken = 261844u + 375u;
+        const qsizetype tokenOffset = markerOffset + 16;
+        if(data.size() - tokenOffset < 8)
+            return false;
+        const quint32 rootToken = qFromLittleEndian<quint32>(
+            reinterpret_cast<const uchar*>(data.constData() + tokenOffset));
+        const quint32 declaredBytes = qFromLittleEndian<quint32>(
+            reinterpret_cast<const uchar*>(data.constData() + tokenOffset + 4));
+        const qsizetype availableBytes = data.size() - tokenOffset - 8;
+        if(rootToken != BinaryWorldRootToken
+                || declaredBytes != static_cast<quint32>(availableBytes))
+            return false;
+        binaryPayload = data.mid(tokenOffset + 8);
+        return true;
+    }
+
     if(data.size() >= 2
             && static_cast<unsigned char>(data[0]) == 0xFF
             && static_cast<unsigned char>(data[1]) == 0xFE) {
@@ -287,6 +317,18 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
     if(manifestShapes.isEmpty())
         return true;
 
+    struct GeneratedNameEncoding {
+        QString name;
+        QByteArray ascii;
+        QByteArray utf16Le;
+    };
+    QVector<GeneratedNameEncoding> generatedNames;
+    generatedNames.reserve(manifestShapes.size());
+    for(const QString &shape : manifestShapes) {
+        QStringEncoder encoder(QStringEncoder::Utf16LE);
+        generatedNames.append({shape, shape.toLatin1(), encoder(shape)});
+    }
+
     QSet<QString> referencedShapes;
     const QDir worldDirectory(cleanRoutePath + "/world");
     const QStringList worldFiles = worldDirectory.entryList(
@@ -304,14 +346,25 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
             return false;
         }
         QString worldText;
-        if(!decodedWorldFile(worldFile.readAll(), worldText)) {
+        QByteArray binaryPayload;
+        if(!decodedWorldFile(worldFile.readAll(), worldText, binaryPayload)) {
             error = "Unable to decode saved world file safely: "
                     + worldFile.fileName();
             return false;
         }
-        worldText = worldText.toLower();
-        for(const QString &shape : manifestShapes)
-            if(worldText.contains(shape)) referencedShapes.insert(shape);
+        if(binaryPayload.isEmpty()) {
+            worldText = worldText.toLower();
+            for(const GeneratedNameEncoding &shape : generatedNames)
+                if(worldText.contains(shape.name))
+                    referencedShapes.insert(shape.name);
+            continue;
+        }
+
+        const QByteArray foldedPayload = binaryPayload.toLower();
+        for(const GeneratedNameEncoding &shape : generatedNames)
+            if(foldedPayload.contains(shape.ascii)
+                    || foldedPayload.contains(shape.utf16Le))
+                referencedShapes.insert(shape.name);
     }
 
     QJsonArray retainedEntries;

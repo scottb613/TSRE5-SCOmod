@@ -312,6 +312,120 @@ private:
     QHash<quint64, QVector<Segment>> segments;
 };
 
+class PolyVegWaterClearance {
+public:
+    explicit PolyVegWaterClearance(double clearanceMetres)
+        : clearanceMetres(clearanceMetres) {}
+
+    bool blocks(double planX, double planZ) {
+        if(Game::terrainLib == nullptr || clearanceMetres <= 0.0)
+            return false;
+        const int centreTileX = tileForPlanCoordinate(planX);
+        const int centreTileZ = tileForPlanCoordinate(planZ);
+        const double searchDistance = clearanceMetres;
+        const int tileRadius = static_cast<int>(
+            std::ceil(searchDistance/2048.0));
+        const QPointF candidate(planX, planZ);
+        for(int dz = -tileRadius; dz <= tileRadius; ++dz) {
+            for(int dx = -tileRadius; dx <= tileRadius; ++dx) {
+                const int tileX = centreTileX+dx;
+                const int tileZ = centreTileZ+dz;
+                const double minimumX = tileX*2048.0-1024.0;
+                const double minimumZ = tileZ*2048.0-1024.0;
+                const double distanceX = planX < minimumX
+                    ? minimumX-planX
+                    : (planX > minimumX+2048.0
+                        ? planX-(minimumX+2048.0) : 0.0);
+                const double distanceZ = planZ < minimumZ
+                    ? minimumZ-planZ
+                    : (planZ > minimumZ+2048.0
+                        ? planZ-(minimumZ+2048.0) : 0.0);
+                if(std::hypot(distanceX, distanceZ) > searchDistance)
+                    continue;
+
+                const quint64 key = polyVegTileKey(tileX, tileZ);
+                if(!exclusionPaths.contains(key))
+                    loadTile(tileX, tileZ, key);
+                const auto path = exclusionPaths.constFind(key);
+                if(path != exclusionPaths.constEnd()
+                        && path.value().contains(candidate))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+private:
+    void loadTile(int tileX, int tileZ, quint64 key) {
+        QPainterPath submergedCells;
+        if(!Game::terrainLib->load(tileX, tileZ)) {
+            exclusionPaths.insert(key, submergedCells);
+            return;
+        }
+        Terrain *terrain = Game::terrainLib->getTerrainByXY(
+            tileX, tileZ, false);
+        if(terrain == nullptr || !terrain->loaded || !terrain->hasAnyWater()) {
+            exclusionPaths.insert(key, submergedCells);
+            return;
+        }
+        const int samples = terrain->getSampleCount();
+        const int sampleSize = terrain->getSampleSize();
+        const double tileSize = static_cast<double>(samples)*sampleSize;
+        if(samples <= 0 || sampleSize <= 0
+                || std::fabs(tileSize-2048.0) > 0.001) {
+            exclusionPaths.insert(key, submergedCells);
+            return;
+        }
+
+        const double tileMinimumX = tileX*2048.0-1024.0;
+        const double tileMinimumZ = tileZ*2048.0-1024.0;
+        for(int sampleZ = 0; sampleZ < samples; ++sampleZ) {
+            const float localZ = static_cast<float>(
+                -1024.0+(sampleZ+0.5)*sampleSize);
+            int submergedRunStart = -1;
+            for(int sampleX = 0; sampleX < samples; ++sampleX) {
+                const float localX = static_cast<float>(
+                    -1024.0+(sampleX+0.5)*sampleSize);
+                const float centreHeight = 0.25f*(
+                    terrain->terrainData[sampleZ][sampleX]
+                    + terrain->terrainData[sampleZ][sampleX+1]
+                    + terrain->terrainData[sampleZ+1][sampleX]
+                    + terrain->terrainData[sampleZ+1][sampleX+1]);
+                const bool submerged = terrain->isTerrainSubmergedAt(
+                    tileX, tileZ, localX, localZ, centreHeight);
+                if(submerged && submergedRunStart < 0)
+                    submergedRunStart = sampleX;
+                if(!submerged && submergedRunStart >= 0) {
+                    submergedCells.addRect(
+                        tileMinimumX+submergedRunStart*sampleSize,
+                        tileMinimumZ+sampleZ*sampleSize,
+                        (sampleX-submergedRunStart)*sampleSize, sampleSize);
+                    submergedRunStart = -1;
+                }
+            }
+            if(submergedRunStart >= 0)
+                submergedCells.addRect(
+                    tileMinimumX+submergedRunStart*sampleSize,
+                    tileMinimumZ+sampleZ*sampleSize,
+                    (samples-submergedRunStart)*sampleSize, sampleSize);
+        }
+        if(submergedCells.isEmpty()) {
+            exclusionPaths.insert(key, submergedCells);
+            return;
+        }
+        submergedCells = submergedCells.simplified();
+        QPainterPathStroker setback;
+        setback.setWidth(clearanceMetres*2.0);
+        setback.setCapStyle(Qt::RoundCap);
+        setback.setJoinStyle(Qt::RoundJoin);
+        exclusionPaths.insert(key,
+            submergedCells.united(setback.createStroke(submergedCells)));
+    }
+
+    double clearanceMetres = 0.0;
+    QHash<quint64, QPainterPath> exclusionPaths;
+};
+
 bool polyVegTerrainSlopeAccepted(double planX, double planZ,
                                  double maximumSlopeDegrees) {
     if(maximumSlopeDegrees >= 90.0)
@@ -3550,12 +3664,16 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
         Game::trackDB, recipe.defaultTrackClearanceMetres);
     PolyVegDatabaseClearance roadClearance(
         Game::roadDB, recipe.defaultRoadClearanceMetres);
+    PolyVegWaterClearance waterClearance(
+        recipe.defaultWaterClearanceMetres);
     int totalSlopeRejections = 0;
     int totalTrackRejections = 0;
     int totalRoadRejections = 0;
+    int totalWaterRejections = 0;
     settings.acceptsTerrain = [&recipe, &trackClearance, &roadClearance,
+            &waterClearance,
             &totalSlopeRejections, &totalTrackRejections,
-            &totalRoadRejections](double x, double z) {
+            &totalRoadRejections, &totalWaterRejections](double x, double z) {
         if(!polyVegTerrainSlopeAccepted(x, z, recipe.maximumSlopeDegrees)) {
             ++totalSlopeRejections;
             return false;
@@ -3571,6 +3689,10 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
         }
         if(roadClearance.blocks(x, terrainY, z)) {
             ++totalRoadRejections;
+            return false;
+        }
+        if(waterClearance.blocks(x, z)) {
+            ++totalWaterRejections;
             return false;
         }
         return true;
@@ -3676,6 +3798,11 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
             "%1 candidate position(s) were rejected within the %2 m RDB clearance.")
             .arg(totalRoadRejections)
             .arg(recipe.defaultRoadClearanceMetres, 0, 'f', 1));
+    if(totalWaterRejections > 0)
+        limitations.append(QString(
+            "%1 candidate position(s) were rejected within the %2 m submerged-water clearance.")
+            .arg(totalWaterRejections)
+            .arg(recipe.defaultWaterClearanceMetres, 0, 'f', 1));
     int placedCount = 0;
     int skippedTerrain = 0;
     int skippedBakedTiles = 0;
@@ -3805,7 +3932,8 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
                 "of the selected PolyVeg feature.\n\nFeature: %3\nTerrain skips: %4\n"
                 "Candidates before operation limit: %5\nGeneration attempts: %6\n"
                 "Generation time: %7 s\nPlacement time: %8 s\n"
-                "Blocked by baked tiles: %9\nTDB rejects: %10\nRDB rejects: %11%12\n\n"
+                "Blocked by baked tiles: %9\nTDB rejects: %10\nRDB rejects: %11\n"
+                "Water rejects: %12%13\n\n"
                 "The camera position was preserved. Save normally to keep it, or Undo "
                 "to remove the operation.")
             .arg(placedCount).arg(plantingPieces.size()).arg(selectedPolygon->featureId)
@@ -3813,7 +3941,8 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
             .arg(candidateGenerationMilliseconds / 1000.0, 0, 'f', 2)
             .arg(placementMilliseconds / 1000.0, 0, 'f', 2)
             .arg(skippedBakedTiles).arg(totalTrackRejections)
-            .arg(totalRoadRejections).arg(postLimitText));
+            .arg(totalRoadRejections).arg(totalWaterRejections)
+            .arg(postLimitText));
     queuePolyVegSuccessSound();
 }
 
@@ -4130,12 +4259,16 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         Game::trackDB, recipe->defaultTrackClearanceMetres);
     PolyVegDatabaseClearance roadClearance(
         Game::roadDB, recipe->defaultRoadClearanceMetres);
+    PolyVegWaterClearance waterClearance(
+        recipe->defaultWaterClearanceMetres);
     int rejectedBySlope = 0;
     int rejectedByTrack = 0;
     int rejectedByRoad = 0;
+    int rejectedByWater = 0;
     settings.acceptsTerrain = [recipe, &trackClearance, &roadClearance,
+            &waterClearance,
             &rejectedBySlope, &rejectedByTrack,
-            &rejectedByRoad](double x, double z) {
+            &rejectedByRoad, &rejectedByWater](double x, double z) {
         if(!polyVegTerrainSlopeAccepted(x, z, recipe->maximumSlopeDegrees)) {
             ++rejectedBySlope;
             return false;
@@ -4151,6 +4284,10 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         }
         if(roadClearance.blocks(x, terrainY, z)) {
             ++rejectedByRoad;
+            return false;
+        }
+        if(waterClearance.blocks(x, z)) {
+            ++rejectedByWater;
             return false;
         }
         return true;
@@ -4239,8 +4376,8 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
     QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
     if(candidates.isEmpty()) {
         GuiFunct::showEditorNotice(this, "Plant Ruler (polyveg)",
-            "No plantable positions remain after OSM, TDB/RDB clearance, "
-            "slope and baked-tile checks.");
+            "No plantable positions remain after OSM, TDB/RDB/water "
+            "clearance, slope and baked-tile checks.");
         return;
     }
     QString plantPrompt = QString(areaMode
@@ -4251,14 +4388,17 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         "OSM exclusions: %1\nBlocked by baked tiles: %2\n"
         "Rejected above %3 degrees slope: %4\n"
         "TDB clearance rejects (%5 m): %6\n"
-        "RDB clearance rejects (%7 m): %8")
+        "RDB clearance rejects (%7 m): %8\n"
+        "Water clearance rejects (%9 m): %10")
         .arg(excludedByOsm).arg(excludedByBake)
         .arg(recipe->maximumSlopeDegrees, 0, 'f', 1)
         .arg(rejectedBySlope)
         .arg(recipe->defaultTrackClearanceMetres, 0, 'f', 1)
         .arg(rejectedByTrack)
         .arg(recipe->defaultRoadClearanceMetres, 0, 'f', 1)
-        .arg(rejectedByRoad);
+        .arg(rejectedByRoad)
+        .arg(recipe->defaultWaterClearanceMetres, 0, 'f', 1)
+        .arg(rejectedByWater);
     if(polyVegRowsEnabled) {
         plantPrompt += QString("\nRows: %1 m wide, %2 m spacing at %3 degrees")
             .arg(polyVegRowWidthMetres > 0.0
@@ -4338,10 +4478,11 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         areaMode ? "Plant Area (polyveg)" : "Plant Ruler (polyveg)",
         QString("Planted %1 vegetation objects.\n\nTerrain skips: %2\n"
                 "OSM exclusions: %3\nBlocked by baked tiles: %4\n"
-                "TDB rejects: %5\nRDB rejects: %6\n\n"
+                "TDB rejects: %5\nRDB rejects: %6\nWater rejects: %7\n\n"
                 "Save normally to keep the planting, or Undo to remove it.")
             .arg(placed).arg(terrainSkips).arg(excludedByOsm)
-            .arg(excludedByBake).arg(rejectedByTrack).arg(rejectedByRoad));
+            .arg(excludedByBake).arg(rejectedByTrack).arg(rejectedByRoad)
+            .arg(rejectedByWater));
     queuePolyVegSuccessSound();
 }
 
@@ -4756,34 +4897,18 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     }
     const int sourceObjectCount = sourceObjects.size();
 
-    const ForestPatchBakeResult baked = ForestPatchBaker::bake(instances, 4);
-    if(!baked.isValid() || baked.patches.isEmpty()) {
-        GuiFunct::showEditorStopped(this, "Bake PolyVeg Tile",
-            baked.errors.isEmpty() ? "No occupied 4x4 vegetation blocks were produced."
-                                   : baked.errors.join("\n"));
-        return false;
-    }
-
     auto signedTile = [](int value) {
         return QString("%1%2").arg(value < 0 ? '-' : '+')
             .arg(std::abs(value), 5, 10, QLatin1Char('0'));
     };
     const QString shapesPath = routePath + "/shapes";
-    QStringList outputNames;
-    for(const ForestBakedPatch &patch : baked.patches) {
-        const QString name = QString("V%1%2-%3%4.s")
-            .arg(signedTile(tileX), signedTile(-tileZ))
-            .arg(patch.key.patchX).arg(patch.key.patchZ);
-        outputNames.append(name);
-    }
-
     const QString confirmation = QString(
         "Bake configured vegetation on the pointer tile into 4x4 patch blocks?\n\n"
-        "Tile: %1, %2\nSource objects: %3\nBaked blocks: %4\n\n"
+        "Tile: %1, %2\nSource objects: %3\n\n"
         "Only static shapes listed in polyveg.json will be replaced. "
         "Bake clears Undo history and purges this tile's source objects from "
         "memory. Delete the bake and replant to retry.")
-        .arg(tileX).arg(tileZ).arg(sourceObjects.size()).arg(baked.patches.size());
+        .arg(tileX).arg(tileZ).arg(sourceObjects.size());
     if(!polyVegBatchBake
             && !GuiFunct::confirmDestructiveAction(this, "Bake Vegetation", confirmation))
         return false;
@@ -4797,6 +4922,24 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
         singleBakeDialog.show();
         singleBakeDialog.raise();
         allowPolyVegBakePaint(this, 500);
+    }
+    PolyVegViewportFreeze bakeViewportFreeze(this);
+
+    const ForestPatchBakeResult baked = ForestPatchBaker::bake(instances, 4);
+    if(!baked.isValid() || baked.patches.isEmpty()) {
+        if(!polyVegBatchBake)
+            singleBakeDialog.close();
+        GuiFunct::showEditorStopped(this, "Bake PolyVeg Tile",
+            baked.errors.isEmpty() ? "No occupied 4x4 vegetation blocks were produced."
+                                   : baked.errors.join("\n"));
+        return false;
+    }
+    QStringList outputNames;
+    for(const ForestBakedPatch &patch : baked.patches) {
+        const QString name = QString("V%1%2-%3%4.s")
+            .arg(signedTile(tileX), signedTile(-tileZ))
+            .arg(patch.key.patchX).arg(patch.key.patchZ);
+        outputNames.append(name);
     }
 
     QString error;
@@ -4931,6 +5074,7 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
             "PolyVeg bake purged %1 of %2 expected raw objects on tile %3, %4.")
             .arg(purgedSources).arg(sourceObjectCount).arg(tileX).arg(tileZ));
 
+    bakeViewportFreeze.finish();
     update();
     if(polyVegBatchBake) {
         polyVegBatchSourceCount += sourceObjectCount;
@@ -4988,6 +5132,8 @@ void RouteEditorGLWidget::bakeAllVegetation() {
     configurePolyVegBakeDialog(processing, processingStatus);
     processing.show();
     processing.raise();
+    QApplication::processEvents();
+    PolyVegViewportFreeze bakeViewportFreeze(this);
 
     polyVegBatchBake = true;
     polyVegBatchSourceCount = 0;
@@ -5006,6 +5152,7 @@ void RouteEditorGLWidget::bakeAllVegetation() {
     }
     polyVegBatchBake = false;
 
+    bakeViewportFreeze.finish();
     QTimer::singleShot(0, this,
         &RouteEditorGLWidget::refreshPolyVegTileCounts);
     allowPolyVegBakePaint(this, 250);
@@ -6813,13 +6960,19 @@ bool RouteEditorGLWidget::saveRoute() {
         emit updStatus(QString("stat0"), QString("SAVE FAILED"));
         return false;
     }
+
+    // A save attempt writes modified world tiles before terrain, route-key,
+    // activity, and cleanup stages can report failure. From this point onward
+    // rolling generated bake files back could leave an already-written world
+    // file referring to a deleted shape. Retaining a now-orphaned bake asset is
+    // safe and recoverable by the next successful manifest cleanup.
+    polyVegBakeSession.commit();
     route->save();
     if(!route->lastSaveSucceeded()){
         emit updStatus(QString("stat0"), QString("SAVE FAILED"));
         return false;
     }
 
-    polyVegBakeSession.commit();
     timeSaved = timeNow;
     emit updStatus(QString("stat0"), QString("Saved"));
     return true;

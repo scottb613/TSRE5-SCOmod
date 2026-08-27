@@ -36,6 +36,7 @@
 #include "Renderer.h"
 #include "RouteSaveTransaction.h"
 #include "TerrainGridMath.h"
+#include "WaterBedClearanceMath.h"
 
 QString Terrain::TileDir[2] = {"tiles", "lo_tiles"};
 Brush* Terrain::DefaultBrush = NULL;
@@ -584,17 +585,30 @@ void Terrain::SaveEmpty(QString name, int samples, int sampleSize, int patches, 
         return;
     }
     TerrainGridMath::RenderLayout layout;
-    TerrainGridMath::RenderLayoutError layoutError;
+    TerrainGridMath::RenderLayoutError layoutError =
+            TerrainGridMath::RenderLayoutError::None;
     std::size_t expectedRawBytes = 0;
-    if(patches != TerrainGridMath::SupportedPatchDimension
-            || !TerrainGridMath::calculateRenderLayout(
-                    samples, patches, layout, layoutError)
-            || !TerrainGridMath::calculateSamplePayloadSize(
-                    samples, sizeof(quint16), expectedRawBytes)){
+    if(patches != TerrainGridMath::SupportedPatchDimension){
+        qWarning() << "Refusing to create invalid terrain tile" << name
+                   << "samples" << samples << "sample size" << sampleSize
+                   << "patches" << patches << "reason"
+                   << "unsupported patch dimension";
+        return;
+    }
+    if(!TerrainGridMath::calculateRenderLayout(
+            samples, patches, layout, layoutError)){
         qWarning() << "Refusing to create invalid terrain tile" << name
                    << "samples" << samples << "sample size" << sampleSize
                    << "patches" << patches << "reason"
                    << TerrainGridMath::renderLayoutErrorText(layoutError);
+        return;
+    }
+    if(!TerrainGridMath::calculateSamplePayloadSize(
+            samples, sizeof(quint16), expectedRawBytes)){
+        qWarning() << "Refusing to create invalid terrain tile" << name
+                   << "samples" << samples << "sample size" << sampleSize
+                   << "patches" << patches << "reason"
+                   << "sample payload size overflow";
         return;
     }
     QString path;
@@ -1498,6 +1512,42 @@ void Terrain::getWaterLevels(float* w){
     w[1] = tfile->WNE;
     w[2] = tfile->WSW;
     w[3] = tfile->WSE;
+}
+
+bool Terrain::isTerrainSubmergedAt(int tileX, int tileZ,
+                                   float localX, float localZ,
+                                   float terrainHeight) const {
+    if(tfile == NULL || tfile->nsamples == NULL || tfile->sampleSize == NULL
+            || tfile->flags == NULL || tfile->patchsetNpatches <= 0)
+        return false;
+    const int samples = *tfile->nsamples;
+    const int sampleSize = *tfile->sampleSize;
+    const float tileSize = static_cast<float>(samples*sampleSize);
+    if(samples <= 0 || sampleSize <= 0 || !std::isfinite(tileSize)
+            || tileSize <= 0.0f)
+        return false;
+
+    float terrainX = localX
+        - 2048.0f*(mojex-static_cast<float>(tileX)) + 1024.0f;
+    float terrainZ = localZ
+        - 2048.0f*(mojez-static_cast<float>(tileZ)) + 1024.0f;
+    terrainX = std::clamp(terrainX, 0.0f,
+        std::nextafter(tileSize, 0.0f));
+    terrainZ = std::clamp(terrainZ, 0.0f,
+        std::nextafter(tileSize, 0.0f));
+    const int patches = tfile->patchsetNpatches;
+    const int patchX = std::clamp(
+        static_cast<int>(terrainX*patches/tileSize), 0, patches-1);
+    const int patchZ = std::clamp(
+        static_cast<int>(terrainZ*patches/tileSize), 0, patches-1);
+    const bool waterPatchVisible =
+        (tfile->flags[patchZ*patches+patchX] & 0xc0) != 0;
+    const float levels[4] {tfile->WNW, tfile->WNE,
+                           tfile->WSW, tfile->WSE};
+    const float waterHeight = WaterBedClearanceMath::bilinearWaterHeight(
+        levels, terrainX-tileSize*0.5f, terrainZ-tileSize*0.5f);
+    return WaterBedClearanceMath::terrainIsSubmerged(
+        waterPatchVisible, terrainHeight, waterHeight);
 }
 
 float Terrain::getWaterLevelNW(){

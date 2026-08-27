@@ -4,7 +4,22 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
-v0.14 community source checkpoint
+v0.15 corrective source checkpoint
+
+- Game.cpp / TSRE5_resource.rc / CMakeLists.txt / vcpkg.json
+- ForestBakeManifest.cpp / RouteEditorGLWidget.cpp / RouteEditorGLWidget.h
+- ForestDefinition.cpp / ForestDefinition.h / PolyVegSchemaEditor.cpp
+- Terrain.cpp / Terrain.h / WaterBedClearanceMath.h
+- tests/ForestBakeManifestProbe.cpp / tests/ForestDefinitionProbe.cpp
+- tests/WaterBedClearanceMathProbe.cpp
+  - Corrected binary-world bake ownership and cleanup, added schema-controlled
+    submerged-water setback, and froze the bake viewport while progress remains
+    responsive.
+
+The v0.15 public manifest is authoritative for the complete replacement source
+set. The withdrawn v0.14 tag remains local only for forensic comparison.
+
+v0.14 withdrawn source checkpoint
 
 - CMakeLists.txt / CMakePresets.json / vcpkg.json
 - TSRE5_resource.rc / Game.cpp
@@ -26,11 +41,11 @@ v0.14 community source checkpoint
 - GuiFunct.cpp / GuiFunct.h / GenXControls.qrc / SettingsDialog.cpp
 - tests/*.cpp / TSREvcWIP/tests/*.cpp / tools/BakeForestPatch.cpp
 - scripts/Invoke-CMake.ps1 / scripts/Invoke-RouteRegression.ps1 / scripts/Prepare-SourceRelease.ps1
-- AAA_Compile.ps1
+- AAA_Compile.ps1 / AAA_Publish.ps1
 
-The v0.14 public manifest is authoritative for the complete file set. This
-consolidated ledger lists the principal implementation groups rather than
-duplicating every source-file touch from the detailed development log.
+The frozen local v0.14 manifest records that withdrawn checkpoint's complete
+file set. This consolidated ledger lists the principal implementation groups
+rather than duplicating every source-file touch from the development log.
 
 v0.13 community source checkpoint
 
@@ -150,7 +165,7 @@ v0.12 community open-testing release
 - vcpkg.json
 - scripts/Check-Prerequisites.ps1
 - scripts/Invoke-CMake.ps1
-- AAA_Compile.ps1
+- AAA_Compile.ps1 / AAA_Publish.ps1
 - tests/ForestDefinitionProbe.cpp
 - tests/ForestOsmCacheProbe.cpp
 - tests/ForestPatchBakerProbe.cpp

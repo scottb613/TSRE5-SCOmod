@@ -292,7 +292,7 @@ ForestCatalogLoadResult ForestDefinitionLoader::loadFile(
         warnUnknown(defaults,
             {"widthMetres", "densityPerSquareKilometre", "terrainDepthMetres",
              "variationScale", "trackClearanceMetres", "roadClearanceMetres",
-             "maximumTrees"},
+             "waterClearanceMetres", "maximumTrees"},
             defaultsContext, result.warnings);
         requiredNumber(defaults, "densityPerSquareKilometre", defaultsContext,
             recipe.defaultDensityPerSquareMetre, result.errors);
@@ -301,13 +301,17 @@ ForestCatalogLoadResult ForestDefinitionLoader::loadFile(
             recipe.defaultTrackClearanceMetres, result.errors);
         requiredNumber(defaults, "roadClearanceMetres", defaultsContext,
             recipe.defaultRoadClearanceMetres, result.errors);
+        requiredNumber(defaults, "waterClearanceMetres", defaultsContext,
+            recipe.defaultWaterClearanceMetres, result.errors);
         double defaultMaximumTrees = 0.0;
         if(defaults.contains("maximumTrees"))
             requiredNumber(defaults, "maximumTrees", defaultsContext,
                 defaultMaximumTrees, result.errors);
         if(recipe.defaultDensityPerSquareMetre <= 0.0
                 || recipe.defaultTrackClearanceMetres < 0.0
-                || recipe.defaultRoadClearanceMetres < 0.0)
+                || recipe.defaultRoadClearanceMetres < 0.0
+                || recipe.defaultWaterClearanceMetres < 0.0
+                || recipe.defaultWaterClearanceMetres > 100.0)
             result.errors.append(defaultsContext + ": defaults are outside safe ranges.");
 
         const QJsonObject limits = object.value("limits").toObject();

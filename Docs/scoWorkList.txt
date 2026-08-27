@@ -1,16 +1,40 @@
-TSRE GenX v0.14 Community Source Checkpoint Work List
+TSRE GenX v0.15 Corrective Development Work List
 
 ======================================================================================================
 
 SCOPE
 
-TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.14 is the current source checkpoint from `tsre-scomod-wip`.
+TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.15 is the current open development line on `tsre-scomod-wip`.
 
 TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Grønbæk Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.
 
 ======================================================================================================
 
-COMPLETED SOURCE CHECKPOINT: V0.14
+CORRECTIVE DEVELOPMENT LINE: V0.15
+
+PolyVeg safety
+
+- Corrected generated-asset cleanup for valid compressed-binary MSTS world files and made malformed or unsupported inputs stop before deletion.
+- Committed generated bake-file ownership when Save begins so a later failed save cannot make Discard delete a shape that a written world may reference.
+- Expanded the bake-manifest probe with compressed-binary retention and malformed-root fail-closed cases.
+
+PolyVeg water clearance and baking
+
+- Added required schema-controlled submerged-water clearance beside TDB/RDB clearances, with an 8 m default for new schemas.
+- Built the exclusion from current water-enabled terrain below its bilinear water surface, including setback expansion across tile borders.
+- Shared water rejection between OSM/flood and ruler/area planting and reported its count separately.
+- Blank/froze the viewport during single-tile and loaded-LOD bakes while keeping progress responsive, and moved patch conversion after confirmation.
+
+Release disposition
+
+- The operator confirmed the corrected working editor, water setback, bake viewport behavior, save, and reload.
+- The flawed remote v0.14 tag was withdrawn. Its exact annotated tag and frozen evidence remain local; public branch history was not rewritten.
+- v0.15 is authorized for a branch-and-tag source safety push and remains open development after the tagged commit. The annotated tag stores the exact reviewed source; no frozen binary release, GitHub Actions run, binary upload, or GitHub Release is included.
+- Final clean MinGW and MSVC Release builds passed all 15 registered tests in both lanes; exact executable hashes and timings are recorded in TEST-MATRIX-v0.15.md.
+
+======================================================================================================
+
+WITHDRAWN SOURCE CHECKPOINT: V0.14
 
 Terrain and Water Tools
 
@@ -46,7 +70,7 @@ Reliability, validation, and release engineering
 - Replaced the legacy TST convention with a versioned unpacked distribution under `dist/tsre-scomod-v0.14` and guarded source export through the clean public worktree.
 - Corrected release-pack promotion so the verified runtime-only `tsre_assets/templateRoute_0.6` payload is retained and required; v0.14 restores its 123 manifest-matched files from the immutable v0.12 local package.
 - Clean Qt 6.11.1 MinGW and VS2026/MSVC Release lanes completed. Both registered suites passed 15/15; exact hashes and timings are frozen in `TEST-MATRIX-v0.14.md`.
-- The operator accepted v0.14 with no outstanding release testing. Local binary/source packages and checksums were retained; the source branch/tag were pushed without creating or uploading a GitHub Release.
+- The operator accepted and capped v0.14 on the recorded release-time evidence. A valid compressed-binary world subsequently exposed a PolyVeg cleanup/save-ownership regression absent from that corpus; the immutable v0.14 tag remains historical, and the correction is tracked on v0.15 pending rebuild and focused editor verification. Local binary/source packages and checksums were retained; the source branch/tag were pushed without creating or uploading a GitHub Release.
 
 ======================================================================================================
 

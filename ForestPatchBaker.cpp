@@ -396,7 +396,8 @@ bool ForestShapeTextIO::writePatch(const QString &path,
         << "    vertices ( " << vertexCount << "\r\n";
     int globalVertex = 0;
     for(const ForestShapeMesh &mesh : patch.meshes) {
-        for(const ForestShapeVertex &v : mesh.vertices) {
+        for(qsizetype vertexIndex = 0;
+                vertexIndex < mesh.vertices.size(); ++vertexIndex) {
             out << "     vertex ( 00000000 " << globalVertex << ' ' << globalVertex
                 << " FFFFFFFF FF000000 vertex_uvs ( 1 " << globalVertex << " ) )\r\n";
             ++globalVertex;
