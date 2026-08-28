@@ -191,6 +191,7 @@ Get-ChildItem -Force -LiteralPath $releaseCopy | ForEach-Object {
 foreach ($document in @(
     'LICENSE.md', 'README.md', "RELEASE-NOTES-$Version.md",
     "TEST-MATRIX-$Version.md", 'THIRD-PARTY-NOTICES.txt',
+    'POLYVEG-USER-GUIDE.md', 'WATER-RULER-USER-GUIDE.md',
     'scoFileEdit.txt', 'scoGitRelease.txt', 'scoKeyList.txt',
     'scoUiStyle.txt', 'scoWorkList.txt', 'workList.rtf'
 )) {

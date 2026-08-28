@@ -9,7 +9,7 @@ GenX is an actively developed editor, not a demonstration port. Back up a
 route before major terrain, water, track, or vegetation work and evaluate new
 workflows on a copy first.
 
-> **Current development line:** v0.15. The v0.14 public tag was withdrawn.
+> **Current release:** v0.15. The v0.14 public tag was withdrawn.
 
 ## Release Highlights
 
@@ -30,11 +30,10 @@ workflows on a copy first.
 - Keeps the earlier tile-border conforming, terrain-water, interface, parsing,
   save-transaction, texture, and diagnostic work that passed the v0.14 gate.
 
-v0.15 is an active development line receiving a **corrective source safety
-push** on `tsre-scomod-wip` with an annotated `v0.15` source tag. The tag stores
-this exact reviewed source snapshot; it is not a frozen binary release and does
-not create a GitHub Release, upload a binary, or invoke GitHub Actions. The
-latest downloadable binary release remains v0.12.
+v0.15 is the corrective full release on `tsre-scomod-wip`. Its existing
+annotated `v0.15` tag stores the exact reviewed source used for the binary
+package and remains immutable. The complete Windows distribution is prepared
+from the matching reviewed MinGW build. No GitHub Actions were used.
 
 ### v0.14 — Withdrawn
 
@@ -87,10 +86,10 @@ locally only for forensic comparison. Use v0.15 instead.
 
 ## Installation
 
-### Current Source
+### Source
 
-1. Check out the `tsre-scomod-wip` branch for continuing development or the
-   `v0.15` tag for this exact reviewed source safety snapshot.
+1. Check out the `v0.15` tag for the exact release source or
+   `tsre-scomod-wip` for continuing development.
 2. Install the Qt 6.11.1 and vcpkg prerequisites described by the checked-in
    CMake presets.
 3. Keep machine-specific paths in `CMakeUserPresets.json`.
@@ -105,10 +104,12 @@ locally only for forensic comparison. Use v0.15 instead.
 Do not copy only `TSRE5.exe` into an older runtime. The executable, Qt runtime,
 plugins, and packaged assets must remain compiler-matched.
 
-### Latest Packaged Binary
+### Packaged Binary
 
-The latest public binary is [v0.12](https://github.com/scottb613/TSRE5-SCOmod/releases/tag/v0.12).
-v0.15 intentionally has no GitHub Release or binary download.
+The current packaged binary release is
+[v0.15](https://github.com/scottb613/TSRE5-SCOmod/releases/tag/v0.15).
+Use the published SHA-256 companion to verify the downloaded ZIP before
+extracting it.
 
 ## Requirements and Limitations
 
@@ -123,11 +124,10 @@ v0.15 intentionally has no GitHub Release or binary download.
 
 ## Verification
 
-The operator has confirmed the corrected v0.15 editor behavior, PolyVeg water
+The operator confirmed the corrected v0.15 editor behavior, PolyVeg water
 setback, bake viewport blanking, Save, and reload. Final MinGW and MSVC Release
-builds, full CTest results, and executable hashes are recorded in
-[`TEST-MATRIX-v0.15.md`](TEST-MATRIX-v0.15.md) before the source checkpoint is
-pushed.
+builds passed all 15 registered tests. Complete results and executable hashes
+are recorded in [`TEST-MATRIX-v0.15.md`](TEST-MATRIX-v0.15.md).
 
 ## Documentation
 
@@ -138,6 +138,11 @@ documents:
   release notes.
 - [`TEST-MATRIX-v0.15.md`](TEST-MATRIX-v0.15.md) — automated and manual
   verification record.
+- [`POLYVEG-USER-GUIDE.md`](POLYVEG-USER-GUIDE.md) — complete PolyVeg schema,
+  planting, ruler, bake, cleanup, and troubleshooting cheat sheet.
+- [`WATER-RULER-USER-GUIDE.md`](WATER-RULER-USER-GUIDE.md) — Water Ruler
+  placement, water processing, terrain adjustment, Undo, save, and
+  troubleshooting procedure.
 - [`scoKeyList.txt`](scoKeyList.txt) — Route Editor shortcuts.
 - [`scoUiStyle.txt`](scoUiStyle.txt) — canonical interface rules.
 - [`scoWorkList.txt`](scoWorkList.txt) — historical engineering record.

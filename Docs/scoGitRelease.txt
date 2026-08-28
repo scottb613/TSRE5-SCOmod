@@ -1,9 +1,9 @@
 # TSRE GenX v0.15 Release Notes
 
-v0.15 is the active corrective development line replacing the withdrawn v0.14
-code on the public branch. Its annotated `v0.15` tag stores the exact reviewed
-source safety snapshot; it is not a frozen binary release and contains no
-public binary package or GitHub Release.
+v0.15 is the corrective full release replacing the withdrawn v0.14 code. Its
+existing annotated `v0.15` tag stores the exact reviewed source used for the
+binary package; the tag remains immutable and was not moved or replaced while
+the full distribution was prepared.
 
 ## Critical PolyVeg correction
 
@@ -45,7 +45,8 @@ public binary package or GitHub Release.
 
 ## Distribution status
 
-v0.15 is authorized only as a source safety push on `tsre-scomod-wip` with an
-annotated `v0.15` source tag. Development continues after that tagged commit;
-no frozen binary release, GitHub Actions run, binary upload, or GitHub Release
-is part of this push. The latest uploaded binary release remains v0.12.
+v0.15 is distributed as a complete 64-bit Windows binary release against the
+existing immutable `v0.15` source tag. The release contains the reviewed MinGW
+runtime, frozen public documents, user procedures, manifests, and a published
+SHA-256 companion. The source tag was not moved or replaced, and no GitHub
+Actions were used.

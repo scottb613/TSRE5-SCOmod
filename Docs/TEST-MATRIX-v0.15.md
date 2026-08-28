@@ -1,8 +1,8 @@
 # TSRE GenX v0.15 Test Matrix
 
-v0.15 is the active corrective development line after the withdrawn v0.14 tag.
-This matrix records the completed working-pack checks and clean dual-compiler
-gate used for the branch-and-tag source safety push.
+v0.15 is the corrective full release after the withdrawn v0.14 tag. This matrix
+records the completed working-pack checks and clean dual-compiler gate used for
+the immutable source tag and matching binary release candidate.
 
 ## Automated release gate
 
@@ -68,7 +68,8 @@ above.
 ## Publication disposition
 
 The remote v0.14 tag was withdrawn; its exact annotated tag remains local. The
-v0.15 final build gate is complete and the active source is approved for a
-direct branch push and annotated `v0.15` source safety tag. Development remains
-open after that commit; no frozen binary release, GitHub Actions run, binary
-upload, or GitHub Release is authorized.
+v0.15 final build gate is complete, and the promoted MinGW executable matches
+the reviewed build hash. The existing annotated `v0.15` tag remains fixed at
+the exact reviewed source commit used by the package. The verified binary ZIP
+and SHA-256 companion are published as the stable v0.15 GitHub Release. No
+GitHub Actions were used.
