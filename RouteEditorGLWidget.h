@@ -222,6 +222,7 @@ signals:
     void polyVegPanelStatus(QString text);
     void polyVegTileCounts(int rawCount, int bakedCount, int bakedTileCount);
     void primaryEditorToolsEnabled(bool enabled);
+    void terrainShapeToggleRequested();
 
     
 protected:
@@ -243,6 +244,7 @@ protected:
     void pushRenderPointer();
 private:
     void setupVertexAttribs();
+    void applyStatusPanelCommand(const QString &name, bool allowToggleOff);
     void setSelectedObj(GameObj* o, bool refreshProperties = true);
     bool validatePlacement(WorldObj* obj, Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);
     bool pointerNearPlacementDb(Ref::RefItem* item, const float* pointerPos, int pointerTileX, int pointerTileZ);

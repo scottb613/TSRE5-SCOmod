@@ -17,6 +17,7 @@
 #include "Game.h"
 #include "ShapeLib.h"
 #include "Terrain.h"
+#include "TerrainGridMath.h"
 #include "ForestObj.h"
 #include "TFile.h"
 #include "TerrainLib.h"
@@ -2258,20 +2259,29 @@ void TerrainTools::resetRouteTerrtexPaint()
         TFile tfile;
         if (!tfile.readT(tileInfo.absoluteFilePath())
         || tfile.tdata == NULL
+        || tfile.nsamples == NULL
         || tfile.patchsetNpatches <= 0) {
             tilesInvalid++;
             continue;
         }
 
         int patches = tfile.patchsetNpatches;
+        const int samplesPerPatch =
+                TerrainGridMath::patchSampleCount(*tfile.nsamples, patches);
+        if(samplesPerPatch <= 0){
+            tilesInvalid++;
+            continue;
+        }
+        const float textureScale =
+                TerrainGridMath::insetPatchTextureScale(samplesPerPatch);
         for (int patch = 0; patch < patches * patches; patch++) {
             tfile.tdata[patch * 13 + 6] = 0;
             tfile.tdata[patch * 13 + 7] = 0.001f;
             tfile.tdata[patch * 13 + 8] = 0.001f;
-            tfile.tdata[patch * 13 + 9] = 0.062375f;
+            tfile.tdata[patch * 13 + 9] = textureScale;
             tfile.tdata[patch * 13 + 10] = 0.0f;
             tfile.tdata[patch * 13 + 11] = 0.0f;
-            tfile.tdata[patch * 13 + 12] = 0.062375f;
+            tfile.tdata[patch * 13 + 12] = textureScale;
         }
 
         const int removed = tfile.resetMaterialsToDefault();

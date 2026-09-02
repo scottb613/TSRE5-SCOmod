@@ -24,6 +24,8 @@
 #include "RouteEditorGLWidget.h"
 #include "RouteEditorWindow.h"
 #include "Game.h"
+#include "MapWindow.h"
+#include "TerrainLib.h"
 #include "AceLib.h"
 #include <QDebug>
 #include "GuiFunct.h"
@@ -38,6 +40,7 @@
 #include "PropertiesAbstract.h"
 #include "PropertiesUndefined.h"
 #include "PropertiesStatic.h"
+#include "PropertiesPolyVegBake.h"
 #include "PropertiesTransfer.h"
 #include "PropertiesPlatform.h"
 #include "PropertiesSiding.h"
@@ -280,6 +283,7 @@ RouteEditorWindow::RouteEditorWindow() {
     activityTrafficWindow = new ActivityTrafficWindow(this);
     activityTimetableWindow = new ActivityTimetableWindow(this);
     
+    objProperties["PolyVegBake"] = new PropertiesPolyVegBake;
     objProperties["Static"] = new PropertiesStatic;
     objProperties["Transfer"] = new PropertiesTransfer;
     objProperties["Platform"] = new PropertiesPlatform;
@@ -380,6 +384,14 @@ RouteEditorWindow::RouteEditorWindow() {
     if(staticProperties != NULL && trackProperties != NULL){
         QObject::connect(staticProperties, &PropertiesStatic::hacksToggled,
                          trackProperties, &PropertiesTrackObj::toggleHacksForSelection);
+    }
+    PropertiesPolyVegBake *polyVegBakeProperties =
+        qobject_cast<PropertiesPolyVegBake*>(objProperties["PolyVegBake"]);
+    if(polyVegBakeProperties != NULL && trackProperties != NULL){
+        QObject::connect(polyVegBakeProperties,
+                         &PropertiesPolyVegBake::hacksToggled,
+                         trackProperties,
+                         &PropertiesTrackObj::toggleHacksForSelection);
     }
     PropertiesSignal *signalProperties =
         qobject_cast<PropertiesSignal*>(objProperties["Signal"]);
@@ -651,7 +663,9 @@ RouteEditorWindow::RouteEditorWindow() {
     QObject::connect(vViewTerrainGrid, SIGNAL(triggered(bool)), this, SLOT(viewTerrainGrid(bool)));   
     vViewTerrainShape = GuiFunct::newMenuCheckAction(tr("&Hide Terrain Shape"), this, false); 
     viewMenu->addAction(vViewTerrainShape);
-    QObject::connect(vViewTerrainShape, SIGNAL(triggered(bool)), this, SLOT(viewTerrainShape(bool)));   
+    QObject::connect(vViewTerrainShape, SIGNAL(triggered(bool)), this, SLOT(viewTerrainShape(bool)));
+    QObject::connect(glWidget, &RouteEditorGLWidget::terrainShapeToggleRequested,
+                     vViewTerrainShape, &QAction::trigger);
     vShowWorldObjPivotPoints = GuiFunct::newMenuCheckAction(tr("World&Obj Markers"), this, false); 
     viewMenu->addAction(vShowWorldObjPivotPoints);
     QObject::connect(vShowWorldObjPivotPoints, SIGNAL(triggered(bool)), this, SLOT(showWorldObjPivotPointsEnabled(bool)));
@@ -1824,13 +1838,17 @@ void RouteEditorWindow::showProperties(GameObj* obj){
         if(obj != NULL && trackProperties->support(obj)){
             visibleHacksButton = trackProperties->hacksButton();
         } else if(obj != NULL){
+            PropertiesPolyVegBake *polyVegBakeProperties =
+                qobject_cast<PropertiesPolyVegBake*>(objProperties["PolyVegBake"]);
             PropertiesStatic *staticProperties =
                 qobject_cast<PropertiesStatic*>(objProperties["Static"]);
             PropertiesTerrain *terrainProperties =
                 qobject_cast<PropertiesTerrain*>(objProperties["Terrain"]);
             PropertiesSignal *signalProperties =
                 qobject_cast<PropertiesSignal*>(objProperties["Signal"]);
-            if(staticProperties != NULL && staticProperties->support(obj))
+            if(polyVegBakeProperties != NULL && polyVegBakeProperties->support(obj))
+                visibleHacksButton = polyVegBakeProperties->hacksButton();
+            else if(staticProperties != NULL && staticProperties->support(obj))
                 visibleHacksButton = staticProperties->hacksButton();
             else if(terrainProperties != NULL && terrainProperties->support(obj))
                 visibleHacksButton = terrainProperties->hacksButton();
@@ -1847,6 +1865,18 @@ void RouteEditorWindow::showProperties(GameObj* obj){
     propertiesPanelTitle->show();
     // show 
     //qDebug() << obj->typeObj;
+
+    // Generated PolyVeg blocks have a deliberately restricted panel. Dispatch
+    // it before the generic QHash walk (whose Undefined fallback supports all
+    // objects) so they can never inherit editable Static-object commands.
+    PropertiesPolyVegBake *polyVegBakeProperties =
+        qobject_cast<PropertiesPolyVegBake*>(objProperties["PolyVegBake"]);
+    if(polyVegBakeProperties != NULL && polyVegBakeProperties->support(obj)){
+        polyVegBakeProperties->showObj(obj);
+        polyVegBakeProperties->show();
+        EditorPopupWindow::closeActiveUnlessSupportedBy(polyVegBakeProperties);
+        return;
+    }
 
     //for (std::vector<PropertiesAbstract*>::iterator it = objProperties.begin(); it != objProperties.end(); ++it) {
     foreach (PropertiesAbstract *it, objProperties){
@@ -1934,7 +1964,26 @@ void RouteEditorWindow::viewTileGrid(bool show){
     Game::viewTileGrid = show;
 }
 void RouteEditorWindow::viewTerrainShape(bool show){
-    Game::viewTerrainShape = !show;
+    if(show){
+        if(Game::viewTerrainShape){
+            routeMapVisibleBeforeTerrainHide = MapWindow::routeMapOverlaysVisible;
+            terrainShapeMapStateCaptured = true;
+        }
+        if(MapWindow::routeMapOverlaysVisible && Game::terrainLib != NULL)
+            Game::terrainLib->setRouteMapOverlayVisible(false);
+        Game::viewTerrainShape = false;
+        return;
+    }
+
+    Game::viewTerrainShape = true;
+    if(!terrainShapeMapStateCaptured)
+        return;
+
+    const bool restoreMap = routeMapVisibleBeforeTerrainHide;
+    terrainShapeMapStateCaptured = false;
+    if(Game::terrainLib != NULL
+            && MapWindow::routeMapOverlaysVisible != restoreMap)
+        Game::terrainLib->setRouteMapOverlayVisible(restoreMap);
 }
 void RouteEditorWindow::viewTerrainGrid(bool show){
     Game::viewTerrainGrid = show;

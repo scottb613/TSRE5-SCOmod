@@ -13,6 +13,35 @@
 #include "Game.h"
 #include "GuiFunct.h"
 
+namespace {
+
+QString terrainMeshResolutionText(Terrain *terrain){
+    if(terrain == NULL)
+        return QStringLiteral("Unknown");
+
+    const int sampleSize = terrain->getSampleSize();
+    if(sampleSize <= 0)
+        return QStringLiteral("Unknown");
+
+    const QString spacing = QString::number(sampleSize) + QStringLiteral("m ");
+    if(!terrain->lowTile){
+        if(sampleSize == 8)
+            return spacing + QStringLiteral("Normal");
+        if(sampleSize == 4)
+            return spacing + QStringLiteral("High Def");
+        return spacing + QStringLiteral("Detailed");
+    }
+
+    const int samples = terrain->getSampleCount();
+    if(samples == 64)
+        return spacing + QStringLiteral("Mosaic");
+    if(samples == 256)
+        return spacing + QStringLiteral("TSRE");
+    return spacing + QStringLiteral("DM");
+}
+
+} // namespace
+
 class TerrainHeightHelperWindow : public EditorPopupWindow {
 public:
     explicit TerrainHeightHelperWindow(PropertiesTerrain *owner)
@@ -153,6 +182,9 @@ PropertiesTerrain::PropertiesTerrain() {
     this->fileName.setReadOnly(true);
     this->eObjectCount.setDisabled(true);
     vlist->addRow("Obj #:",&this->eObjectCount);
+    this->eMeshResolution.setReadOnly(true);
+    this->eMeshResolution.setFocusPolicy(Qt::NoFocus);
+    vlist->addRow("Mesh Res:",&this->eMeshResolution);
     alignValueColumn(vlist);
     QFrame *identityCard = new QFrame(this);
     GuiFunct::styleEditorPanelCard(identityCard);
@@ -377,6 +409,7 @@ void PropertiesTerrain::showObj(GameObj* obj){
     this->tY.setText(QString::number(-terrainObj->mojez));
     this->fileName.setText(terrainObj->getTileName());
     this->eObjectCount.setText(QString::number(currentObjectCount));
+    this->eMeshResolution.setText(terrainMeshResolutionText(terrainObj));
     this->tP.setText(QString::number(terrainObj->getSelectedPathId()));
     this->tS.setText(QString::number(terrainObj->getSelectedShaderId()));
     this->tTex.setText(terrainObj->getPatchMainTextureName());
@@ -403,6 +436,7 @@ void PropertiesTerrain::updateObj(GameObj* obj){
         return;
     }
     terrainObj = (Terrain*)obj;
+    this->eMeshResolution.setText(terrainMeshResolutionText(terrainObj));
     if(!tP.hasFocus() && !eBias.hasFocus() && !tTex.hasFocus()){
         this->tP.setText(QString::number(terrainObj->getSelectedPathId()));
         this->tS.setText(QString::number(terrainObj->getSelectedShaderId()));

@@ -1,4 +1,4 @@
-TSRE GenX v0.15 - ROUTE EDITOR - MENU SHORTCUTS
+TSRE GenX v0.16 - ROUTE EDITOR - MENU SHORTCUTS
 Shift+Ctrl+S  Save route
 Alt+F4        Exit/close route editor
 Ctrl+Z        Undo
@@ -25,11 +25,11 @@ Shift         Enables Shift-modified actions
 Alt           Fast object movement step; enables Alt-modified actions
 B             Create new tile at current camera tile
 Esc           Cancel resize/translate/rotate modes
-E             Toggle Select tool
-Q             Toggle Place tool
-R             Toggle Rotate mode
-T             Toggle Translate mode
-Y             Toggle Resize mode
+E             Enable base Select tool
+Q             Enable base Place tool
+R             Enable Rotate mode
+T             Enable Translate mode
+Y             Enable Size mode
 M             Toggle saved route map tiles
 Ctrl+Q        Toggle auto-add-to-TDB
 Shift+Q       Toggle stick pointer to terrain

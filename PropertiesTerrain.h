@@ -56,6 +56,7 @@ private:
     QLineEdit eAvgWater;
     QLineEdit eBias;
     QLineEdit eObjectCount;
+    QLineEdit eMeshResolution;
     int currentObjectCount = 0;
     QPushButton waterVisibilityButton;
     QPushButton drawVisibilityButton;

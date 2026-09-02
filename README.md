@@ -9,9 +9,36 @@ GenX is an actively developed editor, not a demonstration port. Back up a
 route before major terrain, water, track, or vegetation work and evaluate new
 workflows on a copy first.
 
-> **Current release:** v0.15. The v0.14 public tag was withdrawn.
+> **Current release:** v0.16. This full Windows release is led by the critical
+> 4 m terrain-texture persistence hotfix. The v0.14 public tag was withdrawn;
+> v0.15 remains the immutable prior-release baseline.
+
+## v0.16 Release Status
+
+The operator accepted the complete applicable v0.16 functional matrix. Final
+clean MinGW and MSVC Release builds both passed all 15 registered CTest tests;
+the exact executable hashes and timings are recorded in the v0.16 test matrix.
+The published v0.15 tag, package, and frozen documents remain unchanged.
 
 ## Release Highlights
+
+### v0.16 — 4 m Terrain Texture Hotfix and Full Release
+
+- Corrects saved terrain-texture matrices for native 512-sample/4 m terrain so
+  GenX and Open Rails consume the same resolution-aware coordinate domain.
+- Covers default/reset, rotation, mirror, scale, route-wide TERRTEX reset,
+  generated maps, and conservative normalization of clear legacy fixed-16
+  signatures while preserving established 8 m constants.
+- Adds a read-only PolyVeg bake-group panel, safe attached-interactive track
+  removal, consistent grade precision, idempotent editor mode keys, terrain
+  mesh-resolution labeling, improved F1 ordering, exact parallel Path Editor
+  serialization, and Shift+M terrain/map-state control.
+- Adds LIDEX-style ownership and GPL notices only to first-party source files
+  created from scratch; inherited and third-party headers remain untouched.
+
+v0.16 is a complete binary release, not a source-only checkpoint. Its final
+MinGW/MSVC evidence, executable hashes, package checksum, source archive, and
+source tag are frozen as part of the release record.
 
 ### v0.15 — Corrective PolyVeg Safety and Water Clearance
 
@@ -88,7 +115,7 @@ locally only for forensic comparison. Use v0.15 instead.
 
 ### Source
 
-1. Check out the `v0.15` tag for the exact release source or
+1. Check out the `v0.16` tag for the exact release source or
    `tsre-scomod-wip` for continuing development.
 2. Install the Qt 6.11.1 and vcpkg prerequisites described by the checked-in
    CMake presets.
@@ -107,7 +134,7 @@ plugins, and packaged assets must remain compiler-matched.
 ### Packaged Binary
 
 The current packaged binary release is
-[v0.15](https://github.com/scottb613/TSRE5-SCOmod/releases/tag/v0.15).
+[v0.16](https://github.com/scottb613/TSRE5-SCOmod/releases/tag/v0.16).
 Use the published SHA-256 companion to verify the downloaded ZIP before
 extracting it.
 
@@ -124,25 +151,52 @@ extracting it.
 
 ## Verification
 
-The operator confirmed the corrected v0.15 editor behavior, PolyVeg water
-setback, bake viewport blanking, Save, and reload. Final MinGW and MSVC Release
-builds passed all 15 registered tests. Complete results and executable hashes
-are recorded in [`TEST-MATRIX-v0.15.md`](TEST-MATRIX-v0.15.md).
+The operator reports the complete applicable v0.16 functional matrix
+satisfactory. Focused terrain-grid, terrain-track, and route-save transaction
+probes passed against the latest existing MinGW tree. The final clean
+dual-compiler build and full-suite results are still pending and will be
+recorded in [`TEST-MATRIX-v0.16.md`](TEST-MATRIX-v0.16.md) before release.
 
 ## Documentation
 
 This source folder contains the public editor source and synchronized release
 documents:
 
-- [`RELEASE-NOTES-v0.15.md`](RELEASE-NOTES-v0.15.md) — complete grouped v0.15
-  release notes.
-- [`TEST-MATRIX-v0.15.md`](TEST-MATRIX-v0.15.md) — automated and manual
+- [`RELEASE-NOTES-v0.16.md`](RELEASE-NOTES-v0.16.md) — full grouped v0.16
+  release-candidate notes led by the 4 m texture hotfix.
+- [`TEST-MATRIX-v0.16.md`](TEST-MATRIX-v0.16.md) — automated and manual
   verification record.
 - [`POLYVEG-USER-GUIDE.md`](POLYVEG-USER-GUIDE.md) — complete PolyVeg schema,
   planting, ruler, bake, cleanup, and troubleshooting cheat sheet.
 - [`WATER-RULER-USER-GUIDE.md`](WATER-RULER-USER-GUIDE.md) — Water Ruler
   placement, water processing, terrain adjustment, Undo, save, and
   troubleshooting procedure.
+- [`SEASONAL-MIRROR-PAINTING-USER-GUIDE.md`](SEASONAL-MIRROR-PAINTING-USER-GUIDE.md)
+  — paired main/snow TERRTEX preparation, painting, preview, save, and
+  troubleshooting procedure.
+- [`TERRAIN-IMPROVEMENTS-USER-GUIDE.md`](TERRAIN-IMPROVEMENTS-USER-GUIDE.md)
+  — improved F2 terrain brushes, conforming, waterbed work, terrain keys,
+  native 4 m/8 m behavior, Auto Paint, cleanup, and save procedure.
+- [`HD-4M-TERRAIN-MESH-USER-GUIDE.md`](HD-4M-TERRAIN-MESH-USER-GUIDE.md)
+  — complete route conversion to the experimental 4 m terrain mesh with SCO
+  LIDEX, TSRE GenX validation, Open Rails Unstable setup, rollback, and
+  troubleshooting.
+- [`DYNAMIC-TRACK-AUTO-FLEX-USER-GUIDE.md`](DYNAMIC-TRACK-AUTO-FLEX-USER-GUIDE.md)
+  — beginner-to-advanced Dynamic Track and NextGen S-C-S-C-S Auto-Flex
+  connection procedure, traditional S-C-S comparison, TrackDB safety, Open
+  Rails validation, recovery, and troubleshooting.
+- [`GRADE-HELPER-USER-GUIDE.md`](GRADE-HELPER-USER-GUIDE.md) — Grade Ruler,
+  direct grade editing, Lock Grade, piece-by-piece Grade Helper transitions,
+  orange/cyan/red Grade Symbols, save/reopen validation, Open Rails testing,
+  and troubleshooting.
+- [`PATH-EDITOR-AND-FULL-MAP-USER-GUIDE.md`](PATH-EDITOR-AND-FULL-MAP-USER-GUIDE.md)
+  — F10 full-screen TrackDB map navigation and the complete standalone PAT
+  workflow: flowing-water routing, live switches, endpoints, reverses, waits,
+  advanced ORTS points, passing sidings, validation, repair, and safe save.
+- [`TERRTEX-TEXTURES-USER-GUIDE.md`](TERRTEX-TEXTURES-USER-GUIDE.md) — F3
+  Terrain Texture panel, validated source loading, previews and Recent/Brush
+  controls, presets, rotation, manual paint, Track/Road/Water Auto Paint,
+  tile selection, reset boundaries, save/reload validation, and troubleshooting.
 - [`scoKeyList.txt`](scoKeyList.txt) — Route Editor shortcuts.
 - [`scoUiStyle.txt`](scoUiStyle.txt) — canonical interface rules.
 - [`scoWorkList.txt`](scoWorkList.txt) — historical engineering record.

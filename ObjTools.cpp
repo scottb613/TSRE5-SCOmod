@@ -20,6 +20,8 @@
 #include "SoundList.h"
 #include "TRitem.h"
 #include "GuiFunct.h"
+#include <algorithm>
+#include <QCollator>
 #include <QMapIterator>
 
 static int scaledUiSize(int base){
@@ -81,6 +83,20 @@ static QString tdbCategoryKey(const QString& label, bool roadShape){
     QString key = label.toLower();
     key.replace(QRegularExpression("[^a-z0-9]+"), "_");
     return QString("#TDB#%1/%2").arg(roadShape ? "road" : "track", key);
+}
+
+static QStringList naturallySortedCategoryLabels(
+        const QMap<QString, QString>& categoryKeys){
+    QStringList labels = categoryKeys.keys();
+    QCollator collator;
+    collator.setCaseSensitivity(Qt::CaseInsensitive);
+    collator.setNumericMode(true);
+    std::sort(labels.begin(), labels.end(), [&collator](const QString& left,
+                                                       const QString& right){
+        const int result = collator.compare(left, right);
+        return result == 0 ? left < right : result < 0;
+    });
+    return labels;
 }
 
 ObjTools::ObjTools(QString name)
@@ -415,14 +431,24 @@ void ObjTools::routeLoaded(Route* a){
     route->placementAutoTargetType = 2;
     route->snapableOnlyRotation = Game::snapableOnlyRot;
        
+    const QString nextGenDynamicTrackKey = QString("#TSRE#")
+            + "nextgen dynamic track";
+    const QString tsreToolsKey = QString("#TSRE#") + "tsre tools";
+
     QStringList hash;
     const int fullDatabaseIndex = refClass.count();
     refClass.addItem(QString::fromUtf8("•  FULL DATABASE  •"),
                      QString("__ALL_OBJECTS__"));
     refClass.setItemData(fullDatabaseIndex, Qt::AlignLeft, Qt::TextAlignmentRole);
+    refClass.addItem(QString::fromUtf8("•  NEXGEN TRACK  •"),
+                     nextGenDynamicTrackKey);
+    refClass.addItem(QString::fromUtf8("•  TSRE TOOLS  •"),
+                     tsreToolsKey);
     QMapIterator<QString, QVector<Ref::RefItem>> i(route->ref->refItems);
     while (i.hasNext()) {
         i.next();
+        if(i.key() == nextGenDynamicTrackKey || i.key() == tsreToolsKey)
+            continue;
         hash.append(i.key());
     }
     hash.sort(Qt::CaseInsensitive);
@@ -471,10 +497,8 @@ void ObjTools::routeLoaded(Route* a){
       //std::cout << " " << it->first << ":" << it->second;
     }
     refTrack.addItem("ALL");
-    for(QMapIterator<QString, QString> category(trackCategoryKeys); category.hasNext(); ){
-        category.next();
-        refTrack.addItem(category.key(), category.value());
-    }
+    for(const QString& label : naturallySortedCategoryLabels(trackCategoryKeys))
+        refTrack.addItem(label, trackCategoryKeys.value(label));
     refTrack.setMaxVisibleItems(35);
     refTrack.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     refRoad.addItem("ALL");
@@ -591,8 +615,6 @@ void ObjTools::routeLoaded(Route* a){
         route->ref->refItems[QString("#TSRE#")+"sound regions"].push_back(item);
     }
     
-    const QString nextGenDynamicTrackKey = QString("#TSRE#")
-            + "nextgen dynamic track";
     route->ref->refItems[nextGenDynamicTrackKey].clear();
     Ref::RefItem nextGenDynamicTrackItem;
     nextGenDynamicTrackItem.filename.push_back("");
@@ -607,7 +629,7 @@ void ObjTools::routeLoaded(Route* a){
     item.description = "Ruler";
     item.clas = "tsre tools";
     item.type = "ruler";
-    route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(item);
+    route->ref->refItems[tsreToolsKey].push_back(item);
 
     Ref::RefItem waterRulerItem;
     waterRulerItem.filename.push_back("");
@@ -616,21 +638,21 @@ void ObjTools::routeLoaded(Route* a){
     // This is a launcher for the Water Tools workflow, not a serialized
     // world-object type. RouteEditorGLWidget intercepts it before placement.
     waterRulerItem.type = "rulerwater";
-    route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(waterRulerItem);
+    route->ref->refItems[tsreToolsKey].push_back(waterRulerItem);
 
     Ref::RefItem vegetationRulerItem;
     vegetationRulerItem.filename.push_back("");
     vegetationRulerItem.description = "Ruler (polyveg)";
     vegetationRulerItem.clas = "tsre tools";
     vegetationRulerItem.type = "rulervegetation";
-    route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(vegetationRulerItem);
+    route->ref->refItems[tsreToolsKey].push_back(vegetationRulerItem);
 
     Ref::RefItem gradeRulerItem;
     gradeRulerItem.filename.push_back("");
     gradeRulerItem.description = "Ruler (grade)";
     gradeRulerItem.clas = "tsre tools";
     gradeRulerItem.type = "rulergrade";
-    route->ref->refItems[QString("#TSRE#")+"tsre tools"].push_back(gradeRulerItem);
+    route->ref->refItems[tsreToolsKey].push_back(gradeRulerItem);
     
     refOther.addItem("ALL");
     refOther.addItem("Signals");
@@ -642,10 +664,6 @@ void ObjTools::routeLoaded(Route* a){
     refOther.addItem("SpeedWarning");
     refOther.addItem("Milepost");
     refOther.addItem("Route/Shapes Directory");
-    refOther.addItem(QString::fromUtf8("•  NEXGEN TRACK  •"),
-                     QString("nextgen dynamic track"));
-    refOther.addItem(QString::fromUtf8("•  TSRE TOOLS  •"),
-                     QString("tsre tools"));
     refOther.setMaxVisibleItems(35);
     
     /// EFO add un-indexed shapes

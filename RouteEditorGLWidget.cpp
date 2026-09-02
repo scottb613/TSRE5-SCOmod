@@ -1656,10 +1656,7 @@ void RouteEditorGLWidget::flexResult(bool success) {
            selectedObj->typeObj == GameObj::worldobj &&
            ((WorldObj*)selectedObj)->type == "dyntrack") {
             WorldObj* dyntrack = (WorldObj*)selectedObj;
-            if(!route->removeTrackFromTDB(dyntrack)) {
-                showPlacementGuardError();
-                return;
-            }
+            route->removeTrackFromTDB(dyntrack);
             route->addToTDB(dyntrack);
         }
         showPlacementSuccess();
@@ -1687,6 +1684,14 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
     Game::currentShapeLib = currentShapeLib;
     if (!route->loaded) return;
 
+    if(event->key() == Qt::Key_M
+            && event->modifiers() == Qt::ShiftModifier){
+        if(!event->isAutoRepeat())
+            emit terrainShapeToggleRequested();
+        event->accept();
+        return;
+    }
+
     if(event->key() == Qt::Key_A
             && event->modifiers().testFlag(Qt::AltModifier)){
         selectAllTerrainPatchesOnSelectedTile();
@@ -1712,23 +1717,23 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
 
         switch(event->key()){
             case Qt::Key_E:
-                statusPanelCommand("select");
+                applyStatusPanelCommand("select", false);
                 event->accept();
                 return;
             case Qt::Key_Q:
-                statusPanelCommand("place");
+                applyStatusPanelCommand("place", false);
                 event->accept();
                 return;
             case Qt::Key_R:
-                statusPanelCommand("rotate");
+                applyStatusPanelCommand("rotate", false);
                 event->accept();
                 return;
             case Qt::Key_T:
-                statusPanelCommand("translate");
+                applyStatusPanelCommand("translate", false);
                 event->accept();
                 return;
             case Qt::Key_Y:
-                statusPanelCommand("resize");
+                applyStatusPanelCommand("resize", false);
                 event->accept();
                 return;
             case Qt::Key_M:
@@ -2450,14 +2455,6 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             enableTool("");
         }
         if (toolEnabled == "FlexTool") {
-            if(route != NULL && selectedObj != NULL
-                    && selectedObj->typeObj == GameObj::worldobj
-                    && !route->canRemoveTrackFromTDB(
-                        static_cast<WorldObj*>(selectedObj), true)) {
-                showPlacementGuardError();
-                enableTool("selectTool");
-                return;
-            }
             emit flexData((int) camera->pozT[0], (int) camera->pozT[1], aktPointerPos);
         }
         if (toolEnabled == "heightTool") {
@@ -2768,6 +2765,11 @@ void RouteEditorGLWidget::showWaterMessage(const QString &text, int visibleMilli
 }
 
 void RouteEditorGLWidget::statusPanelCommand(QString name) {
+    applyStatusPanelCommand(name, true);
+}
+
+void RouteEditorGLWidget::applyStatusPanelCommand(
+        const QString &name, const bool allowToggleOff) {
     if(name == "movefast"){
         cameraMoveSpeedLock = (cameraMoveSpeedLock == 1) ? 0 : 1;
         if(camera != NULL)
@@ -2793,7 +2795,8 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
         return;
     }
     if(name == "select"){
-        if(toolEnabled == "selectTool" && !resizeTool && !rotateTool && !translateTool){
+        if(allowToggleOff && toolEnabled == "selectTool"
+                && !resizeTool && !rotateTool && !translateTool){
             enableTool("");
             showModeChange();
             return;
@@ -2824,7 +2827,7 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
             showModeChange();
             return;
         }
-        if(toolEnabled == "placeTool"){
+        if(allowToggleOff && toolEnabled == "placeTool"){
             enableTool("");
             showModeChange();
             return;
@@ -2834,7 +2837,7 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
         return;
     }
     if(name == "rotate"){
-        if(toolEnabled == "selectTool" && rotateTool){
+        if(allowToggleOff && toolEnabled == "selectTool" && rotateTool){
             selectToolSelect();
             showModeChange();
             return;
@@ -2845,7 +2848,7 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
         return;
     }
     if(name == "translate"){
-        if(toolEnabled == "selectTool" && translateTool){
+        if(allowToggleOff && toolEnabled == "selectTool" && translateTool){
             selectToolSelect();
             showModeChange();
             return;
@@ -2856,7 +2859,7 @@ void RouteEditorGLWidget::statusPanelCommand(QString name) {
         return;
     }
     if(name == "resize"){
-        if(toolEnabled == "selectTool" && resizeTool){
+        if(allowToggleOff && toolEnabled == "selectTool" && resizeTool){
             selectToolSelect();
             showModeChange();
             return;
@@ -3098,7 +3101,9 @@ void RouteEditorGLWidget::copySelectionInfo() {
             const float displayedElevation = obj->typeID == WorldObj::dyntrack
                     ? static_cast<DynTrackObj*>(obj)->getAverageElevation()
                     : obj->getElevation();
-            info << "Grade: " + number(tan(displayedElevation) * 100.0) + "%";
+            info << "Grade: "
+                    + QString::number(tan(displayedElevation) * 100.0, 'f', 2)
+                    + "%";
             info << "Elevation Radians: " + number(displayedElevation);
         }
 

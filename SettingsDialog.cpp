@@ -460,6 +460,7 @@ QString SettingsDialog::keyAssignmentsText() const {
         "T             Toggle Translate mode\n"
         "Y             Toggle Resize mode\n"
         "M             Toggle saved route map tiles\n"
+        "Shift+M       Toggle terrain shape; temporarily hide and restore map tiles\n"
         "Ctrl+Q        Toggle auto-add-to-TDB\n"
         "Shift+Q       Toggle stick pointer to terrain\n"
         "Home          Jump camera/pointer upward by 40m\n"

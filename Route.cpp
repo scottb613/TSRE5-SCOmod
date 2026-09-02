@@ -26,6 +26,7 @@
 #include "TerrainLibSimple.h"
 #include "TerrainLibQt.h"
 #include "TerrainTrackMath.h"
+#include "TerrainGridMath.h"
 #include "TFile.h"
 #include "Game.h"
 #include "GuiFunct.h"
@@ -1602,14 +1603,20 @@ bool Route::resetTerrainTextureOnTile(int x, int y, int &filesDeleted, int &file
         defaultMat = tfile.newMat();
 
     int patches = tfile.patchsetNpatches;
+    const int samplesPerPatch = tfile.nsamples == NULL ? 0
+            : TerrainGridMath::patchSampleCount(*tfile.nsamples, patches);
+    if(samplesPerPatch <= 0)
+        return false;
+    const float textureScale =
+            TerrainGridMath::insetPatchTextureScale(samplesPerPatch);
     for (int patch = 0; patch < patches * patches; patch++) {
         tfile.tdata[patch * 13 + 6] = defaultMat;
         tfile.tdata[patch * 13 + 7] = 0.001f;
         tfile.tdata[patch * 13 + 8] = 0.001f;
-        tfile.tdata[patch * 13 + 9] = 0.062375f;
+        tfile.tdata[patch * 13 + 9] = textureScale;
         tfile.tdata[patch * 13 + 10] = 0.0f;
         tfile.tdata[patch * 13 + 11] = 0.0f;
-        tfile.tdata[patch * 13 + 12] = 0.062375f;
+        tfile.tdata[patch * 13 + 12] = textureScale;
     }
 
     tfile.save(tilePath);
@@ -2631,8 +2638,7 @@ void Route::toggleToTDB(WorldObj* obj) {
             return;
     }
     if(roadDB->ifTrackExist(obj->x, obj->y, obj->UiD) || trackDB->ifTrackExist(obj->x, obj->y, obj->UiD)){
-        if(!removeTrackFromTDB(obj))
-            return;
+        removeTrackFromTDB(obj);
         obj->setModified();   //// EFO added to account for unsaved on TDB edits only
         return;
     }
@@ -3101,8 +3107,6 @@ void Route::fixTDBVectorElevation(WorldObj* obj){
 }
 
 void Route::deleteTDBVector(WorldObj* obj){
-    if(!canRemoveTrackFromTDB(obj, true))
-        return;
     Undo::StateBegin();
     Undo::PushTrackDB(this->trackDB, false);
     Undo::PushTrackDB(this->roadDB, true);
@@ -3136,9 +3140,6 @@ void Route::deleteObj(WorldObj* obj) {
     if(obj == NULL)
         return;
     if(obj->typeObj != WorldObj::worldobj)
-        return;
-    if((obj->type == "trackobj" || obj->type == "dyntrack")
-            && !canRemoveTrackFromTDB(obj, true))
         return;
     if(obj == waterRulerObj)
         waterRulerObj = NULL;
@@ -3340,36 +3341,9 @@ int Route::deleteAllInstances(WorldObj *selected, bool gui) {
     return matches.size();
 }
 
-bool Route::canRemoveTrackFromTDB(WorldObj* obj, bool reportError) const {
+void Route::removeTrackFromTDB(WorldObj* obj) {
     if(obj == NULL || obj->typeObj != WorldObj::worldobj)
-        return false;
-    const bool blocked = (roadDB != NULL
-            && roadDB->hasTrackItemsForTrack(obj->x, obj->y, obj->UiD))
-        || (trackDB != NULL
-            && trackDB->hasTrackItemsForTrack(obj->x, obj->y, obj->UiD));
-    if(!blocked)
-        return true;
-    if(reportError){
-        const QString heading = QString("Track Edit Stopped");
-        const QString message = QString(
-            "Remove every signal, platform, siding, speedpost, crossing, "
-            "pickup, sound region, and other interactive attached to this "
-            "track before changing or deleting its geometry.");
-        ErrorMessage *error = new ErrorMessage(
-            ErrorMessage::Type_Error,
-            ErrorMessage::Source_Editor,
-            QString("Track edit blocked: remove interactives first."),
-            message);
-        ErrorMessagesLib::PushErrorMessage(error);
-        if(Game::gui)
-            GuiFunct::showEditorStopped(NULL, heading, message);
-    }
-    return false;
-}
-
-bool Route::removeTrackFromTDB(WorldObj* obj) {
-    if(!canRemoveTrackFromTDB(obj, true))
-        return false;
+        return;
     bool ok = false;
     if(roadDB != NULL)
         ok = roadDB->removeTrackFromTDB(obj->x, obj->y, obj->UiD);
@@ -3377,7 +3351,6 @@ bool Route::removeTrackFromTDB(WorldObj* obj) {
         ok |= trackDB->removeTrackFromTDB(obj->x, obj->y, obj->UiD);
     if(ok)
         obj->removedFromTDB();
-    return true;
 }
 
 int Route::getTileObjCount(int x, int z) {

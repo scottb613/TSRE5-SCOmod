@@ -212,6 +212,8 @@ private:
     QAction* vViewCompass;
     QHash<QAction*, bool> savedViewSelections;
     bool viewAllOff = false;
+    bool routeMapVisibleBeforeTerrainHide = false;
+    bool terrainShapeMapStateCaptured = false;
     
     AboutWindow* aboutWindow;
     StatusWindow* statusWindow;

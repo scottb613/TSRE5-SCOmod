@@ -15,6 +15,7 @@
 #include "ReadFile.h"
 #include <QDataStream>
 #include "Game.h"
+#include "TerrainGridMath.h"
 
 TFile::TFile() {
     loaded = false;
@@ -56,6 +57,9 @@ void TFile::initNew(QString name, int samples, int sampleS, int patches){
     errorBias = new float[patches*patches];
     int tileSize = samples*sampleS;
     float patchSize = tileSize/patches;
+    const int samplesPerPatch = TerrainGridMath::patchSampleCount(samples, patches);
+    const float textureScale =
+            TerrainGridMath::exactPatchTextureScale(samplesPerPatch);
     float patchPosZ = -0.5*patchSize;
     float patchPosX = 0.5*patchSize;
     for(int j = 0; j < patches; j++, patchPosZ -= patchSize){
@@ -71,10 +75,10 @@ void TFile::initNew(QString name, int samples, int sampleS, int patches){
             tdata[(j*patches+i)*13+6] = 0;
             tdata[(j*patches+i)*13+7] = 0.0001;
             tdata[(j*patches+i)*13+8] = 0.0001;
-            tdata[(j*patches+i)*13+9] = 0.0625;
+            tdata[(j*patches+i)*13+9] = textureScale;
             tdata[(j*patches+i)*13+10] = 0;
             tdata[(j*patches+i)*13+11] = 0;
-            tdata[(j*patches+i)*13+12] = 0.0625;
+            tdata[(j*patches+i)*13+12] = textureScale;
             errorBias[(j*patches+i)] = 1;
         }
     }
@@ -555,15 +559,19 @@ void TFile::removeMat(int id){
     if(id > materialsCount)
         return;
     
+    const int samplesPerPatch = nsamples == NULL ? 0
+            : TerrainGridMath::patchSampleCount(*nsamples, patchsetNpatches);
+    const float textureScale =
+            TerrainGridMath::insetPatchTextureScale(samplesPerPatch);
     for(int j = 0; j < patchsetNpatches*patchsetNpatches; j++){
         if(tdata[j*13+0+6] == id){
             tdata[j*13+0+6] = 0;
             tdata[j*13 + 1 + 6] = 0.001;
             tdata[j*13 + 2 + 6] = 0.001;
-            tdata[j*13 + 3 + 6] = 0.062375;
+            tdata[j*13 + 3 + 6] = textureScale;
             tdata[j*13 + 4 + 6] = 0.0;
             tdata[j*13 + 5 + 6] = 0.0;
-            tdata[j*13 + 6 + 6] = 0.062375;
+            tdata[j*13 + 6 + 6] = textureScale;
         }
     }
     for(int j = 0; j < patchsetNpatches*patchsetNpatches; j++){

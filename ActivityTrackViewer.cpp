@@ -1,3 +1,9 @@
+// TSRE GenX - maintained editor source and regression support.
+// TSRE GenX modifications Copyright (C) Scott Brunner, Beast of Burden.
+// Based on TSRE5 by Piotr Gadecki and TSRE 8.x by Eric Olesen.
+// Part of the TSRE GenX route-editor application.
+// Licensed under GNU GPL v3 or later. See LICENSE.md.
+
 /*  This file is part of TSRE5.
  *
  *  Native 2D TrackDB viewer for the Activity Builder.
@@ -472,13 +478,21 @@ void ActivityTrackViewer::beginPathEdit(Path *path){
         int branchIndex = static_cast<int>(branchValue);
         QSet<int> visitedBranch;
         QVector<int> savedInternalJunctions;
+        QHash<int, int> savedSegmentVectorAnchors;
+        int savedSegmentIndex = 0;
         while(branchIndex >= 0 && branchIndex < path->trPathNode.size() &&
               !mainIndexSet.contains(branchIndex) && !visitedBranch.contains(branchIndex)){
             visitedBranch.insert(branchIndex);
             if(controlType(branchIndex) == 2){
                 const int junctionId = nearestJunctionId(controlPoint(branchIndex));
-                if(junctionId > 0 && !savedInternalJunctions.contains(junctionId))
+                if(junctionId > 0 && !savedInternalJunctions.contains(junctionId)){
                     savedInternalJunctions.push_back(junctionId);
+                    savedSegmentIndex++;
+                }
+            } else if(controlType(branchIndex) == 1){
+                const int vectorId = nearestVector(controlPoint(branchIndex));
+                if(vectorId > 0)
+                    savedSegmentVectorAnchors.insert(savedSegmentIndex, vectorId);
             }
             const unsigned int next = path->trPathNode[branchIndex][2];
             branchIndex = next < static_cast<unsigned int>(path->trPathNode.size())
@@ -527,19 +541,24 @@ void ActivityTrackViewer::beginPathEdit(Path *path){
                 if(junction.nodeId == savedJunctionSequence[sequenceIndex + 1])
                     b = &junction;
             }
-            int sharedVector = -1;
+            QVector<int> sharedVectorIds;
             if(a != NULL && b != NULL){
-                for(int aPin = 0; aPin < 3 && sharedVector < 0; aPin++){
+                for(int aPin = 0; aPin < 3; aPin++){
                     if(a->pins[aPin] <= 0)
                         continue;
                     for(int bPin = 0; bPin < 3; bPin++){
-                        if(a->pins[aPin] == b->pins[bPin]){
-                            sharedVector = a->pins[aPin];
-                            break;
-                        }
+                        if(a->pins[aPin] == b->pins[bPin] &&
+                           !sharedVectorIds.contains(a->pins[aPin]))
+                            sharedVectorIds.push_back(a->pins[aPin]);
                     }
                 }
             }
+            int sharedVector = -1;
+            if(savedSegmentVectorAnchors.contains(sequenceIndex) &&
+               sharedVectorIds.contains(savedSegmentVectorAnchors.value(sequenceIndex)))
+                sharedVector = savedSegmentVectorAnchors.value(sequenceIndex);
+            else if(!sharedVectorIds.isEmpty())
+                sharedVector = sharedVectorIds.first();
             if(sharedVector <= 0)
                 exactRoute = false;
             else
@@ -1029,6 +1048,58 @@ void ActivityTrackViewer::saveDraftPath(){
         control.position = junctionPosition(junctionId);
         controls.push_back(control);
     };
+    auto sharedVectors = [this](int firstJunction, int secondJunction) {
+        QSet<int> firstVectors;
+        QSet<int> shared;
+        for(const JunctionInfo &junction : junctions){
+            if(junction.nodeId != firstJunction)
+                continue;
+            for(int pin = 0; pin < 3; pin++){
+                if(junction.pins[pin] > 0)
+                    firstVectors.insert(junction.pins[pin]);
+            }
+            break;
+        }
+        for(const JunctionInfo &junction : junctions){
+            if(junction.nodeId != secondJunction)
+                continue;
+            for(int pin = 0; pin < 3; pin++){
+                if(firstVectors.contains(junction.pins[pin]))
+                    shared.insert(junction.pins[pin]);
+            }
+            break;
+        }
+        return shared;
+    };
+    auto vectorAnchorPosition = [this](int vectorId) {
+        const QVector<QLineF> lines = vectorSegments.value(vectorId);
+        qreal totalLength = 0.0;
+        for(const QLineF &line : lines)
+            totalLength += line.length();
+        if(totalLength <= 0.000001)
+            return QPointF();
+        const qreal midpoint = totalLength * 0.5;
+        qreal traversed = 0.0;
+        for(const QLineF &line : lines){
+            if(traversed + line.length() >= midpoint){
+                const qreal fraction = line.length() <= 0.000001
+                    ? 0.0 : (midpoint - traversed) / line.length();
+                return line.pointAt(qBound<qreal>(0.0, fraction, 1.0));
+            }
+            traversed += line.length();
+        }
+        return lines.last().p2();
+    };
+    auto appendAmbiguousVectorAnchor = [&appendVectorControl, &sharedVectors,
+                                         &vectorAnchorPosition](int vectorId,
+                                                                int firstJunction,
+                                                                int secondJunction) {
+        const QSet<int> shared = sharedVectors(firstJunction, secondJunction);
+        if(shared.size() <= 1 || !shared.contains(vectorId))
+            return false;
+        appendVectorControl(vectorAnchorPosition(vectorId), vectorId, 0);
+        return true;
+    };
 
     appendVectorControl(draftStart, draftStartVector, 0);
     QPointF legStart = draftStart;
@@ -1073,6 +1144,19 @@ void ActivityTrackViewer::saveDraftPath(){
                     (static_cast<unsigned int>(qBound(1, wait.waitSeconds, 65535)) << 16) | 2u;
                 appendVectorControl(wait.position, wait.vectorNodeId, flags);
                 savedWaits.insert(waitIndex);
+            }
+            // A junction pair can be connected by more than one vector (for
+            // example, the main track and a parallel passing siding). A PAT
+            // containing only the two junction PDPs cannot identify which
+            // connection the draft used; Path::init3dShapes would later take
+            // the first shared vector and the saved path could visibly jump.
+            // Any wait control already anchors this vector, otherwise add a
+            // neutral interior vector PDP before the destination junction.
+            if(vectorIndex > 0 && vectorIndex < orderedJunctions.size() &&
+               waitsOnVector.isEmpty()){
+                appendAmbiguousVectorAnchor(vectorId,
+                    orderedJunctions[vectorIndex - 1],
+                    orderedJunctions[vectorIndex]);
             }
             if(vectorIndex < orderedJunctions.size())
                 appendJunctionControl(orderedJunctions[vectorIndex]);
@@ -1124,21 +1208,40 @@ void ActivityTrackViewer::saveDraftPath(){
             showTransientMessage(tr("PATH NOT SAVED - overlapping passing starts"), true);
             return;
         }
-        if(siding.junctionIds.isEmpty()){
+        QVector<int> sidingControlIndexes;
+        QVector<int> boundaryJunctions;
+        boundaryJunctions.push_back(siding.startJunction);
+        boundaryJunctions += siding.junctionIds;
+        boundaryJunctions.push_back(siding.endJunction);
+        if(siding.vectors.size() != boundaryJunctions.size() - 1){
+            emit pathDraftStatus(tr("<b>Path not saved</b><br>A passing path has inconsistent vector and junction data."));
+            showTransientMessage(tr("PATH NOT SAVED - passing path data mismatch"), true);
+            return;
+        }
+        for(int segment = 0; segment < siding.vectors.size(); segment++){
+            const int beforeAnchor = controls.size();
+            if(appendAmbiguousVectorAnchor(siding.vectors[segment],
+                                           boundaryJunctions[segment],
+                                           boundaryJunctions[segment + 1]))
+                sidingControlIndexes.push_back(beforeAnchor);
+            if(segment < siding.junctionIds.size()){
+                SaveControl control;
+                control.type = 2;
+                control.junctionId = siding.junctionIds[segment];
+                control.position = junctionPosition(control.junctionId);
+                sidingControlIndexes.push_back(controls.size());
+                controls.push_back(control);
+            }
+        }
+        if(sidingControlIndexes.isEmpty()){
             controls[startIndex].nextSiding = endIndex;
             continue;
         }
-        const int firstSidingIndex = controls.size();
-        controls[startIndex].nextSiding = firstSidingIndex;
-        for(int i = 0; i < siding.junctionIds.size(); i++){
-            SaveControl control;
-            control.type = 2;
-            control.junctionId = siding.junctionIds[i];
-            control.position = junctionPosition(control.junctionId);
-            control.nextSiding = i + 1 < siding.junctionIds.size()
-                ? controls.size() + 1 : endIndex;
-            controls.push_back(control);
-        }
+        controls[startIndex].nextSiding = sidingControlIndexes.first();
+        for(int i = 0; i < sidingControlIndexes.size(); i++)
+            controls[sidingControlIndexes[i]].nextSiding =
+                i + 1 < sidingControlIndexes.size()
+                    ? sidingControlIndexes[i + 1] : endIndex;
     }
 
     struct Pdp {

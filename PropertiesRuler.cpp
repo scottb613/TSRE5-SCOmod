@@ -15,6 +15,12 @@
 #include "ProceduralShape.h"
 #include "ShapeTemplates.h"
 
+static QString rulerGradeDisplayText(double value, int units){
+    static const int decimals[] = {1, 2, 2, 3};
+    const int boundedUnits = qBound(0, units, 3);
+    return QString::number(value, 'f', decimals[boundedUnits]);
+}
+
 PropertiesRuler::PropertiesRuler() {
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
@@ -208,10 +214,10 @@ void PropertiesRuler::showObj(GameObj* obj){
     float oneInXm = qFuzzyIsNull(gradeRatio) ? 0.0f : 1.0f/gradeRatio;
     float prog = qRadiansToDegrees(gradeAngle);
     float prop = gradeRatio*100.0f;
-    this->elevProm.setText(QString::number(elev));
-    this->elevProg.setText(QString::number(prog));
-    this->elevProp.setText(QString::number(prop));
-    this->elev1inXm.setText(QString::number(oneInXm));
+    this->elevProm.setText(rulerGradeDisplayText(elev, 0));
+    this->elevProg.setText(rulerGradeDisplayText(prog, 3));
+    this->elevProp.setText(rulerGradeDisplayText(prop, 1));
+    this->elev1inXm.setText(rulerGradeDisplayText(oneInXm, 2));
     
      // Simulate a key press event
     QWidget keywidget; 
@@ -239,10 +245,10 @@ void PropertiesRuler::updateObj(GameObj* obj){
     float prog = qRadiansToDegrees(gradeAngle);
     float prop = gradeRatio*100.0f;
     if(!this->elevProm.hasFocus() && !this->elev1inXm.hasFocus() && !this->elevProg.hasFocus() && !this->elevProp.hasFocus()){
-        this->elevProm.setText(QString::number(elev));
-        this->elevProg.setText(QString::number(prog));
-        this->elevProp.setText(QString::number(prop));
-        this->elev1inXm.setText(QString::number(oneInXm));
+        this->elevProm.setText(rulerGradeDisplayText(elev, 0));
+        this->elevProg.setText(rulerGradeDisplayText(prog, 3));
+        this->elevProp.setText(rulerGradeDisplayText(prop, 1));
+        this->elev1inXm.setText(rulerGradeDisplayText(oneInXm, 2));
     }
 }
 

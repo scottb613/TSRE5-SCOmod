@@ -1836,7 +1836,7 @@ void TDB::deleteJunction(int id){
 
 void TDB::deleteVectorSection(int id){
     TRnode* vect = trackNodes[id];
-    if(vect == NULL || vect->iTri > 0)
+    if(vect == NULL)
         return;
     const int endNId1 = vect->TrPinS[0];
     const int endNId2 = vect->TrPinS[1];
@@ -1872,6 +1872,8 @@ void TDB::deleteVectorSection(int id){
 
 bool TDB::deleteAllTrItemsFromVectorSection(int id){
     TRnode* vect = trackNodes[id];
+    if(vect == NULL)
+        return false;
     if(vect->iTri > 0){
         TRitem* trit;
         for(int i = 0; i < vect->iTri; i++){
@@ -1892,7 +1894,7 @@ bool TDB::deleteAllTrItemsFromVectorSection(int id){
 
 bool TDB::deleteFromVectorSection(int id, int j){
     TRnode* vect = trackNodes[id];
-    if(vect == NULL || j < 0 || j >= vect->iTrv || vect->iTri > 0)
+    if(vect == NULL || j < 0 || j >= vect->iTrv)
         return false;
     if(vect->iTrv == 1){
         deleteVectorSection(id);
@@ -1908,9 +1910,28 @@ bool TDB::deleteFromVectorSection(int id, int j){
     int endNId2 = vect->TrPinS[1];
     TRnode* end1 = trackNodes[vect->TrPinS[0]];
     TRnode* end2 = trackNodes[vect->TrPinS[1]];
-    //deleteAllTrItemsFromVectorSection(id);
     TRnode::TRSect *newV = new TRnode::TRSect[vect->iTrv - 1];
     if(j == 0){
+        // Retain item positions relative to the shortened vector and remove
+        // only items that occupied the deleted section.
+        const float removedLength =
+            tsection->sekcja[vect->trVectorSection[0].param[0]]->getDlugosc();
+        for(int i = 0; i < vect->iTri;){
+            const int itemRef = vect->trItemRef[i];
+            TRitem *item = trackItems[itemRef];
+            if(item == NULL){
+                ++i;
+                continue;
+            }
+            item->addToTrackPos(-removedLength);
+            if(item->getTrackPosition() < 0){
+                deleteTrItem(item->trItemId);
+                continue;
+            }
+            updateTrItem(itemRef);
+            ++i;
+        }
+
         std::copy(vect->trVectorSection + 1, vect->trVectorSection + vect->iTrv, newV);
         
         if(end1->typ == 2){
@@ -1945,6 +1966,21 @@ bool TDB::deleteFromVectorSection(int id, int j){
             
             
     } else if(j == vect->iTrv - 1) {
+        // Positions before the removed tail remain unchanged.
+        const float retainedLength = getVectorSectionLengthToIdx(id, j);
+        for(int i = 0; i < vect->iTri;){
+            TRitem *item = trackItems[vect->trItemRef[i]];
+            if(item == NULL){
+                ++i;
+                continue;
+            }
+            if(item->getTrackPosition() > retainedLength){
+                deleteTrItem(item->trItemId);
+                continue;
+            }
+            ++i;
+        }
+
         std::copy(vect->trVectorSection , vect->trVectorSection + vect->iTrv - 1, newV);
         if(end2->typ == 2){
             end2->podmienTrPin(id, 0);
@@ -2484,28 +2520,7 @@ bool TDB::placeTrack(int x, int z, float* p, float* q, int sectionIdx, int uid, 
     return true;
 }
 
-bool TDB::hasTrackItemsForTrack(int x, int y, int UiD) const {
-    const int databaseY = -y;
-    for(int i = 1; i <= iTRnodes; ++i){
-        auto nodeIt = trackNodes.find(i);
-        if(nodeIt == trackNodes.end() || nodeIt->second == NULL)
-            continue;
-        TRnode *node = nodeIt->second;
-        if(node->typ != 1 || node->trVectorSection == NULL || node->iTri <= 0)
-            continue;
-        for(int j = 0; j < node->iTrv; ++j){
-            const float *section = node->trVectorSection[j].param;
-            if(section[2] == x && section[3] == databaseY
-                    && section[4] == UiD)
-                return true;
-        }
-    }
-    return false;
-}
-
 bool TDB::removeTrackFromTDB(int x, int y, int UiD){
-    if(hasTrackItemsForTrack(x, y, UiD))
-        return false;
     y = -y;
     if(Game::debugOutput) qDebug() << "Removing from TDB: " << x << " " << y << " " << UiD; 
     
@@ -4245,8 +4260,6 @@ void TDB::fixTDBVectorElevation(TRnode *n){
 }
 
 void TDB::deleteVectorSection(int x, int y, int UiD){
-    if(hasTrackItemsForTrack(x, y, UiD))
-        return;
     y = -y;
     
     TRnode *n;

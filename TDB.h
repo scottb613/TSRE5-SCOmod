@@ -112,7 +112,6 @@ public:
     static void saveEmpty(bool road);
     void fillTrackAngles(int x, int z, int UiD, QMap<int, float>& angles);
     bool ifTrackExist(int x, int y, int UiD);
-    bool hasTrackItemsForTrack(int x, int y, int UiD) const;
     int getGradeMarkerTransition(int x, int y, int UiD);
     bool removeTrackFromTDB(int x, int y, int UiD);
     int findNearestNode(int &x, int &z, float* p, float* q, float maxD = 4, bool updatePosition = true);

@@ -27,6 +27,20 @@ static int gradeHelperScaledSize(int base){
     return qRound(base * qBound(0.75f, Game::uiScale, 1.25f));
 }
 
+static int gradeDisplayDecimals(int units){
+    switch(units){
+    case 0: return 1; // per mille: 0.1 ‰ = 0.01%
+    case 1: return 2; // percent
+    case 2: return 2; // 1 in X
+    case 3: return 3; // degrees: approximately equivalent to 0.01%
+    default: return 2;
+    }
+}
+
+static QString gradeDisplayText(double value, int units){
+    return QString::number(value, 'f', gradeDisplayDecimals(units));
+}
+
 static QString gradeHelperStateStyle(const QString &background, const QString &border, const QString &text){
     return QString(
         "QPushButton { color: %3; background-color: %1; border: 1px solid %2;"
@@ -233,39 +247,39 @@ private:
         displayedUnits = units;
         targetGrade.blockSignals(true);
         stepGrade.blockSignals(true);
-        targetGrade.setDecimals(5);
-        stepGrade.setDecimals(5);
+        targetGrade.setDecimals(gradeDisplayDecimals(units));
+        stepGrade.setDecimals(gradeDisplayDecimals(units));
         if(units == 0){
             targetGradeLabel.setText("Target Grade (‰):");
             stepGradeLabel.setText("Step Per Piece (‰):");
             targetGrade.setRange(-Game::trackElevationMaxPm, Game::trackElevationMaxPm);
-            targetGrade.setSingleStep(0.5);
-            stepGrade.setRange(0.01, Game::trackElevationMaxPm);
-            stepGrade.setSingleStep(0.5);
+            targetGrade.setSingleStep(0.1);
+            stepGrade.setRange(0.1, Game::trackElevationMaxPm);
+            stepGrade.setSingleStep(0.1);
         } else if(units == 2){
             targetGradeLabel.setText("Target Grade (m):");
             stepGradeLabel.setText("Step Per Piece (m):");
             targetGrade.setRange(-100000.0, 100000.0);
-            targetGrade.setSingleStep(1.0);
+            targetGrade.setSingleStep(0.01);
             stepGrade.setRange(1000.0 / Game::trackElevationMaxPm, 100000.0);
-            stepGrade.setSingleStep(1.0);
+            stepGrade.setSingleStep(0.01);
         } else if(units == 3){
             targetGradeLabel.setText("Target Grade (°):");
             stepGradeLabel.setText("Step Per Piece (°):");
             const double maximumAngle = qRadiansToDegrees(qAtan(Game::trackElevationMaxPm / 1000.0));
             targetGrade.setRange(-maximumAngle, maximumAngle);
-            targetGrade.setSingleStep(0.05);
-            const double minimumAngle = qRadiansToDegrees(qAtan(0.001 / 100.0));
+            targetGrade.setSingleStep(0.001);
+            const double minimumAngle = 0.001;
             stepGrade.setRange(minimumAngle, maximumAngle);
-            stepGrade.setSingleStep(0.01);
+            stepGrade.setSingleStep(0.001);
         } else {
             targetGradeLabel.setText("Target Grade (%):");
             stepGradeLabel.setText("Step Per Piece (%):");
             const double maximumPercent = Game::trackElevationMaxPm / 10.0;
             targetGrade.setRange(-maximumPercent, maximumPercent);
-            targetGrade.setSingleStep(0.05);
-            stepGrade.setRange(0.001, maximumPercent);
-            stepGrade.setSingleStep(0.05);
+            targetGrade.setSingleStep(0.01);
+            stepGrade.setRange(0.01, maximumPercent);
+            stepGrade.setSingleStep(0.01);
         }
         targetGrade.setValue(percentToDisplayGrade(Game::gradeAssistTargetPercent));
         stepGrade.setValue(percentToDisplayGrade(Game::gradeAssistStepPercent));
@@ -281,8 +295,8 @@ private:
 
     void syncUi(){
         updateTargetGradeUnits();
-        currentGrade.setText(QString::number(Game::gradeAssistCurrentPercent, 'f', 5) + " %");
-        nextGrade.setText(QString::number(Game::gradeAssistNextPercent, 'f', 5) + " %");
+        currentGrade.setText(gradeDisplayText(Game::gradeAssistCurrentPercent, 1) + " %");
+        nextGrade.setText(gradeDisplayText(Game::gradeAssistNextPercent, 1) + " %");
         if(!targetGrade.hasFocus()){
             targetGrade.blockSignals(true);
             targetGrade.setValue(percentToDisplayGrade(Game::gradeAssistTargetPercent));
@@ -741,10 +755,16 @@ PropertiesTrackObj::PropertiesTrackObj(){
     vlist = new QFormLayout;
     vlist->setSpacing(3);
     vlist->setContentsMargins(3,0,3,0);
-    QDoubleValidator* doubleValidator = new QDoubleValidator(-10000, 10000, 6, this); 
+    QDoubleValidator* doubleValidator = new QDoubleValidator(-10000, 10000, 6, this);
     doubleValidator->setNotation(QDoubleValidator::StandardNotation);
-    QDoubleValidator* doubleValidator1 = new QDoubleValidator(-1000, 1000, 6, this); 
-    doubleValidator1->setNotation(QDoubleValidator::StandardNotation);
+    QDoubleValidator* permilleValidator = new QDoubleValidator(-1000, 1000, 1, this);
+    permilleValidator->setNotation(QDoubleValidator::StandardNotation);
+    QDoubleValidator* percentValidator = new QDoubleValidator(-1000, 1000, 2, this);
+    percentValidator->setNotation(QDoubleValidator::StandardNotation);
+    QDoubleValidator* ratioValidator = new QDoubleValidator(-10000, 10000, 2, this);
+    ratioValidator->setNotation(QDoubleValidator::StandardNotation);
+    QDoubleValidator* angleValidator = new QDoubleValidator(-1000, 1000, 3, this);
+    angleValidator->setNotation(QDoubleValidator::StandardNotation);
     
     //‰
     vlist->addRow("Units: ",&this->elevType);
@@ -756,16 +776,16 @@ PropertiesTrackObj::PropertiesTrackObj(){
     QObject::connect(&elevType, SIGNAL(currentTextChanged(QString)),
                       this, SLOT(elevTypeEdited(QString)));
     
-    elevProm.setValidator(doubleValidator1);
+    elevProm.setValidator(permilleValidator);
     QObject::connect(&elevProm, SIGNAL(textEdited(QString)), this, SLOT(elevPromEnabled(QString)));
     //oneInXm
-    elev1inXm.setValidator(doubleValidator);
+    elev1inXm.setValidator(ratioValidator);
     QObject::connect(&elev1inXm, SIGNAL(textEdited(QString)), this, SLOT(elev1inXmEnabled(QString)));
     //º
-    elevProg.setValidator(doubleValidator1);
+    elevProg.setValidator(angleValidator);
     QObject::connect(&elevProg, SIGNAL(textEdited(QString)), this, SLOT(elevProgEnabled(QString)));
     //%
-    elevProp.setValidator(doubleValidator1);
+    elevProp.setValidator(percentValidator);
     QObject::connect(&elevProp, SIGNAL(textEdited(QString)), this, SLOT(elevPropEnabled(QString)));
     elevValueStack.addWidget(&elevProm);
     elevValueStack.addWidget(&elevProp);
@@ -1200,10 +1220,10 @@ void PropertiesTrackObj::showObj(GameObj* obj){
 
     //if(vect[1] > 0)
         oneInXm = qFuzzyIsNull(prom) ? 0.0 : 1000.0/prom;
-    this->elevProm.setText(QString::number(prom));
-    this->elevProg.setText(QString::number(prog));
-    this->elevProp.setText(QString::number(prop));
-    this->elev1inXm.setText(QString::number(oneInXm));
+    this->elevProm.setText(gradeDisplayText(prom, 0));
+    this->elevProg.setText(gradeDisplayText(prog, 3));
+    this->elevProp.setText(gradeDisplayText(prop, 1));
+    this->elev1inXm.setText(gradeDisplayText(oneInXm, 2));
     setStepValue(Game::DefaultMoveStep);
     refreshGradeLockUi();
     refreshGradeHelperUi();
@@ -1238,7 +1258,7 @@ void PropertiesTrackObj::setStepValue(float step){
     if(elevType.currentIndex() == 3)
         step = qRadiansToDegrees(qAtan(step/10.0));
     
-    elevStep.setText(QString::number(step));
+    elevStep.setText(gradeDisplayText(step, elevType.currentIndex()));
 }
 
 float PropertiesTrackObj::getStepValue(float step){
@@ -1280,10 +1300,10 @@ void PropertiesTrackObj::updateObj(GameObj* obj){
                 );
     }
     if(!this->elevProm.hasFocus() && !this->elev1inXm.hasFocus() && !this->elevProg.hasFocus() && !this->elevProp.hasFocus()){
-        this->elevProm.setText(QString::number(prom));
-        this->elevProg.setText(QString::number(prog));
-        this->elevProp.setText(QString::number(prop));
-        this->elev1inXm.setText(QString::number(oneInXm));
+        this->elevProm.setText(gradeDisplayText(prom, 0));
+        this->elevProg.setText(gradeDisplayText(prog, 3));
+        this->elevProp.setText(gradeDisplayText(prop, 1));
+        this->elev1inXm.setText(gradeDisplayText(oneInXm, 2));
      }
     refreshGradeLockUi();
     refreshGradeHelperUi();
@@ -1309,8 +1329,10 @@ void PropertiesTrackObj::refreshGradeLockUi(){
     gradeLock.setChecked(Game::gradeLockEnabled);
     gradeLock.blockSignals(false);
     if(Game::gradeLockEnabled){
-        gradeLock.setText(QString("Lock Grade: %1%").arg(Game::gradeLockedPercent, 0, 'f', 5));
-        gradeLock.setToolTip(QString("New track and road pieces will use a physical grade of %1%.").arg(Game::gradeLockedPercent, 0, 'f', 5));
+        gradeLock.setText(QString("Lock Grade: %1%").arg(
+            gradeDisplayText(Game::gradeLockedPercent, 1)));
+        gradeLock.setToolTip(QString("New track and road pieces will use a physical grade of %1%.").arg(
+            gradeDisplayText(Game::gradeLockedPercent, 1)));
     } else {
         gradeLock.setText("Lock Grade");
         gradeLock.setToolTip("Capture the selected physical grade and apply it to newly placed track and road pieces.");
@@ -1369,22 +1391,22 @@ void PropertiesTrackObj::elevPromEnabled(QString val){
     float prom = val.toFloat(&ok);
     if(!ok) return;
     if(fabs(prom) > Game::trackElevationMaxPm + 0.000001) {   
-        this->elevProm.setText(QString::number(Game::trackElevationMaxPm));
+        this->elevProm.setText(gradeDisplayText(Game::trackElevationMaxPm, 0));
         return;
     }
     //oneInXm
     float oneInXm = 1000.0/prom;
     if(Game::debugOutput) qDebug () << "oneInXm" << oneInXm;
     if(Game::debugOutput) qDebug () << "Game::trackElevationMaxPm" << Game::trackElevationMaxPm;
-    this->elev1inXm.setText(QString::number(oneInXm));
+    this->elev1inXm.setText(gradeDisplayText(oneInXm, 2));
     //prog 
     float prog = qRadiansToDegrees(qAtan(prom/1000.0));
     if(Game::debugOutput) qDebug () << "prog" << prog;
-    this->elevProg.setText(QString::number(prog));
+    this->elevProg.setText(gradeDisplayText(prog, 3));
     //prop 
     float prop = prom/10.0;
     if(Game::debugOutput) qDebug () << "prop" << prop;
-    this->elevProp.setText(QString::number(prop));  
+    this->elevProp.setText(gradeDisplayText(prop, 1));
     
     Undo::SinglePushWorldObjData(worldObj);
     trackObj->setElevation(prom);
@@ -1421,15 +1443,15 @@ void PropertiesTrackObj::elev1inXmEnabled(QString val){
     }
     
     if(Game::debugOutput) qDebug () << "Game::trackElevationMaxPm: " << Game::trackElevationMaxPm;
-    this->elevProm.setText(QString::number(prom));  
+    this->elevProm.setText(gradeDisplayText(prom, 0));
     //prop 
     float prop = prom/10.0;
     if(Game::debugOutput) qDebug () << "prop" << prop;
-    this->elevProp.setText(QString::number(prop));
+    this->elevProp.setText(gradeDisplayText(prop, 1));
     //prog 
     float prog = qRadiansToDegrees(qAtan(prom/1000.0));
     if(Game::debugOutput) qDebug () << "prog" << prog;
-    this->elevProg.setText(QString::number(prog));
+    this->elevProg.setText(gradeDisplayText(prog, 3));
     
     Undo::SinglePushWorldObjData(worldObj);
     trackObj->setElevation(prom);
@@ -1444,22 +1466,23 @@ void PropertiesTrackObj::elevProgEnabled(QString val){
     float prog = val.toFloat(&ok);
     if(!ok) return;
     if(fabs(prog) > qRadiansToDegrees(qAtan(Game::trackElevationMaxPm/1000.0))+ 0.000001) {   
-        this->elevProg.setText(QString::number(qRadiansToDegrees(qAtan(Game::trackElevationMaxPm/1000.0))));
+        this->elevProg.setText(gradeDisplayText(
+            qRadiansToDegrees(qAtan(Game::trackElevationMaxPm/1000.0)), 3));
         return;
     }
     //prop 
     float prop = qTan(qDegreesToRadians(prog))*100.0;
     if(Game::debugOutput) qDebug () << "prop" << prop;
     if(Game::debugOutput) qDebug () << "prog" << prog;
-    this->elevProp.setText(QString::number(prop));
+    this->elevProp.setText(gradeDisplayText(prop, 1));
     //prom
     float prom = prop*10.0;
     if(Game::debugOutput) qDebug () << "prom" << prom;
-    this->elevProm.setText(QString::number(prom));
+    this->elevProm.setText(gradeDisplayText(prom, 0));
     //oneInXm
     float oneInXm = 1000.0/prom;
     if(Game::debugOutput) qDebug () << "oneInXm" << oneInXm;
-    this->elev1inXm.setText(QString::number(oneInXm));
+    this->elev1inXm.setText(gradeDisplayText(oneInXm, 2));
      
     Undo::SinglePushWorldObjData(worldObj);
     trackObj->setElevation(prom);
@@ -1474,22 +1497,22 @@ void PropertiesTrackObj::elevPropEnabled(QString val){
     float prop = val.toFloat(&ok);
     if(!ok) return;
     if(fabs(prop) > (Game::trackElevationMaxPm/10.0)+ 0.000001)
-    {    this->elevProp.setText(QString::number(Game::trackElevationMaxPm/10.0));
+    {    this->elevProp.setText(gradeDisplayText(Game::trackElevationMaxPm/10.0, 1));
         return;}
     //prom    
     float prom = prop*10.0;
     if(Game::debugOutput) qDebug () << "prop" << prop;
     if(Game::debugOutput) qDebug () << "prom" << prom;
     if(Game::debugOutput) qDebug () << "Game::trackElevationMaxPm/10.0: " << Game::trackElevationMaxPm/10.0;
-    this->elevProm.setText(QString::number(prom));
+    this->elevProm.setText(gradeDisplayText(prom, 0));
     //prog 
     float prog = qRadiansToDegrees(qAtan(prom/1000.0));
     if(Game::debugOutput) qDebug () << "prog" << prog;
-    this->elevProg.setText(QString::number(prog));
+    this->elevProg.setText(gradeDisplayText(prog, 3));
     //oneInXm
     float oneInXm = 1000.0/prom;
     if(Game::debugOutput) qDebug () << "oneInXm" << oneInXm;
-    this->elev1inXm.setText(QString::number(oneInXm));
+    this->elev1inXm.setText(gradeDisplayText(oneInXm, 2));
     
     Undo::SinglePushWorldObjData(worldObj);
     trackObj->setElevation(prom);

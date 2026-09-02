@@ -43,7 +43,7 @@
 //////// Version
 //////////////////////////////////
 
-QString Game::AppVersion = "v0.15";  // over-ride from main.cpp
+QString Game::AppVersion = "v0.16";  // over-ride from main.cpp
 
 
 bool Game::ServerMode = false;

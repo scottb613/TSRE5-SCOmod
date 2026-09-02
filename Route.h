@@ -106,8 +106,7 @@ public:
     int deleteAllInstances(WorldObj *selected, bool gui = true);
     int deleteAllPolyVegBakes(bool gui = true);
     void undoPlaceObj(int x, int y, int UiD);
-    bool canRemoveTrackFromTDB(WorldObj* obj, bool reportError = true) const;
-    bool removeTrackFromTDB(WorldObj* obj);
+    void removeTrackFromTDB(WorldObj* obj);
     void fillWorldObjectsByTrackItemId(QVector<WorldObj*> &objects, int tdbId, int id);
     void fillWorldObjectsByTrackItemIds(QHash<int, QVector<WorldObj*>> &objects, int tdbId);
     void findSimilar(WorldObj* obj, GroupObj* group, float *playerT, int tileRadius = 0);

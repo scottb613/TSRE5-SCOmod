@@ -1,12 +1,36 @@
-TSRE GenX v0.15 Corrective Full Release Work List
+TSRE GenX v0.16 4 m Texture Hotfix Full Release Work List
 
 ======================================================================================================
 
 SCOPE
 
-TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.15 is the current corrective full release; continuing development remains on `tsre-scomod-wip`.
+TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.16 is the full-release candidate led by the critical 4 m terrain-texture persistence hotfix; v0.15 remains the immutable current public release until the final dual-lane gate and publication complete.
 
 TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Grønbæk Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.
+
+======================================================================================================
+
+4 M TEXTURE HOTFIX FULL RELEASE: V0.16
+
+Critical terrain-texture correction
+
+- Replaced the renderer-only 4 m display compensation with texture matrices derived from the terrain descriptor's actual samples per patch. GenX and Open Rails now consume the same coordinate domain that GenX saves.
+- Applied resolution-aware transforms to default/reset, rotation, mirror, scale reporting, route-wide TERRTEX reset, and generated whole-tile maps for R=8, R=16, and R=32 while preserving the established R=16 constants bit-for-bit.
+- Conservatively normalizes clear non-R16 fixed-16 signatures in memory and marks affected tiles modified for route Save. Ambiguous custom-scaled records are not guessed.
+- Corrected 45-degree matrix scale cancellation by measuring component magnitude, preventing a zero scale report and later division by zero. The terrain-grid probe covers 0, 45, and 90 degrees.
+
+Editor refinements
+
+- Added a dedicated read-only properties panel for generated PolyVeg bake groups while preserving normal Static, raw PolyVeg, mixed-group, and ordinary-group controls.
+- Removed the attached-interactive refusal from track changes/deletions and retained position adjustment for surviving TrackDB/RoadDB items while deleting items on removed geometry.
+- Standardized grade precision, made E/Q/R/T/Y mode keys idempotent, labeled actual terrain mesh resolution, reordered F1 special categories with numeric track sorting, preserved parallel Path Editor vectors through neutral anchors, and added Shift+M terrain-shape/map-state control.
+
+Release disposition
+
+- The operator reports the complete applicable v0.16 functional matrix satisfactory. The final clean MinGW/MSVC Release builds and both complete registered CTest suites remain the publication gate.
+- Added LIDEX-style ownership, lineage, and GPL notices only to first-party editor and regression-probe files created from scratch. Piotr's headers, inherited and third-party source, vendored OpenAL headers, and generated files remain unchanged.
+- Prepared a full cumulative release page with complete installation, platform and backup limitations, checksum guidance, canonical acknowledgments, and license information while making the 4 m texture hotfix the primary release identity.
+- v0.15 remains capped and immutable. No v0.15 tag, release asset, frozen public document, or source snapshot is changed by v0.16.
 
 ======================================================================================================
 

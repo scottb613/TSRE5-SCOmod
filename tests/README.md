@@ -12,7 +12,7 @@ Initial automated coverage should include:
 - path serialization and validation;
 - settings JSON recovery and atomic saving.
 
-Manual editor coverage is tracked in `Docs/TEST-MATRIX-v0.15.md`.
+Manual editor coverage is tracked in `Docs/TEST-MATRIX-v0.16.md`.
 
 `scripts/Invoke-RouteRegression.ps1` automates the evidence around manual
 Route Editor scenarios. `Capture` records a full-route hash manifest and exact
@@ -30,7 +30,11 @@ Critical-format probes added during the v0.14 audit:
 
 - `tsre_terrain_grid_math_probe` verifies checked render-buffer counts for the
   256/8 m and 512/4 m terrain layouts, rejects invalid or oversized layouts,
-  and verifies exact UInt16 height/byte flag payload sizes for both grids.
+  verifies exact UInt16 height/byte flag payload sizes for both grids, and
+  checks resolution-aware texture-matrix domains at 128/8-, 256/16-, and
+  512/32-sample patch resolutions. It also covers conservative conversion of
+  clear legacy fixed-16 matrices while preserving the established 256-sample
+  values bit-for-bit.
 - `tsre_route_save_transaction_probe` verifies multi-component commit,
   rollback after a later component failure, and route-root confinement.
 - `tsre_ace_format_validator_probe` verifies ACE header, dimension, allocation,

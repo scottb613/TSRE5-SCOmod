@@ -17,6 +17,22 @@
 #include "GuiFunct.h"
 #include "TDB.h"
 
+namespace {
+int gradeDisplayDecimals(const int units){
+    switch(units){
+    case 0: return 1; // per mille: 0.1 per mille = 0.01%
+    case 1: return 2; // percent
+    case 2: return 2; // 1 in X
+    case 3: return 3; // degrees: approximately equivalent to 0.01%
+    default: return 2;
+    }
+}
+
+QString gradeDisplayText(const double value, const int units){
+    return QString::number(value, 'f', gradeDisplayDecimals(units));
+}
+}
+
 PropertiesDyntrack::PropertiesDyntrack() {
     buttonTools["FlexTool"] = new QPushButton("Auto-Flex", this);
     GuiFunct::styleEditorActionButton(buttonTools["FlexTool"]);
@@ -170,8 +186,14 @@ PropertiesDyntrack::PropertiesDyntrack() {
                               cardMargin, cardMargin);
     QDoubleValidator* doubleValidator = new QDoubleValidator(-10000, 10000, 6, this); 
     doubleValidator->setNotation(QDoubleValidator::StandardNotation);
-    QDoubleValidator* doubleValidator1 = new QDoubleValidator(-1000, 1000, 6, this); 
-    doubleValidator1->setNotation(QDoubleValidator::StandardNotation);
+    QDoubleValidator* permilleValidator = new QDoubleValidator(-1000, 1000, 1, this);
+    permilleValidator->setNotation(QDoubleValidator::StandardNotation);
+    QDoubleValidator* percentValidator = new QDoubleValidator(-1000, 1000, 2, this);
+    percentValidator->setNotation(QDoubleValidator::StandardNotation);
+    QDoubleValidator* ratioValidator = new QDoubleValidator(-10000, 10000, 2, this);
+    ratioValidator->setNotation(QDoubleValidator::StandardNotation);
+    QDoubleValidator* angleValidator = new QDoubleValidator(-1000, 1000, 3, this);
+    angleValidator->setNotation(QDoubleValidator::StandardNotation);
     
     //‰
     const int gradeFieldHeight = qRound(22.0f * qBound(0.75f, Game::uiScale, 1.25f));
@@ -191,16 +213,16 @@ PropertiesDyntrack::PropertiesDyntrack() {
     QObject::connect(&elevType, SIGNAL(currentTextChanged(QString)),
                       this, SLOT(elevTypeEdited(QString)));
     
-    elevProm.setValidator(doubleValidator1);
+    elevProm.setValidator(permilleValidator);
     QObject::connect(&elevProm, SIGNAL(textEdited(QString)), this, SLOT(elevPromEnabled(QString)));
     //oneInXm
-    elev1inXm.setValidator(doubleValidator);
+    elev1inXm.setValidator(ratioValidator);
     QObject::connect(&elev1inXm, SIGNAL(textEdited(QString)), this, SLOT(elev1inXmEnabled(QString)));
     //º
-    elevProg.setValidator(doubleValidator1);
+    elevProg.setValidator(angleValidator);
     QObject::connect(&elevProg, SIGNAL(textEdited(QString)), this, SLOT(elevProgEnabled(QString)));
     //%
-    elevProp.setValidator(doubleValidator1);
+    elevProp.setValidator(percentValidator);
     QObject::connect(&elevProp, SIGNAL(textEdited(QString)), this, SLOT(elevPropEnabled(QString)));
     elevValueStack.addWidget(&elevProm);
     elevValueStack.addWidget(&elevProp);
@@ -343,11 +365,11 @@ void PropertiesDyntrack::showObj(GameObj* obj){
     float prop = gradePermille/10.0;
 
     //if(gradePermille > 0)
-        oneInXm = 1000.0/gradePermille;
-    this->elevProm.setText(QString::number(gradePermille));
-    this->elevProg.setText(QString::number(prog));
-    this->elevProp.setText(QString::number(prop));
-    this->elev1inXm.setText(QString::number(oneInXm));
+        oneInXm = qFuzzyIsNull(gradePermille) ? 0.0f : 1000.0f/gradePermille;
+    this->elevProm.setText(gradeDisplayText(gradePermille, 0));
+    this->elevProg.setText(gradeDisplayText(prog, 3));
+    this->elevProp.setText(gradeDisplayText(prop, 1));
+    this->elev1inXm.setText(gradeDisplayText(oneInXm, 2));
     setStepValue(Game::DefaultMoveStep);
     
     //this->carNumber.setText(QString::number(pobj->getCarNumber(),10));
@@ -363,15 +385,15 @@ void PropertiesDyntrack::updateObj(GameObj* obj){
     const float gradePermille = dobj->getAverageGradePermille();
      
     float oneInXm = 0.0;
-    oneInXm = 1000.0/gradePermille;
+    oneInXm = qFuzzyIsNull(gradePermille) ? 0.0f : 1000.0f/gradePermille;
     float prog = qRadiansToDegrees(qAtan(gradePermille/1000.0));
     float prop = gradePermille/10.0;
        
     if(!this->elevProm.hasFocus() && !this->elev1inXm.hasFocus() && !this->elevProg.hasFocus() && !this->elevProp.hasFocus()){
-        this->elevProm.setText(QString::number(gradePermille));
-        this->elevProg.setText(QString::number(prog));
-        this->elevProp.setText(QString::number(prop));
-        this->elev1inXm.setText(QString::number(oneInXm));
+        this->elevProm.setText(gradeDisplayText(gradePermille, 0));
+        this->elevProg.setText(gradeDisplayText(prog, 3));
+        this->elevProp.setText(gradeDisplayText(prop, 1));
+        this->elev1inXm.setText(gradeDisplayText(oneInXm, 2));
     }
 
 }
@@ -566,7 +588,7 @@ void PropertiesDyntrack::setStepValue(float step){
     if(elevType.currentIndex() == 3)
         step = qRadiansToDegrees(qAtan(step/10.0));
     
-    elevStep.setText(QString::number(step));
+    elevStep.setText(gradeDisplayText(step, elevType.currentIndex()));
 }
 
 float PropertiesDyntrack::getStepValue(float step){
@@ -590,22 +612,22 @@ void PropertiesDyntrack::elevPromEnabled(QString val){
     float prom = val.toFloat(&ok);
     if(!ok) return;
     if(fabs(prom) > Game::trackElevationMaxPm + 0.000001) {   
-        this->elevProm.setText(QString::number(Game::trackElevationMaxPm));
+        this->elevProm.setText(gradeDisplayText(Game::trackElevationMaxPm, 0));
         return;
     }
     //oneInXm
     float oneInXm = 1000.0/prom;
     if(Game::debugOutput) qDebug () << "oneInXm" << oneInXm;
     if(Game::debugOutput) qDebug () << "Game::trackElevationMaxPm" << Game::trackElevationMaxPm;
-    this->elev1inXm.setText(QString::number(oneInXm));
+    this->elev1inXm.setText(gradeDisplayText(oneInXm, 2));
     //prog 
     float prog = qRadiansToDegrees(qAtan(prom/1000.0));
     if(Game::debugOutput) qDebug () << "prog" << prog;
-    this->elevProg.setText(QString::number(prog));
+    this->elevProg.setText(gradeDisplayText(prog, 3));
     //prop 
     float prop = prom/10.0;
     if(Game::debugOutput) qDebug () << "prop" << prop;
-    this->elevProp.setText(QString::number(prop));  
+    this->elevProp.setText(gradeDisplayText(prop, 1));
     
     Undo::SinglePushWorldObjData(worldObj);
     dobj->setElevation(prom);
@@ -642,15 +664,15 @@ void PropertiesDyntrack::elev1inXmEnabled(QString val){
     }
     
     if(Game::debugOutput) qDebug () << "Game::trackElevationMaxPm: " << Game::trackElevationMaxPm;
-    this->elevProm.setText(QString::number(prom));  
+    this->elevProm.setText(gradeDisplayText(prom, 0));
     //prop 
     float prop = prom/10.0;
     if(Game::debugOutput) qDebug () << "prop" << prop;
-    this->elevProp.setText(QString::number(prop));
+    this->elevProp.setText(gradeDisplayText(prop, 1));
     //prog 
     float prog = qRadiansToDegrees(qAtan(prom/1000.0));
     if(Game::debugOutput) qDebug () << "prog" << prog;
-    this->elevProg.setText(QString::number(prog));
+    this->elevProg.setText(gradeDisplayText(prog, 3));
     
     Undo::SinglePushWorldObjData(worldObj);
     dobj->setElevation(prom);
@@ -665,22 +687,23 @@ void PropertiesDyntrack::elevProgEnabled(QString val){
     float prog = val.toFloat(&ok);
     if(!ok) return;
     if(fabs(prog) > qRadiansToDegrees(qAtan(Game::trackElevationMaxPm/1000.0))+ 0.000001) {   
-        this->elevProg.setText(QString::number(qRadiansToDegrees(qAtan(Game::trackElevationMaxPm/1000.0))));
+        this->elevProg.setText(gradeDisplayText(
+            qRadiansToDegrees(qAtan(Game::trackElevationMaxPm/1000.0)), 3));
         return;
     }
     //prop 
     float prop = qTan(qDegreesToRadians(prog))*100.0;
     if(Game::debugOutput) qDebug () << "prop" << prop;
     if(Game::debugOutput) qDebug () << "prog" << prog;
-    this->elevProp.setText(QString::number(prop));
+    this->elevProp.setText(gradeDisplayText(prop, 1));
     //prom
     float prom = prop*10.0;
     if(Game::debugOutput) qDebug () << "prom" << prom;
-    this->elevProm.setText(QString::number(prom));
+    this->elevProm.setText(gradeDisplayText(prom, 0));
     //oneInXm
     float oneInXm = 1000.0/prom;
     if(Game::debugOutput) qDebug () << "oneInXm" << oneInXm;
-    this->elev1inXm.setText(QString::number(oneInXm));
+    this->elev1inXm.setText(gradeDisplayText(oneInXm, 2));
      
     Undo::SinglePushWorldObjData(worldObj);
     dobj->setElevation(prom);
@@ -695,22 +718,22 @@ void PropertiesDyntrack::elevPropEnabled(QString val){
     float prop = val.toFloat(&ok);
     if(!ok) return;
     if(fabs(prop) > (Game::trackElevationMaxPm/10.0)+ 0.000001)
-    {    this->elevProp.setText(QString::number(Game::trackElevationMaxPm/10.0));
+    {    this->elevProp.setText(gradeDisplayText(Game::trackElevationMaxPm/10.0, 1));
         return;}
     //prom    
     float prom = prop*10.0;
     if(Game::debugOutput) qDebug () << "prop" << prop;
     if(Game::debugOutput) qDebug () << "prom" << prom;
     if(Game::debugOutput) qDebug () << "Game::trackElevationMaxPm/10.0: " << Game::trackElevationMaxPm/10.0;
-    this->elevProm.setText(QString::number(prom));
+    this->elevProm.setText(gradeDisplayText(prom, 0));
     //prog 
     float prog = qRadiansToDegrees(qAtan(prom/1000.0));
     if(Game::debugOutput) qDebug () << "prog" << prog;
-    this->elevProg.setText(QString::number(prog));
+    this->elevProg.setText(gradeDisplayText(prog, 3));
     //oneInXm
     float oneInXm = 1000.0/prom;
     if(Game::debugOutput) qDebug () << "oneInXm" << oneInXm;
-    this->elev1inXm.setText(QString::number(oneInXm));
+    this->elev1inXm.setText(gradeDisplayText(oneInXm, 2));
     
     Undo::SinglePushWorldObjData(worldObj);
     dobj->setElevation(prom);

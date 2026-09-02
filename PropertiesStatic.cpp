@@ -397,6 +397,8 @@ bool PropertiesStatic::support(GameObj* obj){
         return false;
     if(obj->typeObj != GameObj::worldobj)
         return false;
+    if(PolyVegObject::isBakeShape(((WorldObj*)obj)->fileName))
+        return false;
     if(((WorldObj*)obj)->type == "static")
         return true;
     if(((WorldObj*)obj)->type == "gantry")
