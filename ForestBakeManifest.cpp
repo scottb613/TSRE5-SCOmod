@@ -15,6 +15,7 @@
 #include <QSaveFile>
 #include <QSet>
 #include <QStringConverter>
+#include "WorldCleanupValidation.h"
 #include <QRegularExpression>
 #include <QVector>
 #include <QtEndian>
@@ -96,6 +97,15 @@ bool decodedWorldFile(const QByteArray &input, QString &text,
                       QByteArray &binaryPayload) {
     QByteArray data;
     if(!expandedWorldFile(input, data)) return false;
+    // Expansion retains the compressed wrapper, whose size bytes are not text.
+    // Restore its ordinary signature before decoding a textual world payload.
+    if(input.size() > 16 && input.startsWith("SIMISA@F"))
+        data.replace(0, 16, "SIMISA@@@@@@@@@@");
+    else if(input.size() > 34 && input.startsWith(QByteArray::fromHex("fffe"))
+            && input[16] == 'F') {
+        QStringEncoder encoder(QStringEncoder::Utf16LE);
+        data.replace(0, 34, QByteArray::fromHex("fffe") + encoder(u"SIMISA@@@@@@@@@@"));
+    }
     text.clear();
     binaryPayload.clear();
 
@@ -127,20 +137,20 @@ bool decodedWorldFile(const QByteArray &input, QString &text,
     if(data.size() >= 2
             && static_cast<unsigned char>(data[0]) == 0xFF
             && static_cast<unsigned char>(data[1]) == 0xFE) {
-        QStringDecoder decoder(QStringDecoder::Utf16LE);
+        QStringDecoder decoder(QStringDecoder::Utf16LE, QStringConverter::Flag::Stateless);
         text = decoder(data);
-        return !decoder.hasError();
+        return !decoder.hasError() && WorldCleanupValidation::completeTextWorld(text);
     }
     if(data.size() >= 2
             && static_cast<unsigned char>(data[0]) == 0xFE
             && static_cast<unsigned char>(data[1]) == 0xFF) {
-        QStringDecoder decoder(QStringDecoder::Utf16BE);
+        QStringDecoder decoder(QStringDecoder::Utf16BE, QStringConverter::Flag::Stateless);
         text = decoder(data);
-        return !decoder.hasError();
+        return !decoder.hasError() && WorldCleanupValidation::completeTextWorld(text);
     }
-    QStringDecoder decoder(QStringDecoder::Utf8);
+    QStringDecoder decoder(QStringDecoder::Utf8, QStringConverter::Flag::Stateless);
     text = decoder(data);
-    return !decoder.hasError();
+    return !decoder.hasError() && WorldCleanupValidation::completeTextWorld(text);
 }
 
 bool isGeneratedBakeName(const QString &name) {
@@ -266,7 +276,10 @@ bool ForestBakeManifest::upsert(const QString &path,
 
 bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
                                            ForestBakePruneResult &result,
-                                           QString &error) {
+                                           QString &error,
+                                           const QSet<QString> *shapeScope,
+                                           bool discoverUntracked) {
+    error.clear();
     result = ForestBakePruneResult();
     const QString cleanRoutePath = QDir::cleanPath(routePath);
     const QString manifestPath = cleanRoutePath
@@ -307,19 +320,20 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
     // defined generated names directly so route cleanup does not depend on
     // bookkeeping that may never have existed.
     const QDir shapesDirectory(cleanRoutePath + "/shapes");
-    const QStringList generatedShapeFiles = shapesDirectory.entryList(
-        QStringList() << "V*.s", QDir::Files, QDir::Name);
+    const QStringList generatedShapeFiles = discoverUntracked ? shapesDirectory.entryList(
+        QStringList() << "V*.s", QDir::Files, QDir::Name) : QStringList();
     for(const QString &shape : generatedShapeFiles)
         if(isGeneratedBakeName(shape))
             manifestShapes.insert(shape.toLower());
-    const QStringList generatedDescriptorFiles = shapesDirectory.entryList(
-        QStringList() << "V*.sd", QDir::Files, QDir::Name);
+    const QStringList generatedDescriptorFiles = discoverUntracked ? shapesDirectory.entryList(
+        QStringList() << "V*.sd", QDir::Files, QDir::Name) : QStringList();
     for(const QString &descriptor : generatedDescriptorFiles) {
         const QString shape =
             QFileInfo(descriptor).completeBaseName() + ".s";
         if(isGeneratedBakeName(shape))
             manifestShapes.insert(shape.toLower());
     }
+    if(shapeScope) manifestShapes.intersect(*shapeScope);
     if(manifestShapes.isEmpty())
         return true;
 
@@ -337,6 +351,10 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
 
     QSet<QString> referencedShapes;
     const QDir worldDirectory(cleanRoutePath + "/world");
+    if(!worldDirectory.exists() || !worldDirectory.isReadable()) {
+        error = "Cannot scan the saved world directory for generated bake cleanup.";
+        return false;
+    }
     const QStringList worldFiles = worldDirectory.entryList(
         QStringList() << "*.w", QDir::Files, QDir::Name);
     for(const QString &worldName : worldFiles) {
@@ -353,7 +371,9 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
         }
         QString worldText;
         QByteArray binaryPayload;
-        if(!decodedWorldFile(worldFile.readAll(), worldText, binaryPayload)) {
+        const QByteArray data = worldFile.readAll();
+        if(worldFile.error() != QFileDevice::NoError
+                || !decodedWorldFile(data, worldText, binaryPayload)) {
             error = "Unable to decode saved world file safely: "
                     + worldFile.fileName();
             return false;
@@ -377,7 +397,8 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
     QStringList assetsToRemove;
     for(const QJsonValue &value : entries) {
         const QString shape = value.toObject()["shapeFile"].toString();
-        if(referencedShapes.contains(shape.toLower())) {
+        if((shapeScope && !shapeScope->contains(shape.toLower()))
+                || referencedShapes.contains(shape.toLower())) {
             retainedEntries.append(value);
             result.retainedShapes.append(shape);
             continue;
@@ -433,20 +454,23 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
         stagedAssets.append({assetPath, stagedPath});
     }
 
-    root["blocks"] = retainedEntries;
-    QSaveFile output(manifestPath);
-    if(!output.open(QIODevice::WriteOnly)) {
-        restoreStagedAssets();
-        error = "Unable to update forest bake manifest: " + manifestPath;
-        return false;
+    // Orphan-only cleanup has no manifest changes. In particular, do not
+    // create an empty manifest (or require an OpenRails directory) for it.
+    if(result.removedBlocks > 0) {
+        root["blocks"] = retainedEntries;
+        QSaveFile output(manifestPath);
+        if(!output.open(QIODevice::WriteOnly)) {
+            restoreStagedAssets();
+            error = "Unable to update forest bake manifest: " + manifestPath;
+            return false;
+        }
+        const QByteArray document = QJsonDocument(root).toJson(QJsonDocument::Indented);
+        if(output.write(document) != document.size() || !output.commit()) {
+            restoreStagedAssets();
+            error = "Unable to publish pruned forest bake manifest: " + manifestPath;
+            return false;
+        }
     }
-    const QByteArray document = QJsonDocument(root).toJson(QJsonDocument::Indented);
-    if(output.write(document) != document.size() || !output.commit()) {
-        restoreStagedAssets();
-        error = "Unable to publish pruned forest bake manifest: " + manifestPath;
-        return false;
-    }
-
     QStringList removalFailures;
     for(const StagedAsset &asset : stagedAssets) {
         if(QFile::remove(asset.staged)) {

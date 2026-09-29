@@ -32,6 +32,8 @@ ActivityServiceWindow::ActivityServiceWindow(QWidget* parent) : QWidget(parent) 
     QObject::connect(bNewActionEvent, SIGNAL(released()),
                       this, SLOT(bNewServiceSelected()));
     QPushButton *bDeleteActionEvent = new QPushButton("Delete");
+    bDeleteActionEvent->setEnabled(false);
+    bDeleteActionEvent->setToolTip(tr("Deleting service files is not implemented."));
     QObject::connect(bDeleteActionEvent, SIGNAL(released()),
                       this, SLOT(bDeleteServiceSelected()));
     actionListLayout->addWidget(&serviceList);
@@ -96,7 +98,6 @@ void ActivityServiceWindow::showServices(Route* r){
         else
             item->setCheckState(2, Qt::Unchecked);
 
-        item->setCheckState(2, Qt::Checked);
         item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
         items.append(item);
     }

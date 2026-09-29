@@ -18,6 +18,7 @@
 #include "ShapeLib.h"
 #include "Coords.h"
 #include "GuiFunct.h"
+#include "ControlPanelAttention.h"
 #include <functional>
 
 static int scaledUiSize(int base){
@@ -345,6 +346,8 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
     statReadout = statusReadoutStyle("#26292c", "#e7eaec", "#383d41");
     statReadoutY = statusReadoutStyle(
         Game::StyleYellowButton, "#232323", Game::StyleYellowButtonHover);
+    statReadoutAttention = statusReadoutStyle(
+        "#f08200", "#000000", "#f08200");
     statR = statusButtonStyle(Game::StyleRedButton, Game::StyleRedButtonHover,
                               "#232323", Game::StyleRedButtonHover, "#743737");
 
@@ -352,6 +355,12 @@ StatusWindow::StatusWindow(QWidget* parent) : QWidget(parent) {
         buttons[i]->setStyleSheet(statS);
     status10.setStyleSheet(statReadout);
     status10.setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    saveAttentionTimer.setInterval(1000);
+    QObject::connect(&saveAttentionTimer, &QTimer::timeout, this, [this](){
+        saveAttentionOrange = !saveAttentionOrange;
+        status10.setStyleSheet(
+            saveAttentionOrange ? statReadoutAttention : statReadout);
+    });
 
     QObject::connect(&status4, SIGNAL(released()), this, SLOT(selectButtonAction()));
     QObject::connect(&status9, SIGNAL(released()), this, SLOT(placeButtonAction()));
@@ -551,11 +560,37 @@ void StatusWindow::recStatus(QString statName, QString statVal ){
     if(statName.contains("select"))    { status4.setText(statVal); if(statVal.endsWith("ON")) status4.setStyleSheet(statG); else status4.setStyleSheet(statS);  }
 
     if(statName.contains("camterr"))   { statVal.replace("Cam Terrain Unlocked", "Camera Terrain: FREE"); statVal.replace("Cam Terrain Locked", "Camera Terrain: LOCK"); statVal.replace("Cam Terrain FREE", "Camera Terrain: FREE"); statVal.replace("Cam Terrain LOCK", "Camera Terrain: LOCK"); status5.setText(statVal); if(statVal.endsWith("LOCK")) status5.setStyleSheet(statS); else status5.setStyleSheet(statY);  }
-    if(statName.contains("stickterr")) { statVal.replace("StickToTerrain", "Stick To Terrain"); status6.setText(statVal); if(statVal.endsWith("ON")) status6.setStyleSheet(statS); else status6.setStyleSheet(statY);  }
+    if(statName.contains("stickterr")) {
+        statVal.replace("StickToTerrain", "Stick To Terrain");
+        status6.setText(statVal);
+        // Stick to All remains the alternate yellow pointer mode even though
+        // its clearer label now describes that mode as enabled.
+        if(statVal.startsWith("Stick to All"))
+            status6.setStyleSheet(statY);
+        else if(statVal.endsWith("ON"))
+            status6.setStyleSheet(statS);
+        else
+            status6.setStyleSheet(statY);
+    }
     if(statName.contains("rotate"))    { status7.setText(statVal); if(statVal.endsWith("ON")) status7.setStyleSheet(statY); else status7.setStyleSheet(statS);  }
     if(statName.contains("translate")) { status8.setText(statVal); if(statVal.endsWith("ON")) status8.setStyleSheet(statY); else status8.setStyleSheet(statS);  }
     if(statName.contains("place"))     { statVal.replace("Place:", "Place New:"); status9.setText(statVal); if(statVal.endsWith("ON")) status9.setStyleSheet(statG); else status9.setStyleSheet(statS);  }
-    if(statName.contains("timer"))     { status10.setText(statVal + "m Since Save"); if(statVal.toInt() > 10) status10.setStyleSheet(statReadoutY); else status10.setStyleSheet(statReadout);  }
+    if(statName.contains("timer")) {
+        const int minutesSinceSave = statVal.toInt();
+        status10.setText(statVal + "m Since Save");
+        if(ControlPanelAttention::saveTimeRequiresFlash(minutesSinceSave)){
+            if(!saveAttentionTimer.isActive()){
+                saveAttentionOrange = true;
+                status10.setStyleSheet(statReadoutAttention);
+                saveAttentionTimer.start();
+            }
+        } else {
+            saveAttentionTimer.stop();
+            saveAttentionOrange = false;
+            status10.setStyleSheet(
+                minutesSinceSave > 10 ? statReadoutY : statReadout);
+        }
+    }
     if(statName.contains("object"))    { if(statVal.size() > 0) {status11.setText(statVal + " Selected"); status11.setStyleSheet(statY); } else {status11.setText(""); status11.setStyleSheet(statS);}  }
     if(statName.contains("guard"))     { lastGuardStatus = statVal; if(guardErrorActive) return; status12.setText(statVal); if(statVal.endsWith("ON")) status12.setStyleSheet(statS); else status12.setStyleSheet(statY);  }
     if(statName.contains("movefast"))  { moveFast.setStyleSheet(statVal.endsWith("ON") ? statC : statS); }

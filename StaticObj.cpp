@@ -225,7 +225,9 @@ void StaticObj::pushRenderItems(float lod, float posx, float posz, float* player
     }*/
     
     if(shapePointer != NULL){
+        Game::currentRenderer->rawPreview = polyVegRaw && selectionColor == 0;
         shapePointer->pushRenderItem(selectionColor, shapeState);
+        Game::currentRenderer->rawPreview = false;
     }
 
     if(selected){
@@ -292,8 +294,12 @@ void StaticObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos
         gluu->enableTextures();
     }
     
-    if(shapePointer != NULL)
+    if(shapePointer != NULL) {
+        gluu->currentShader->setUniformValue(gluu->currentShader->shaderRawPreview,
+            polyVegRaw && selectionColor == 0 && renderMode == gluu->RENDER_DEFAULT ? 1.0f : 0.0f);
         shapePointer->render(selectionColor, shapeState);
+        gluu->currentShader->setUniformValue(gluu->currentShader->shaderRawPreview, 0.0f);
+    }
     //Game::currentShapeLib->shape[shape]->render(isAnimated());
     
     if(selected){
@@ -417,7 +423,7 @@ bool StaticObj::getBoxPoints(QVector<float>& points){
 }
 
 QString StaticObj::getName(){
-    return PolyVegObject::labelForShape(fileName);
+    return PolyVegObject::labelForShape(fileName, polyVegRaw);
 }
 
 QString StaticObj::getShapePath(){

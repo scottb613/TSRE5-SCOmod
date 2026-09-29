@@ -18,11 +18,11 @@
 #include "GuiFunct.h"
 #include "TDB.h"
 #include "TRitem.h"
+#include "RejectedWorldFile.h"
 
 ErrorMessageProperties::ErrorMessageProperties(QWidget* parent) : QWidget(parent) {
     GuiFunct::applyEditorPanelStyle(this);
-    setFixedHeight(qRound(150 * qBound(0.75f, Game::uiScale, 1.25f)));
-    //setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
     
     QVBoxLayout *vbox = new QVBoxLayout;
     vbox->setSpacing(2);
@@ -42,38 +42,77 @@ ErrorMessageProperties::ErrorMessageProperties(QWidget* parent) : QWidget(parent
     int row = 0;
     
     vlist->addWidget(&lMessage,row,0);
-    vlist->addWidget(&eMessage,row,1);
-    vlist->addWidget(&bSelect,row++,2);
+    vlist->addWidget(&eMessage,row++,1,1,3);
     vlist->addWidget(&lAction,row,0);
     vlist->addWidget(&eAction,row++,1,1,3);
     vlist->addWidget(&lLocation,row,0);
-    vlist->addWidget(&eLocation,row,1);
-    vlist->addWidget(&bLocation,row++,2);
-    vlist->addWidget(&bDelete,0,3);
+    vlist->addWidget(&eLocation,row++,1,1,3);
+    QFrame *messageSeparator = new QFrame(detailsCard);
+    messageSeparator->setFrameShape(QFrame::HLine);
+    messageSeparator->setFrameShadow(QFrame::Sunken);
+    vlist->addWidget(messageSeparator,row++,0,1,4);
+    QHBoxLayout *actions = new QHBoxLayout;
+    actions->setSpacing(2);
+    for(QPushButton *button : {&bLocation,&bSelect,&bDelete,&bNoFactor}){
+        QFrame *cell = new QFrame(detailsCard);
+        GuiFunct::styleEditorPanelCard(cell);
+        QVBoxLayout *contents = new QVBoxLayout(cell);
+        contents->setContentsMargins(4,3,4,3);
+        contents->setSpacing(0);
+        contents->addWidget(button);
+        actions->addWidget(cell,1);
+    }
+    vlist->addLayout(actions,row,0,1,4);
     lMessage.setText("Message:");
+    lMessage.setAlignment(Qt::AlignTop);
     lMessage.hide();
     eMessage.hide();
     eMessage.setReadOnly(true);
+    eMessage.setLineWrapMode(QPlainTextEdit::WidgetWidth);
+    eMessage.setFixedHeight(eMessage.fontMetrics().lineSpacing() * 2 + 12);
+    eMessage.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     lAction.hide();
     lAction.setText("Description:");
     lAction.setAlignment(Qt::AlignTop);
     eAction.hide();
     eAction.setReadOnly(true);
+    eAction.setFixedHeight(eAction.fontMetrics().lineSpacing() * 4 + 12);
     lLocation.setText("Location:");
     lLocation.hide();
     eLocation.hide();
     eLocation.setReadOnly(true);
-    bLocation.hide();
-    bSelect.hide();
-    bDelete.hide();
+    // Selection must not resize the log viewport underneath a mouse click.
+    // Reserve the same detail rows even when a record has no optional data.
+    QWidget *detailFields[] = {&lMessage, &eMessage, &lAction, &eAction,
+                              &lLocation, &eLocation};
+    for(QWidget *field : detailFields){
+        QSizePolicy policy = field->sizePolicy();
+        policy.setRetainSizeWhenHidden(true);
+        field->setSizePolicy(policy);
+    }
+    bSelect.setText("Select");
+    bSelect.setToolTip("Select the object or database item associated with this record.");
+    bLocation.setText("Jump");
+    bDelete.setText("Delete");
+    bNoFactor.setText("No Factor");
+    bNoFactor.setToolTip("Hide this diagnostic for this route, including future sessions. Reset Status restores hidden records.");
+    for(QPushButton *button : {&bSelect, &bLocation, &bDelete, &bNoFactor}){
+        button->setEnabled(false);
+        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    }
     
     GuiFunct::styleEditorActionButton(&bLocation);
     GuiFunct::styleEditorActionButton(&bSelect);
     GuiFunct::styleEditorActionButton(&bDelete);
+    GuiFunct::styleEditorActionButton(&bNoFactor);
     vbox->addWidget(detailsCard);
     QObject::connect(&bLocation, SIGNAL(released()), this, SLOT(jumpToLocation()));
     QObject::connect(&bSelect, SIGNAL(released()), this, SLOT(bSelectReleased()));
     QObject::connect(&bDelete, SIGNAL(released()), this, SLOT(deleteCurrentItem()));
+    connect(&bNoFactor, &QPushButton::clicked, this, [this](){
+        if(currentMessage != nullptr)
+            emit noFactorRequested(currentMessage);
+    });
     
     this->setLayout(vbox);
 }
@@ -83,21 +122,33 @@ ErrorMessageProperties::~ErrorMessageProperties() {
 
 void ErrorMessageProperties::showMessage(ErrorMessage* msg){
     currentMessage = msg;
+    eMessage.clear();
+    eMessage.hide();
+    eAction.clear();
+    eLocation.clear();
     lMessage.hide();
     lAction.hide();
     eAction.hide();
     lLocation.hide();
-    bLocation.hide();
+    bLocation.setEnabled(false);
     eLocation.hide();
-    bSelect.hide();
-    bDelete.hide();
+    bSelect.setEnabled(false);
+    bDelete.setEnabled(false);
+    bNoFactor.setEnabled(false);
     if(currentMessage == NULL){
         return;
     }
 
     lMessage.show();
     eMessage.show();
-    eMessage.setText(currentMessage->description);
+    eMessage.setPlainText(currentMessage->description);
+    eMessage.setToolTip(currentMessage->description);
+    bNoFactor.setEnabled(Game::currentRoute != nullptr);
+    if(!currentMessage->rejectedWorldHash.isEmpty()){
+        const QString activeWorld = QFileInfo(Game::root + "/routes/" + Game::route + "/world").canonicalFilePath();
+        bDelete.setEnabled(Game::writeEnabled && activeWorld == currentMessage->rejectedWorldRoot);
+        bDelete.setToolTip("Remove the rejected file from the active world list after confirmation; preserve its exact contents as a recovery .bak file.");
+    }
     if(currentMessage->action.length() > 0){
         lAction.show();
         eAction.show();
@@ -105,19 +156,20 @@ void ErrorMessageProperties::showMessage(ErrorMessage* msg){
     }
     
     if(currentMessage->obj != NULL){
-        bSelect.show();
         bSelect.setEnabled(true);
         if(currentMessage->obj->typeObj == GameObj::tritemobj){
-            bSelect.setText("Select Item");
             if(currentMessage->source == ErrorMessage::Source_TDB
             || currentMessage->source == ErrorMessage::Source_RDB){
-                bDelete.setText("Delete Item");
                 bDelete.setToolTip(
                     "Remove this invalid TrackDB/RoadDB item after confirmation.");
-                bDelete.show();
+                TDB *database = currentMessage->source == ErrorMessage::Source_TDB
+                        ? Game::trackDB : Game::roadDB;
+                TRitem *item = static_cast<TRitem*>(currentMessage->obj);
+                bDelete.setEnabled(database != nullptr && item->trItemId >= 0
+                        && item->trItemId < database->iTRitems
+                        && database->trackItems[item->trItemId] == item);
+                bSelect.setEnabled(bDelete.isEnabled());
             }
-        } else {
-            bSelect.setText("Select Object");
         }
     }
     
@@ -127,21 +179,55 @@ void ErrorMessageProperties::showMessage(ErrorMessage* msg){
         eLocation.setText(QString("Tile: ") + QString::number(currentMessage->coords->TileX) + " "+ QString::number(currentMessage->coords->TileZ) + " " + 
         ". Coordinates: " + QString::number(currentMessage->coords->wX) + " "+ QString::number(currentMessage->coords->wY) + " "+ QString::number(currentMessage->coords->wZ) + " ");
         bLocation.setText("Jump");
-        bLocation.show();
+        eLocation.setToolTip(eLocation.text());
+        bLocation.setEnabled(qIsFinite(currentMessage->coords->wX)
+                && qIsFinite(currentMessage->coords->wY)
+                && qIsFinite(currentMessage->coords->wZ));
     }
     
     
 }
 
 void ErrorMessageProperties::jumpToLocation(){
-    emit jumpTo(currentMessage->coords);
+    if(currentMessage != nullptr && bLocation.isEnabled())
+        emit jumpTo(currentMessage->coords);
 }
 
 void ErrorMessageProperties::bSelectReleased(){
-    emit selectObject(currentMessage->obj);
+    if(currentMessage != nullptr && currentMessage->obj != nullptr)
+        emit selectObject(currentMessage->obj);
 }
 
 void ErrorMessageProperties::deleteCurrentItem(){
+    if(currentMessage != nullptr && !currentMessage->rejectedWorldHash.isEmpty()){
+        if(!Game::writeEnabled) return;
+        const QString root = currentMessage->rejectedWorldRoot;
+        const QString name = currentMessage->rejectedWorldName;
+        const QByteArray hash = currentMessage->rejectedWorldHash;
+        if(!GuiFunct::confirmDestructiveAction(this, "DELETE REJECTED WORLD FILE",
+                QString("Remove %1 from the active world files?\n\n"
+                        "The original will be preserved beside it with a unique .bak suffix. "
+                        "It will no longer be loaded or scanned as a world tile. "
+                        "Scan again afterward to refresh coverage.").arg(name))) return;
+        QString recovery, error;
+        if(!Game::writeEnabled || !RejectedWorldFile::remove(
+                Game::root + "/routes/" + Game::route + "/world", root, name, hash, recovery, error)){
+            GuiFunct::showEditorStopped(this, "File Not Deleted",
+                error.isEmpty() ? "Route writing is disabled." : error);
+            return;
+        }
+        for(ErrorMessage *message : ErrorMessagesLib::ErrorMessages){
+            if(message != nullptr && message->rejectedWorldRoot == root
+                    && message->rejectedWorldName == name){
+                message->rejectedWorldHash.clear();
+                message->type = ErrorMessage::Type_AutoFix;
+                message->action = "Removed from the active world list. Recovery file: "
+                        + recovery + "\nScan again to refresh coverage.";
+            }
+        }
+        emit messageUpdated();
+        return;
+    }
     if(currentMessage == NULL || currentMessage->obj == NULL
     || currentMessage->obj->typeObj != GameObj::tritemobj)
         return;
@@ -190,10 +276,5 @@ void ErrorMessageProperties::deleteCurrentItem(){
         message->action += resolution;
         message->obj = NULL;
     }
-    eAction.setPlainText(currentMessage->action);
-    lAction.show();
-    eAction.show();
-    bSelect.hide();
-    bDelete.hide();
     emit messageUpdated();
 }

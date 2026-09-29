@@ -78,7 +78,7 @@ public:
     void pushRenderItems(float *  playerT, float* playerW, float* target, float fov, int renderMode);
     void render(float *  playerT, float* playerW, float* target, float fov, int renderMode);
     //void renderWS(float *  playerT, float* playerW, float* target, float fov, int renderMode);
-    void save();
+    bool save();
     void saveToStream(QTextStream &out);
     WorldObj* CheckObj;
     
@@ -88,7 +88,7 @@ private:
     bool modified;
     QString* viewDbSphereRaw = NULL;
     void wczytajObiekty();
-    void saveWS();
+    bool saveWS();
     Route* route = NULL;
 
 };

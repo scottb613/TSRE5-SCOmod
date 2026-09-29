@@ -4,6 +4,22 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.17 source changes (selected feature files; prior entries follow)
+
+- AutoPlaceWire.cpp/.h, AutoPlaceRange.h, AutoPlaceInput.h, WireAttachmentOrder.h,
+  ObjTools.cpp, RouteEditorGLWidget.cpp/.h, RouteEditorWindow.cpp, Route.cpp,
+  Tile.cpp and SFile.cpp: placement, SNAP wires, generated lifecycle and reload.
+- WorldCleanupValidation.h, WireAssetScan.h, ForestBakeManifest.cpp:
+  shared cleanup validation and generated-asset preservation.
+- Service.cpp, Activity.cpp and Activity Builder/service/traffic/timetable UI:
+  preview initialization, guards, dirty state and unsupported-action handling.
+- Terrain.cpp, TerrainLibQt.cpp and ConEditorWindow.cpp: terrain guards,
+  texture/save handling and Consist Builder startup sound.
+- Regression probes cover wire limits/cleanup, placement, pickup alignment,
+  moving tables, route section policy, rejected world files and track scanning.
+- This is a feature-oriented ledger, not a replacement for the reviewed source
+  export manifest. Documentation updates do not change compiled source.
+
 v0.15 corrective source checkpoint
 
 - Game.cpp / TSRE5_resource.rc / CMakeLists.txt / vcpkg.json

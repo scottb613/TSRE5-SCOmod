@@ -128,6 +128,16 @@ void UnsavedDialog::setSubtitle(QString subtitle){
     subtitleLabel.show();
 }
 
+void UnsavedDialog::setGeneratedWorkPrompt(){
+    bok->setText("Bake & Save");
+    if(bexit) bexit->setText("Discard");
+    setMsg("The generated items listed below have not been baked and saved. "
+           "Bake & Save saves all route changes before exiting. "
+           "Discard exits without saving route changes and removes pending generated "
+           "objects, their owned shapes and tracking data. Previously saved bakes "
+           "and shared source assets are preserved.");
+}
+
 void UnsavedDialog::hideButtons(){
     if(bok != NULL)
         bok->hide();

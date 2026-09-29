@@ -30,6 +30,7 @@ PickupObj::PickupObj() {
 }
 
 PickupObj::PickupObj(const PickupObj& o) : WorldObj(o) {
+    trackAlignment = o.trackAlignment;
     speedRange[0] = o.speedRange[0];
     speedRange[1] = o.speedRange[1];
     pickupType[0] = o.pickupType[0];
@@ -165,6 +166,7 @@ void PickupObj::initTrItems(float* tpos){
         return;
     int trNodeId = tpos[0];
     float metry = tpos[1];
+    trackAlignment.reset(PickupTrackAlignment::heading(qDirection));
     
     TDB* tdb = Game::trackDB;
     qDebug() <<"new pickup  "<<this->fileName;
@@ -181,6 +183,58 @@ Game::resetTools = true;  // fake signal
     pickupAnimData1 = 3;
     pickupAnimData2 = 2;
     pickupType[1] = 0;
+}
+
+bool PickupObj::trackHeading(float& heading) const {
+    TDB* db = Game::trackDB;
+    if (!db || !trItemId || trItemIdCount < 2 || trItemId[0] != 0)
+        return false;
+    const auto item = db->trackItems.find(trItemId[1]);
+    if (item == db->trackItems.end() || !item->second || item->second->type != "pickupitem")
+        return false;
+    const int node = db->findTrItemNodeId(trItemId[1]);
+    float draw[7];
+    if (node < 0 || !db->getDrawPositionOnTrNode(draw, node, item->second->getTrackPosition())
+            || !std::isfinite(draw[3]))
+        return false;
+    heading = draw[3];
+    return true;
+}
+
+void PickupObj::alignToTrack(float heading) {
+    PickupTrackAlignment::upright(qDirection, heading);
+    trackAlignment.reset(heading);
+    // Refresh the same caches/dirty state as a normal rotation.
+    WorldObj::rotate(0, 0, 0);
+}
+
+void PickupObj::rotateTrack90() {
+    PickupTrackAlignment::upright(qDirection,
+            PickupTrackAlignment::heading(qDirection) + static_cast<float>(M_PI / 2));
+    WorldObj::rotate(0, 0, 0);
+}
+
+bool PickupObj::followTrackHeading(float heading) {
+    if (!std::isfinite(heading))
+        return false;
+    float previousHeading = 0;
+    if (!trackAlignment.hasReference) {
+        // Loaded objects retain their saved relative heading. Sample at their
+        // old position before moving, without changing the pickup's track item.
+        if (!Game::trackDB)
+            return false;
+        float tile[2] = {static_cast<float>(x), static_cast<float>(y)};
+        float pos[3] = {position[0], position[1], position[2]};
+        float q[4];
+        if (Game::trackDB->findNearestPositionOnTDB(tile, pos, q, nullptr) < 0)
+            return false;
+        previousHeading = PickupTrackAlignment::heading(q);
+        if (!std::isfinite(previousHeading))
+            return false;
+    }
+    trackAlignment.follow(qDirection, heading, previousHeading);
+    WorldObj::rotate(0, 0, 0);
+    return true;
 }
 
 void PickupObj::set(QString sh, QString val){

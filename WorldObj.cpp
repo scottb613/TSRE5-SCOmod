@@ -324,6 +324,7 @@ WorldObj::WorldObj(const WorldObj& o) {
     size = o.size;
     jestPQ = o.jestPQ;
     modified = o.modified;
+    polyVegRaw = o.polyVegRaw;
     selectionColor.x = o.selectionColor.x;
     selectionColor.y = o.selectionColor.y;
     selectionColor.z = o.selectionColor.z;

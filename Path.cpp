@@ -14,6 +14,7 @@
 #include <QDebug>
 #include <QFile>
 #include <QDir>
+#include <QSet>
 #include <QStringConverter>
 #include "Game.h"
 #include "FileBuffer.h"
@@ -184,10 +185,9 @@ int Path::getStartDirection(){
 }
 
 float* Path::getStartPositionTXZ(float* out){
+    if(Game::trackDB == NULL || node.isEmpty())
+        return NULL;
     init3dShapes(false);
-    
-    if(out == NULL)
-        out = new float[4];
         
     float posT[2];
     float posW[3];
@@ -197,7 +197,10 @@ float* Path::getStartPositionTXZ(float* out){
     posT[0] = node[0].tilex;
     posT[1] = node[0].tilez;
     Vec3::copy(posW, node[0].pos);
-    tdb->findNearestPositionOnTDB(posT, posW, NULL, tpos1);
+    if(tdb->findNearestPositionOnTDB(posT, posW, NULL, tpos1) < 0)
+        return NULL;
+    if(out == NULL)
+        out = new float[4];
     out[0] = posT[0];
     out[1] = -posT[1];
     out[2] = posW[0];
@@ -231,9 +234,23 @@ void Path::initRoute(){
     
     unsigned int current = 0;
     unsigned int trackPdpId = 0;
+    QSet<unsigned int> visited;
     
     while(current < 1000000) {
+        if(current >= static_cast<unsigned int>(trPathNode.size())
+                || trPathNode[current] == NULL || visited.contains(current)){
+            qWarning() << "Invalid or cyclic activity path:" << pathid;
+            node.clear();
+            return;
+        }
+        visited.insert(current);
         trackPdpId = trPathNode[current][3];
+        if(trackPdpId >= static_cast<unsigned int>(trackPdp.size())
+                || trackPdp[trackPdpId] == NULL){
+            qWarning() << "Invalid activity path point:" << pathid;
+            node.clear();
+            return;
+        }
         current = trPathNode[current][1];
         node.push_back(PathNode());
         node.back().next = current;

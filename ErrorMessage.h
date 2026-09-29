@@ -12,6 +12,7 @@
 #define ERRORMESSAGE_H
 
 #include <QString>
+#include <QByteArray>
 #include <QHash>
 
 struct PreciseTileCoordinate;
@@ -42,6 +43,9 @@ public:
     SourceType source;
     QString description;
     QString action;
+    QString rejectedWorldRoot;
+    QString rejectedWorldName;
+    QByteArray rejectedWorldHash;
     PreciseTileCoordinate *coords = NULL;
     GameObj* obj = NULL;
     ErrorMessage();

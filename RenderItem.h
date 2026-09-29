@@ -30,6 +30,7 @@ public:
     float *msMatrix = 0;
     float *mvMatrix = 0;
     QVector<float*> mvMatrixList;
+    QVector<bool> rawPreviewList;
     unsigned int mvMatrixId = -1;
     unsigned char normalsEnabled = 0;
     unsigned char texturesEnabled = 0;

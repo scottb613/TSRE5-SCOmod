@@ -10,7 +10,7 @@
 #include <QString>
 
 namespace PolyVegObject {
-QString labelForShape(const QString &fileName);
+QString labelForShape(const QString &fileName, bool generatedRaw = false);
 bool isRawShape(const QString &fileName);
 bool isBakeShape(const QString &fileName);
 }

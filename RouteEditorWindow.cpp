@@ -409,6 +409,9 @@ RouteEditorWindow::RouteEditorWindow() {
         QObject::connect(trackProperties,
                          &PropertiesTrackObj::deleteAllPolyVegBakesRequested,
                          glWidget, &RouteEditorGLWidget::deleteAllPolyVegBakes);
+        QObject::connect(trackProperties,
+                         &PropertiesTrackObj::deleteAllWireBakesRequested,
+                         glWidget, &RouteEditorGLWidget::deleteAllWireBakes);
     }
     
     //mainLayout3->addWidget(terrainTools);
@@ -1112,6 +1115,11 @@ RouteEditorWindow::RouteEditorWindow() {
     
     QObject::connect(errorMessagesWindow, SIGNAL(jumpTo(PreciseTileCoordinate*)),
                       glWidget, SLOT(jumpTo(PreciseTileCoordinate*)));
+    // Play on press so scans and confirmation dialogs cannot delay feedback.
+    for(QPushButton *button : errorMessagesWindow->findChildren<QPushButton*>())
+        QObject::connect(button, &QPushButton::pressed,
+                         glWidget, &RouteEditorGLWidget::userModeChangeSound,
+                         Qt::UniqueConnection);
     
     QObject::connect(errorMessagesWindow, SIGNAL(selectObject(GameObj*)),
                       glWidget, SLOT(objectSelected(GameObj*)));
@@ -1191,6 +1199,7 @@ void RouteEditorWindow::hideRouteSessionWindows(){
 }
 
 void RouteEditorWindow::completeEditorClose(QCloseEvent *event){
+    glWidget->resetWirePreviewsOnExit();
     saveLastSession();
     hideRouteSessionWindows();
     hide();
@@ -1203,7 +1212,8 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
     glWidget->getUnsavedInfo(unsavedItems);
     auto discardUnsavedBakeFiles = [this, event]() {
         QString cleanupError;
-        if(glWidget->discardUnsavedPolyVegBakeFiles(cleanupError))
+        if(glWidget->discardUnsavedWireBakeFiles(cleanupError)
+                && glWidget->discardUnsavedPolyVegBakeFiles(cleanupError))
             return true;
         GuiFunct::showEditorStopped(this, tr("Discard Route Changes Failed"),
             tr("TSRE could not restore the pre-bake generated files, so the "
@@ -1223,6 +1233,7 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
    
     UnsavedDialog unsavedDialog;   /// EFO need to add the stwqc here when terrain and world are split
     unsavedDialog.setMsg("Save changes in route?");
+    if(glWidget->hasPendingGeneratedWork()) unsavedDialog.setGeneratedWorkPrompt();
     for(int i = 0; i < unsavedItems.size(); i++){
         unsavedDialog.items.addItem(unsavedItems[i]);
     }

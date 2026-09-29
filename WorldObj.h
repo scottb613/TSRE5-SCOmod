@@ -90,6 +90,8 @@ public:
     float size;
     int jestPQ = 0;
     bool modified = false;
+    // Session ownership, never inferred from an asset name or serialized to MSTS.
+    bool polyVegRaw = false;
     Vector3f selectionColor;
     OglObj box;
     OglObj* snapableEndPoint = NULL;

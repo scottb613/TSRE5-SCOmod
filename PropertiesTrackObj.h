@@ -62,8 +62,10 @@ signals:
     void resetRouteTerrtexRequested();
     void disableRouteWaterRequested();
     void deleteAllPolyVegBakesRequested();
+    void deleteAllWireBakesRequested();
     
 private:
+    bool eventFilter(QObject *watched, QEvent *event) override;
     friend class HacksWindow;
     TrackObj* trackObj = NULL;
     WorldObj* hacksSelection = NULL;

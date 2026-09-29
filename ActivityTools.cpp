@@ -1108,9 +1108,14 @@ void ActivityTools::cServiceEnabled(QString val){
     if(id == -1){
         a->playerServiceDefinition = NULL;
     } else {
-        int startTime = a->header->startTime[0]*60*60 + a->header->startTime[1]*60;
+        if(ActLib::Services[id] == NULL)
+            return;
+        int startTime = a->header->startTime[0]*60*60 + a->header->startTime[1]*60
+                + a->header->startTime[2];
         a->createNewPlayerService(ActLib::Services[id]->nameId, startTime);
     }
+    a->markModified();
+    a->prepareEditorPreview();
 }
 
 void ActivityTools::cTrafficEnabled(QString val){
@@ -1119,12 +1124,17 @@ void ActivityTools::cTrafficEnabled(QString val){
     int id = cTraffic.currentData().toInt();
     int aid = actShow.currentData().toInt();
     Activity *a = ActLib::Act[aid];
+    if(a == NULL)
+        return;
     
     if(id == -1){
         a->traffic = NULL;
     } else {
+        if(ActLib::Traffics[id] == NULL)
+            return;
         a->createNewTrafficService(ActLib::Traffics[id]);
     }
+    a->markModified();
 }
 
 void ActivityTools::newActButtonEnabled(){

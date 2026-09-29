@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <QCollator>
 #include <QMapIterator>
+#include <QTimer>
 
 static int scaledUiSize(int base){
     return qRound(base * qBound(0.75f, Game::uiScale, 1.25f));
@@ -176,9 +177,17 @@ ObjTools::ObjTools(QString name)
     vlist3->setSpacing(2);
     vlist3->setContentsMargins(scaledUiSize(6), scaledUiSize(5),
                                scaledUiSize(6), scaledUiSize(5));
-    int row = 0;
-    vlist3->addWidget(buttonTools["selectTool"],row,0,1,2);
-    vlist3->addWidget(buttonTools["placeTool"],row++,2,1,2);
+
+    // Match PolyVeg's padded charcoal checkbox cells and shared indicators.
+    auto checkboxCell = [](QCheckBox *checkbox, QWidget *parent) {
+        QFrame *cell = new QFrame(parent);
+        GuiFunct::styleEditorPanelCard(cell);
+        QHBoxLayout *layout = new QHBoxLayout(cell);
+        layout->setContentsMargins(scaledUiSize(6), scaledUiSize(5),
+                                   scaledUiSize(6), scaledUiSize(5));
+        layout->addWidget(checkbox);
+        return cell;
+    };
     autoPlacementLength.setText("50");
     autoPlacementLength.setMinimumHeight(scaledUiSize(20));
 //    QDoubleValidator* doubleValidator = new QDoubleValidator(-999, 999, 6, this); 
@@ -190,61 +199,98 @@ ObjTools::ObjTools(QString name)
     autoPlacementLength.setValidator(doubleValidator1);
     QObject::connect(&autoPlacementLength, SIGNAL(textEdited(QString)), this, SLOT(autoPlacementLengthEnabled(QString)));
     vbox->addWidget(placeCard);
+    QGridLayout *manualPlacementLayout = vlist3;
+    QComboBox *manualTarget = new QComboBox(placeCard);
+    manualPlacementTarget = manualTarget;
+    manualTarget->addItems({"Tracks", "Roads", "Tracks & Roads", "Snapable"});
+    manualTarget->setCurrentIndex(2);
+    manualPlacementLayout->addWidget(new QLabel("Target:"), 0, 0);
+    manualPlacementLayout->addWidget(manualTarget, 0, 1, 1, 3);
+    connect(manualTarget, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
+        if(route) route->placementManualTargetType = index;
+    });
+    manualPlacementLayout->addWidget(checkboxCell(&stickToTDB, placeCard), 2, 0, 1, 2);
+    manualPlacementLayout->addWidget(buttonTools["selectTool"], 3, 0, 1, 2);
+    manualPlacementLayout->addWidget(buttonTools["placeTool"], 3, 2, 1, 2);
     
     vlist3 = new QGridLayout;
-    vlist3->setSpacing(2);
-    vlist3->setContentsMargins(3,0,1,0);    
-    row = 0;
-    vlist3->addWidget(new QLabel("Rotation Type:"),row,0,1,1);
-    vlist3->addWidget(&autoPlacementRotType,row++,1,1,6);
+    vlist3->setSpacing(scaledUiSize(4));
+    vlist3->setContentsMargins(0, 0, 0, 0);
+    auto choiceCell = [this](const QString &label, QComboBox *field) {
+        QFrame *cell = new QFrame(&advancedPlacementWidget);
+        GuiFunct::styleEditorPanelCard(cell);
+        QVBoxLayout *layout = new QVBoxLayout(cell);
+        layout->setContentsMargins(scaledUiSize(6), scaledUiSize(5), scaledUiSize(6), scaledUiSize(5));
+        layout->setSpacing(scaledUiSize(3));
+        layout->addWidget(new QLabel(label));
+        field->setMinimumWidth(0);
+        field->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+        layout->addWidget(field);
+        return cell;
+    };
+    vlist3->addWidget(choiceCell("Target:", &autoPlacementTarget), 0, 0);
+    vlist3->addWidget(choiceCell("Rot:", &autoPlacementRotType), 0, 1);
+    vlist3->setColumnStretch(0, 1);
+    vlist3->setColumnStretch(1, 1);
+    auto axesCell = [this](const QString &title, QLineEdit *x, QLineEdit *y, QLineEdit *z) {
+        QFrame *cell = new QFrame(&advancedPlacementWidget);
+        GuiFunct::styleEditorPanelCard(cell);
+        QGridLayout *layout = new QGridLayout(cell);
+        layout->setContentsMargins(scaledUiSize(6), scaledUiSize(5), scaledUiSize(6), scaledUiSize(5));
+        layout->setSpacing(scaledUiSize(3));
+        layout->addWidget(new QLabel(title), 0, 0, 1, 6);
+        int column = 0;
+        for(QLineEdit *field : {x, y, z}) {
+            const QString axis = QString("%1:").arg(QChar('X' + column / 2));
+            layout->addWidget(new QLabel(axis), 1, column);
+            ++column;
+            field->setMinimumWidth(0);
+            field->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+            layout->addWidget(field, 1, column);
+            layout->setColumnStretch(column++, 1);
+        }
+        return cell;
+    };
+    vlist3->addWidget(axesCell("Offset (m)", &autoPlacementPosX, &autoPlacementPosY, &autoPlacementPosZ), 1, 0, 1, 2);
+    vlist3->addWidget(axesCell("Rotate (°)", &autoPlacementRotX, &autoPlacementRotY, &autoPlacementRotZ), 2, 0, 1, 2);
+
     QObject::connect(&autoPlacementRotType, SIGNAL(textActivated(QString)),
                       this, SLOT(autoPlacementRotTypeSelected(QString)));
     autoPlacementRotType.setStyleSheet("combobox-popup: 0;");
-    autoPlacementRotType.addItem("Two Point Rotation");
-    autoPlacementRotType.addItem("One Point Rotation");
-    vlist3->addWidget(new QLabel("Target:"),row,0,1,1);
-    vlist3->addWidget(&autoPlacementTarget,row++,1,1,6);
+    autoPlacementRotType.addItem("Two Point");
+    autoPlacementRotType.addItem("One Point");
     QObject::connect(&autoPlacementTarget, SIGNAL(textActivated(QString)),
                       this, SLOT(autoPlacementTargetSelected(QString)));
     autoPlacementTarget.setStyleSheet("combobox-popup: 0;");
     autoPlacementTarget.addItem("Tracks");
     autoPlacementTarget.addItem("Roads");
     autoPlacementTarget.addItem("Tracks & Roads");
-    autoPlacementTarget.addItem("Snapable");
-    vlist3->addWidget(new QLabel("Translate Offset"),row,0);
-    vlist3->addWidget(new QLabel("X:"),row,1);
-    vlist3->addWidget(&autoPlacementPosX,row,2);
     QObject::connect(&autoPlacementPosX, SIGNAL(textEdited(QString)), this, SLOT(autoPlacementOffsetEnabled(QString)));
     autoPlacementPosX.setText("0");
-    vlist3->addWidget(new QLabel("Y:"),row,3);
-    vlist3->addWidget(&autoPlacementPosY,row,4);
     QObject::connect(&autoPlacementPosY, SIGNAL(textEdited(QString)), this, SLOT(autoPlacementOffsetEnabled(QString)));
     autoPlacementPosY.setText("0");
-    vlist3->addWidget(new QLabel("Z:"),row,5);
-    vlist3->addWidget(&autoPlacementPosZ,row++,6);    
     QObject::connect(&autoPlacementPosZ, SIGNAL(textEdited(QString)), this, SLOT(autoPlacementOffsetEnabled(QString)));
     autoPlacementPosZ.setText("0");
-    vlist3->addWidget(new QLabel("Rotate Offset"),row,0);
-    vlist3->addWidget(new QLabel("X:"),row,1);
-    vlist3->addWidget(&autoPlacementRotX,row,2);
     QObject::connect(&autoPlacementRotX, SIGNAL(textEdited(QString)), this, SLOT(autoPlacementOffsetEnabled(QString)));
     autoPlacementRotX.setText("0");
-    vlist3->addWidget(new QLabel("Y:"),row,3);
-    vlist3->addWidget(&autoPlacementRotY,row,4);
     QObject::connect(&autoPlacementRotY, SIGNAL(textEdited(QString)), this, SLOT(autoPlacementOffsetEnabled(QString)));
     autoPlacementRotY.setText("0");
-    vlist3->addWidget(new QLabel("Z:"),row,5);
-    vlist3->addWidget(&autoPlacementRotZ,row++,6);    
     QObject::connect(&autoPlacementRotZ, SIGNAL(textEdited(QString)), this, SLOT(autoPlacementOffsetEnabled(QString)));
     autoPlacementRotZ.setText("0");
-    vlist3->addWidget(new QLabel("Snapable max radius:"),row,0,1,1);
-    vlist3->addWidget(&autoSnapableRadius,row,1,1,3);
+    manualPlacementLayout->addWidget(new QLabel("Snap radius:"), 1, 0);
+    manualPlacementLayout->addWidget(&autoSnapableRadius, 1, 1, 1, 3);
     QObject::connect(&autoSnapableRadius, SIGNAL(textEdited(QString)), this, SLOT(autoSnapableRadiusEnabled(QString)));
     autoSnapableRadius.setText(QString::number(Game::snapableRadius));
     autoSnapableRadius.setValidator(doubleValidator1);
-    QCheckBox *chSnapableOnlyRotation = new QCheckBox("Only Rot ");
-    vlist3->addWidget(chSnapableOnlyRotation,row++,4,1,3);
+    autoSnapableRadius.setToolTip("Capture distance in metres for Stick Target. Used for nearby track/road alignment and legacy snapable endpoints; unrelated to wire span length.");
+    QCheckBox *chSnapableOnlyRotation = new QCheckBox("Only Rot");
+    manualPlacementLayout->addWidget(checkboxCell(chSnapableOnlyRotation, placeCard), 2, 2, 1, 2);
     chSnapableOnlyRotation->setChecked(Game::snapableOnlyRot);
+    chSnapableOnlyRotation->setToolTip("With a track/road target, take its rotation while keeping the placed position. The legacy Snapable-object target does not honor this option.");
+    connect(manualTarget, qOverload<int>(&QComboBox::currentIndexChanged),
+        chSnapableOnlyRotation, [chSnapableOnlyRotation](int index) {
+            chSnapableOnlyRotation->setEnabled(index != 3);
+        });
     QObject::connect(chSnapableOnlyRotation, SIGNAL(stateChanged(int)), this, SLOT(chSnapableOnlyRotation(int)));
     autoPlacementPosX.setValidator(doubleValidator);
     autoPlacementPosY.setValidator(doubleValidator);
@@ -253,46 +299,183 @@ ObjTools::ObjTools(QString name)
     autoPlacementRotY.setValidator(doubleValidator);
     autoPlacementRotZ.setValidator(doubleValidator);
     advancedPlacementWidget.setLayout(vlist3);
-    GuiFunct::styleEditorPanelCard(&advancedPlacementWidget);
 
     stickToTDB.setText("Stick Target");
+    stickToTDB.setToolTip("Align manual placement to the chosen track, road, or Snapable object. Independent of the control panel's terrain/all pointer mode.");
     stickToTDB.setChecked(false);
 
     autoPlacementWindow = new AutoPlacementWindow(this);
     QVBoxLayout *autoPlaceLayout = autoPlacementWindow->contentLayout();
-    QLabel *alignmentHeading = new QLabel(QString::fromUtf8("• Alignment & Offsets"));
-    GuiFunct::styleEditorSubtitle(alignmentHeading);
-    autoPlaceLayout->addWidget(alignmentHeading);
+    QLineEdit *selectedObject = new QLineEdit(autoPlacementWindow);
+    selectedObject->setReadOnly(true);
+    selectedObject->setPlaceholderText("Choose in F1 or select with E");
+    QFrame *selectedCard = new QFrame(autoPlacementWindow);
+    GuiFunct::styleEditorPanelCard(selectedCard);
+    QFormLayout *selectedLayout = new QFormLayout(selectedCard);
+    selectedLayout->setContentsMargins(scaledUiSize(6), scaledUiSize(5), scaledUiSize(6), scaledUiSize(5));
+    selectedLayout->addRow("Selected object:", selectedObject);
+    autoPlaceLayout->addWidget(selectedCard);
+    // Read the actual placement source, including selections made outside F1.
+    // Do not call getShapeName(): it can advance a random shape selection.
+    QTimer *selectionTimer = new QTimer(this);
+    connect(selectionTimer, &QTimer::timeout, this, [this, selectedObject]() {
+        Ref::RefItem *item = route && route->ref ? route->ref->selected : nullptr;
+        QString text;
+        if(item) {
+            const QString shape = item->currentFilename == "%"
+                ? QStringList(item->filename.begin(), item->filename.end()).join(", ")
+                : item->currentFilename;
+            text = shape;
+        }
+        if(selectedObject->text() != text) selectedObject->setText(text);
+        selectedObject->setToolTip(text);
+        if(autoPlacementWindow->isVisible()) emit sendMsg("wireAvailability");
+    });
+    selectionTimer->start(200);
+    QLabel *objectHeading = new QLabel(QString(QChar(0x2022)) + " Objects", autoPlacementWindow);
+    GuiFunct::styleEditorSubtitle(objectHeading);
+    autoPlaceLayout->addWidget(objectHeading);
     autoPlaceLayout->addWidget(&advancedPlacementWidget);
-
-    autoPlaceLayout->addSpacing(scaledUiSize(5));
-    QLabel *placementHeading = new QLabel(QString::fromUtf8("• Placement"));
-    GuiFunct::styleEditorSubtitle(placementHeading);
-    autoPlaceLayout->addWidget(placementHeading);
 
     QFrame *placementCard = new QFrame(autoPlacementWindow);
     GuiFunct::styleEditorPanelCard(placementCard);
-    QVBoxLayout *placementCardLayout = new QVBoxLayout(placementCard);
-    placementCardLayout->setContentsMargins(scaledUiSize(6), scaledUiSize(5),
-                                            scaledUiSize(6), scaledUiSize(5));
-    placementCardLayout->setSpacing(scaledUiSize(5));
-    QGridLayout *placementLayout = new QGridLayout;
-    placementLayout->setSpacing(3);
-    placementLayout->setContentsMargins(0,0,0,0);
-    placementLayout->addWidget(new QLabel("Spacing:"), 0, 0);
-    placementLayout->addWidget(&autoPlacementLength, 0, 1);
-    placementLayout->addWidget(new QLabel("m"), 0, 2);
-    placementLayout->addWidget(&stickToTDB, 1, 0, 1, 3);
-    placementCardLayout->addLayout(placementLayout);
+    QGridLayout *placementLayout = new QGridLayout(placementCard);
+    placementLayout->setContentsMargins(scaledUiSize(6), scaledUiSize(5),
+                                        scaledUiSize(6), scaledUiSize(5));
+    placementLayout->setSpacing(scaledUiSize(4));
+    QSpinBox *wobble = new QSpinBox(placementCard);
+    wobble->setRange(0, 100);
+    wobble->setSuffix(" %");
+    wobble->setSingleStep(5);
+    wobble->setToolTip("For new Auto Place objects only. 30% allows up to 3° lean; 100% up to 10° lean and ±10° heading. Random full-circle directions; roughly half stay unchanged. The base stays fixed. Existing objects are not changed.");
+    connect(wobble, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
+        emit sendMsg("poleWobblePercent", value);
+    });
+    QGridLayout *objectValues = new QGridLayout;
+    objectValues->setContentsMargins(0, 0, 0, 0);
+    objectValues->addWidget(new QLabel("Spacing (m)"), 0, 0);
+    autoPlacementRange = new QDoubleSpinBox(placementCard);
+    autoPlacementRange->setRange(0, 1000000000);
+    autoPlacementRange->setDecimals(1);
+    autoPlacementRange->setSuffix(" m");
+    autoPlacementRange->setSpecialValueText(QString(QChar(0x221E)));
+    autoPlacementRange->setSingleStep(50);
+    autoPlacementRange->setToolTip("A finite range places forward from the pointer along the selected track/road. Zero displays infinity: place the whole section. Ctrl-click starts at the pointer even with infinity; Shift-click places backward from it. All runs stop at the section boundary. Spacing stays unchanged; no extra object is squeezed in at the end.");
+    connect(autoPlacementRange, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double value) {
+        if(route) route->placementAutoRange = value;
+    });
+    objectValues->addWidget(new QLabel("Range"), 0, 1);
+    objectValues->addWidget(new QLabel("Wobble"), 0, 2);
+    objectValues->addWidget(&autoPlacementLength, 1, 0);
+    objectValues->addWidget(autoPlacementRange, 1, 1);
+    objectValues->addWidget(wobble, 1, 2);
+    for(QWidget *field : {static_cast<QWidget*>(&autoPlacementLength), static_cast<QWidget*>(autoPlacementRange), static_cast<QWidget*>(wobble)}) {
+        field->setMinimumWidth(0);
+        field->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    }
+    objectValues->setColumnStretch(0, 1);
+    objectValues->setColumnStretch(1, 1);
+    objectValues->setColumnStretch(2, 1);
+    placementLayout->addLayout(objectValues, 0, 0, 1, 3);
+    QVBoxLayout *placementChecks = new QVBoxLayout;
+    placementChecks->setContentsMargins(0, 0, 0, 0);
+    placementChecks->setSpacing(scaledUiSize(2));
 
+    QCheckBox *followTerrain = new QCheckBox("Stick Terrain", placementCard);
+    autoStickTerrain = followTerrain;
+    followTerrain->setToolTip("Plant new AP objects on the terrain mesh at their final lateral position. Offset Y adds clearance above the ground. Does not tilt objects to the slope or move existing poles.");
+    connect(followTerrain, &QCheckBox::toggled, this, [this](bool checked) {
+        if(route) route->placementAutoFollowTerrain = checked;
+    });
+    placementChecks->addWidget(checkboxCell(followTerrain, placementCard));
+    placementLayout->addLayout(placementChecks, 1, 0, 1, 3);
     buttonTools["autoPlaceSimpleTool"]->setText("Commit");
+    resetRotationButton->setText("Reset Rot");
+    resetRotationButton->setToolTip("Reset placement rotation.");
     GuiFunct::styleEditorActionButton(buttonTools["autoPlaceSimpleTool"]);
     GuiFunct::styleEditorActionButton(autoPlacementDeleteLast);
     GuiFunct::styleEditorActionButton(resetRotationButton);
-    placementCardLayout->addWidget(buttonTools["autoPlaceSimpleTool"]);
-    placementCardLayout->addWidget(autoPlacementDeleteLast);
-    placementCardLayout->addWidget(resetRotationButton);
+    placementLayout->addWidget(buttonTools["autoPlaceSimpleTool"], 2, 0);
+    placementLayout->addWidget(autoPlacementDeleteLast, 2, 1);
+    placementLayout->addWidget(resetRotationButton, 2, 2);
+    for(int column = 0; column < 3; ++column) placementLayout->setColumnStretch(column, 1);
     autoPlaceLayout->addWidget(placementCard);
+
+    wireSection = new QWidget(autoPlacementWindow);
+    QVBoxLayout *wireSectionLayout = new QVBoxLayout(wireSection);
+    wireSectionLayout->setContentsMargins(0, 0, 0, 0);
+    wireSectionLayout->setSpacing(scaledUiSize(4));
+    QLabel *wireTitle = new QLabel(QString(QChar(0x2022)) + " Wires", wireSection);
+    GuiFunct::styleEditorSubtitle(wireTitle);
+    wireTitle->setToolTip("Available when the selected static shape has numbered SNAP_1, SNAP_2, ... attachment points.");
+    wireSectionLayout->addWidget(wireTitle);
+    wireSettingsCard = new QFrame(wireSection);
+    GuiFunct::styleEditorPanelCard(wireSettingsCard);
+    wireSettingsCard->setEnabled(false);
+    wireSettingsCard->setToolTip(wireTitle->toolTip());
+    QGridLayout *wireLayout = new QGridLayout(wireSettingsCard);
+    wireLayout->setContentsMargins(scaledUiSize(6), scaledUiSize(5),
+                                   scaledUiSize(6), scaledUiSize(5));
+    wireLayout->setSpacing(scaledUiSize(4));
+    auto wireValue = [this](double minimum, double maximum, double value,
+                           const QString &suffix) {
+        QDoubleSpinBox *box = new QDoubleSpinBox(wireSettingsCard);
+        box->setRange(minimum, maximum);
+        box->setDecimals(2);
+        box->setValue(value);
+        box->setSuffix(suffix);
+        box->setMinimumWidth(0);
+        box->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+        return box;
+    };
+    QDoubleSpinBox *sag = wireValue(0, 10, 1.5, " %");
+    QDoubleSpinBox *width = wireValue(1, 100, 12, " mm");
+    QDoubleSpinBox *span = wireValue(1, 200, 75, " m");
+    width->setDecimals(1);
+    span->setDecimals(1);
+    sag->setToolTip("Midpoint sag as a percentage of horizontal span length.");
+    width->setToolTip("Diameter of triangular wire geometry in millimetres.");
+    span->setToolTip("Maximum distance between connected poles in metres.");
+    wireLayout->addWidget(new QLabel("Sag"), 0, 0);
+    wireLayout->addWidget(new QLabel("Width"), 0, 1);
+    wireLayout->addWidget(new QLabel("Max Span"), 0, 2);
+    wireLayout->addWidget(sag, 1, 0);
+    wireLayout->addWidget(width, 1, 1);
+    wireLayout->addWidget(span, 1, 2);
+    for(int column = 0; column < 3; ++column) wireLayout->setColumnStretch(column, 1);
+    QPushButton *preview = new QPushButton("Commit", wireSettingsCard);
+    QPushButton *clearPreview = new QPushButton("Preview Off", wireSettingsCard);
+    preview->setToolTip("Select a placed pole with E, then commit its connected wire run between track/road nodes. Blue raw wires bake on Save. Existing spans are not duplicated.");
+    clearPreview->setToolTip("Turn off the last previewed section. Retain its raw definitions but exclude it from baking.");
+    GuiFunct::styleEditorActionButton(preview);
+    GuiFunct::styleEditorActionButton(clearPreview);
+    QHBoxLayout *previewRow = new QHBoxLayout;
+    previewRow->addWidget(preview, 1);
+    previewRow->addWidget(clearPreview, 1);
+    wireLayout->addLayout(previewRow, 2, 0, 1, 3);
+    QPushButton *bakeWires = new QPushButton("Bake All Wires", wireSettingsCard);
+    GuiFunct::styleEditorActionButton(bakeWires);
+    bakeWires->setToolTip("Bake all active raw wire sections. Each pole-to-pole span is a separate shape. Save to retain placements.");
+    QHBoxLayout *wireActions = new QHBoxLayout;
+    QPushButton *deleteWires = new QPushButton("Delete Wires", wireSettingsCard);
+    GuiFunct::styleEditorActionButton(deleteWires);
+    deleteWires->setToolTip("Select one pole with E. Remove its connected node-to-node wire run; preserve every pole.");
+    wireActions->addWidget(bakeWires,1);
+    wireActions->addWidget(deleteWires,1);
+    wireLayout->addLayout(wireActions, 3, 0, 1, 3);
+    connect(deleteWires, &QPushButton::clicked, this, [this]() { emit sendMsg("deleteSelectedWires"); });
+    connect(bakeWires, &QPushButton::clicked, this, [this]() { emit sendMsg("bakeAllWires"); });
+    connect(preview, &QPushButton::clicked, this, [this, sag, width, span]() {
+        emit sendMsg("wirePreview", QString("%1,%2,%3")
+            .arg(sag->value()).arg(width->value()).arg(span->value()));
+        emit requestMainFocus();
+    });
+    connect(clearPreview, &QPushButton::clicked, this, [this]() {
+        emit sendMsg("clearWirePreview");
+    });
+    wireSectionLayout->addWidget(wireSettingsCard);
+    wireSection->setEnabled(false);
+    autoPlaceLayout->addWidget(wireSection);
     autoPlacementWindow->finishLayout();
 
     QLabel *label2 = new QLabel(QString(QChar(0x2022)) + " Recent Items");
@@ -419,6 +602,9 @@ void ObjTools::routeLoaded(Route* a){
     if(a == NULL)
         return;
     this->route = a;
+    route->placementManualTargetType = manualPlacementTarget->currentIndex();
+    route->placementAutoRange = autoPlacementRange->value();
+    route->placementAutoFollowTerrain = autoStickTerrain && autoStickTerrain->isChecked();
     refList.clear();
     lastItems.clear();
     refClass.clear();
@@ -974,10 +1160,9 @@ void ObjTools::stickToTDBEnabled(int state){
 
 void ObjTools::autoPlacementLengthEnabled(QString val){
     bool ok = false;
-    float v = val.toFloat(&ok);
+    const double v = val.toDouble(&ok);
     if(!ok) return;
-    
-    sendMsg("autoPlacementLength", v);
+    if(route) route->placementAutoLength = v;
 }
 
 void ObjTools::advancedPlacementButtonEnabled(bool val){
@@ -988,6 +1173,10 @@ void ObjTools::msg(QString text){
 }
 
 void ObjTools::msg(QString text, bool val){
+    if(text == "wireAvailability" && wireSettingsCard) {
+        wireSettingsCard->setEnabled(val);
+        if(wireSection) wireSection->setEnabled(val);
+    }
 }
 
 void ObjTools::msg(QString text, int val){

@@ -4917,7 +4917,7 @@ void TDB::checkDatabase(){
     // Variables
     QHash<int, QVector<WorldObj*>> objects;
 
-    float *drawPosition = new float[7];
+    float drawPosition[7] = {};
     bool isPosition = false;
 
     // Build WorldFile data
@@ -4930,7 +4930,7 @@ void TDB::checkDatabase(){
         if(trackItems[i] == NULL) 
             continue;
                            
-//        isPosition = false;    /// EFO commenting as it wasn't there in 5m
+        isPosition = false;
 
         
         if (trackItems[i]->type != "emptyitem"){
@@ -4986,7 +4986,7 @@ void TDB::checkDatabase(){
         }
         
         if(trackItems[i]->type == "signalitem"){
-            if(trackItems[i]->trSignalDirs == 1){
+            if(trackItems[i]->trSignalDirs == 1 && trackItems[i]->trSignalDir != NULL){
                 int jid = trackItems[i]->trSignalDir[0];
                 TRnode* n = trackNodes[jid];
                 if(n == NULL) { 
@@ -5007,7 +5007,7 @@ void TDB::checkDatabase(){
                         trackItems[i]->trSignalRDir = NULL;
                     }
                 }
-                if(n->typ != 2) {
+                else if(n->typ != 2) {
                     ErrorMessage *e = new ErrorMessage(
                             ErrorMessage::Type_Error, 
                             tdbName, 
@@ -5048,7 +5048,7 @@ void TDB::checkDatabase(){
                     }
             } else {
                 int iid1 = trackItems[i]->crossoverTrItemData[0];
-                if(trackItems[iid1]->crossoverTrItemData == NULL){
+                if(trackItems[iid1] == NULL || trackItems[iid1]->crossoverTrItemData == NULL){
                     ErrorMessage *e = new ErrorMessage(
                                 ErrorMessage::Type_Error, 
                                 tdbName, 

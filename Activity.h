@@ -127,6 +127,7 @@ public:
     bool isNew();
     void prepareEditorPreview();
     bool isUnSaved();
+    void markModified() { modified = true; }
     void setFileName(QString val);
     void setDisplayName(QString val);
     void setOrtsHornAtCrossigns(bool val);

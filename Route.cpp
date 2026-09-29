@@ -23,6 +23,7 @@
 #include "Tile.h"
 #include "GLMatrix.h"
 #include "TerrainLib.h"
+#include "AutoPlaceRange.h"
 #include "TerrainLibSimple.h"
 #include "TerrainLibQt.h"
 #include "TerrainTrackMath.h"
@@ -41,6 +42,7 @@
 #include "DynTrackObj.h"
 #include "PlatformObj.h"
 #include "CarSpawnerObj.h"
+#include "PickupObj.h"
 #include "ForestObj.h"
 #include "ForestBakeManifest.h"
 #include "PolyVegObject.h"
@@ -68,7 +70,6 @@
 #include "Consist.h"
 #include "Skydome.h"
 #include "TRitem.h"
-#include "ActionChooseDialog.h"
 #include "ErrorMessagesWindow.h"
 #include "ErrorMessagesLib.h"
 #include "ErrorMessage.h"
@@ -658,22 +659,82 @@ bool Route::checkTrackSectionDatabase(){
         return true;
     
     // Edit mode. Make an action regarding not synced tsection data
-    ActionChooseDialog dialog(4);
-    dialog.setWindowTitle("TDB Error");
-    dialog.setInfoText("Route Track Section database is out of sync with your Global database.\n"
-                       "Choose action:");
-    dialog.pushAction("FIX", "Convert route database to current Global now");
-    dialog.pushAction("VIEW", "Disable writing to TDB - avoid editing tracks and interactives");
-    dialog.pushAction("IGNORE", "Ignore and continue - saving route may destroy your route");
-    dialog.pushAction("EXIT", "Quit TSRE now");
+    QDialog dialog;
+    GuiFunct::styleEditorDialog(&dialog);
+    dialog.setMinimumWidth(qRound(540 * qBound(0.75f, Game::uiScale, 1.25f)));
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(6,6,6,6);
+    layout->setSpacing(4);
+    GuiFunct::addEditorDialogHeader(&dialog, "TRACK SECTION CONFLICT", "");
+    QFrame *card = new QFrame(&dialog);
+    GuiFunct::styleEditorPanelCard(card);
+    QVBoxLayout *choices = new QVBoxLayout(card);
+    choices->setContentsMargins(6,6,6,6);
+    choices->setSpacing(4);
+    QLabel *info = new QLabel(
+        "Route-local track definitions share IDs with the active Global definitions. "
+        "A low ID alone is not a conflict.\n\n"
+        "Conversion renumbers route references in memory for the next Save; "
+        "it does not install or replace Global tsection.dat. Back up the complete "
+        "route first: world and database files are not saved as one transaction.\n\n"
+        "Disabling TrackDB writing is not full read-only mode. "
+        "Avoid editing track and interactive objects in that mode.", card);
+    info->setWordWrap(true);
+    choices->addWidget(info);
+    QString actionChosen = "EXIT";
+    const auto addChoice = [&](const QString &action, const QString &text){
+        QPushButton *button = new QPushButton(text, card);
+        GuiFunct::styleEditorActionButton(button);
+        button->setAutoDefault(false);
+        choices->addWidget(button);
+        QObject::connect(button, &QPushButton::clicked, &dialog, [&, action](){
+            actionChosen = action;
+            dialog.accept();
+        });
+        return button;
+    };
+    addChoice("FIX", "Convert Route to Current Global");
+    addChoice("VIEW", "Continue with TrackDB Writing Disabled");
+    QPushButton *cancel = addChoice("EXIT", "Cancel Route Loading");
+    cancel->setDefault(true);
+    cancel->setFocus();
+    layout->addWidget(card);
     dialog.exec();
-    if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":" << dialog.actionChoosen;
+    if(Game::debugOutput) qDebug() << "Track section conflict choice:" << actionChosen;
     
-    if(dialog.actionChoosen == "FIX"){
+    if(actionChosen == "FIX"){
         Game::loadAllWFiles = true;
         preloadWFiles(true);
+        QDir worldDir(Game::root + "/routes/" + Game::route + "/world");
+        const QStringList worldFiles = worldDir.entryList(QStringList() << "*.w", QDir::Files);
+        bool complete = worldDir.exists() && !worldFiles.isEmpty();
+        for(const QString &worldFile : worldFiles){
+            bool validX = false, validZ = false;
+            const int x = worldFile.mid(1,7).toInt(&validX);
+            const int z = -worldFile.mid(8,7).toInt(&validZ);
+            Tile *worldTile = tile.value(x * 10000 + z, nullptr);
+            if(worldFile.size() != 17 || !validX || !validZ
+                    || worldTile == nullptr || worldTile->loaded != 1)
+                complete = false;
+        }
+        if(!complete){
+            GuiFunct::showEditorStopped(nullptr, "Conversion Stopped",
+                "Not every world tile loaded successfully. Route loading has been cancelled; "
+                "no track-section conversion has been applied or saved.");
+            loaded = false;
+            return false;
+        }
         // load tsection with autofix
-        this->tsection = new TSectionDAT(true);
+        TSectionDAT *converted = new TSectionDAT(true);
+        if(!converted->loaded || !converted->updateSectionDataRequired){
+            delete converted;
+            GuiFunct::showEditorStopped(nullptr, "Conversion Stopped",
+                "The Global or route track-section file could not be reloaded. "
+                "Route loading has been cancelled; no world references were converted.");
+            loaded = false;
+            return false;
+        }
+        this->tsection = converted;
         // update ids inside W files
         foreach (Tile* tTile, tile){
             if (tTile == NULL) continue;
@@ -684,8 +745,9 @@ bool Route::checkTrackSectionDatabase(){
         ErrorMessage *e = new ErrorMessage(
             ErrorMessage::Type_Info, 
             ErrorMessage::Source_Editor, 
-            QString("Route Track Section synced by TSRE. "),
-                    "TSRE made automatic conversion of route database to current Global."
+            QString("Route track-section conversion prepared in memory. "),
+                    "Route references were renumbered for the active Global definitions. "
+                    "No Global file was replaced. Changes are not committed until the route is saved."
                     );
         ErrorMessagesLib::PushErrorMessage(e);
         
@@ -695,21 +757,16 @@ bool Route::checkTrackSectionDatabase(){
     ErrorMessage *e = new ErrorMessage(
     ErrorMessage::Type_Error, 
     ErrorMessage::Source_TDB, 
-    QString("Route Track Section database is out of sync with your Global database. "),
-            "Route Track Section isn't compatibile with your current Global database. \n"
-            "Check route installation for custom Global or convert Route using TSRE. \n"
-            "Editing route may cause fatal errors. Make sure that writing to TDB is disabled."
+    QString("Route-local track definitions share IDs with the active Global definitions. "),
+            "Check the route's intended Global installation before converting. "
+            "TrackDB writing can be disabled for inspection; this is not full read-only mode."
         );
     ErrorMessagesLib::PushErrorMessage(e);
-    if(dialog.actionChoosen == "VIEW"){
+    if(actionChosen == "VIEW"){
         Game::writeTDB = false;
         return true;
     }
-    if(dialog.actionChoosen == "IGNORE"){
-        // just do nothing
-        return true;
-    } 
-    if(dialog.actionChoosen == "EXIT"){
+    if(actionChosen == "EXIT"){
         loaded = false;
         return false;
     }
@@ -1499,11 +1556,11 @@ void Route::setTerrainTextureToTrack(int x, int y, float* pos, Brush* brush, int
     int ok1, ok2;
     QVector<float> punkty;
     punkty.reserve(10000);
-    if(placementAutoTargetType == 0) {
+    if(placementManualTargetType == 0) {
         this->trackDB->getVectorSectionPoints(x, y, pos, punkty, mode);
-    } else if(placementAutoTargetType == 1) {
+    } else if(placementManualTargetType == 1) {
         this->roadDB->getVectorSectionPoints(x, y, pos, punkty, mode);
-    } else if(placementAutoTargetType == 2) {
+    } else if(placementManualTargetType == 2) {
         bool road = false;
         ok1 = this->trackDB->findNearestPositionOnTDB(playerT, tp, NULL, NULL);
         ok2 = this->roadDB->findNearestPositionOnTDB(playerT, tp, NULL, NULL);
@@ -1914,22 +1971,22 @@ WorldObj* Route::placeObject(int x, int z, float* p, float* q, float elev, Ref::
     }
     
     float* tpos = NULL;
-    if(placementStickToTarget){
+    if(!apCheckingDuplicates && placementStickToTarget){
             tpos = new float[3];
             float* playerT = Vec2::fromValues(x, z);
             float* playerT2 = Vec2::fromValues(x, z);
             float tp[3], tp2[3];
-            float tq[4], tq2[3];
+            float tq[4], tq2[4];
             Vec3::copy(tp, p);
             Quat::copy(tq, q);
             Vec3::copy(tp2, p);
             Quat::copy(tq2, q);
             int ok = -1;
-            if(placementAutoTargetType == 0) {
+            if(placementManualTargetType == 0) {
                 ok = this->trackDB->findNearestPositionOnTDB(playerT, tp, tq, tpos); // if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
-            } else if(placementAutoTargetType == 1) {
+            } else if(placementManualTargetType == 1) {
                 ok = this->roadDB->findNearestPositionOnTDB(playerT, tp, tq, tpos); // if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
-            } else if(placementAutoTargetType == 2) {
+            } else if(placementManualTargetType == 2) {
                 ok = this->trackDB->findNearestPositionOnTDB(playerT, tp, tq, tpos);  if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
                 int ok2 = this->roadDB->findNearestPositionOnTDB(playerT2, tp2, tq2, tpos);
                 if(ok2 >= 0)
@@ -1986,7 +2043,7 @@ WorldObj* Route::placeObject(int x, int z, float* p, float* q, float elev, Ref::
     if(tTile->loaded != 1) return NULL;
     
     int snapableSide = -1;
-    if(placementStickToTarget && placementAutoTargetType == 3){
+    if(!apCheckingDuplicates && placementStickToTarget && placementManualTargetType == 3){
         snapableSide = tTile->getNearestSnapablePosition(p, q);  
     }
         
@@ -2019,7 +2076,55 @@ WorldObj* Route::placeObject(int x, int z, float* p, float* q, float elev, Ref::
         if(tTile->loaded != 1) return NULL;
     }
           
-    WorldObj* nowy = tTile->placeObject(p, q, r, tpos);   if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":" << nowy->typeObj << "/" << nowy->type;  
+    if(apCheckingDuplicates) {
+        if(placementAutoFollowTerrain) {
+            Game::check_coords(x, z, p);
+            TerrainLib *ground = Game::terrainLib;
+            if(!ground || (!ground->isLoaded(x, z) && !ground->load(x, z))
+                    || !ground->isLoaded(x, z)) {
+                apStatus = "Auto Place: terrain unavailable; object skipped.";
+                return nullptr;
+            }
+            const float height = ground->getHeight(x, z, p[0], p[2], false);
+            if(!std::isfinite(height)) {
+                apStatus = "Auto Place: invalid terrain height; object skipped.";
+                return nullptr;
+            }
+            // Use the mesh at the final lateral position, not track elevation.
+            p[1] = height + placementAutoTranslationOffset[1];
+        }
+        // Check after target snapping, before allocating an object/UID or undo entry.
+        // Read adjacent world tiles as well so tile boundaries cannot hide a duplicate.
+        WorldObj *existing = nullptr;
+        double best = 0.25; // 0.5 m horizontal tolerance, independent of wobble.
+        for(int dx = -1; dx <= 1; ++dx) for(int dz = -1; dz <= 1; ++dz) {
+            Tile *nearTile = requestTile(x + dx, z + dz, false);
+            if(!nearTile || (nearTile->loaded != 1 && nearTile->loaded != -2)) {
+                apStatus = "Auto Place: nearby world tile unavailable; placement skipped to avoid duplicates.";
+                return nullptr;
+            }
+            if(nearTile->loaded != 1) continue;
+            for(const auto &entry : nearTile->obiekty) {
+                WorldObj *candidate = entry.second;
+                if(!candidate || !candidate->loaded || candidate->type != r->type) continue;
+                bool sameShape = candidate->fileName.compare(r->currentFilename, Qt::CaseInsensitive) == 0;
+                // A sequential/random reference may have placed any listed variant.
+                for(const QString &name : r->filename)
+                    sameShape |= candidate->fileName.compare(name, Qt::CaseInsensitive) == 0;
+                if(!sameShape || std::abs(candidate->position[1] - p[1]) > 2.0f) continue;
+                const double px = candidate->position[0] + 2048.0 * dx - p[0];
+                const double pz = candidate->position[2] + 2048.0 * dz - p[2];
+                const double distance = px * px + pz * pz;
+                if(distance <= best) { best = distance; existing = candidate; }
+            }
+        }
+        if(existing) {
+            apLastReused = true;
+            return existing;
+        }
+    }
+    WorldObj* nowy = tTile->placeObject(p, q, r, tpos);   if(Game::debugOutput && nowy) qDebug() << __FILE__ << " " << __LINE__ << ":" << nowy->typeObj << "/" << nowy->type;
+    if(!nowy) return nullptr;
     if ((r->type == "trackobj" || r->type == "dyntrack" )&& nowy != NULL) {
         if(nowy->endp == 0) nowy->endp = new float[5];
         memcpy(nowy->endp, endp, sizeof(float)*5);
@@ -2031,7 +2136,7 @@ WorldObj* Route::placeObject(int x, int z, float* p, float* q, float elev, Ref::
     if(nowy->typeID == nowy->sstatic){        
         moveWorldObjToTile(nowy->x, nowy->y, nowy);
     }
-    if(elev !=0)
+    if(elev !=0 && nowy->type != "pickup")
         nowy->rotate(elev, 0, 0);
     
     if((r->type == "signal") || (r->type == "speedpost")) {        
@@ -2056,15 +2161,15 @@ float* Route::getPointerPosition(float* out, int &x, int &z, float* pos){
             float* playerT = Vec2::fromValues(x, z);
             float* playerT2 = Vec2::fromValues(x, z);
             float tp[3], tp2[3];
-            float tq[4], tq2[3];
+            float tq[4], tq2[4];
             Vec3::copy(tp, pos);
             Vec3::copy(tp2, pos);
             int ok = -1;
-            if(placementAutoTargetType == 0) {
+            if(placementManualTargetType == 0) {
                 ok = this->trackDB->findNearestPositionOnTDB(playerT, tp, tq, ttpos); // if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
-            } else if(placementAutoTargetType == 1) {
+            } else if(placementManualTargetType == 1) {
                 ok = this->roadDB->findNearestPositionOnTDB(playerT, tp, tq, ttpos); // if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
-            } else if(placementAutoTargetType == 2) {
+            } else if(placementManualTargetType == 2) {
                 ok = this->trackDB->findNearestPositionOnTDB(playerT, tp, tq, ttpos);   if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
                 int ok2 = this->roadDB->findNearestPositionOnTDB(playerT2, tp2, tq2, ttpos); // if(Game::debugOutput)  qDebug() << __FILE__ << " " << __LINE__ << ":";
                 if(ok2 >= 0)
@@ -2100,22 +2205,46 @@ void Route::dragWorldObject(WorldObj* obj, int x, int z, float* pos){
     float q[4];
     Quat::copy(q, obj->qDirection);
     
+    if (placementStickToTarget && obj->type == "pickup") {
+        // Pickups belong to rail track even when the generic target includes roads.
+        float tile[2] = {static_cast<float>(x), static_cast<float>(z)};
+        float snapped[3];
+        Vec3::copy(snapped, tpos);
+        const int distance = trackDB->findNearestPositionOnTDB(tile, snapped, q, nullptr);
+        if (distance >= 0 && distance <= Game::snapableRadius) {
+            static_cast<PickupObj*>(obj)->followTrackHeading(PickupTrackAlignment::heading(q));
+            if (!snapableOnlyRotation) {
+                Vec3::copy(tpos, snapped);
+                x = tile[0];
+                z = tile[1];
+            }
+        }
+        // Rotation-only snapping must not translate, including a missed snap.
+        if (snapableOnlyRotation) {
+            obj->setMartix();
+            return;
+        }
+        obj->setPosition(x, z, tpos);
+        obj->setMartix();
+        return;
+    }
+
     if(placementStickToTarget){
             float ttpos[3];
             float* playerT = Vec2::fromValues(x, z);
             float* playerT2 = Vec2::fromValues(x, z);
             float tp[3], tp2[3];
-            float tq[4], tq2[3];
+            float tq[4], tq2[4];
             Vec3::copy(tp, pos);
             Quat::copy(tq, q);
             Vec3::copy(tp2, pos);
             Quat::copy(tq2, q);
             int ok = -1;
-            if(placementAutoTargetType == 0) {
+            if(placementManualTargetType == 0) {
                 ok = this->trackDB->findNearestPositionOnTDB(playerT, tp, tq, ttpos);
-            } else if(placementAutoTargetType == 1) {
+            } else if(placementManualTargetType == 1) {
                 ok = this->roadDB->findNearestPositionOnTDB(playerT, tp, tq, ttpos);
-            } else if(placementAutoTargetType == 2) {
+            } else if(placementManualTargetType == 2) {
                 ok = this->trackDB->findNearestPositionOnTDB(playerT, tp, tq, ttpos);
                 int ok2 = this->roadDB->findNearestPositionOnTDB(playerT2, tp2, tq2, ttpos);
                 if(ok2 >= 0)
@@ -2150,7 +2279,7 @@ void Route::dragWorldObject(WorldObj* obj, int x, int z, float* pos){
             return;
     }
     
-    if(placementStickToTarget && placementAutoTargetType == 3){
+    if(placementStickToTarget && placementManualTargetType == 3){
         snapableSide = tTile->getNearestSnapablePosition(tpos, q, obj->UiD);
     }
 
@@ -2317,10 +2446,20 @@ float *fromtwovectors(float* out, float* u, float* v){
 }
 
 WorldObj* Route::autoPlaceObject(int x, int z, float* p, int mode) {
+    autoPlacementLastPlaced.clear();
+    apReused = 0;
+    apStatus.clear();
     if(ref->selected == NULL) return NULL;
+    if(!std::isfinite(placementAutoLength) || placementAutoLength < 1) {
+        apStatus = "Auto Place: spacing must be at least 1 m.";
+        return nullptr;
+    }
+    if(!std::isfinite(placementAutoRange) || placementAutoRange < 0) {
+        apStatus = "Auto Place: range must be positive, or zero for unlimited.";
+        return nullptr;
+    }
     Game::check_coords(x, z, p);
     
-    autoPlacementLastPlaced.clear();
     
     TDB * tdb = NULL;
     if(placementAutoTargetType == 0)
@@ -2333,40 +2472,46 @@ WorldObj* Route::autoPlaceObject(int x, int z, float* p, int mode) {
         return NULL;
     
     // pozycja wzgledem TDB:
-    float* tpos = new float[3];
-    float* playerT = Vec2::fromValues(x, z);
+    float tpos[3];
+    float playerT[2] = {float(x), float(z)};
+    float roadPosition[3];
+    Vec3::copy(roadPosition, p);
     int ok = tdb->findNearestPositionOnTDB(playerT, p, NULL, tpos);
+    if(placementAutoTargetType == 2) {
+        float roadTile[2] = {float(x), float(z)}, roadTrack[3];
+        const int roadDistance = roadDB->findNearestPositionOnTDB(roadTile, roadPosition, nullptr, roadTrack);
+        if(roadDistance >= 0 && (ok < 0 || roadDistance < ok)) {
+            tdb = roadDB;
+            ok = roadDistance;
+            Vec2::copy(playerT, roadTile);
+            Vec3::copy(p, roadPosition);
+            Vec3::copy(tpos, roadTrack);
+        }
+    }
     if(ok < 0) return NULL;
     
     x = playerT[0];
     z = playerT[1];
     int trackNodeIdx = tpos[0];
-    int length = tdb->getVectorSectionLength(trackNodeIdx);
+    const float length = tdb->getVectorSectionLength(trackNodeIdx);
+    if(length < 1) return nullptr;
     float drawPosition1[7];
     float drawPosition2[7];
     float xyz[3];
-    float *quat = Quat::create();
-    float step = placementAutoLength;
-    float startPos = 0;
-    float endPos = length;
-    float rot = 0;
-    if(mode == 1){
-        startPos = tpos[1];
-    }
-    if(mode == 2){
-        startPos = 0;
-        endPos = tpos[1];
-        rot = M_PI;
-    }    
+    float quat[4];
+    const double step = placementAutoLength;
+    const float rot = mode == 2 ? M_PI : 0;
     float i1, i2;
-    for(float i = startPos; i < endPos; i+=step ){
+    for(std::size_t index = 0;; ++index) {
+        const auto station = AutoPlaceRange::station(
+            index, step, length, tpos[1], placementAutoRange, mode);
+        if(!station) break;
+        i1 = *station;
         if(mode == 2){
-           i1 = endPos - i;
            i2 = i1-step;
            if(i2 < 0)
                 i2 = 0 + 0.1;
         } else {
-            i1 = i;
             i2 = i1+step;
             if(i2 > length)
                 i2 = length - 0.1;
@@ -2400,6 +2545,7 @@ WorldObj* Route::autoPlaceObject(int x, int z, float* p, int mode) {
         drawPosition2[0] += 2048*(drawPosition2[5]-drawPosition1[5]);
         drawPosition2[2] += 2048*(drawPosition2[6]-drawPosition1[6]);
         float dlugosc = Vec3::distance(drawPosition1, drawPosition2);
+        if(!std::isfinite(dlugosc) || dlugosc < 0.001f) continue;
 
         int someval = (((drawPosition2[2]-drawPosition1[2])+0.00001f)/fabs((drawPosition2[2]-drawPosition1[2])+0.00001f));
         float rotY = ((float)someval+1.0)*(M_PI/2)+(float)(atan((drawPosition1[0]-drawPosition2[0])/(drawPosition1[2]-drawPosition2[2]))); 
@@ -2434,11 +2580,44 @@ WorldObj* Route::autoPlaceObject(int x, int z, float* p, int mode) {
         xyz[1] = drawPosition1[1] + offset[1];
         xyz[2] = -drawPosition1[2] + offset[2];      
         
-        autoPlacementLastPlaced.push_back(placeObject(x, z, (float*) xyz, quat, 0, ref->selected));
+        apCheckingDuplicates = true;
+        apLastReused = false;
+        WorldObj *placed = placeObject(x, z, (float*) xyz, quat, 0, ref->selected);
+        apCheckingDuplicates = false;
+        if(!placed) continue;
+        if(apLastReused) ++apReused;
+        else {
+            if(placementAutoWobblePercent > 0) applyPoleWobble(placed);
+            autoPlacementLastPlaced.push_back(placed);
+        }
     }
 
     return NULL;
     
+}
+
+bool Route::applyPoleWobble(WorldObj *object) {
+    // Placement-only variation, independent of wire attachment capability.
+    if(!object || !object->loaded
+            || (object->typeID != WorldObj::sstatic
+                && object->typeID != WorldObj::gantry
+                && object->typeID != WorldObj::collideobject)
+            || object->polyVegRaw
+            || PolyVegObject::isBakeShape(object->fileName)) return false;
+    const QString identity = QString("%1/%2/%3/%4")
+        .arg(object->x).arg(object->y).arg(object->UiD).arg(object->fileName);
+    const QQuaternion current(object->qDirection[3], object->qDirection[0],
+                               object->qDirection[1], object->qDirection[2]);
+    if(!std::isfinite(current.lengthSquared()) || current.lengthSquared() < 0.0001f)
+        return false;
+    const QQuaternion result = PoleWobble::rotation(current,
+        PoleWobble::sample(identity, placementAutoWobblePercent));
+    if(PoleWobble::sameRotation(current, result)) return false;
+    float q[] = {result.x(), result.y(), result.z(), result.scalar()};
+    object->setQdirection(q);
+    object->setMartix();
+    object->setModified();
+    return true;
 }
 
 void Route::fillWorldObjectsByTrackItemIds(QHash<int,QVector<WorldObj*>> &objects, int tdbId){
@@ -3408,7 +3587,14 @@ void Route::save() {
     foreach (Tile* tTile, tile){
         if (tTile == NULL) continue;
         if (tTile->loaded == 1 && tTile->isModified()) {
-            tTile->save();
+            if(!tTile->save()) {
+                emit sendMsg("saveError");
+                if(Game::gui)
+                    GuiFunct::showEditorStopped(NULL, QObject::tr("Route Save Failed"),
+                        QObject::tr("A world tile could not be saved. It remains modified. "
+                                    "The editor will remain open; retry the save after correcting the file access problem."));
+                return;
+            }
             tTile->setModified(false);
         }
     }
@@ -3441,8 +3627,10 @@ void Route::save() {
 
     ForestBakePruneResult bakePrune;
     QString bakePruneError;
+    // Ordinary saves own only manifest-tracked bakes. A shared Shapes library
+    // may contain matching filenames without any PolyVeg work on this route.
     if(!ForestBakeManifest::pruneUnreferenced(
-            activeRouteRoot(), bakePrune, bakePruneError)) {
+            activeRouteRoot(), bakePrune, bakePruneError, nullptr, false)) {
         qWarning() << "PolyVeg save cleanup failed:" << bakePruneError;
         emit sendMsg("saveError");
         if(Game::gui)

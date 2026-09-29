@@ -112,6 +112,20 @@ PropertiesPickup::PropertiesPickup() {
     chBroken.setText("Broken by default");
     QObject::connect(&chBroken, SIGNAL(stateChanged(int)),
             this, SLOT(chBrokenEnabled(int)));
+    auto* alignment = new QHBoxLayout;
+    auto* align = new QPushButton("Align to track", this);
+    auto* rotate = new QPushButton("Rotate 90" + QString(QChar(0x00b0)), this);
+    alignTrackButton = align;
+    rotate90Button = rotate;
+    align->setEnabled(false);
+    rotate->setEnabled(false);
+    align->setToolTip("Face along the attached track and keep upright. Resets the orientation offset.");
+    rotate->setToolTip("Turn the shape 90 degrees about its origin. Keep this offset when snapping along track.");
+    alignment->addWidget(align);
+    alignment->addWidget(rotate);
+    vbox->addLayout(alignment);
+    connect(align, &QPushButton::clicked, this, &PropertiesPickup::alignTrackEnabled);
+    connect(rotate, &QPushButton::clicked, this, &PropertiesPickup::rotate90Enabled);
     vbox->addStretch(1);
     this->setLayout(vbox);
 
@@ -122,11 +136,17 @@ PropertiesPickup::~PropertiesPickup() {
 
 void PropertiesPickup::showObj(GameObj* obj) {
     if (obj == NULL) {
+        pobj = nullptr;
+        alignTrackButton->setEnabled(false);
+        rotate90Button->setEnabled(false);
         infoLabel->setText("NULL");
         return;
     }
     worldObj = (WorldObj*)obj;
     pobj = (PickupObj*) obj;
+    float heading;
+    alignTrackButton->setEnabled(pobj->trackHeading(heading));
+    rotate90Button->setEnabled(true);
 
     this->infoLabel->setText("Object: " + pobj->type);
     this->fileName.setText(pobj->fileName);
@@ -149,6 +169,23 @@ void PropertiesPickup::showObj(GameObj* obj) {
     this->chBroken.blockSignals(true);
     this->chBroken.setChecked(pobj->isBroken());
     this->chBroken.blockSignals(false);
+}
+
+void PropertiesPickup::alignTrackEnabled() {
+    if (!pobj)
+        return;
+    float heading;
+    if (!pobj->trackHeading(heading))
+        return;
+    Undo::SinglePushWorldObjData(pobj);
+    pobj->alignToTrack(heading);
+}
+
+void PropertiesPickup::rotate90Enabled() {
+    if (!pobj)
+        return;
+    Undo::SinglePushWorldObjData(pobj);
+    pobj->rotateTrack90();
 }
 
 void PropertiesPickup::cPickupTypeEdited(int val) {

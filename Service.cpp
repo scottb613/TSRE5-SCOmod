@@ -52,6 +52,8 @@ Service::Service(const Service& orig) {
 }
 
 Service::~Service() {
+    for(Consist *preview : previewConsists)
+        delete preview;
 }
 
 void Service::load(){
@@ -238,25 +240,44 @@ void Service::save(){
 
 void Service::render(GLUU* gluu, float* playerT, int selectionColor){
     prepareEditorPreview();
+    if(pathPointer == NULL || pathPointer->loaded != 1 || pathPointer->node.isEmpty())
+        return;
     
     pathPointer->render(gluu, playerT, selectionColor);
     
-    conPointer->renderOnTrack(gluu, playerT, selectionColor);
+    if(conPointer != NULL)
+        conPointer->renderOnTrack(gluu, playerT, selectionColor);
 }
 
 void Service::prepareEditorPreview(){
+    if(pathId.isEmpty() || Game::trackDB == NULL)
+        return;
     if(pathPointer == NULL){
         QDir dir(Game::root + "/routes/" + Game::route + "/paths");
-        int pathPointerId;
-        if(Game::debugOutput) qDebug() << "pathid" << (pathPointerId = ActLib::AddPath(dir.path(), pathId+".pat"));
+        // Loading is required even when diagnostic output is disabled.
+        const int pathPointerId = ActLib::AddPath(dir.path(), pathId+".pat");
+        if(Game::debugOutput) qDebug() << "pathid" << pathPointerId;
         pathPointer = ActLib::Paths[pathPointerId];
     }
+    if(pathPointer == NULL || pathPointer->loaded != 1 || pathPointer->node.isEmpty()
+            || trainConfig.isEmpty())
+        return;
     if(conPointer == NULL){
         QDir dir(Game::root + "/trains/consists/");
-        int conPointerId;
-        if(Game::debugOutput) qDebug() << "conid" << (conPointerId =  ConLib::addCon(dir.path(), trainConfig+".con"));
-        conPointer = new Consist(ConLib::con[conPointerId], true);
-        conPointer->initOnTrack(pathPointer->getStartPositionTXZ(), pathPointer->getStartDirection(), pathPointer->getJunctionDirections());
+        const int conPointerId = ConLib::addCon(dir.path(), trainConfig+".con");
+        if(Game::debugOutput) qDebug() << "conid" << conPointerId;
+        Consist *source = ConLib::con[conPointerId];
+        if(source == NULL || source->loaded != 1 || source->engItems.isEmpty())
+            return;
+        float startPosition[4];
+        if(pathPointer->getStartPositionTXZ(startPosition) == NULL)
+            return;
+        conPointer = previewConsists.value(trainConfig.toLower(), NULL);
+        if(conPointer == NULL){
+            conPointer = new Consist(source, true);
+            previewConsists.insert(trainConfig.toLower(), conPointer);
+        }
+        conPointer->initOnTrack(startPosition, pathPointer->getStartDirection(), pathPointer->getJunctionDirections());
     }
 }
 
@@ -274,10 +295,15 @@ void Service::setNameId(QString val){
 }
 
 void Service::setNewPath(QString pathName){
+    pathPointer = NULL;
+    conPointer = NULL;
     stationStop.clear();
     pathId = pathName;
-    if(pathId.length() <= 0)
+    modified = true;
+    if(pathId.length() <= 0){
+        ActLib::UpdateServiceChanges(nameId);
         return;
+    }
     qDebug() << "new path:" << pathId;
     Path *p = ActLib::GetPathByName(pathId);
     if(p == NULL){
@@ -303,6 +329,7 @@ void Service::disableStationStop(int count){
     for(int ii = 0; ii < stationStop.size(); ii++ ){
         if(stationStop[ii].skipCount == count){
             stationStop.remove(ii);
+            modified = true;
             ActLib::UpdateServiceChanges(nameId);
             return;
         }
@@ -325,6 +352,8 @@ void Service::setStartSpeed(float val){
 }
     
 void Service::setTrainConfig(QString val){
+    if(trainConfig != val)
+        conPointer = NULL;
     trainConfig = val;
     modified = true;
 }
@@ -345,7 +374,7 @@ void Service::enableStationStop(int count){
         return;
     }
     p->init3dShapes(false);
-    if(p->pathObjects.size() < count)
+    if(count < 0 || count >= p->pathObjects.size() || p->pathObjects[count] == NULL)
         return;
     
     float dist = p->pathObjects[count]->distanceDownPath;

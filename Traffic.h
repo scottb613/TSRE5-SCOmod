@@ -34,6 +34,7 @@ public:
     void load();
     void save();
     bool isModified();
+    void markModified() { modified = true; }
     ActivityTimetable* getTimetableByServiceName(QString nameTime);
 private:
     bool modified = false;

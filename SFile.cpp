@@ -9,6 +9,8 @@
  */
 
 #include "SFile.h"
+#include "WireAttachmentOrder.h"
+#include <cmath>
 #include "SFileC.h"
 #include "SFileX.h"
 #include "ReadFile.h"
@@ -847,27 +849,22 @@ void SFile::addSnapablePoints(QVector<float> &out){
 }
 
 void SFile::reload() {
-    loaded = 0;
     if(Game::debugOutput) qDebug() << "reload";
-    QStringList list;
-    
-    for (int i = 0; i < distancelevel[0].iloscs; i++) {
-        for (int j = 0; j < distancelevel[0].subobiekty[i].iloscc; j++) {
-            int prim_state = distancelevel[0].subobiekty[i].czesci[j].prim_state_idx;
-
-            if(primstate[prim_state].arg4 == -1)
-                continue;
-            //if (image[texture[primstate[prim_state].arg4].image].tex == -2)
-            //    continue;
-            list.push_back(image[texture[primstate[prim_state].arg4].image].name);
-       }
+    // Use the same resolved path (including case and season) as rendering.
+    // The path/name overload lowercases its cache key and can reload a
+    // different entry; walking only LOD 0 also misses higher-LOD textures.
+    QSet<QString> paths;
+    if(loaded == 1 && image != NULL) {
+        for(int i = 0; i < ilosci; i++)
+            paths.insert(resolveTexturePath(image[i].name));
     }
-    
-    list.removeDuplicates();
-    for(QString s : list){
-        if(Game::debugOutput) qDebug() << "SFile 860:" << s;
-        TexLib::addTex(texPath, s, true);
+    for(const QString &path : paths) {
+        if(Game::debugOutput) qDebug() << "Reload shape texture:" << path;
+        TexLib::addTex(path, true);
     }
+    renderItems.clear();
+    requiresUpdate = true;
+    loaded = 0;
 }
 
 void SFile::refreshSeasonTextures() {
@@ -1405,6 +1402,44 @@ void SFile::fillShapeTextureInfo(QHash<int, ShapeTextureInfo*>& list, unsigned i
 /*======================================================
 ===== Przekształcenia takie tam
 =======================================================*/
+QMap<int, QVector3D> SFile::wireAttachmentOrigins() {
+    QMap<int, QVector3D> origins;
+    if(loaded != 1 || iloscd < 1) return origins;
+    QSet<int> seen;
+    for(int i = 1; i < iloscm; ++i) {
+        const int id = WireAttachmentOrder::attachmentId(macierz[i].name);
+        if(id == 0) continue;
+        // Ambiguous duplicate names cannot identify a unique connection point.
+        if(seen.contains(id)) { origins.remove(id); continue; }
+        seen.insert(id);
+        float point[3];
+        if(attachmentOrigin(macierz[i].name, point)
+                && std::isfinite(point[0]) && std::isfinite(point[1]) && std::isfinite(point[2]))
+            origins.insert(id, QVector3D(point[0], point[1], point[2]));
+    }
+    return origins;
+}
+
+bool SFile::attachmentOrigin(const QString &name, float *origin) {
+    if(loaded != 1 || iloscd < 1 || iloscm < 1) return false;
+    for(int i = 1; i < iloscm; ++i) {
+        if(macierz[i].name.compare(name, Qt::CaseInsensitive) != 0) continue;
+        int parent = i;
+        int depth = 0;
+        while(parent != 0 && parent != -1) {
+            if(parent < 0 || parent >= iloscm
+                    || parent >= distancelevel[0].ilosch || ++depth > iloscm)
+                return false;
+            parent = distancelevel[0].hierarchia[parent];
+        }
+        float transform[16];
+        getPmatrix(0, transform, i);
+        for(int axis = 0; axis < 3; ++axis) origin[axis] = transform[12 + axis];
+        return true;
+    }
+    return false;
+}
+
 float* SFile::getPmatrix(int currentDlevel, float* pmatrix, int matrix) {
     if (matrix == -1 || matrix == 0) {
         Mat4::identity(pmatrix);

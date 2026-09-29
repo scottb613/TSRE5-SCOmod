@@ -34,11 +34,12 @@ signals:
     void jumpTo(PreciseTileCoordinate *c);
     void selectObject(GameObj *o);
     void messageUpdated();
+    void noFactorRequested(ErrorMessage *message);
     
 protected:
     ErrorMessage *currentMessage = NULL;
     QLabel lMessage;
-    QLineEdit eMessage;
+    QPlainTextEdit eMessage;
     QLabel lAction;   
     QLabel lLocation;
     QLineEdit eLocation;
@@ -47,6 +48,7 @@ protected:
     
     QPushButton bSelect;
     QPushButton bDelete;
+    QPushButton bNoFactor;
 
 };
 

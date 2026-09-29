@@ -23,6 +23,7 @@ public:
         RENDER_SELECTION = 1,
         RENDER_SHADOWMAP = 2
     };
+    bool rawPreview = false;
     float* objStrMatrix = NULL;
     float* mvMatrix = NULL;
     float* mvMatrixStack[1000];

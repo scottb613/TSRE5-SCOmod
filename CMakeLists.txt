@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
     TSREvc
-    VERSION 0.16.0
+    VERSION 0.17.0
     DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )
@@ -112,6 +112,110 @@ if(TSRE_ENABLE_WARNINGS)
 endif()
 
 if(BUILD_TESTING)
+    add_executable(tsre_auto_place_wire_probe
+        tests/AutoPlaceWireProbe.cpp
+        AutoPlaceWire.cpp)
+    target_include_directories(tsre_auto_place_wire_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_auto_place_wire_probe PRIVATE Qt6::Core Qt6::Gui)
+    add_test(NAME tsre_auto_place_wire_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        "$<TARGET_FILE:tsre_auto_place_wire_probe>")
+    add_executable(tsre_rejected_world_file_probe tests/RejectedWorldFileTest.cpp)
+    target_include_directories(tsre_rejected_world_file_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_rejected_world_file_probe PRIVATE Qt6::Core)
+    add_test(NAME tsre_rejected_world_file_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_rejected_world_file_probe>"
+    )
+    add_executable(tsre_route_section_policy_probe
+        tests/RouteSectionPolicyTest.cpp
+        RouteSectionPolicy.h
+    )
+    target_include_directories(tsre_route_section_policy_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    add_test(NAME tsre_route_section_policy_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_route_section_policy_probe>"
+    )
+    add_executable(tsre_track_overlap_scan_probe
+        tests/TrackOverlapScanTest.cpp
+        TrackOverlapScan.h
+    )
+    target_include_directories(tsre_track_overlap_scan_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    add_test(NAME tsre_track_overlap_scan_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_track_overlap_scan_probe>"
+    )
+
+    add_executable(
+        tsre_control_panel_attention_probe
+        tests/ControlPanelAttentionProbe.cpp
+        ControlPanelAttention.h
+    )
+    target_include_directories(
+        tsre_control_panel_attention_probe
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    add_test(
+        NAME tsre_control_panel_attention_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_control_panel_attention_probe>"
+    )
+
+    add_executable(tsre_pickup_track_alignment_probe tests/PickupTrackAlignmentProbe.cpp)
+    target_include_directories(tsre_pickup_track_alignment_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    add_test(NAME tsre_pickup_track_alignment_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_pickup_track_alignment_probe>")
+
+    add_executable(tsre_pole_wobble_probe tests/PoleWobbleProbe.cpp)
+    target_include_directories(tsre_pole_wobble_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_pole_wobble_probe PRIVATE Qt6::Gui)
+    add_test(NAME tsre_pole_wobble_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_pole_wobble_probe>"
+    )
+
+    add_executable(tsre_orts_turntable_config_probe
+        tests/OrtsTurntableConfigTest.cpp
+        OrtsTurntableConfig.cpp
+    )
+    target_include_directories(tsre_orts_turntable_config_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_orts_turntable_config_probe PRIVATE Qt6::Core)
+    add_test(NAME tsre_orts_turntable_config_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_orts_turntable_config_probe>"
+    )
+
+    add_executable(
+        tsre_place_guard_math_probe
+        tests/PlaceGuardMathProbe.cpp
+        PlaceGuardMath.h
+    )
+    target_include_directories(
+        tsre_place_guard_math_probe
+        PRIVATE
+            "${TSRE_SOURCE_DIR}"
+    )
+    add_test(
+        NAME tsre_place_guard_math_probe
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_place_guard_math_probe>"
+    )
+
     add_executable(
         tsre_terrain_track_math_probe
         tests/TerrainTrackMathTest.cpp
@@ -371,6 +475,15 @@ if(BUILD_TESTING)
             "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
             "$<TARGET_FILE:tsre_forest_bake_manifest_probe>"
     )
+    add_executable(tsre_forest_save_cleanup_probe
+        tests/ForestBakeSaveCleanupProbe.cpp
+        ForestBakeManifest.cpp)
+    target_include_directories(tsre_forest_save_cleanup_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_forest_save_cleanup_probe PRIVATE Qt6::Core Qt6::Gui)
+    add_test(NAME tsre_forest_save_cleanup_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_forest_save_cleanup_probe>")
     target_include_directories(
         tsre_forest_patch_baker_probe
         PRIVATE

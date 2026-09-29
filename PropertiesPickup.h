@@ -24,6 +24,8 @@ public:
     void showObj(GameObj* obj);
     
 public slots:
+    void alignTrackEnabled();
+    void rotate90Enabled();
     void cPickupTypeEdited(int val);
     void cAnimTypeEdited(int val);
     void eCapacityEnabled(QString val);
@@ -37,7 +39,9 @@ public slots:
 signals:
     
 private:
-    PickupObj* pobj;
+    PickupObj* pobj = nullptr;
+    QPushButton* alignTrackButton = nullptr;
+    QPushButton* rotate90Button = nullptr;
     QLineEdit eBrokenFileName;
     QComboBox cPickupType;
     QComboBox cAnimType;

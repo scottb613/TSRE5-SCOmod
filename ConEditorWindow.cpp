@@ -448,16 +448,27 @@ ConEditorWindow::ConEditorWindow()
     QObject::connect(engSetAddFlipButton, SIGNAL(released()),
         this, SLOT(engSetFlipAndAddSelected()));
     
-    if(!Game::ceWindowLayout.toUpper().contains("C"))
-        vConList->trigger();
-    if(!Game::ceWindowLayout.contains("1"))
-        vEngList1->trigger();
-    if(!Game::ceWindowLayout.contains("2"))
-        vEngList2->trigger();
-    if(!Game::ceWindowLayout.toUpper().contains("U"))
-        vConUnits->trigger();
-    if(Game::ceWindowLayout.toUpper().contains("-S"))
-        vEngView->trigger();    
+    // Restore layout without triggering menu interaction sounds at startup.
+    if(!Game::ceWindowLayout.toUpper().contains("C")){
+        vConList->setChecked(false);
+        viewConList(false);
+    }
+    if(!Game::ceWindowLayout.contains("1")){
+        vEngList1->setChecked(false);
+        viewEngList1(false);
+    }
+    if(!Game::ceWindowLayout.contains("2")){
+        vEngList2->setChecked(false);
+        viewEngList2(false);
+    }
+    if(!Game::ceWindowLayout.toUpper().contains("U")){
+        vConUnits->setChecked(false);
+        viewConUnits(false);
+    }
+    if(Game::ceWindowLayout.toUpper().contains("-S")){
+        vEngView->setChecked(false);
+        viewEngView(false);
+    }
 
     
 }

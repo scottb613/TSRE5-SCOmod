@@ -25,10 +25,8 @@ performance.
 6. For mapped planting, point at a visible map polygon, right-click empty
    terrain, and choose **Plant PolyVeg**.
 7. Inspect the raw objects. Use **Undo** immediately if the result is wrong.
-8. Save the route after the planting looks right.
-9. When ready to commit the result, use **Bake PolyVeg Tile** for the current
-   camera tile or **Bake PolyVeg Area** for eligible loaded tiles in the current
-   camera LOD. Inspect and save again.
+8. Save when planting looks right: Save automatically bakes owned raw PolyVeg on loaded tiles, together with active raw wires, before writing world placements.
+9. For an explicit bake first, use **Bake PolyVeg Tile** or **Bake PolyVeg Area**, then Save and reopen to inspect the result.
 
 ## Required route files
 
@@ -238,11 +236,14 @@ Raw planting is ordinary static scenery and can be selected, deleted, or
 undone before baking. Correct schema or planting settings, remove the unwanted
 raw result, and replant before committing it.
 
+## Pending work in v0.17
+
+Owned raw planting has a 25% blue tint while keeping texture detail and alpha cutouts. Save bakes eligible pending vegetation on loaded tiles and active raw wires. Exit offers **Bake & Save / Discard / Cancel** when generated work remains. Discard preserves saved references/shared assets and keeps the editor open if cleanup fails. Malformed world files stop cleanup before asset deletion; resolve the reported problem and retry. Individual file writes are atomic; the whole route is not one transaction.
+
 ## Bake and save
 
 Baking combines configured raw vegetation on each world tile into generated
-4-by-4 patch blocks. It replaces only static shapes currently listed in
-`polyveg.json`.
+4-by-4 patch blocks. It replaces only owned raw generated instances. Manually placed copies of the same assets remain ordinary scenery.
 
 - **Bake PolyVeg Tile** bakes the current camera tile.
 - The right-click **Bake PolyVeg Tile** command bakes the pointer tile.
@@ -251,7 +252,7 @@ Baking combines configured raw vegetation on each world tile into generated
 
 Before confirming a bake:
 
-1. Save or otherwise settle unrelated work.
+1. Settle unrelated work before planting; Save now also bakes pending generated work.
 2. Inspect the raw vegetation and schema carefully.
 3. Confirm that the intended tile or LOD area is loaded.
 4. Read the confirmation count.

@@ -17,8 +17,10 @@
 #include "TDB.h"
 #include "WorldObj.h"
 #include "Ref.h"
+#include "PoleWobble.h"
 
 class Tile;
+class QWidget;
 class Brush;
 class Coords;
 class Trk;
@@ -53,10 +55,20 @@ public:
     Environment *env = NULL;
     Skydome *skydome = NULL;
     bool placementStickToTarget = false;
-    float placementAutoLength = 50;
+    double placementAutoLength = 50;
+    double placementAutoRange = 0; // Zero means no user limit; still bounded by the section.
+    int placementAutoWobblePercent = 0;
+    bool placementAutoFollowTerrain = false;
+    bool applyPoleWobble(WorldObj *object);
+    int autoPlacementCount() const { return int(autoPlacementLastPlaced.size()); }
+    int apReused = 0;
+    QString apStatus;
+    bool apCheckingDuplicates = false;
+    bool apLastReused = false;
     bool placementAutoTwoPointRot = true;
     bool snapableOnlyRotation = false;
     int placementAutoTargetType = 0;
+    int placementManualTargetType = 2;
     float placementAutoTranslationOffset[3];
     float placementAutoRotationOffset[3];
     TerrainLib* terrainLib = NULL;
@@ -89,6 +101,8 @@ public:
     void createNew();
     bool checkTrackSectionDatabase();
     void checkRouteDatabase();
+    QString scanAllWorldTiles(double maxOrphanLength, QWidget* parent,
+                             double horizontalTolerance = 0.25, double verticalTolerance = 0.20);
     void loadMkrList();
     void clearMkrList();
     void createMkrPlaces();

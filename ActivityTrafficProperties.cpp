@@ -105,6 +105,8 @@ void ActivityTrafficProperties::showTraffic(Traffic* t){
     traffic = t;
     eFileName.setText(t->name);
     eDisplayName.setText(t->nameId);
+    eFileName.setReadOnly(true);
+    eDisplayName.setReadOnly(true);
     
     lServcies.clear();
     QList<QTreeWidgetItem *> items;
@@ -148,7 +150,7 @@ void ActivityTrafficProperties::lServciesSelected(QTreeWidgetItem* item, int col
 }
 
 void ActivityTrafficProperties::bCloneOutcomeSelected(){
-    if(traffic == NULL)
+    if(traffic == NULL || lServcies.currentItem() == NULL)
         return;
     
     ActivityTimetable* s = traffic->service[lServcies.currentItem()->type()];
@@ -195,13 +197,18 @@ void ActivityTrafficProperties::bAddServiceSelected(){
 }
 
 void ActivityTrafficProperties::bRemoveServiceSelected(){
+    if(traffic == NULL || lServcies.currentItem() == NULL)
+        return;
     
     traffic->service.remove(lServcies.currentItem()->type());
+    traffic->markModified();
     
     showTraffic(traffic);
 }
 
 void ActivityTrafficProperties::serviceActoionListSelected(QString val){
+    if(traffic == NULL || lServcies.currentItem() == NULL)
+        return;
     QString index = "";
     if(cServiceList.currentIndex() > 0)
         index = cServiceList.currentData().toString();

@@ -9,6 +9,8 @@
  */
 
 #include "RouteEditorGLWidget.h"
+#include "AutoPlaceInput.h"
+#include "WireAttachmentOrder.h"
 #include <QMouseEvent>
 #include <QOpenGLShaderProgram>
 #include <QCoreApplication>
@@ -25,6 +27,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QTimer>
+#include <QVector3D>
 #include <QApplication>
 #include <QClipboard>
 #include <math.h>
@@ -61,6 +64,9 @@
 #include "Environment.h"
 #include "Terrain.h"
 #include "WaterBedClearanceMath.h"
+#include "PlaceGuardMath.h"
+#include "OrtsTurntableConfig.h"
+#include "TSectionDAT.h"
 #include "RulerObj.h"
 #include <QQueue>
 #include <QSet>
@@ -91,6 +97,10 @@
 #include "ForestGenerator.h"
 #include "ForestOsmCache.h"
 #include "ForestPatchBaker.h"
+#include "AutoPlaceWire.h"
+#include <QScopedValueRollback>
+#include <QJsonDocument>
+#include <QJsonArray>
 #include "ForestBakeManifest.h"
 #include "PolyVegObject.h"
 #include "TrackItemObj.h"
@@ -502,6 +512,8 @@ bool RouteEditorGLWidget::eventFilter(QObject *object, QEvent *event){
 }
 
 RouteEditorGLWidget::~RouteEditorGLWidget() {
+    makeCurrent();
+    delete wirePreview;
     delete polyVegBakeMarker;
     cleanup();
 }
@@ -560,7 +572,7 @@ void RouteEditorGLWidget::timerEvent(QTimerEvent *) {
             } else if(selectedObj->typeObj == GameObj::worldobj) {
                 WorldObj* worldObj = (WorldObj*)selectedObj;
                 if(worldObj->typeID == WorldObj::sstatic)
-                    selectedType = PolyVegObject::labelForShape(worldObj->fileName);
+                    selectedType = PolyVegObject::labelForShape(worldObj->fileName, worldObj->polyVegRaw);
                 else if(worldObj->typeID == WorldObj::trackobj || worldObj->typeID == WorldObj::dyntrack)
                     selectedType = "Track";
                 else if(worldObj->typeID == WorldObj::platform || worldObj->typeID == WorldObj::siding ||
@@ -619,7 +631,7 @@ void RouteEditorGLWidget::timerEvent(QTimerEvent *) {
 
         if(autoAddToTDB == true) emit updStatus(QString("autotdb"), QString("AutoTDB: ON")); else emit updStatus(QString("autotdb"), QString("AutoTDB: OFF"));  /// EFO Added to
         if(Game::writeTDB == false) emit updStatus(QString("autotdb"), QString("WriteTDB: OFF"));   /// EFO Added to
-        if(stickPointerToTerrain == true) emit updStatus(QString("stickterr"), QString("StickToTerrain: ON")); else emit updStatus(QString("stickterr"), QString("StickToTerrain: OFF"));  /// EFO Added to
+        if(stickPointerToTerrain == true) emit updStatus(QString("stickterr"), QString("StickToTerrain: ON")); else emit updStatus(QString("stickterr"), QString("Stick to All: ON"));  /// EFO Added to
         if(resizeTool == true) emit updStatus(QString("resize"), QString("Resize: ON")); else emit updStatus(QString("resize"), QString("Resize: OFF"));  /// EFO Added to
         if(translateTool == true) emit updStatus(QString("translate"), QString("Translate: ON")); else emit updStatus(QString("translate"), QString("Translate: OFF"));  /// EFO Added to
         if(rotateTool == true) emit updStatus(QString("rotate"), QString("Rotate: ON")); else emit updStatus(QString("rotate"), QString("Rotate: OFF"));  /// EFO Added to
@@ -662,6 +674,20 @@ void RouteEditorGLWidget::timerEvent(QTimerEvent *) {
 }
 
 bool RouteEditorGLWidget::initRoute(){
+    wireSpans = QJsonObject();
+    wireUnsavedBakes.clear();
+    polyVegUnsavedBakeShapes.clear();
+    polyVegWorldSaveAttempted = false;
+    polyVegBakeSession.commit();
+    wireRegistryPath.clear();
+    wireSection.clear();
+    wireRegistryReady = false;
+    wireCleanupAll = false;
+    if(wirePreview) {
+        makeCurrent();
+        delete wirePreview;
+        wirePreview = nullptr;
+    }
     MapWindow::loadMapOverlayState();
     // Init Shape and Trains libs
     currentShapeLib = new ShapeLib();
@@ -839,6 +865,7 @@ void RouteEditorGLWidget::initializeGL() {
     moveStep = Game::DefaultMoveStep;
     moveMaxStep = Game::DefaultMoveStep;
     defaultMoveStep = moveStep;
+    if(loadWireRegistry()) refreshRawWires();
 }
 
 void RouteEditorGLWidget::reloadRefFile(){
@@ -1050,6 +1077,7 @@ void RouteEditorGLWidget::paintGL2() {
         if (!selection) drawPointer();
 
     route->render(gluu, camera->pozT, camera->getPos(), camera->getTarget(), camera->getRotX(), 3.14f / 3, renderMode);
+    renderWirePreview();
     renderPolyVegBakeMarkers();
 
     //if (!selection)
@@ -1225,6 +1253,25 @@ void RouteEditorGLWidget::handleSelection() {
                         || (!clickedRuler->isWaterRuler()
                             && !clickedRuler->isVegetationRuler());
                 setSelectedObj(twobj, refreshObjectProperties);
+                // Normal E/Select picks the scenery source for F5 without
+                // copying its rotation or switching into placement mode.
+                if(toolEnabled == "selectTool" && route->ref && twobj
+                        && (twobj->typeID == WorldObj::sstatic
+                            || twobj->typeID == WorldObj::gantry
+                            || twobj->typeID == WorldObj::collideobject)
+                        && !twobj->fileName.isEmpty()
+                        && !twobj->polyVegRaw
+                        && !PolyVegObject::isBakeShape(twobj->fileName)) {
+                    const QString key = twobj->type + "\n" + twobj->fileName
+                        + "\n" + QString::number(twobj->staticFlags);
+                    Ref::RefItem &reference = autoPlacementPickedReferences[key];
+                    reference.type = twobj->type;
+                    reference.filename = {twobj->fileName};
+                    reference.currentFilename = twobj->fileName;
+                    reference.description = twobj->getName();
+                    reference.staticFlags = twobj->staticFlags;
+                    route->ref->selected = &reference;
+                }
                 if (selectedObj == NULL) {
                     if(Game::debugOutput) qDebug() << "brak obiektu";
                 } else {
@@ -1515,17 +1562,30 @@ bool RouteEditorGLWidget::validatePlacement(WorldObj* obj, Ref::RefItem* item, c
         return qAbs(obj->position[1] - dbHeight) <= 10.0f;
     }
 
-    Terrain *terrain = Game::terrainLib->getTerrainByXY(obj->x, obj->y, false);
-    if (terrain == NULL || !terrain->loaded)
-        return false;
-
-    float ground = Game::terrainLib->getHeight(obj->x, obj->y, obj->position[0], obj->position[2]);
-    float delta = obj->position[1] - ground;
-
     if (obj->typeID == WorldObj::trackobj || obj->typeID == WorldObj::dyntrack)
-        return delta <= 100.0f && delta >= -50.0f;
+    {
+        Terrain *terrain = Game::terrainLib->getTerrainByXY(obj->x, obj->y, false);
+        if (terrain == NULL || !terrain->loaded)
+            return false;
 
-    return delta <= 1.0f && delta >= -1.0f;
+        float ground = Game::terrainLib->getHeight(obj->x, obj->y, obj->position[0], obj->position[2]);
+        float delta = obj->position[1] - ground;
+        return std::isfinite(delta) && delta <= 100.0f && delta >= -50.0f;
+    }
+
+    Terrain *terrain = NULL;
+    float delta = 0.0f;
+    if(stickPointerToTerrain){
+        terrain = Game::terrainLib->getTerrainByXY(obj->x, obj->y, false);
+        if(terrain != NULL && terrain->loaded){
+            float ground = Game::terrainLib->getHeight(
+                obj->x, obj->y, obj->position[0], obj->position[2]);
+            delta = obj->position[1] - ground;
+        }
+    }
+
+    return PlaceGuardMath::acceptsSceneryHeight(
+        stickPointerToTerrain, terrain != NULL && terrain->loaded, delta);
 }
 
 void RouteEditorGLWidget::rejectPlacement() {
@@ -2030,6 +2090,18 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
                     return;
                 {
                     WorldObj *worldObj = (WorldObj*)selectedObj;
+                    // Flipping registered track can relocate the shape away from
+                    // its database geometry. Reject before changing either end or grade.
+                    if(placeGuardEnabled &&
+                            (worldObj->typeID == WorldObj::trackobj ||
+                             worldObj->typeID == WorldObj::dyntrack) &&
+                            ((Game::trackDB != NULL && Game::trackDB->ifTrackExist(
+                                  worldObj->x, worldObj->y, worldObj->UiD)) ||
+                             (Game::roadDB != NULL && Game::roadDB->ifTrackExist(
+                                  worldObj->x, worldObj->y, worldObj->UiD)))){
+                        showPlacementGuardError();
+                        return;
+                    }
                     const bool preserveTrackGrade = worldObj->typeID == WorldObj::trackobj;
                     float trackGradeBeforeFlip = preserveTrackGrade
                             ? trackGradePercent(selectedObj) : 0.0f;
@@ -2252,6 +2324,7 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             }
         }
         if (toolEnabled == "autoPlaceSimpleTool") {
+            makeCurrent();
             if (selectedObj != NULL) {
                 selectedObj->unselect();
                 if (autoAddToTDB)
@@ -2259,31 +2332,25 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                         route->addToTDBIfNotExist((WorldObj*) selectedObj);
             }
             Undo::StateBeginIfNotExist();
-            int placementTileX = (int)camera->pozT[0];
-            int placementTileZ = (int)camera->pozT[1];
-            float placementPointer[3];
-            Vec3::copy(placementPointer, aktPointerPos);
             lastNewObjPosT[0] = camera->pozT[0];
             lastNewObjPosT[1] = camera->pozT[1];
             lastNewObjPos[0] = aktPointerPos[0];
             lastNewObjPos[1] = aktPointerPos[1];
             lastNewObjPos[2] = aktPointerPos[2];
-            int mode = 0;
-            if (keyControlEnabled)
-                mode = 1;
-            if (keyShiftEnabled)
-                mode = 2;
-            setSelectedObj(route->autoPlaceObject((int) camera->pozT[0], (int) camera->pozT[1], aktPointerPos, mode));
-            if (selectedObj == NULL)
+            const int mode = AutoPlaceInput::mode(*event);
+            route->autoPlaceObject((int) camera->pozT[0], (int) camera->pozT[1], aktPointerPos, mode);
+            setSelectedObj(nullptr);
+            // Batch placement intentionally has no single selected object.
+            // Its success is the number actually placed, not that null result.
+            if(route->autoPlacementCount() == 0 && route->apReused == 0) {
                 showPlacementGuardError();
-            if (selectedObj != NULL && !validatePlacement((WorldObj*)selectedObj, route->ref->selected, placementPointer, placementTileX, placementTileZ)) {
-                rejectPlacement();
-                return;
-            }
-            if (selectedObj != NULL) {
+                if(!route->apStatus.isEmpty()) emit updStatus("Stat3", route->apStatus);
+            } else {
                 showPlacementSuccess();
                 emit itemSelected(route->ref->selected);
-                selectedObj->select();
+                emit updStatus("Stat3", QString("Auto Place: %1 placed, %2 reused. Rebuild wires to update preview.")
+                    .arg(route->autoPlacementCount()).arg(route->apReused));
+                if(!route->apStatus.isEmpty()) emit updStatus("Stat3", route->apStatus);
             }
         }
         if (toolEnabled == "waterRulerTool") {
@@ -2921,6 +2988,7 @@ void RouteEditorGLWidget::applyStatusPanelCommand(
 }
 
 void RouteEditorGLWidget::jumpTo(PreciseTileCoordinate* c) {
+    if(c == nullptr) return;
     jumpTo(c->TileX, -c->TileZ, c->wX, c->wY, -c->wZ);
 }
 
@@ -2944,6 +3012,10 @@ void RouteEditorGLWidget::jumpTo(int X, int Z, float x, float y, float z) {
 
     camera->setPozT(X, Z);
     camera->setPos(x, y, z);
+    QObject::disconnect(jumpChirpConnection);
+    jumpChirpConnection = QObject::connect(this, &QOpenGLWidget::frameSwapped,
+        this, [this](){ playPlacementSound("SCOchirp.wav"); }, Qt::SingleShotConnection);
+    update();
 
 }
 
@@ -3008,6 +3080,7 @@ void RouteEditorGLWidget::setPaintBrush(Brush* brush) {
 void RouteEditorGLWidget::setSelectedObj(GameObj* o, bool refreshProperties) {
     selectedObj = o;
     Game::currentSelectedGameObj = selectedObj;
+    updateWireAvailability();
     if(refreshProperties)
         emit showProperties(selectedObj);
     if (o != NULL)
@@ -3889,6 +3962,7 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
         WorldObj *placed = route->placeObject(
             tileX, tileZ, position, rotation, 0.0f, &reference);
         if(placed == NULL) continue;
+        placed->polyVegRaw = true;
         placed->setUniformMatrixScale(static_cast<float>(candidate.uniformScale));
         ++placedCount;
     }
@@ -4458,6 +4532,7 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         WorldObj *object = route->placeObject(
             tileX, tileZ, position, rotation, 0.0f, &reference);
         if(object == NULL) continue;
+        object->polyVegRaw = true;
         object->setUniformMatrixScale(static_cast<float>(candidate.uniformScale));
         ++placed;
     }
@@ -4493,13 +4568,6 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
 
 void RouteEditorGLWidget::refreshPolyVegTileCounts() {
     if(route == NULL) return;
-    const ForestCatalogLoadResult result = ForestDefinitionLoader::loadRoute(
-        Game::root + "/routes/" + Game::route);
-    QSet<QString> rawShapes;
-    if(result.isValid())
-        for(const ForestRecipeDefinition &recipe : result.catalog.polyVeg)
-            for(const ForestVegetationDefinition &vegetation : recipe.vegetation)
-                rawShapes.insert(vegetation.shape.toLower());
 
     int totalRawCount = 0;
     int totalBakeCount = 0;
@@ -4515,7 +4583,7 @@ void RouteEditorGLWidget::refreshPolyVegTileCounts() {
             QString shapeName = object->fileName;
             shapeName.replace('\\', '/');
             shapeName = shapeName.section('/', -1);
-            if(rawShapes.contains(shapeName.toLower())) {
+            if(object->polyVegRaw) {
                 ++tileRaw;
             } else if(PolyVegObject::isBakeShape(shapeName)) {
                 ++tileBake;
@@ -4532,13 +4600,6 @@ void RouteEditorGLWidget::refreshPolyVegTileCounts() {
 QVector<QPair<int, int>> RouteEditorGLWidget::polyVegTiles(bool wantBaked) const {
     QVector<QPair<int, int>> matches;
     if(route == NULL) return matches;
-    const ForestCatalogLoadResult result = ForestDefinitionLoader::loadRoute(
-        Game::root + "/routes/" + Game::route);
-    if(!result.isValid()) return matches;
-    QSet<QString> rawShapes;
-    for(const ForestRecipeDefinition &recipe : result.catalog.polyVeg)
-        for(const ForestVegetationDefinition &vegetation : recipe.vegetation)
-            rawShapes.insert(vegetation.shape.toLower());
     for(auto it = route->tile.constBegin(); it != route->tile.constEnd(); ++it) {
         Tile *worldTile = it.value();
         if(worldTile == NULL || worldTile->loaded != 1) continue;
@@ -4548,10 +4609,10 @@ QVector<QPair<int, int>> RouteEditorGLWidget::polyVegTiles(bool wantBaked) const
             WorldObj *object = worldTile->obiekty[index];
             if(object == NULL || !object->loaded
                     || object->typeID != WorldObj::sstatic) continue;
-            raw = raw || rawShapes.contains(object->fileName.toLower());
+            raw = raw || object->polyVegRaw;
             baked = baked || PolyVegObject::isBakeShape(object->fileName);
         }
-        if((wantBaked && baked) || (!wantBaked && raw && !baked))
+        if((wantBaked && baked) || (!wantBaked && raw))
             matches.append(qMakePair(worldTile->x, worldTile->z));
     }
     return matches;
@@ -4639,6 +4700,592 @@ void RouteEditorGLWidget::jumpNextPolyVegBakeTile() {
 void RouteEditorGLWidget::resetPolyVegBakeJump() {
     polyVegBakeJumpTiles.clear();
     polyVegBakeJumpIndex = -1;
+}
+
+void RouteEditorGLWidget::updateWireAvailability() {
+    // Wire actions operate on a placed support, never merely the F1 source shape.
+    bool placedSupport=false;
+    if(selectedObj && selectedObj->typeObj==GameObj::worldobj) {
+        auto object=static_cast<WorldObj*>(selectedObj);
+        if(object->loaded && object->typeID==WorldObj::sstatic && object->shapePointer) {
+            placedSupport=!object->shapePointer->wireAttachmentOrigins().isEmpty();
+        }
+    }
+    emit sendMsg("wireAvailability",placedSupport);
+}
+
+bool RouteEditorGLWidget::loadWireRegistry() {
+    if(wireRegistryReady) return true;
+    if(!route || Game::serverClient) return false;
+    wireRegistryPath=Game::root+"/routes/"+Game::route+"/OpenRails/tsre-ap-wires.json";
+    QFile file(wireRegistryPath);
+    if(file.exists()) {
+        QJsonParseError parse;
+        if(!file.open(QIODevice::ReadOnly)) {
+            GuiFunct::showEditorStopped(this,"AP Wires","Cannot read AP wire definitions. Save stopped to protect them.");
+            return false;
+        }
+        auto root=QJsonDocument::fromJson(file.readAll(),&parse).object();
+        if(parse.error!=QJsonParseError::NoError || root["version"].toInt()!=1 || !root["spans"].isObject()) {
+            GuiFunct::showEditorStopped(this,"AP Wires","Invalid AP wire definitions. The registry has not been overwritten.");
+            return false;
+        }
+        auto spans=root["spans"].toObject();
+        QString limitError;
+        if(!AutoPlaceWire::registryWithinLimit(spans, limitError)) {
+            GuiFunct::showEditorStopped(this,"AP Wires",limitError);
+            return false;
+        }
+        auto validVector=[](QJsonValue value) {
+            auto a=value.toArray(); if(a.size()!=3) return false;
+            for(const auto &n:a) if(!n.isDouble() || !std::isfinite(n.toDouble()) || std::abs(n.toDouble())>1.e7) return false;
+            return true;
+        };
+        for(const QString &key:spans.keys()) {
+            auto s=spans[key].toObject();
+            bool valid=s["key"].toString()==key && validVector(s["origin"])
+                && s["width"].toDouble()>0 && s["width"].toDouble()<=100
+                && s["sag"].toDouble()>=0 && s["sag"].toDouble()<=10
+                && !s["wires"].toArray().isEmpty();
+            for(const auto &w:s["wires"].toArray()) valid=valid && validVector(w.toObject()["a"]) && validVector(w.toObject()["b"]);
+            if(!valid) {
+                GuiFunct::showEditorStopped(this,"AP Wires","Invalid span data. The registry has not been overwritten.");
+                return false;
+            }
+        }
+        wireSpans=spans;
+        wireCleanupAll=root["cleanupAll"].toBool();
+    }
+    reconcileWireReservations();
+    for(const QString &key:wireSpans.keys()) {
+        auto span=wireSpans[key].toObject();
+        if(!span["baked"].toBool()) { span["active"]=false; wireSpans[key]=span; }
+    }
+    wireRegistryReady=true;
+    return applyWireDeletions();
+}
+
+void RouteEditorGLWidget::reconcileWireReservations() {
+    // File presence is not placement presence. Check loaded world objects on
+    // reload and Commit, including deletion earlier in this editor session.
+    for(const QString &key:wireSpans.keys()) {
+        const auto span=wireSpans[key].toObject();
+        if(span["deleted"].toBool() || (!span["baked"].toBool() && !span["external"].toBool())) continue;
+        Tile *tile=route->requestTile(span["x"].toInt(),span["z"].toInt(),false);
+        if(!tile || (tile->loaded!=1 && tile->loaded!=-2)) continue;
+        const QString name=span["external"].toBool()
+            ? span["shape"].toString() : AutoPlaceWire::shapeName(key);
+        if(name.isEmpty()) continue; // Unidentified external records remain protected.
+        bool found=false;
+        if(tile->loaded==1) for(const auto &entry:tile->obiekty) {
+            auto object=entry.second;
+            if(object && object->loaded && object->typeID==WorldObj::sstatic
+                    && object->fileName.compare(name,Qt::CaseInsensitive)==0) { found=true; break; }
+        }
+        wireSpans[key]=AutoPlaceWire::reconcileReservation(span,found);
+    }
+}
+
+bool RouteEditorGLWidget::applyWireDeletions() {
+    // Keep deletion records until an explicit Commit replaces them. A registry
+    // save may precede a world save, including when the editor is interrupted.
+    QVector<WorldObj*> objects;
+    if(wireCleanupAll) {
+        route->preloadWFiles(false);
+        QSet<QString> keep;
+        for(const QString &key:wireSpans.keys()) {
+            const auto span=wireSpans[key].toObject();
+            if(!span["deleted"].toBool()) keep.insert(AutoPlaceWire::shapeName(key).toLower());
+        }
+        for(Tile *tile:route->tile) {
+            if(!tile || tile->loaded==-2) continue;
+            if(tile->loaded!=1) return false;
+            for(const auto &entry:tile->obiekty) {
+                auto object=entry.second;
+                if(object && object->loaded && object->typeID==WorldObj::sstatic
+                        && AutoPlaceWire::isWireShape(object->fileName)
+                        && !keep.contains(object->fileName.toLower())) objects.append(object);
+            }
+        }
+    }
+    for(const QString &key:wireSpans.keys()) {
+        const auto span=wireSpans[key].toObject();
+        if(!span["deleted"].toBool()) continue;
+        Tile *tile=route->requestTile(span["x"].toInt(),span["z"].toInt(),false);
+        if(tile && tile->loaded==-2) continue; // No world file: no saved bake to remove.
+        if(!tile || tile->loaded!=1) {
+            GuiFunct::showEditorStopped(this,"AP Wires","A wire tile could not be loaded. Pending wire deletions are retained; Save stopped.");
+            return false;
+        }
+        const QString name=span["external"].toBool()
+            ? span["shape"].toString() : AutoPlaceWire::shapeName(key);
+        // Only the recognized legacy test family can be an externally owned
+        // cleanup target. Never expand a reset into arbitrary scenery deletion.
+        if(span["external"].toBool()
+                && !name.startsWith("SCO_TelephoneWire_OR_Test",Qt::CaseInsensitive)) continue;
+        for(const auto &entry:tile->obiekty) {
+            WorldObj *object=entry.second;
+            if(object && object->loaded && object->typeID==WorldObj::sstatic
+                    && object->fileName.compare(name,Qt::CaseInsensitive)==0)
+                if(!objects.contains(object)) objects.append(object);
+        }
+    }
+    if(!objects.isEmpty()) Undo::Clear();
+    for(WorldObj *object:objects) {
+        if(selectedObj==object) setSelectedObj(nullptr);
+        object->unselect();
+        object->loaded=false;
+        object->setModified();
+    }
+    return true;
+}
+
+void RouteEditorGLWidget::deleteAllWireBakes() {
+    if(!route || wireBakeBusy || !Game::writeEnabled || !loadWireRegistry()) return;
+    if(!GuiFunct::confirmDestructiveAction(this,"Delete All Wire Bakes",
+            "Delete all tracked AP and legacy test wire bakes, turn off every wire preview, and reset all wire reservations?\n\n"
+            "Poles and PolyVeg are preserved. This clears Undo history. Save the route afterward.")) return;
+    const auto previous=wireSpans;
+    const bool previousCleanupAll=wireCleanupAll;
+    wireCleanupAll=true;
+    for(const QString &key:wireSpans.keys()) {
+        auto span=wireSpans[key].toObject();
+        span["active"]=false;
+        span["deleted"]=true;
+        span["baked"]=false;
+        wireSpans[key]=span;
+    }
+    if(!persistWireRegistry()) { wireSpans=previous; wireCleanupAll=previousCleanupAll; return; }
+    wireSection.clear();
+    const bool removed=applyWireDeletions();
+    refreshRawWires();
+    if(removed && cleanupWireAssets(false))
+        emit updStatus("Stat3","All wire bakes and unused assets removed; all previews off. Save the route.");
+}
+
+void RouteEditorGLWidget::deleteSelectedWires() {
+    if(wireBakeBusy || !Game::writeEnabled || !loadWireRegistry()) return;
+    WorldObj *pole=nullptr; TDB *db=nullptr; int node=-1; bool road=false;
+    if(!selectedWireNode(pole,db,node,road)) return;
+    const QString supportKey=QString("%1,%2,%3").arg(pole->x).arg(pole->y).arg(pole->UiD);
+    QSet<QString> keys;
+    // A cross-node run retains its Commit node as bookkeeping. Use the
+    // attached records, not this pole's nearest node, to locate that run.
+    for(const auto &value : wireSpans) {
+        const auto span=value.toObject();
+        if(span["deleted"].toBool() || span["external"].toBool()) continue;
+        for(const QString &field : {QString("poleA"),QString("poleB")}) {
+            const auto identity=span[field].toObject();
+            if(identity["x"].toInt()!=pole->x || identity["z"].toInt()!=pole->y
+                    || identity["uid"].toDouble()!=pole->UiD) continue;
+            keys.unite(AutoPlaceWire::connectedSpans(wireSpans,supportKey,
+                span["node"].toInt(-1),span["road"].toBool()));
+        }
+    }
+    if(keys.isEmpty()) { emit updStatus("Stat3","No tracked node-to-node wires attached to this pole."); return; }
+    if(!GuiFunct::confirmDestructiveAction(this,"Delete Wires",
+            QString("Delete %1 wire spans in this pole's node-to-node run?\n\nPoles are preserved. This clears Undo history. Save afterward.").arg(keys.size()))) return;
+    const auto previous=wireSpans;
+    for(const QString &key:keys) {
+        auto span=wireSpans[key].toObject();
+        span["active"]=false; span["baked"]=false; span["deleted"]=true; wireSpans[key]=span;
+    }
+    if(!persistWireRegistry()) { wireSpans=previous; return; }
+    const bool removed=applyWireDeletions();
+    refreshRawWires();
+    if(removed && cleanupWireAssets(false))
+        emit updStatus("Stat3","Node-to-node wires and unused assets removed. Poles retained; save the route.");
+}
+
+bool RouteEditorGLWidget::persistWireRegistry() {
+    if(!wireRegistryReady || !Game::writeEnabled) return false;
+    if(wireSpans.isEmpty() && !wireCleanupAll && !QFile::exists(wireRegistryPath)) return true;
+    QString error;
+    if(!QDir().mkpath(QFileInfo(wireRegistryPath).absolutePath()) ||
+       !AutoPlaceWire::writeRegistry(wireRegistryPath,{{"version",1},{"spans",wireSpans},{"cleanupAll",wireCleanupAll}},error)) {
+        GuiFunct::showEditorStopped(this,"AP Wires","Wire definitions could not be saved.\n\n"+error);
+        return false;
+    }
+    return true;
+}
+
+bool RouteEditorGLWidget::cleanupWireAssets(bool afterSave) {
+    if(!wireRegistryReady || Game::serverClient) return true;
+    auto retained=wireSpans;
+    QString error;
+    if(!AutoPlaceWire::pruneAssets(Game::root+"/routes/"+Game::route,retained,wireCleanupAll,error)) {
+        if(!afterSave && error=="Some wire assets are still referenced by saved world objects; retained for retry.")
+            emit updStatus("Stat3","Unused wire files removed. Save the route to remove files still referenced by the saved world.");
+        else GuiFunct::showEditorStopped(this,"Wire Cleanup",error+(afterSave
+            ? "\n\nThe route was saved. Cleanup remains pending; save again to retry."
+            : "\n\nCleanup remains pending. Save the route to retry."));
+        return false;
+    }
+    const auto previous=wireSpans; const bool previousAll=wireCleanupAll;
+    wireSpans=retained; wireCleanupAll=false;
+    bool written=true;
+    if(wireSpans.isEmpty()) {
+        if(QFile::exists(wireRegistryPath)) written=QFile::remove(wireRegistryPath);
+    } else written=persistWireRegistry();
+    if(!written) {
+        wireSpans=previous; wireCleanupAll=previousAll;
+        GuiFunct::showEditorStopped(this,"Wire Cleanup","Cannot finish the wire registry cleanup. Save again to retry.");
+    }
+    return written;
+}
+
+void RouteEditorGLWidget::resetWirePreviewsOnExit() {
+    if(!wireRegistryReady || !Game::writeEnabled) return;
+    bool changed=false;
+    for(const QString &key:wireSpans.keys()) {
+        auto span=wireSpans[key].toObject();
+        if(!span["baked"].toBool() && span["active"].toBool()) {
+            span["active"]=false; wireSpans[key]=span; changed=true;
+        }
+    }
+    if(changed) persistWireRegistry();
+}
+
+void RouteEditorGLWidget::refreshRawWires() {
+    if(!camera || !camera->pozT) return;
+    makeCurrent(); delete wirePreview; wirePreview=nullptr;
+    wirePreviewTileX=int(camera->pozT[0]); wirePreviewTileZ=int(camera->pozT[1]);
+    QVector<float> vertices;
+    for(const QString &key:wireSpans.keys()) {
+        auto s=wireSpans[key].toObject();
+        if(!AutoPlaceWire::isPending(s)) continue;
+        Tile *owner = route ? route->tile.value(s["x"].toInt()*10000+s["z"].toInt(), nullptr) : nullptr;
+        if(owner && owner->loaded == 1) owner->setModified(true);
+        if(qAbs(s["x"].toInt()-wirePreviewTileX)>qMax(1,Game::tileLod)
+            || qAbs(s["z"].toInt()-wirePreviewTileZ)>qMax(1,Game::tileLod)) continue;
+        auto offset=AutoPlaceWire::vector(s["origin"])+QVector3D(2048.f*(s["x"].toInt()-wirePreviewTileX),0,
+            2048.f*(s["z"].toInt()-wirePreviewTileZ));
+        for(const auto &v:AutoPlaceWire::mesh(s)) {
+            auto p=v.point+offset; vertices<<p.x()<<p.y()<<p.z();
+        }
+    }
+    if(!vertices.isEmpty()) {
+        wirePreview=new OglObj(); wirePreview->setMaterial(0.15f,0.45f,0.95f);
+        wirePreview->initLitTriangles(vertices.constData(),int(vertices.size()));
+    }
+    update();
+}
+
+bool RouteEditorGLWidget::bakeAllWires() {
+    if(wireBakeBusy) return false;
+    if(Game::serverClient) return true; // Local-route first pass only.
+    if(!loadWireRegistry() || !applyWireDeletions()) return false;
+    if(wireSpans.isEmpty()) return true;
+    if(!Game::writeEnabled || !persistWireRegistry()) return false;
+    QScopedValueRollback<bool> busy(wireBakeBusy,true);
+    QProgressDialog progress("Baking AP wires...",QString(),0,wireSpans.size(),this);
+    GuiFunct::styleEditorDialog(&progress);
+    progress.setWindowTitle("Bake All Wires"); progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(600);
+    const QString routePath=Game::root+"/routes/"+Game::route;
+    QString error; int done=0, baked=0;
+    makeCurrent();
+    for(const QString &key:wireSpans.keys()) {
+        progress.setValue(done++);
+        // Exclude user input while pumping paint/progress; no nested edits during bake.
+        QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+        makeCurrent();
+        auto s=wireSpans[key].toObject();
+        if(s["deleted"].toBool() || !s["active"].toBool() || s["external"].toBool()) continue;
+        Tile *tile=route->requestTile(s["x"].toInt(),s["z"].toInt(),false);
+        if(!tile || tile->loaded!=1) { error="A wire world tile could not be loaded."; break; }
+        const QString name=AutoPlaceWire::shapeName(key);
+        WorldObj *existing=nullptr;
+        for(const auto &entry:tile->obiekty) {
+            auto o=entry.second;
+            if(o && o->loaded && o->fileName.compare(name,Qt::CaseInsensitive)==0) { existing=o; break; }
+        }
+        if(existing) { s["baked"]=true; s["uid"]=double(existing->UiD); wireSpans[key]=s; continue; }
+        // Refuse a stale snapshot: saving must not bake disconnected wires after pole edits.
+        for(const QString &field:{QString("poleA"),QString("poleB")}) {
+            const auto identity=s[field].toObject();
+            Tile *supportTile=route->requestTile(identity["x"].toInt(),identity["z"].toInt(),false);
+            WorldObj *support=nullptr;
+            if(supportTile && supportTile->loaded==1) for(const auto &entry:supportTile->obiekty) {
+                auto o=entry.second;
+                if(o && o->loaded && o->UiD==identity["uid"].toDouble()) { support=o; break; }
+            }
+            auto pose=identity["pose"].toArray();
+            if(!support || support->fileName!=identity["shape"].toString() || pose.size()!=16) {
+                error="A support pole changed or was deleted. Rebuild that section's preview before saving."; break;
+            }
+            for(int i=0;i<16;++i) if(std::abs(support->matrix[i]-pose[i].toDouble())>0.001) {
+                error="A support pole moved. Rebuild that section's preview before saving."; break;
+            }
+            if(!error.isEmpty()) break;
+        }
+        if(!error.isEmpty()) break;
+        // Track before writing so Discard also removes partial/failed bakes.
+        wireUnsavedBakes.insert(key);
+        if(!AutoPlaceWire::writeShape(routePath,s,error)) break;
+        currentShapeLib->reloadShapeIfCached(routePath+"/SHAPES/"+name);
+        const auto origin=AutoPlaceWire::vector(s["origin"]);
+        float p[3]={origin.x(),origin.y(),origin.z()}, q[4]={0,0,0,1};
+        Ref::RefItem reference; reference.type="static"; reference.clas="AP Wires";
+        reference.filename.append(name); reference.staticFlags=0x10000;
+        // Exact placement; manual F1 snapping must not move a baked span.
+        WorldObj *placed=tile->placeObject(p,q,&reference);
+        if(!placed || !placed->loaded) {
+            if(placed) tile->purgeObjects(QVector<WorldObj*>{placed});
+            error="The wire shape could not be placed. Raw definitions were retained."; break;
+        }
+        s["baked"]=true; s["uid"]=double(placed->UiD); wireSpans[key]=s; ++baked;
+        if(!persistWireRegistry()) { error="Cannot record wire ownership. Save stopped; retry preserves existing spans."; break; }
+    }
+    progress.setValue(wireSpans.size()); progress.close();
+    refreshRawWires();
+    if(!error.isEmpty()) {
+        GuiFunct::showEditorStopped(this,"AP Wire Bake Stopped",error+"\n\nCompleted spans are retained; retry will not duplicate them.");
+        return false;
+    }
+    if(!persistWireRegistry()) return false;
+    if(baked) emit updStatus("Stat3",QString("Baked %1 AP wire spans. Save the route to retain their placements.").arg(baked));
+    return true;
+}
+
+bool RouteEditorGLWidget::selectedWireNode(WorldObj *&pole,TDB *&db,int &node,bool &road) {
+    pole=nullptr; db=nullptr; node=-1; road=false;
+    if(!route || !selectedObj || selectedObj->typeObj!=GameObj::worldobj) {
+        emit updStatus("Stat3","Select a placed pole with E first."); return false;
+    }
+    pole=static_cast<WorldObj*>(selectedObj);
+    bool attached=false;
+    if(pole->loaded && pole->typeID==WorldObj::sstatic && pole->shapePointer)
+        attached=!pole->shapePointer->wireAttachmentOrigins().isEmpty();
+    if(!attached) { emit updStatus("Stat3","Select a pole with SNAP wire attachments."); return false; }
+    int best=201;
+    for(int kind=0;kind<2;++kind) {
+        if(route->placementAutoTargetType!=2 && route->placementAutoTargetType!=kind) continue;
+        TDB *candidate=kind?Game::roadDB:Game::trackDB; if(!candidate) continue;
+        float tile[2]={float(pole->x),float(pole->y)}, pos[3], track[3]={};
+        Vec3::copy(pos,pole->position);
+        int distance=candidate->findNearestPositionOnTDB(tile,pos,nullptr,track);
+        if(distance>=0 && distance<best) { best=distance; db=candidate; node=int(track[0]); road=kind==1; }
+    }
+    if(!db) { emit updStatus("Stat3","No track/road node section within 200 m of the selected pole."); return false; }
+    return true;
+}
+
+void RouteEditorGLWidget::rebuildWirePreview(float sagPercent, float widthMm, float maxSpan) {
+    if(wireBakeBusy || !loadWireRegistry() || !applyWireDeletions()) return;
+    reconcileWireReservations();
+    WorldObj *seed=nullptr; TDB *nodeDb=nullptr; int nodeId=-1; bool road=false;
+    if(!selectedWireNode(seed,nodeDb,nodeId,road)) return;
+    const QString previousSection = wireSection;
+    makeCurrent();
+    delete wirePreview;
+    wirePreview = nullptr;
+    const QString shapeName=seed->fileName;
+    wirePreviewTileX=seed->x; wirePreviewTileZ=seed->y;
+    // Load the whole vector node corridor before discovery, not a camera-sized subset.
+    float *line=nullptr; int lineSize=0;
+    nodeDb->getVectorSectionLine(line,lineSize,seed->x,seed->y,nodeId,true,25);
+    QSet<QPair<int,int>> corridor;
+    for(int i=0;line && i+2<lineSize;i+=6) {
+        int x=seed->x,z=seed->y; float point[3]={line[i],line[i+1],line[i+2]};
+        Game::check_coords(x,z,point);
+        for(int dx=-1;dx<=1;++dx) for(int dz=-1;dz<=1;++dz) corridor.insert({x+dx,z+dz});
+    }
+    delete[] line;
+    if(corridor.isEmpty() || corridor.size()>256) { emit updStatus("Stat3","Wire node section is unavailable or too large (256-tile limit)."); return; }
+    for(const auto &coords:corridor) {
+        Tile *tile=route->requestTile(coords.first,coords.second,false);
+        if(tile && tile->loaded!=1 && tile->loaded!=-2) {
+            emit updStatus("Stat3","A node corridor tile could not be loaded; wire Commit stopped."); return;
+        }
+    }
+    wireSection=QString("%1:%2:%3").arg(road?"road":"track").arg(nodeId).arg(shapeName.toLower());
+    struct Pole {
+        QVector3D base;
+        QMap<int, QVector3D> local;
+        QMap<int, QVector3D> points;
+        int tileX, tileZ;
+        unsigned int uid;
+        QJsonObject identity;
+    };
+    QVector<Pole> poles;
+    for(Tile *tile : route->tile) {
+        if(!tile || tile->loaded!=1 || !corridor.contains({tile->x,tile->z})) continue;
+        for(const auto &entry : tile->obiekty) {
+            WorldObj *object = entry.second;
+            if(!object || !object->loaded || object->typeID != WorldObj::sstatic
+                    || !AutoPlaceWire::matchesSupportPrefix(object->fileName, shapeName)
+                    || !object->shapePointer) continue;
+            // The track node bounds tile loading, not wire connectivity. A pole
+            // across the tracks (or beside a junction) can project onto another
+            // node while remaining the next support in the same physical run.
+            // Max Span and the degree/cycle rules below bound the connections.
+            Pole pole;
+            pole.tileX = tile->x;
+            pole.tileZ = tile->z;
+            pole.uid = object->UiD;
+            QJsonArray pose;
+            for(int i=0;i<16;++i) pose.append(object->matrix[i]);
+            pole.identity = {{"x",tile->x},{"z",tile->z},{"uid",double(object->UiD)},
+                {"shape",object->fileName},{"pose",pose}};
+            const QVector3D offset(2048.0f * (tile->x - wirePreviewTileX), 0,
+                                   2048.0f * (tile->z - wirePreviewTileZ));
+            pole.base = QVector3D(object->position[0], object->position[1], object->position[2]) + offset;
+            const auto attachments = object->shapePointer->wireAttachmentOrigins();
+            for(auto attachment = attachments.cbegin(); attachment != attachments.cend(); ++attachment) {
+                float point[3] = {attachment.value().x(), attachment.value().y(), attachment.value().z()};
+                Vec3::transformMat4(point, point, object->matrix);
+                if(!std::isfinite(point[0]) || !std::isfinite(point[1]) || !std::isfinite(point[2])) continue;
+                pole.local.insert(attachment.key(), attachment.value());
+                pole.points.insert(attachment.key(), QVector3D(point[0], point[1], point[2]) + offset);
+            }
+            if(!pole.points.isEmpty()) poles.append(pole);
+            if(poles.size() > 512) {
+                emit updStatus("Stat3", "Wire preview: too many nearby poles (limit 512).");
+                return;
+            }
+        }
+    }
+    // Deterministic nearest-span forest. Previously baked pairs remain reserved.
+    // Degree two and cycle rejection prevent branches and closing the strip.
+    std::sort(poles.begin(), poles.end(), [](const Pole &a, const Pole &b) {
+        if(a.tileX != b.tileX) return a.tileX < b.tileX;
+        if(a.tileZ != b.tileZ) return a.tileZ < b.tileZ;
+        return a.uid < b.uid;
+    });
+    struct Edge { int a, b; float distance; };
+    QVector<Edge> edges;
+    for(int a = 0; a < poles.size(); ++a) for(int b = a + 1; b < poles.size(); ++b) {
+        QVector3D delta = poles[b].base - poles[a].base;
+        delta.setY(0);
+        const float distance = delta.length();
+        if(distance < 1 || distance > maxSpan) continue;
+        edges.append({a, b, distance});
+    }
+    std::sort(edges.begin(), edges.end(), [](const Edge &a, const Edge &b) {
+        if(a.distance != b.distance) return a.distance < b.distance;
+        return a.a == b.a ? a.b < b.b : a.a < b.a;
+    });
+    QVector<int> degree(poles.size(), 0), component;
+    for(int p = 0; p < poles.size(); ++p) component.append(p);
+    int seedIndex=-1;
+    for(int p=0;p<poles.size();++p) if(poles[p].tileX==seed->x && poles[p].tileZ==seed->y && poles[p].uid==seed->UiD) seedIndex=p;
+    if(seedIndex<0) { emit updStatus("Stat3","Selected pole could not be resolved in the node section."); return; }
+    QVector<Edge> runEdges;
+    for(const Edge &edge:edges) {
+        if(degree[edge.a]>=2 || degree[edge.b]>=2 || component[edge.a]==component[edge.b]) continue;
+        runEdges.append(edge); ++degree[edge.a]; ++degree[edge.b];
+        int from=component[edge.b],to=component[edge.a];
+        for(int &c:component) if(c==from) c=to;
+    }
+    const int run=component[seedIndex];
+    edges.clear();
+    for(const Edge &edge:runEdges) if(component[edge.a]==run) edges.append(edge);
+    int anchor=seedIndex;
+    for(int p=0;p<poles.size();++p) if(component[p]==run) { anchor=p; break; }
+    wireSection+=QString(":%1,%2,%3").arg(poles[anchor].tileX).arg(poles[anchor].tileZ).arg(poles[anchor].uid);
+    const auto previousSpans = wireSpans;
+    for(const QString &key:wireSpans.keys()) {
+        auto s=wireSpans[key].toObject();
+        if(s["section"].toString()==wireSection && !s["baked"].toBool()) { s["active"]=false; wireSpans[key]=s; }
+    }
+    degree.fill(0); for(int p=0;p<component.size();++p) component[p]=p;
+    int spans = 0, wires = 0;
+    for(const Edge &edge : edges) {
+        if(degree[edge.a] >= 2 || degree[edge.b] >= 2
+                || component[edge.a] == component[edge.b]) continue;
+        int connected = 0;
+        const auto matching = WireAttachmentOrder::match(poles[edge.a].local,
+            poles[edge.a].points, poles[edge.b].points);
+        const Pole &first=poles[edge.a], &second=poles[edge.b];
+        const QString key=QString("%1,%2,%3|%4,%5,%6").arg(first.tileX).arg(first.tileZ).arg(first.uid)
+            .arg(second.tileX).arg(second.tileZ).arg(second.uid);
+        const QVector3D origin=first.base-QVector3D(2048.f*(first.tileX-wirePreviewTileX),0,
+            2048.f*(first.tileZ-wirePreviewTileZ));
+        QJsonArray connections;
+        for(auto match = matching.cbegin(); match != matching.cend(); ++match) {
+            const int w = match.key(), destination = match.value();
+            if(!second.points.contains(destination)) continue;
+            const QVector3D a = first.points[w], b = second.points[destination];
+            QVector3D horizontal = b - a;
+            horizontal.setY(0);
+            const float length = horizontal.length();
+            if(length < 0.1f) continue;
+            connections.append(QJsonObject{{"a",AutoPlaceWire::json(a-first.base)},
+                {"b",AutoPlaceWire::json(b-first.base)},{"from",w},{"to",destination}});
+            ++connected;
+        }
+        if(!connected) continue;
+        auto record=wireSpans.value(key).toObject();
+        // A span is owned by its unordered pole pair, not by the preview operation.
+        // Existing baked spans reserve that pair and cannot acquire a second string.
+        if(!record.value("baked").toBool()) {
+            record={{"key",key},{"section",wireSection},{"active",true},{"baked",false},
+                {"node",nodeId},{"road",road},
+                {"x",first.tileX},{"z",first.tileZ},{"origin",AutoPlaceWire::json(origin)},
+                {"poleA",first.identity},{"poleB",second.identity},{"sag",sagPercent},
+                {"width",widthMm},{"wires",connections}};
+            // Reserve legacy telephone-wire test fixtures without claiming ownership.
+            for(Tile *t : route->tile) {
+                if(!t || t->loaded!=1 || t->x!=first.tileX || t->z!=first.tileZ) continue;
+                for(const auto &entry:t->obiekty) {
+                    WorldObj *o=entry.second;
+                    if(!o || !o->loaded || !o->fileName.startsWith("SCO_TelephoneWire_OR_Test",Qt::CaseInsensitive)) continue;
+                    if((QVector3D(o->position[0],o->position[1],o->position[2])-origin).length()<0.5f) {
+                        record["baked"]=true; record["external"]=true; record["shape"]=o->fileName;
+                        record["uid"]=double(o->UiD);
+                    }
+                }
+            }
+            wireSpans[key]=record;
+        } else {
+            // Older tracked bakes acquire section membership without rebaking.
+            record["node"]=nodeId; record["road"]=road; record["section"]=wireSection;
+            wireSpans[key]=record;
+        }
+        ++degree[edge.a]; ++degree[edge.b];
+        const int oldComponent = component[edge.b], newComponent = component[edge.a];
+        for(int &c : component) if(c == oldComponent) c = newComponent;
+        ++spans;
+        wires += connected;
+    }
+    if(!persistWireRegistry()) {
+        // A rejected Commit must leave both the accepted registry and preview
+        // usable, including when the route-wide limit or publication fails.
+        wireSpans = previousSpans;
+        wireSection = previousSection;
+        refreshRawWires();
+        return;
+    }
+    for(const auto &value : wireSpans) {
+        const auto span = value.toObject();
+        if(!AutoPlaceWire::isPending(span)) continue;
+        Tile *owner = route->requestTile(span["x"].toInt(), span["z"].toInt(), false);
+        if(owner && owner->loaded == 1) owner->setModified(true);
+    }
+    refreshRawWires();
+    emit updStatus("Stat3", QString("AP wires: %1 poles, %2 spans, %3 connections. Blue raw spans bake on Save.")
+        .arg(poles.size()).arg(spans).arg(wires));
+    update();
+}
+
+void RouteEditorGLWidget::renderWirePreview() {
+    if(wireRegistryReady && camera && camera->pozT &&
+       (wirePreviewTileX!=int(camera->pozT[0]) || wirePreviewTileZ!=int(camera->pozT[1]))) refreshRawWires();
+    if(selection || !wirePreview || !camera || !camera->pozT) return;
+    gluu->mvPushMatrix();
+    Mat4::identity(gluu->mvMatrix);
+    Mat4::translate(gluu->mvMatrix, gluu->mvMatrix,
+        2048.0f * (wirePreviewTileX - camera->pozT[0]), 0,
+        2048.0f * (wirePreviewTileZ - camera->pozT[1]));
+    float savedShapeMatrix[16];
+    std::copy(gluu->objStrMatrix, gluu->objStrMatrix + 16, savedShapeMatrix);
+    Mat4::identity(gluu->objStrMatrix);
+    gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform,
+        *reinterpret_cast<float(*)[4][4]>(gluu->mvMatrix));
+    wirePreview->render();
+    std::copy(savedShapeMatrix, savedShapeMatrix + 16, gluu->objStrMatrix);
+    gluu->mvPopMatrix();
 }
 
 void RouteEditorGLWidget::renderPolyVegBakeMarkers() {
@@ -4827,7 +5474,8 @@ static void allowPolyVegBakePaint(QWidget *viewport, int milliseconds) {
 }
 
 bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
-    if(route == NULL || camera == NULL || camera->pozT == NULL)
+    if(route == NULL || camera == NULL || camera->pozT == NULL || !Game::writeEnabled
+            || Game::serverClient)
         return false;
 
     int tileX = static_cast<int>(camera->pozT[0]);
@@ -4860,25 +5508,13 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     }
 
     const QString routePath = Game::root + "/routes/" + Game::route;
-    const ForestCatalogLoadResult catalogResult =
-        ForestDefinitionLoader::loadRoute(routePath);
-    if(!catalogResult.isValid()) {
-        GuiFunct::showEditorStopped(this, "Bake PolyVeg Tile",
-            "polyveg.json could not be loaded:\n\n" + catalogResult.errors.join("\n"));
-        return false;
-    }
-
-    QSet<QString> vegetationShapes;
-    for(const ForestRecipeDefinition &recipe : catalogResult.catalog.polyVeg)
-        for(const ForestVegetationDefinition &vegetation : recipe.vegetation)
-            vegetationShapes.insert(vegetation.shape.toLower());
 
     QVector<WorldObj*> sourceObjects;
     QVector<ForestBakeInstance> instances;
     for(int index = 0; index < worldTile->jestObiektow; ++index) {
         WorldObj *object = worldTile->obiekty[index];
         if(object == NULL || !object->loaded || object->typeID != WorldObj::sstatic
-                || !vegetationShapes.contains(object->fileName.toLower()))
+                || !object->polyVegRaw)
             continue;
         ForestBakeInstance instance;
         instance.shapePath = routePath + "/shapes/" + object->fileName;
@@ -4896,8 +5532,8 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     if(instances.isEmpty()) {
         if(!polyVegBatchBake) GuiFunct::showEditorNotice(this, "Bake PolyVeg Tile",
             usePointerTile
-                ? "The pointer tile contains no unbaked vegetation shapes listed in polyveg.json."
-                : "The current tile contains no unbaked vegetation shapes listed in polyveg.json.");
+                ? "The pointer tile contains no generated unbaked PolyVeg objects."
+                : "The current tile contains no generated unbaked PolyVeg objects.");
         return false;
     }
     const int sourceObjectCount = sourceObjects.size();
@@ -4910,7 +5546,7 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     const QString confirmation = QString(
         "Bake configured vegetation on the pointer tile into 4x4 patch blocks?\n\n"
         "Tile: %1, %2\nSource objects: %3\n\n"
-        "Only static shapes listed in polyveg.json will be replaced. "
+        "Only generated blue PolyVeg instances will be replaced. "
         "Bake clears Undo history and purges this tile's source objects from "
         "memory. Delete the bake and replant to retry.")
         .arg(tileX).arg(tileZ).arg(sourceObjects.size());
@@ -4956,6 +5592,7 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
         generatedFiles.append(shapesPath + '/'
             + QFileInfo(outputName).completeBaseName() + ".sd");
     }
+    for(const QString &name : outputNames) polyVegUnsavedBakeShapes.insert(name.toLower());
     QStringList transactionFiles = generatedFiles;
     transactionFiles.append(manifestPath);
     for(const QString &path : transactionFiles) {
@@ -5245,8 +5882,91 @@ void RouteEditorGLWidget::editUndo() {
         &RouteEditorGLWidget::refreshPolyVegTileCounts);
 }
 
+void RouteEditorGLWidget::purgeDiscardedGeneratedObjects(
+        const QSet<QString> &shapes, bool rawVegetation) {
+    if(!route) return;
+    // Discard can fail later and leave the editor open. Drop every selection
+    // borrowed from live objects before any generated object is destroyed.
+    if(selectedObj) selectedObj->unselect();
+    if(groupObj) {
+        groupObj->unselect();
+        groupObj->objects.clear();
+    }
+    lastSelectedObj = nullptr;
+    setSelectedObj(NULL);
+    Undo::Clear();
+    for(Tile *tile : route->tile) {
+        if(!tile || tile->loaded != 1) continue;
+        QVector<WorldObj*> removed;
+        for(const auto &entry : tile->obiekty) {
+            WorldObj *object = entry.second;
+            if(object && ((rawVegetation && object->polyVegRaw)
+                    || shapes.contains(object->fileName.toLower())))
+                removed.append(object);
+        }
+        if(!removed.isEmpty()) {
+            // The clipboard also borrows world objects rather than cloning
+            // them; invalidate it only when this purge removes its source.
+            if(removed.contains(copyPasteObj)) copyPasteObj = nullptr;
+            if(copyPasteGroupObj) {
+                bool affected = false;
+                for(WorldObj *object : copyPasteGroupObj->objects)
+                    affected |= removed.contains(object);
+                if(affected) {
+                    if(copyPasteObj == copyPasteGroupObj) copyPasteObj = nullptr;
+                    copyPasteGroupObj->objects.clear();
+                }
+            }
+            tile->purgeObjects(removed);
+        }
+    }
+    update();
+}
+
 bool RouteEditorGLWidget::discardUnsavedPolyVegBakeFiles(QString &error) {
-    return polyVegBakeSession.rollback(error);
+    if(!polyVegBakeSession.rollback(error)) return false;
+    QSet<QString> removedShapes = polyVegUnsavedBakeShapes;
+    if(polyVegWorldSaveAttempted && !polyVegUnsavedBakeShapes.isEmpty()) {
+        ForestBakePruneResult result;
+        if(!ForestBakeManifest::pruneUnreferenced(Game::root+"/routes/"+Game::route,
+                result, error, &polyVegUnsavedBakeShapes)) return false;
+        for(const QString &shape : result.retainedShapes) removedShapes.remove(shape.toLower());
+    }
+    purgeDiscardedGeneratedObjects(removedShapes, true);
+    polyVegUnsavedBakeShapes.clear();
+    polyVegWorldSaveAttempted = false;
+    refreshPolyVegTileCounts();
+    return true;
+}
+
+bool RouteEditorGLWidget::discardUnsavedWireBakeFiles(QString &error) {
+    if(!wireRegistryReady || Game::serverClient) return true;
+    QSet<QString> discarded = wireUnsavedBakes;
+    for(const QString &key : wireSpans.keys())
+        if(AutoPlaceWire::isRaw(wireSpans[key].toObject())) discarded.insert(key);
+    if(discarded.isEmpty()) return true;
+    // Keep retry ownership even if asset cleanup succeeds but registry publication fails.
+    wireUnsavedBakes = discarded;
+    auto retained=wireSpans;
+    if(!AutoPlaceWire::discardBakes(Game::root+"/routes/"+Game::route,
+            retained,discarded,error)) return false;
+    QSet<QString> removedShapes;
+    for(const QString &key : discarded)
+        if(!retained.contains(key)) removedShapes.insert(AutoPlaceWire::shapeName(key).toLower());
+    // Remove live geometry too, so a later cleanup failure leaves a usable editor.
+    purgeDiscardedGeneratedObjects(removedShapes, false);
+    wireSpans=retained;
+    refreshRawWires();
+    // Remove an empty generated registry, preserving shared/saved records otherwise.
+    if(wireSpans.isEmpty() && !wireCleanupAll) {
+        if(QFile::exists(wireRegistryPath) && !QFile::remove(wireRegistryPath)) {
+            error = "Cannot remove the discarded wire registry.";
+            return false;
+        }
+    } else if(!AutoPlaceWire::writeRegistry(wireRegistryPath,
+            {{"version",1},{"spans",wireSpans},{"cleanupAll",wireCleanupAll}},error)) return false;
+    wireUnsavedBakes.clear();
+    return true;
 }
 
 void RouteEditorGLWidget::showTrkEditr() {
@@ -6534,7 +7254,162 @@ void RouteEditorGLWidget::pickObjRotElevForPlacement(){
     }
 }
 
+namespace {
+// First verified profile: the animated 42 m XTracks table. Filename is only
+// a candidate filter; check the actual bridge, animation and radial paths.
+bool ortsTurntableEntry(WorldObj *obj, OrtsTurntableConfig::Entry &entry) {
+    if(obj == NULL || obj->typeID != WorldObj::trackobj ||
+            !OrtsTurntableConfig::is42mShapeReference(obj->fileName) ||
+            Game::trackDB == NULL || Game::trackDB->tsection == NULL)
+        return false;
+    const auto close = [](double a, double b) { return std::isfinite(a) && std::abs(a-b) < 0.002; };
+    SFile *model = obj->shapePointer;
+    if(model == NULL || model->loaded != 1 || model->iloscm != 2 ||
+            model->macierz == NULL || model->animations.size() != 1)
+        return false;
+    if(model->macierz[0].name != "BASIN" || model->macierz[1].name != "TRACKPIECE")
+        return false;
+    // Reject variants whose basis or pivot differs from the verified model.
+    for(int m = 0; m < 2; ++m) {
+        for(int i = 0; i < 16; ++i) {
+            const double expected = i == 14 && m == 1 ? 21.0 : (i % 5 == 0 ? 1.0 : 0.0);
+            if(!close(model->macierz[m].param[i], expected)) return false;
+        }
+    }
+    const SFile::Animation &animation = model->animations.first();
+    if(animation.frames != 3599 || !close(animation.fps, 30) || animation.node.size() != 2)
+        return false;
+    const SFile::AnimNode &basin = animation.node[0];
+    const SFile::AnimNode &bridge = animation.node[1];
+    if(!basin.tcbKey.isEmpty() || !basin.slerpRot.isEmpty() || !basin.linearKey.isEmpty() ||
+            bridge.tcbKey.size() != 3 || !bridge.slerpRot.isEmpty()) return false;
+    const int frames[] = {0, 1800, 3600};
+    const double quaternions[][4] = {{0,0,0,1}, {0,1,0,0}, {0,0,0,-1}};
+    for(int i = 0; i < 3; ++i) {
+        if(bridge.tcbKey[i].frame != frames[i]) return false;
+        for(int j = 0; j < 4; ++j)
+            if(!close(bridge.tcbKey[i].quat[j], quaternions[i][j])) return false;
+        for(float parameter : bridge.tcbKey[i].param)
+            if(!close(parameter, 0)) return false;
+    }
+    for(const auto &key : bridge.linearKey)
+        if(!close(key.pos[0], 0) || !close(key.pos[1], 0) || !close(key.pos[2], 21)) return false;
+    TSectionDAT *sections = Game::trackDB->tsection;
+    const auto found = sections->shape.find(obj->sectionIdx);
+    if(found == sections->shape.end() || found->second == NULL) return false;
+    const TrackShape *shape = found->second;
+    if(!OrtsTurntableConfig::is42mShapeReference(shape->filename) ||
+            shape->roadshape || shape->numpaths != 18 || shape->path == NULL) return false;
+    for(int i = 0; i < 18; ++i) {
+        const auto &path = shape->path[i];
+        const double angle = i * 3.14159265358979323846 / 18.0;
+        if(path.n != 2 || !close(path.rotDeg, i*10) ||
+                !close(path.pos[0], -21*std::sin(angle)) || !close(path.pos[1], -0.18) ||
+                !close(path.pos[2], 21*(1-std::cos(angle)))) return false;
+        double length = 0;
+        for(int j = 0; j < path.n; ++j) {
+            const auto section = sections->sekcja.find(path.sect[j]);
+            if(section == sections->sekcja.end() || section->second == NULL || section->second->type != 0)
+                return false;
+            length += section->second->getDlugosc();
+        }
+        if(!close(length, 42)) return false;
+    }
+    entry.worldFile = "w" + Tile::getNameXY(obj->x) + Tile::getNameXY(-obj->y) + ".w";
+    entry.uid = obj->UiD; entry.shapeIndex = obj->sectionIdx;
+    entry.animation = "TRACKPIECE"; entry.z = 21; entry.diameter = 42;
+    return true;
+}
+
+// Conservative horizontal transfer profile: fixed basin, one straight sliding
+// bridge, and increasing parallel straight paths. Inspect the loaded asset,
+// so GLOBAL and explicit route-relative references follow the same rules.
+bool ortsTransferEntry(WorldObj *obj, OrtsTurntableConfig::Entry &entry) {
+    if(obj == nullptr || obj->typeID != WorldObj::trackobj ||
+            Game::trackDB == nullptr || Game::trackDB->tsection == nullptr) return false;
+    SFile *model = obj->shapePointer;
+    if(model == nullptr || model->loaded != 1 || model->iloscm != 2 ||
+            model->macierz == nullptr || model->animations.size() != 1) return false;
+    const auto close = [](double a, double b) {
+        return std::isfinite(a) && std::isfinite(b) && std::abs(a-b) < 0.002;
+    };
+    if(model->macierz[0].name != "BASIN" || model->macierz[1].name != "TRACKPIECE") return false;
+    const auto &animation = model->animations.first();
+    if(animation.frames <= 0 || !std::isfinite(animation.fps) || animation.fps <= 0 ||
+            animation.node.size() != 2) return false;
+    const auto &basin = animation.node[0];
+    const auto &bridge = animation.node[1];
+    if(!basin.tcbKey.isEmpty() || !basin.slerpRot.isEmpty() || !basin.linearKey.isEmpty() ||
+            !bridge.tcbKey.isEmpty() || !bridge.slerpRot.isEmpty() || bridge.linearKey.size() < 2)
+        return false;
+    const auto &first = bridge.linearKey.first();
+    const auto &last = bridge.linearKey.last();
+    if(first.frame != 0 || last.frame != animation.frames ||
+            !std::isfinite(first.pos[0]) || !std::isfinite(last.pos[0]) ||
+            last.pos[0]-first.pos[0] <= 0.002) return false;
+    int previousFrame = -1;
+    for(const auto &key : bridge.linearKey) {
+        const double fraction = double(key.frame)/animation.frames;
+        if(key.frame <= previousFrame || key.frame > animation.frames ||
+                !close(key.pos[0], first.pos[0]+fraction*(last.pos[0]-first.pos[0])) ||
+                !close(key.pos[1], first.pos[1]) || !close(key.pos[2], first.pos[2])) return false;
+        previousFrame = key.frame;
+    }
+    for(int m = 0; m < 2; ++m)
+        for(int i = 0; i < 16; ++i) {
+            const double expected = m == 1 && i >= 12 && i <= 14
+                    ? first.pos[i-12] : (i%5 == 0 ? 1.0 : 0.0);
+            if(!close(model->macierz[m].param[i], expected)) return false;
+        }
+    TSectionDAT *sections = Game::trackDB->tsection;
+    const auto found = sections->shape.find(obj->sectionIdx);
+    if(found == sections->shape.end() || found->second == nullptr) return false;
+    const TrackShape *shape = found->second;
+    if(shape->roadshape || shape->numpaths < 2 || shape->path == nullptr) return false;
+    const auto &origin = shape->path[0];
+    if(!close(origin.pos[0], first.pos[0]) ||
+            !close(shape->path[shape->numpaths-1].pos[0], last.pos[0])) return false;
+    double bridgeLength = 0;
+    for(int i = 0; i < shape->numpaths; ++i) {
+        const auto &path = shape->path[i];
+        if(path.n < 1 || path.n > 12 || !close(path.rotDeg, 0) ||
+                !close(path.pos[1], origin.pos[1]) || !close(path.pos[2], origin.pos[2]) ||
+                !std::isfinite(path.pos[0]) ||
+                (i > 0 && path.pos[0] <= shape->path[i-1].pos[0])) return false;
+        double length = 0;
+        for(int j = 0; j < path.n; ++j) {
+            const auto section = sections->sekcja.find(path.sect[j]);
+            if(section == sections->sekcja.end() || section->second == nullptr ||
+                    section->second->type != 0) return false;
+            const double part = section->second->getDlugosc();
+            if(!std::isfinite(part) || part <= 0) return false;
+            length += part;
+        }
+        if(i == 0) bridgeLength = length;
+        else if(!close(length, bridgeLength)) return false;
+    }
+    entry = OrtsTurntableConfig::Entry();
+    entry.kind = OrtsTurntableConfig::Entry::Kind::Transfer;
+    entry.worldFile = "w" + Tile::getNameXY(obj->x) + Tile::getNameXY(-obj->y) + ".w";
+    entry.uid = obj->UiD; entry.shapeIndex = obj->sectionIdx;
+    entry.animation = model->macierz[1].name;
+    entry.x = origin.pos[0]; entry.z = origin.pos[2]+bridgeLength/2;
+    entry.length = bridgeLength;
+    return true;
+}
+
+bool ortsMovingTableEntry(WorldObj *obj, OrtsTurntableConfig::Entry &entry) {
+    entry = OrtsTurntableConfig::Entry();
+    return ortsTurntableEntry(obj, entry) || ortsTransferEntry(obj, entry);
+}
+
+}
+
 void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
+    const bool trackSelected = selectedObj != NULL
+            && selectedObj->typeObj == GameObj::worldobj
+            && (((WorldObj*)selectedObj)->typeID == WorldObj::trackobj
+                || ((WorldObj*)selectedObj)->typeID == WorldObj::dyntrack);
     if(defaultMenuActions["undo"] == NULL){
         defaultMenuActions["undo"] = new QAction(tr("&Undo"), this);
         QObject::connect(defaultMenuActions["undo"], SIGNAL(triggered()), this, SLOT(editUndo()));
@@ -6587,6 +7462,8 @@ void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
         defaultMenuActions["pickObjElev"] = new QAction(tr("&Pick elevation for placement"));
         QObject::connect(defaultMenuActions["pickObjElev"], SIGNAL(triggered()), this, SLOT(pickObjRotElevForPlacement()));
     }
+    defaultMenuActions["pickObjElev"]->setText(trackSelected
+            ? tr("Pick &slope for placement") : tr("&Pick elevation for placement"));
 
     if(defaultMenuActions["pickObjRotCam"] == NULL){
         defaultMenuActions["pickObjRotCam"] = new QAction(tr("&Reposition camera to object"));
@@ -6656,16 +7533,60 @@ void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
         menu.addSection("Object: " + selectedObj->getName());
         selectedObj->pushContextMenuActions(&menu);
 
+        OrtsTurntableConfig::Entry turntable;
+        if(selectedObj->typeObj == GameObj::worldobj &&
+                ortsMovingTableEntry(static_cast<WorldObj*>(selectedObj), turntable)) {
+            const QString activationTitle = turntable.kind == OrtsTurntableConfig::Entry::Kind::Transfer
+                    ? tr("Activate Transfer") : tr("Activate Turntable");
+            QAction *activate = menu.addAction(activationTitle);
+            activate->setEnabled(Game::writeEnabled && Game::serverClient == NULL);
+            connect(activate, &QAction::triggered, this, [this, activationTitle]() {
+                OrtsTurntableConfig::Entry entry;
+                if(!Game::writeEnabled || Game::serverClient != NULL || selectedObj == NULL ||
+                        selectedObj->typeObj != GameObj::worldobj ||
+                        !ortsMovingTableEntry(static_cast<WorldObj*>(selectedObj), entry)) return;
+                WorldObj *obj = static_cast<WorldObj*>(selectedObj);
+                const QString routeDirectory = Game::root + "/routes/" + Game::route;
+                QVector<QString> unsaved;
+                route->getUnsavedInfo(unsaved);
+                if(obj->modified || !unsaved.isEmpty() ||
+                        Game::trackDB->tsection->dataOutOfSync ||
+                        Game::trackDB->tsection->updateSectionDataRequired ||
+                        !QFile::exists(routeDirectory + "/world/" + entry.worldFile)) {
+                    GuiFunct::showEditorStopped(this, activationTitle,
+                        tr("Save the route before activating this moving table."));
+                    return;
+                }
+                if(!Game::trackDB->ifTrackExist(obj->x, obj->y, obj->UiD)) {
+                    GuiFunct::showEditorStopped(this, activationTitle,
+                        tr("Add this moving table to TDB and save the route first."));
+                    return;
+                }
+                QString error; bool alreadyPresent = false;
+                if(!OrtsTurntableConfig::activate(routeDirectory, entry, alreadyPresent, error)) {
+                    GuiFunct::showEditorStopped(this, activationTitle, error);
+                    return;
+                }
+                GuiFunct::showEditorNotice(this, activationTitle, alreadyPresent
+                    ? tr("This moving table already has an ORTS entry. Its settings were preserved.")
+                    : tr("Activated. Reload the route in Open Rails to use it."));
+            });
+        }
+
         if(selectedObj->typeObj == selectedObj->worldobj){
-            menu.addAction(defaultMenuActions["setTerrToObj"]);
+            if(!trackSelected)
+                menu.addAction(defaultMenuActions["setTerrToObj"]);
             menu.addAction(defaultMenuActions["setPosToTerr"]);
-            menu.addAction(defaultMenuActions["setRotToTerr"]);
+            if(!trackSelected)
+                menu.addAction(defaultMenuActions["setRotToTerr"]);
             menu.addAction(defaultMenuActions["pickObj"]);
             menu.addAction(defaultMenuActions["pickObjRot"]);
             menu.addAction(defaultMenuActions["pickObjElev"]);
 
-            menu.addAction(defaultMenuActions["find1x1"]);
-            menu.addAction(defaultMenuActions["find3x3"]);
+            if(!trackSelected){
+                menu.addAction(defaultMenuActions["find1x1"]);
+                menu.addAction(defaultMenuActions["find3x3"]);
+            }
         }
 
 
@@ -6893,16 +7814,17 @@ void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
     //if(selectedObj != NULL){
         menu.addAction(defaultMenuActions["pickObjRotCam"]);
     //}
-    menu.addAction(defaultMenuActions["pickObjRotCamFlip"]);
-
-    menuCamera.setTitle("Reset Camera");
-            menu.addMenu(&menuCamera);
-            menuCamera.addAction(defaultMenuActions["resetCamN"]);
-            menuCamera.addAction(defaultMenuActions["resetCamS"]);
-            menuCamera.addAction(defaultMenuActions["resetCamE"]);
-            menuCamera.addAction(defaultMenuActions["resetCamW"]);
-            menuCamera.addAction(defaultMenuActions["resetCamD"]);
-            menuCamera.addAction(defaultMenuActions["resetCamZ"]);
+    if(!trackSelected){
+        menu.addAction(defaultMenuActions["pickObjRotCamFlip"]);
+        menuCamera.setTitle("Reset Camera");
+        menu.addMenu(&menuCamera);
+        menuCamera.addAction(defaultMenuActions["resetCamN"]);
+        menuCamera.addAction(defaultMenuActions["resetCamS"]);
+        menuCamera.addAction(defaultMenuActions["resetCamE"]);
+        menuCamera.addAction(defaultMenuActions["resetCamW"]);
+        menuCamera.addAction(defaultMenuActions["resetCamD"]);
+        menuCamera.addAction(defaultMenuActions["resetCamZ"]);
+    }
 
     menu.addSeparator();
     menu.addSection("Edit");
@@ -6958,10 +7880,51 @@ void RouteEditorGLWidget::getUnsavedInfo(QVector<QString> &items) {
     if (this->route == NULL)
         return;
     route->getUnsavedInfo(items);
+    const auto rawTiles = polyVegTiles(false);
+    if(!rawTiles.isEmpty())
+        items.append(QString("Unbaked blue PolyVeg on %1 tile(s)").arg(rawTiles.size()));
+    for(const QString &key : wireSpans.keys()) {
+        const auto span = wireSpans[key].toObject();
+        if(AutoPlaceWire::isPending(span))
+            items.append(QString("Unbaked blue wires: tile %1, %2")
+                .arg(span["x"].toInt()).arg(span["z"].toInt()));
+    }
+    if(!wireUnsavedBakes.isEmpty() || !polyVegBakeSession.isEmpty()
+            || !polyVegUnsavedBakeShapes.isEmpty())
+        items.append("Generated bakes awaiting route save");
+}
+
+bool RouteEditorGLWidget::hasPendingGeneratedWork() const {
+    if(!polyVegTiles(false).isEmpty() || !wireUnsavedBakes.isEmpty()
+            || !polyVegBakeSession.isEmpty() || !polyVegUnsavedBakeShapes.isEmpty()) return true;
+    for(const auto &value : wireSpans)
+        if(AutoPlaceWire::isPending(value.toObject())) return true;
+    return false;
+}
+
+bool RouteEditorGLWidget::bakePendingVegetation() {
+    const auto tiles = polyVegTiles(false);
+    if(tiles.isEmpty()) return true;
+    QScopedValueRollback<bool> batch(polyVegBatchBake, true);
+    polyVegBatchSourceCount = 0;
+    polyVegBatchBlockCount = 0;
+    for(const auto &tile : tiles) {
+        polyVegBatchTileX = tile.first;
+        polyVegBatchTileZ = tile.second;
+        makeCurrent();
+        if(!bakeVegetationTile(false)) {
+            GuiFunct::showEditorStopped(this, "Bake and Save Stopped",
+                "PolyVeg could not be baked. The route has not been saved. "
+                "Completed bakes and remaining raw objects are retained; retry or discard on exit.");
+            return false;
+        }
+    }
+    refreshPolyVegTileCounts();
+    return polyVegTiles(false).isEmpty();
 }
 
 bool RouteEditorGLWidget::saveRoute() {
-    if(route == NULL){
+    if(route == NULL || !Game::writeEnabled){
         emit updStatus(QString("stat0"), QString("SAVE FAILED"));
         return false;
     }
@@ -6969,14 +7932,27 @@ bool RouteEditorGLWidget::saveRoute() {
     // A save attempt writes modified world tiles before terrain, route-key,
     // activity, and cleanup stages can report failure. From this point onward
     // rolling generated bake files back could leave an already-written world
-    // file referring to a deleted shape. Retaining a now-orphaned bake asset is
-    // safe and recoverable by the next successful manifest cleanup.
+    // file referring to a deleted shape. Discard after a save attempt instead
+    // scans saved references and removes only this session's unreferenced bakes.
+    if(!bakePendingVegetation() || !bakeAllWires()) return false;
     polyVegBakeSession.commit();
+    polyVegWorldSaveAttempted = !polyVegUnsavedBakeShapes.isEmpty();
     route->save();
     if(!route->lastSaveSucceeded()){
         emit updStatus(QString("stat0"), QString("SAVE FAILED"));
         return false;
     }
+    if(!cleanupWireAssets()) return false;
+    wireUnsavedBakes.clear();
+    polyVegUnsavedBakeShapes.clear();
+    polyVegWorldSaveAttempted = false;
+
+    QVector<QString> remainingItems;
+    getUnsavedInfo(remainingItems);
+    if(!remainingItems.isEmpty())
+        qWarning() << "Save completed with pending editor items:" << remainingItems;
+    else
+        qDebug() << "Save completed with no pending editor items";
 
     timeSaved = timeNow;
     emit updStatus(QString("stat0"), QString("Saved"));
@@ -6984,6 +7960,29 @@ bool RouteEditorGLWidget::saveRoute() {
 }
 
 void RouteEditorGLWidget::msg(QString text) {
+    if(text == "deleteSelectedWires") { deleteSelectedWires(); return; }
+    if(text == "bakeAllWires") { bakeAllWires(); return; }
+    if(text == "wireAvailability") {
+        updateWireAvailability();
+        return;
+    }
+    if(text == "clearWirePreview") {
+        if(wireBakeBusy || !loadWireRegistry()) return;
+        for(const QString &key:wireSpans.keys()) {
+            auto span=wireSpans[key].toObject();
+            if(span["section"].toString()==wireSection && !span["baked"].toBool()) {
+                span["active"]=false; wireSpans[key]=span;
+            }
+        }
+        if(!persistWireRegistry()) { refreshRawWires(); return; }
+        makeCurrent();
+        delete wirePreview;
+        wirePreview = nullptr;
+        refreshRawWires();
+        emit updStatus("Stat3", "Section preview off; raw definitions retained and excluded from baking.");
+        update();
+        return;
+    }
     if(Game::debugOutput) qDebug() << text;
     if (text == "saveError") {
         userErrorSound();
@@ -7036,6 +8035,8 @@ void RouteEditorGLWidget::msg(QString text, bool val) {
 }
 
 void RouteEditorGLWidget::msg(QString text, int val) {
+    if(text == "poleWobblePercent" && route)
+        route->placementAutoWobblePercent = qBound(0, val, 100);
 }
 
 void RouteEditorGLWidget::msg(QString text, float val) {
@@ -7047,6 +8048,22 @@ void RouteEditorGLWidget::msg(QString text, float val) {
 }
 
 void RouteEditorGLWidget::msg(QString text, QString val) {
+    if(text == "wirePreview") {
+        const QStringList values = val.split(',');
+        if(values.size() == 3) {
+            bool okSag = false, okWidth = false, okSpan = false;
+            const float sag = values[0].toFloat(&okSag);
+            const float width = values[1].toFloat(&okWidth);
+            const float span = values[2].toFloat(&okSpan);
+            if(okSag && okWidth && okSpan && std::isfinite(sag)
+                    && std::isfinite(width) && std::isfinite(span)
+                    && sag >= 0 && sag <= 10 && width >= 1 && width <= 100
+                    && span >= 1 && span <= 200) {
+                rebuildWirePreview(sag, width, span);
+            }
+        }
+        return;
+    }
     //qDebug() << text;
     if (text == "mkrFile") {
         this->route->setMkrFile(val);

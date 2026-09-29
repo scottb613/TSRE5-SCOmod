@@ -225,11 +225,13 @@ void DynTrackObj::removedFromTDB(){
 }
 
 int DynTrackObj::updateTrackSectionInfo(QHash<unsigned int,unsigned int> shapes, QHash<unsigned int,unsigned int> sect){
-    if(shapes[sectionIdx] > 0)
-        sectionIdx = shapes[sectionIdx];
-    if(sections == NULL)
-        return 0;
     int count = 0;
+    if(shapes[sectionIdx] > 0){
+        sectionIdx = shapes[sectionIdx];
+        ++count;
+    }
+    if(sections == NULL)
+        return count;
     for(int i = 0; i < 5; i++){
         if(sections[i].sectIdx == 4294967295)
             continue;

@@ -1,12 +1,124 @@
-{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Consolas;}}\viewkind4\uc1\pard\f0\fs20 TSRE GenX v0.15 Corrective Full Release Work List\par
-\par
-======================================================================================================\par
+{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Consolas;}}\viewkind4\uc1\pard\f0\fs20 TSRE GenX v0.17 Release Work List\par
 \par
 SCOPE\par
 \par
-TSRE GenX is an actively developed route editor for MSTS and Open Rails route building. It remains experimental and should be used with route backups, but it is a full editor with maintained build, test, documentation, terrain, track, object, map, PolyVeg, diagnostics, and Activity Builder workflows. v0.15 is the current corrective full release; continuing development remains on `tsre-scomod-wip`.\par
+Full release based on immutable v0.16. See the test matrix for verification scope.\par
 \par
-TSRE GenX stands on the combined work of Piotr Gadecki (GokuMK), the original author of TSRE5, who created its core editor, file, texture, and rendering systems and shared that invaluable work with the community; Eric Olesen (eric-from-trainsim), whose TSRE 8.006 development is the direct source line for GenX; and Peter Gr\unb\uk Andersen, whose independent Qt6/CMake port provided important build, dependency, deployment, and DDS-loading references. Their work together made both the GenX improvements and the v0.9 modernization possible.\par
+HIGHLIGHTS\par
+\par
+- Native SNAP wire Commit, preview, bake/save and scoped deletion with compatible support variants and a separate SCOsnapPole runtime example.\par
+- F5 placement range, selected-object source and repeatable pole wobble; pickup track alignment and supported moving-table activation.\par
+- Safer generated-work save/discard, unreadable-world cleanup protection, shared-terrain texture staging and consistent wire registry limits.\par
+- Full-route F11 diagnostics, remembered review status and route-local track-section compatibility.\par
+- Explicit Snow textures, reliable shape reload, activity-preview guards, cleaner track controls and a single Consist Builder launch cue.\par
+- Clean MinGW and MSVC Release builds: 25/25 tests passed in each lane; package verification and individual manual coverage are separately recorded.\par
+\par
+WORK DETAIL\par
+\par
+## Major Updates Since v0.16\par
+\par
+### Auto Place poles and native wire runs\par
+\par
+- F5 separates Objects and Wires, shows the selected shape, and accepts normal\par
+  E-selection of placed scenery as the placement source. Finite Range, spacing,\par
+  track/road targets, offsets and repeatable pole wobble support controlled runs.\par
+- Commit connects valid numbered SNAP attachments on compatible placed supports.\par
+  Shape-family prefix matching supports variants; eligible spans can cross nearby\par
+  track-node boundaries. Attachment discovery is no longer limited to 16 wires.\par
+- Adjust sag, width and maximum span, inspect blue raw wires, then Save to bake\par
+  and retain placements. Bake All Wires, Preview Off and selected-run Delete Wires\par
+  provide explicit control; recorded baked pairs are not duplicated.\par
+- The separate SCOsnapPole example ZIP supplies a ready-to-place 16-attachment\par
+  pole, textures and object-list entry. The new SNAP Pole and Wire User Guide\par
+  covers installation, model conventions, placement, baking and troubleshooting.\par
+\par
+### Generated work and safer cleanup\par
+\par
+- Raw PolyVeg uses instance ownership and a blue tint; manually placed copies of\par
+  the same vegetation remain ordinary scenery. Save bakes active raw wires and\par
+  owned pending PolyVeg on loaded tiles.\par
+- Bake & Save, Discard and Cancel handle pending generated work explicitly.\par
+  Saved world references and shared assets remain protected during cleanup,\par
+  including after a partially successful save. Cleanup failure keeps the editor\par
+  open for retry.\par
+- Wire and PolyVeg cleanup reject malformed or incomplete world data before\par
+  deleting generated assets. Discard invalidates affected selection/clipboard\par
+  references before object deletion.\par
+- Wire registry reads and writes share an 8,192-span limit. Rejected Commit\par
+  preserves the accepted file and in-memory span state instead of creating a\par
+  registry that cannot be reopened.\par
+\par
+### Route diagnostics and track-section compatibility\par
+\par
+- F11 loads and scans world tiles with progress, cancellation and explicit\par
+  incomplete-coverage reporting. It identifies stacked orphan track, isolated\par
+  pieces and TrackDB joint/connectivity defects without automatic route repair.\par
+- Orphan length and joint-gap thresholds, Jump/Select navigation, stable compact\par
+  rows, wrapped details, remembered No Factor dismissal and Reset Status make\par
+  diagnostic review easier. Valid terminal nodes and zero-length dynamic-track\par
+  subsections no longer produce the same false positives.\par
+- Rejected world files remain visible as diagnostics while valid tiles are\par
+  scanned. Confirmed removal of a malformed-filename file retains a recovery\par
+  copy; ordinary tile-load failures are diagnostic-only.\par
+- Unused low-numbered route-local track sections are accepted and preserved on\par
+  Save. Actual occupied-ID conflicts use explicit conversion, inspection or\par
+  cancel choices; conversion refuses incomplete world loading.\par
+\par
+### Track, scenery and moving tables\par
+\par
+- Place Guard accepts intentional elevated scenery with Stick to All while\par
+  retaining terrain-snapped checks. It prevents X-flipping track already in\par
+  TrackDB/RoadDB when enabled, independently of AutoTDB placement settings.\par
+- Pickup properties add track alignment and quarter-turn rotation, including\par
+  upright orientation on grades and retained relative orientation while snapping.\par
+- Animated turntable activation supports eligible Global and route-local shapes.\par
+  Transfer activation handles supported linear models with matching track paths.\par
+- Track context menus are cleaner, grade editing returns focus to the viewport,\par
+  and the save-time indicator flashes after more than an hour without a save.\par
+\par
+### Terrain, textures and editor reliability\par
+\par
+- An explicit Snow texture set complements the existing seasonal and Night\par
+  choices. Shape reload refreshes resolved seasonal textures across detail levels.\par
+- Repeated terrain patches sharing one texture destination no longer collide in\par
+  save staging; conflicting payloads still stop publication. Unloaded-terrain\par
+  checks protect route rendering and map-overlay cleanup.\par
+- Existing activity preview initializes its path and consist independently of\par
+  debug logging. Additional guards cover preview refresh, path chains, traffic\par
+  selection and timetable handling; unsupported actions no longer look usable.\par
+- Consist Builder restores panel layouts without triggering an extra menu sound,\par
+  retaining the normal launcher press cue.\par
+\par
+### Verification\par
+\par
+Final operator-run clean MinGW and MSVC Release builds each passed all **25\par
+registered CTest tests** on 29 September 2026. See `TEST-MATRIX-v0.17.md` for\par
+executable hashes, scope and remaining manual acceptance. Automated passes do not\par
+claim complete Activity Builder, model-rendering or simulator coverage.\par
+\par
+PRIOR RELEASE HISTORY (historical statuses apply to their named versions)\par
+\par
+4 M TEXTURE HOTFIX FULL RELEASE: V0.16\par
+\par
+Critical terrain-texture correction\par
+\par
+- Replaced the renderer-only 4 m display compensation with texture matrices derived from the terrain descriptor's actual samples per patch. GenX and Open Rails now consume the same coordinate domain that GenX saves.\par
+- Applied resolution-aware transforms to default/reset, rotation, mirror, scale reporting, route-wide TERRTEX reset, and generated whole-tile maps for R=8, R=16, and R=32 while preserving the established R=16 constants bit-for-bit.\par
+- Conservatively normalizes clear non-R16 fixed-16 signatures in memory and marks affected tiles modified for route Save. Ambiguous custom-scaled records are not guessed.\par
+- Corrected 45-degree matrix scale cancellation by measuring component magnitude, preventing a zero scale report and later division by zero. The terrain-grid probe covers 0, 45, and 90 degrees.\par
+\par
+Editor refinements\par
+\par
+- Added a dedicated read-only properties panel for generated PolyVeg bake groups while preserving normal Static, raw PolyVeg, mixed-group, and ordinary-group controls.\par
+- Removed the attached-interactive refusal from track changes/deletions and retained position adjustment for surviving TrackDB/RoadDB items while deleting items on removed geometry.\par
+- Standardized grade precision, made E/Q/R/T/Y mode keys idempotent, labeled actual terrain mesh resolution, reordered F1 special categories with numeric track sorting, preserved parallel Path Editor vectors through neutral anchors, and added Shift+M terrain-shape/map-state control.\par
+\par
+Release disposition\par
+\par
+- The operator accepted the complete applicable v0.16 functional matrix. Final clean MinGW/MSVC Release builds each passed all 15 registered CTest tests with zero compiler errors.\par
+- Added LIDEX-style ownership, lineage, and GPL notices only to first-party editor and regression-probe files created from scratch. Piotr's headers, inherited and third-party source, vendored OpenAL headers, and generated files remain unchanged.\par
+- Prepared a full cumulative release page with complete installation, platform and backup limitations, checksum guidance, canonical acknowledgments, and license information while making the 4 m texture hotfix the primary release identity.\par
+- v0.16 is capped and immutable. Its tag, release assets, frozen public documents, and source snapshot are the rollback baseline for v0.17.\par
 \par
 ======================================================================================================\par
 \par
@@ -145,7 +257,7 @@ CAPPED PLATFORM RELEASE: V0.9\par
 - Completed controlled parity checks for application startup, no-edit save/reload, scenery placement/Undo/retention/deletion, Place Guard, Camera Terrain Lock, and Activity Path Editor create/save/reload/extension.\par
 - Stabilized native captions, dropdown anchoring, helper shutdown, rejected-Load feedback, Terrain Brush sizing, and Water Helper height steps.\par
 - Updated the codebase for current MSYS2/MinGW tooling and added independently testable terrain math.\par
-- Built v0.9 from the complementary work of Piotr Gadecki (GokuMK), Eric Olesen (eric-from-trainsim), and Peter Gr\unb\uk Andersen, acknowledged in detail below.\par
+- Built v0.9 from the complementary work of Piotr Gadecki (GokuMK), Eric Olesen (eric-from-trainsim), and Peter Gr\u248?nb\u230?k Andersen, acknowledged in detail below.\par
 \par
 ======================================================================================================\par
 \par
@@ -338,7 +450,9 @@ Piotr Gadecki, known as GokuMK, is the original author of TSRE5. He created the 
 \par
 Eric Olesen, known as eric-from-trainsim, carried TSRE forward through the TSRE 8.006 line that directly precedes GenX. His continuing editor, compatibility, imagery, rolling-stock, route-reporting, and dedicated 8.006n Qt6 work provided the primary source/API reference for preserving the behavior of the immediate GenX parent line.\par
 \par
-Peter Gr\unb\uk Andersen produced the independent Eric-line Qt6/CMake port used as the primary build-structure and dependency-management reference. His CMake, vcpkg, deployment, and DDS-loading work supplied proven solutions that were reviewed and narrowly adapted to the GenX source rather than copied wholesale.\par
+Peter Gr\u248?nb\u230?k Andersen produced the independent Eric-line Qt6/CMake port used as the primary build-structure and dependency-management reference. His CMake, vcpkg, deployment, and DDS-loading work supplied proven solutions that were reviewed and narrowly adapted to the GenX source rather than copied wholesale.\par
+\par
+Wayne Campbell and Pete Willard are thanked for their MSTS/ORST exporter code, which was used as a reference.\par
 \par
 TSRE GenX v0.9 exists because these three bodies of work complement one another: Piotr's original application and technical foundation, Eric's sustained TSRE 8.x development, and Peter's independent modern build and Qt6 migration work.\par
 \par

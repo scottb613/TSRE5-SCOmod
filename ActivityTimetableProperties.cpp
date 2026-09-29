@@ -20,6 +20,7 @@
 #include "ConLib.h"
 #include "Consist.h"
 #include "GuiFunct.h"
+#include <QSignalBlocker>
 
 ActivityTimetableProperties::ActivityTimetableProperties(QWidget* parent) : QWidget(parent) {
     GuiFunct::applyEditorPanelStyle(this);
@@ -89,10 +90,27 @@ ActivityTimetableProperties::~ActivityTimetableProperties() {
 }
 
 void ActivityTimetableProperties::showTimetable(ActivityServiceDefinition* s){
+    const QSignalBlocker blocker(lTimetable);
+    lTimetable.clearContents();
+    lTimetable.setRowCount(0);
+    eMainEng.clear();
+    eMaxSpeed.clear();
+    eAvgSpeed.clear();
+    eTime.setTime(QTime(0, 0));
     service = s;
+    if(service == NULL)
+        return;
     ActivityTimetable *t = service->trafficDefinition;
     if(t == NULL)
         return;
+    eTime.setTime(QTime::fromMSecsSinceStartOfDay(t->time * 1000));
+    if(t->arrivalTime.size() != t->platformStartID.size()
+            || t->departTime.size() != t->platformStartID.size()
+            || t->distanceDownPath.size() != t->platformStartID.size()
+            || s->efficiency.size() != t->platformStartID.size()){
+        eAvgSpeed.setText(tr("Incomplete timetable"));
+        return;
+    }
 
     QTableWidgetItem *newItem;
     QTime time;
@@ -100,9 +118,6 @@ void ActivityTimetableProperties::showTimetable(ActivityServiceDefinition* s){
     if(tdb == NULL)
         return;
     
-    lTimetable.blockSignals(true);
-    lTimetable.clearContents();
-    lTimetable.setRowCount(0);
     QString name = "";
     for(int i = 0; i < t->platformStartID.size(); i++){
         TRitem *trit = tdb->trackItems[t->platformStartID[i]];
@@ -123,18 +138,17 @@ void ActivityTimetableProperties::showTimetable(ActivityServiceDefinition* s){
         newItem = new QTableWidgetItem(QString::number(s->efficiency[i]));
         lTimetable.setItem(i, 3, newItem);
     }
-    lTimetable.blockSignals(false);
     
     Service *srv = ActLib::GetServiceByName(service->name);
     if(srv == NULL)
         return;
     Consist *con = ConLib::con[ConLib::addCon(Game::root+"/trains/consists/", srv->trainConfig+".con")];
-    if(con == NULL)
+    if(con == NULL || con->loaded != 1 || con->engItems.isEmpty())
         return;
     eMainEng.setText(con->engItems[0].ename);
     eMaxSpeed.setText(QString::number((int)(con->maxVelocity[0]*3.6)) + " km/h");
     eTime.setTime(QTime::fromMSecsSinceStartOfDay((t->time*1000)));
-    if(t->platformStartID.size() > 1)
+    if(t->platformStartID.size() > 1 && t->arrivalTime.last() > t->time)
         eAvgSpeed.setText(QString::number(3.6*(t->distanceDownPath[t->distanceDownPath.size()-1]/(t->arrivalTime[t->arrivalTime.size()-1]-t->time))) + " km/h");
     else
         eAvgSpeed.setText("NONE");
@@ -155,16 +169,26 @@ void ActivityTimetableProperties::lTimetableSelected(int row, int column){
     if(service == NULL)
         return;
     ActivityTimetable *t = service->trafficDefinition;
+    if(t == NULL || row < 0 || lTimetable.item(row, column) == NULL)
+        return;
     
     if(column < 1)
         return;
     QTime time;
     if(column == 1){
         time = QTime::fromString(lTimetable.item(row, column)->text(), "HH:mm:ss");
+        if(!time.isValid()){
+            showTimetable(service);
+            return;
+        }
         t->setArrival(row, time.msecsSinceStartOfDay()/1000);
     }
     if(column == 2){
         time = QTime::fromString(lTimetable.item(row, column)->text(), "HH:mm:ss");
+        if(!time.isValid()){
+            showTimetable(service);
+            return;
+        }
         t->setDepart(row, time.msecsSinceStartOfDay()/1000);
     }
     if(column == 3){

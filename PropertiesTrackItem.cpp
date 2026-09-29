@@ -12,6 +12,7 @@
 #include "TRitem.h"
 #include "Game.h"
 #include "GuiFunct.h"
+#include <cmath>
 
 PropertiesTrackItem::PropertiesTrackItem() {
     GuiFunct::applyEditorPanelStyle(this);
@@ -58,30 +59,39 @@ PropertiesTrackItem::~PropertiesTrackItem() {
 
 
 void PropertiesTrackItem::showObj(GameObj* obj){
-    if(obj == NULL){
-        infoLabel->setText("NULL");
+    itemObj = nullptr;
+    uid.clear();
+    posX.clear();
+    posZ.clear();
+    tX.clear();
+    tY.clear();
+    eItemType.clear();
+    eItemId.clear();
+    if(!support(obj)){
+        infoLabel->setText(tr("No Track Item selected"));
         return;
     }
-    itemObj = (TRitem*)obj;
-    
-    posX.setText(QString::number(itemObj->trItemRData[0]));
-    posZ.setText(QString::number(itemObj->trItemRData[2]));
-    tX.setText(QString::number(itemObj->trItemRData[3]));
-    tY.setText(QString::number(itemObj->trItemRData[4]));
-    
-    if(Game::debugOutput) qDebug() << "trItemRData " << itemObj->trItemRData[0] << " " << itemObj->trItemRData[2];
-    
-    infoLabel->setText("Object: TrackItem");
+    itemObj = static_cast<TRitem*>(obj);
+    infoLabel->setText(tr("Object: TrackItem"));
+    uid.setText(QString::number(itemObj->trItemId));
     eItemType.setText(itemObj->type);
     eItemId.setText(QString::number(itemObj->trItemId));
-    
+
+    // F11 deliberately exposes incomplete items. RData is optional; selecting
+    // an item with no map position must still display its identity safely.
+    const float* position = itemObj->trItemRData;
+    const auto coordinate = [this,position](int index) {
+        return position != nullptr && std::isfinite(position[index])
+            ? QString::number(position[index]) : tr("Unavailable");
+    };
+    posX.setText(coordinate(0));
+    posZ.setText(coordinate(2));
+    tX.setText(coordinate(3));
+    tY.setText(coordinate(4));
 }
 
 void PropertiesTrackItem::updateObj(GameObj* obj){
-    if(obj == NULL){
-        return;
-    }
-    itemObj = (TRitem*)obj;
+    showObj(obj);
 }
 
 bool PropertiesTrackItem::support(GameObj* obj){

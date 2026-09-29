@@ -26,6 +26,8 @@ as the primary build-structure and dependency-management reference. His CMake,
 vcpkg, deployment, and DDS-loading work supplied proven solutions that were
 reviewed and narrowly adapted to the GenX source rather than copied wholesale.
 
+Wayne Campbell and Pete Willard are thanked for their MSTS/ORST exporter code, which was used as a reference.
+
 TSRE GenX v0.9 exists because these three bodies of work complement one
 another: Piotr's original application and technical foundation, Eric's
 sustained TSRE 8.x development, and Peter's independent modern build and Qt6

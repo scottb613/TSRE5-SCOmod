@@ -125,7 +125,7 @@ QStringList Terrain::textureSubdirCandidatesForFlags(int flags, QString season) 
     QString key = season.trimmed().toLower();
     QStringList out;
 
-    if (key == "winter" || key == "autumnsnow" || key == "wintersnow" || key == "springsnow") {
+    if (key == "snow" || key == "winter" || key == "autumnsnow" || key == "wintersnow" || key == "springsnow") {
         if ((flags & Game::TextureFlags["snow"]) != 0 || (flags & Game::TextureFlags["snowtrack"]) != 0)
             out << "snow/";
     }
@@ -1049,6 +1049,9 @@ void Terrain::setTileBlob(){
 }
 
 void Terrain::setMapOverlayVisible(bool visible){
+    // Also called by the destructor after an unsuccessful terrain load.
+    if(!loaded)
+        return;
     if(!visible || lowTile){
         showBlob = false;
         terrainBlob.releaseTexture();

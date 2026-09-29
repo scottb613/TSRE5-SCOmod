@@ -13,6 +13,7 @@
 
 #include <QString>
 #include <QVector>
+#include <QMap>
 
 class GLUU;
 class Path;
@@ -66,6 +67,8 @@ private:
     int serial = -1;
     Path *pathPointer = NULL;
     Consist *conPointer = NULL;
+    // Keep preview objects stable while the viewport may hold a selection.
+    QMap<QString, Consist*> previewConsists;
 };
 
 #endif	/* SERVICE_H */

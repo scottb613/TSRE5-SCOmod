@@ -25,6 +25,7 @@
 #include "TRitem.h"
 #include "Service.h"
 #include "Path.h"
+#include <cmath>
 
 Activity::Activity() {
 }
@@ -469,16 +470,32 @@ bool ActivityServiceDefinition::isModified(){
 
 void ActivityServiceDefinition::calculateTimetable(){
     ActivityTimetable *t = trafficDefinition;
+    if(t == NULL || t->arrivalTime.size() != t->platformStartID.size()
+            || t->departTime.size() != t->platformStartID.size()
+            || t->distanceDownPath.size() != t->platformStartID.size()
+            || efficiency.size() != t->platformStartID.size())
+        return;
 
     Service *srv = ActLib::GetServiceByName(name);
     if(srv == NULL)
         return;
     Consist *con = ConLib::con[ConLib::addCon(Game::root+"/trains/consists/", srv->trainConfig+".con")];
-    if(con == NULL)
+    if(con == NULL || con->loaded != 1 || con->engItems.isEmpty())
         return;
     qDebug() << con->maxVelocity[0] << con->maxVelocity[1];
     float speed = con->maxVelocity[0];
     float acceleration = con->maxVelocity[1];
+    if(!std::isfinite(speed) || !std::isfinite(acceleration)
+            || speed <= 0 || acceleration <= 0)
+        return;
+    float previousDistance = 0;
+    for(int i = 0; i < t->platformStartID.size(); ++i){
+        if(!std::isfinite(efficiency[i]) || efficiency[i] <= 0
+                || !std::isfinite(t->distanceDownPath[i])
+                || t->distanceDownPath[i] < previousDistance)
+            return;
+        previousDistance = t->distanceDownPath[i];
+    }
     float tdist = 0, ldist = 0, performance = 1;
     unsigned int sTime = t->time;
     

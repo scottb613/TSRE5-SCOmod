@@ -31,6 +31,7 @@ uniform mat4 uMVMatrix;
 uniform mat4 uMSMatrix;
 uniform float enableNormals;
 uniform float selectionPass;
+uniform float rawPreview;
 uniform float colorBrightness;
 
 vec2 poissonDisk[16] = vec2[]( 
@@ -146,6 +147,9 @@ void main() {
             vec3 color = diffuseColor.xyz;
             color *= clamp(visibility, 0.0, 1.0);
             color += ambientColor.xyz;
+            // Keep foliage alpha and texture detail while marking generated raw instances.
+            if(rawPreview > 0.5 && selectionPass < 0.5)
+                fragColor.rgb = mix(fragColor.rgb, vec3(0.15, 0.45, 0.95), 0.25);
             fragColor.xyz *= color*colorBrightness;
             
             // calculate bloom fog

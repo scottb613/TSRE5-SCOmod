@@ -401,6 +401,7 @@ TerrainTools::TerrainTools(QString name)
     seasonType->addItem("Autumn");
     seasonType->addItem("Winter");
     seasonType->addItem("Night");
+    seasonType->addItem("Snow");
     QFrame *textureSetCard = new QFrame(this);
     GuiFunct::styleEditorPanelCard(textureSetCard);
     QVBoxLayout *textureSetLayout = new QVBoxLayout(textureSetCard);
@@ -1455,6 +1456,8 @@ void TerrainTools::setSeasonType(int val){
         requestedSeason = "Winter";
     else if(val == 4)
         requestedSeason = "Night";
+    else if(val == 5)
+        requestedSeason = "Snow";
 
     if (requestedSeason.compare(Game::season, Qt::CaseInsensitive) == 0)
         return;
@@ -1474,10 +1477,12 @@ void TerrainTools::setSeasonType(int val){
             previousIndex = 1;
         else if (previousSeason == "autumn" || previousSeason == "fall")
             previousIndex = 2;
-        else if (previousSeason == "winter" || previousSeason == "snow")
+        else if (previousSeason == "winter")
             previousIndex = 3;
         else if (previousSeason == "night")
             previousIndex = 4;
+        else if (previousSeason == "snow")
+            previousIndex = 5;
 
         QSignalBlocker blocker(seasonType);
         seasonType->setCurrentIndex(previousIndex);
@@ -1494,7 +1499,7 @@ void TerrainTools::setSeasonType(int val){
         Game::sunLightDirection[0] = -1;
         Game::sunLightDirection[1] = 2;
         Game::sunLightDirection[2] = 1;
-    } else if(val == 3) {
+    } else if(val == 3 || val == 5) {
         Game::season = requestedSeason;
         Game::sunLightDirection[0] = 2;
         Game::sunLightDirection[1] = 2;

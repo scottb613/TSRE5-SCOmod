@@ -433,4 +433,3 @@ keeps a saved path's filename stable during normal Edit operations.
 - `Save Path` succeeds.
 - The path reloads and fits correctly as a yellow saved path.
 - The path is tested in its intended Open Rails use.
-

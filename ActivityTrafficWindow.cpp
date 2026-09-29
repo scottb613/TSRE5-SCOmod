@@ -32,6 +32,8 @@ ActivityTrafficWindow::ActivityTrafficWindow(QWidget* parent) : QWidget(parent) 
     QObject::connect(bNew, SIGNAL(released()),
                       this, SLOT(bNewTrafficSelected()));
     QPushButton *bDelete = new QPushButton("Delete");
+    bDelete->setEnabled(false);
+    bDelete->setToolTip(tr("Deleting traffic files is not implemented."));
     //QObject::connect(bDelete, SIGNAL(released()),
     //                  this, SLOT(bDeleteTrafficSelected()));
     QStringList list;
@@ -96,7 +98,6 @@ void ActivityTrafficWindow::showTraffic(Route* r){
         else
             item->setCheckState(2, Qt::Unchecked);
         //}
-        item->setCheckState(2, Qt::Checked);
         item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
         items.append(item);
     }

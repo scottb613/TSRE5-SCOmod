@@ -30,6 +30,7 @@
 #include <QString>
 #include <QDebug>
 #include <QFile>
+#include <QSaveFile>
 #include <QStringConverter>
 #include <QTextStream>
 #include "GLUU.h"
@@ -750,10 +751,14 @@ WorldObj* Tile::placeObject(float* p, float* q, Ref::RefItem* itemData, float* t
     nowy->set("x", x);
     nowy->set("z", z);
     if(nowy->isTrackItem()){
-        q[0] = 0;
-        q[1] = 0;
-        q[2] = 0;
-        q[3] = 1;
+        if (nowy->type == "pickup") {
+            PickupTrackAlignment::upright(q, PickupTrackAlignment::heading(q));
+        } else {
+            q[0] = 0;
+            q[1] = 0;
+            q[2] = 0;
+            q[3] = 1;
+        }
         nowy->initPQ(p, q);
         nowy->initTrItems(tpos);
     } else {
@@ -817,17 +822,24 @@ void Tile::saveToStream(QTextStream &out){
 }
 
 /// EFO Saving out the World file W aka Tile
-void Tile::save() {
+bool Tile::save() {
+    for(const auto &entry : obiekty) {
+        const WorldObj *object = entry.second;
+        if(object && object->loaded && object->polyVegRaw) {
+            qWarning() << "Unbaked generated PolyVeg must be baked before saving a world tile";
+            return false;
+        }
+    }
     QString sh;
     QString path;
     path = Game::root + "/routes/" + Game::route + "/world/w" + getNameXY(x) + "" + getNameXY(-z) + ".w";
     path.replace("//", "/");
     // if(Game::debugOutput) qDebug() << "tile667: " << path;
-    QFile file(path);
+    QSaveFile file(path);
     
     if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
         qWarning() << "Unable to save world tile" << path << file.errorString();
-        return;
+        return false;
     }
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf16);
@@ -877,18 +889,21 @@ void Tile::save() {
     }
     out << ")";
  
-    // optional, as QFile destructor will already do it:
-    file.close(); 
-    saveWS();
+    out.flush();
+    if(out.status() != QTextStream::Ok || !file.commit()) {
+        qWarning() << "Unable to publish world tile" << path << file.errorString();
+        return false;
+    }
+    return saveWS();
 }
 
-void Tile::saveWS() {
+bool Tile::saveWS() {
     QString path;
     
     path = Game::root + "/routes/" + Game::route + "/world/w" + getNameXY(x) + "" + getNameXY(-z) + ".ws";
     path.replace("//", "/");
     // if(Game::debugOutput) qDebug() << "tile726: " << path;
-    QFile file(path);
+    QSaveFile file(path);
     
     int countWS = 0;
     for(int i = 0; i < this->jestObiektow; i++){
@@ -898,13 +913,12 @@ void Tile::saveWS() {
     // if(Game::debugOutput) qDebug() << "tile737: " << countWS;
     if(countWS == 0){
         // if(Game::debugOutput) qDebug() << "delete ws file if exist";
-        file.remove();
-        return;
+        return !QFile::exists(path) || QFile::remove(path);
     }
     
     if(!file.open(QIODevice::WriteOnly | QIODevice::Text)){
         qWarning() << "Unable to save world sound tile" << path << file.errorString();
-        return;
+        return false;
     }
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf16);
@@ -919,8 +933,12 @@ void Tile::saveWS() {
     }
     out << ")";
  
-    file.close(); 
-    
+    out.flush();
+    if(out.status() != QTextStream::Ok || !file.commit()) {
+        qWarning() << "Unable to publish world sound tile" << path << file.errorString();
+        return false;
+    }
+    return true;
 }
 
 bool Tile::isModified(){
@@ -929,7 +947,7 @@ bool Tile::isModified(){
     if(value == false)
         for (int i = 0; i < jestObiektow; i++) {
             if(obiekty[i] == NULL) continue;
-            if(obiekty[i]->modified)
+            if(obiekty[i]->modified || (obiekty[i]->loaded && obiekty[i]->polyVegRaw))
                 return true;
             }
     

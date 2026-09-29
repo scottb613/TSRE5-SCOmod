@@ -147,8 +147,7 @@ void ActivityServiceProperties::showService(Service *s){
     eStartSpeed.setText(QString::number(s->startingSpeed));
     eEndSpeed.setText(QString::number(s->endingSpeed));
     
-    if(cPath.currentIndex() >= 0)
-        setStationList();
+    setStationList();
     setUsedByList();
 }
 
@@ -196,7 +195,7 @@ void ActivityServiceProperties::cConFilesEnabled(int val){
     if(service == NULL)
         return;
     if(cConFiles.currentIndex() <= 0){
-        service->trainConfig = "";
+        service->setTrainConfig("");
         return;
     }
     service->setTrainConfig(cConFiles.currentData().toString().section(".", 0, -2));

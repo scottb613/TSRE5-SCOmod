@@ -19,6 +19,7 @@
 #include <QMatrix4x4>
 #include <QBasicTimer>
 #include <QJsonObject>
+#include <QSet>
 #include "ForestBakeManifest.h"
 #include "CameraFree.h"
 #include "CameraConsist.h"
@@ -27,8 +28,10 @@
 #include "Pointer3d.h"
 #include "Ref.h"
 #include <unordered_map>
+#include <map>
 
 class Tile;
+class TDB;
 class SFile;
 class Eng;
 class GLUU;
@@ -67,6 +70,7 @@ public:
     QJsonObject getSessionCameraState() const;
     void getUnsavedInfo(QVector<QString> &items);
     bool discardUnsavedPolyVegBakeFiles(QString &error);
+    bool discardUnsavedWireBakeFiles(QString &error);
     bool saveRoute();
 
 public slots:
@@ -163,6 +167,9 @@ public slots:
     void bakeVegetationPointerTile();
     void bakeAllVegetation();
     void deleteAllPolyVegBakes();
+    void deleteAllWireBakes();
+    void resetWirePreviewsOnExit();
+    bool hasPendingGeneratedWork() const;
     void setTerrainToObj();
     void smoothTerrainToObj();
     void setTerrainToNearestDbTile();
@@ -230,6 +237,7 @@ protected:
     void initializeGL() Q_DECL_OVERRIDE;
     void paintGL() Q_DECL_OVERRIDE;
     void paintGL2();
+    QMetaObject::Connection jumpChirpConnection;
     void renderShadowMaps();
     void handleSelection();
     void resizeGL(int width, int height) Q_DECL_OVERRIDE;
@@ -277,6 +285,32 @@ private:
     double polyVegRowSpacingMetres = 10.0;
     double polyVegRowDirectionDegrees = 0.0;
     OglObj *polyVegBakeMarker = nullptr;
+    OglObj *wirePreview = nullptr;
+    QJsonObject wireSpans;
+    QSet<QString> wireUnsavedBakes;
+    QSet<QString> polyVegUnsavedBakeShapes;
+    bool polyVegWorldSaveAttempted = false;
+    bool bakePendingVegetation();
+    void purgeDiscardedGeneratedObjects(const QSet<QString> &shapes, bool rawVegetation);
+    QString wireRegistryPath, wireSection;
+    bool wireRegistryReady = false;
+    bool wireBakeBusy = false;
+    bool wireCleanupAll = false;
+    bool cleanupWireAssets(bool afterSave = true);
+    bool loadWireRegistry();
+    bool persistWireRegistry();
+    bool bakeAllWires();
+    void refreshRawWires();
+    bool selectedWireNode(WorldObj *&pole, TDB *&db, int &node, bool &road);
+    void deleteSelectedWires();
+    bool applyWireDeletions();
+    void reconcileWireReservations();
+    // Stable placement references: Recent Items may retain these addresses.
+    std::map<QString, Ref::RefItem> autoPlacementPickedReferences;
+    int wirePreviewTileX = 0, wirePreviewTileZ = 0;
+    void rebuildWirePreview(float sagPercent, float widthMm, float maxSpan);
+    void updateWireAvailability();
+    void renderWirePreview();
     double polyVegRulerWidth = 100.0;
     bool polyVegRulerArea = false;
 

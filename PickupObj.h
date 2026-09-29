@@ -12,6 +12,7 @@
 #define	PICKUPOBJ_H
 
 #include "WorldObj.h"
+#include "PickupTrackAlignment.h"
 #include <QString>
 #include "FileBuffer.h"
 
@@ -33,6 +34,10 @@ public:
     ErrorMessage* checkForErrors();
     void deleteTrItems();
     void initTrItems(float* tpos);
+    bool trackHeading(float& heading) const;
+    void alignToTrack(float heading);
+    void rotateTrack90();
+    bool followTrackHeading(float heading);
     void load(int x, int y);
     void set(int sh, FileBuffer* data);
     void set(QString sh, QString val);
@@ -62,6 +67,7 @@ public:
     void render(GLUU* gluu, float lod, float posx, float posz, float* playerW, float* target, float fov, int selectionColor, int renderMode);
 
 private:
+    PickupTrackAlignment trackAlignment;
     float speedRange[2];
     int pickupType[2];
     int pickupAnimData1;

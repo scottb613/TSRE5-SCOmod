@@ -47,8 +47,8 @@ bool PolyVegObject::isBakeShape(const QString &fileName) {
     return expression.match(fileName).hasMatch();
 }
 
-QString PolyVegObject::labelForShape(const QString &fileName) {
+QString PolyVegObject::labelForShape(const QString &fileName, bool generatedRaw) {
     if(isBakeShape(fileName)) return QStringLiteral("PolyVeg - Bake");
-    if(isRawShape(fileName)) return QStringLiteral("PolyVeg - Raw");
+    if(generatedRaw) return QStringLiteral("PolyVeg - Raw");
     return QStringLiteral("Static Object");
 }

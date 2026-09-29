@@ -225,6 +225,10 @@ bool RouteSaveTransaction::addFile(const QString &destination,
     }
     for(const FileEntry &entry : files){
         if(entry.destination.compare(cleanDestination, Qt::CaseInsensitive) == 0){
+            // Several terrain patches can share one ACE destination. Stage
+            // identical bytes once, but never silently choose between edits.
+            if(entry.data == data)
+                return true;
             if(error)
                 *error = QString("Duplicate save destination: %1").arg(cleanDestination);
             return false;

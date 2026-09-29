@@ -15,6 +15,7 @@ class RouteSaveTransaction {
 public:
     RouteSaveTransaction(const QString &routeRoot, const QString &backupRoot);
 
+    // Repeated destinations are accepted only when their bytes are identical.
     bool addFile(const QString &destination, const QByteArray &data, QString *error = NULL);
     bool commit(QString *error = NULL);
 

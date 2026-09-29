@@ -12,6 +12,7 @@
 #define	TSECTIONDAT_H
 #include <unordered_map>
 #include <QHash>
+#include <set>
 #include "TSection.h"
 #include "TrackShape.h"
 
@@ -25,7 +26,7 @@ public:
     QHash<unsigned int, unsigned int> autoFixedSectionIds;
     QHash<unsigned int, unsigned int> autoFixedShapeIds;
     
-    bool loaded;
+    bool loaded = false;
     bool dataOutOfSync = false;
     bool updateSectionDataRequired = false;
     
@@ -47,6 +48,10 @@ public:
     void mergeTSection(TSectionDAT *second, QHash<unsigned int,unsigned int>& fixedSectionIds, QHash<unsigned int,unsigned int>& fixedShapeIds);
 private:
     bool loadGlobal();
+    std::set<int> localSectionIds;
+    std::set<int> localShapeIds;
+    std::set<int> globalSectionIds;
+    std::set<int> globalShapeIds;
     
 };
 

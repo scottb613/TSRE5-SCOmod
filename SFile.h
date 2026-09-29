@@ -20,6 +20,8 @@
 #include <QString>
 #include <QVector>
 #include <QSet>
+#include <QMap>
+#include <QVector3D>
 
 class FileBuffer;
 class ShapeTextureInfo;
@@ -218,6 +220,8 @@ public:
     bool getBoxPoints(QVector<float> &points);
     void getFloorBorderLinePoints(float *&punkty);
     bool isSnapable();
+    bool attachmentOrigin(const QString &name, float *origin);
+    QMap<int, QVector3D> wireAttachmentOrigins();
     void addSnapablePoints(QVector<float> &out);
     void reload();
     void refreshSeasonTextures();

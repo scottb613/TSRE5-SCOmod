@@ -13,6 +13,7 @@
 #include <QHash>
 #include <QString>
 #include <QStringList>
+#include <QSet>
 
 struct ForestBakeManifestEntry {
     QString id;
@@ -53,9 +54,13 @@ class ForestBakeManifest {
 public:
     static bool upsert(const QString &path, const ForestBakeManifestEntry &entry,
                        QString &error);
+    // Ordinary Save passes discoverUntracked=false: loose matching names in
+    // a shared shape library are not proof of this route's PolyVeg ownership.
     static bool pruneUnreferenced(const QString &routePath,
                                   ForestBakePruneResult &result,
-                                  QString &error);
+                                  QString &error,
+                                  const QSet<QString> *shapeScope = nullptr,
+                                  bool discoverUntracked = true);
 };
 
 #endif

@@ -99,6 +99,7 @@ void GLUU::initShader() {
 
         currentShader->skyColor = currentShader->uniformLocation("skyColor");
 
+        currentShader->shaderRawPreview = currentShader->uniformLocation("rawPreview");
         currentShader->shaderAlpha = currentShader->uniformLocation("isAlpha");
         currentShader->shaderAlphaTest = currentShader->uniformLocation("alphaTest");
         currentShader->shaderTextureEnabled = currentShader->uniformLocation("textureEnabled");
@@ -144,6 +145,7 @@ void GLUU::mvPopMatrix() {
 }
 
 void GLUU::setMatrixUniforms() {
+    currentShader->setUniformValue(currentShader->shaderRawPreview, 0.0f);
     currentShader->setUniformValue(currentShader->pMatrixUniform, *reinterpret_cast<float(*)[4][4]> (pMatrix));
     currentShader->setUniformValue(currentShader->fMatrixUniform, *reinterpret_cast<float(*)[4][4]> (fMatrix));
     currentShader->setUniformValue(currentShader->pShadowMatrixUniform, *reinterpret_cast<float(*)[4][4]> (pShadowMatrix));

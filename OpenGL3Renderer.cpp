@@ -55,8 +55,10 @@ void OpenGL3Renderer::pushItemsVNTA(QVector<RenderItem*>& r, float* mvmatrix){
         if(itemsVNTA[r[i]->texAddr][(unsigned long long int)r[i]] == NULL){
             itemsVNTA[r[i]->texAddr][(unsigned long long int)r[i]] = r[i];
             r[i]->mvMatrixList.clear();
+            r[i]->rawPreviewList.clear();
         }
         r[i]->mvMatrixList.push_back(mvmatrix);
+        r[i]->rawPreviewList.push_back(rawPreview);
         /*RenderItem *rr = new RenderItem();
         rr->VBO = r[i]->VBO;
         rr->VAO = r[i]->VAO;
@@ -116,6 +118,8 @@ void OpenGL3Renderer::renderFrame(){
             //gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]>(it2.value()->mvMatrix));
 
             for(int i = 0; i < it2.value()->mvMatrixList.size(); i++){
+                gluu->currentShader->setUniformValue(gluu->currentShader->shaderRawPreview,
+                    it2.value()->rawPreviewList.value(i) ? 1.0f : 0.0f);
                 gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]>(it2.value()->mvMatrixList[i]));
                 f->glDrawArrays(GL_TRIANGLES, it2.value()->vertOffset, it2.value()->vertCount);
             }
@@ -133,6 +137,7 @@ void OpenGL3Renderer::renderFrame(){
         itemsVNTA[it.key()].clear();
     }
     
+    gluu->currentShader->setUniformValue(gluu->currentShader->shaderRawPreview, 0.0f);
     itemsVNTA.clear();
     mvMatrixs.clear();
     

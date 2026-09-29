@@ -504,6 +504,8 @@ void ActivityEvent::load(FileBuffer* data) {
         if (sh == "ortsactsoundfile"){
             ortsActSoundFileDeprecated.push_back(ParserX::GetStringInside(data));
             ortsActSoundFileDeprecated.push_back(ParserX::GetStringInside(data));
+            ParserX::SkipToken(data);
+            continue;
         }
         if (sh == "ortsweatherchange"){
             ortsWeatherChangeDeprecated = new OrtsWeatherChange();

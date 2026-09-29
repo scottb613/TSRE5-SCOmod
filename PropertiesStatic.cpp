@@ -314,7 +314,7 @@ void PropertiesStatic::showObj(GameObj* obj){
     }
     worldObj = (WorldObj*)obj;
     
-    this->infoLabel->setText("Object: " + PolyVegObject::labelForShape(worldObj->fileName));
+    this->infoLabel->setText("Object: " + PolyVegObject::labelForShape(worldObj->fileName, worldObj->polyVegRaw));
     this->fileName.setText(worldObj->fileName);
     
     this->uid.setText(QString::number(worldObj->UiD, 10));

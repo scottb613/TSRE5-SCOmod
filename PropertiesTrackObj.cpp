@@ -448,6 +448,10 @@ public:
             "The deletion remains Undo-friendly until the route is saved.");
         GuiFunct::styleEditorActionButton(deletePolyVegBakes);
         cleanupLayout->addWidget(deletePolyVegBakes);
+        QPushButton *deleteWireBakes = new QPushButton("Delete All Wire Bakes");
+        deleteWireBakes->setToolTip("Deletes all tracked AP wire bakes across the route and turns off every wire preview.");
+        GuiFunct::styleEditorActionButton(deleteWireBakes);
+        cleanupLayout->addWidget(deleteWireBakes);
         layout->addWidget(cleanupCard);
 
         QObject::connect(fixJNodePosn, &QPushButton::clicked, owner, [this](){
@@ -493,6 +497,11 @@ public:
         QObject::connect(deletePolyVegBakes, &QPushButton::clicked, owner, [this](){
             this->owner->userButtonPressed();
             emit this->owner->deleteAllPolyVegBakesRequested();
+            this->owner->requestMainFocus();
+        });
+        QObject::connect(deleteWireBakes, &QPushButton::clicked, owner, [this](){
+            this->owner->userButtonPressed();
+            emit this->owner->deleteAllWireBakesRequested();
             this->owner->requestMainFocus();
         });
         QObject::connect(fixSignalFlags, &QPushButton::clicked, owner, [this](){
@@ -791,6 +800,8 @@ PropertiesTrackObj::PropertiesTrackObj(){
     elevValueStack.addWidget(&elevProp);
     elevValueStack.addWidget(&elev1inXm);
     elevValueStack.addWidget(&elevProg);
+    for(QLineEdit *field : {&elevProm, &elevProp, &elev1inXm, &elevProg})
+        field->installEventFilter(this);
     elevValueStack.setContentsMargins(0,0,0,0);
     vlist->addRow(&elevValueLabel, &elevValueStack);
     elevStep.setToolTip("General object movement/rotation adjustment sensitivity; this is not a grade-transition increment.");
@@ -950,6 +961,32 @@ void PropertiesTrackObj::showElevBox(QString val){
     else
         elevValueLabel.setText("°");
     setStepValue(Game::DefaultMoveStep);
+}
+
+bool PropertiesTrackObj::eventFilter(QObject *watched, QEvent *event){
+    if(watched == &elevProm || watched == &elevProp
+            || watched == &elev1inXm || watched == &elevProg){
+        bool restoreFocus = false;
+        if(event->type() == QEvent::FocusOut){
+            const auto reason = static_cast<QFocusEvent *>(event)->reason();
+            restoreFocus = reason != Qt::ActiveWindowFocusReason
+                    && reason != Qt::PopupFocusReason;
+        } else if(event->type() == QEvent::KeyPress){
+            const int key = static_cast<QKeyEvent *>(event)->key();
+            restoreFocus = key == Qt::Key_Return || key == Qt::Key_Enter;
+        }
+        if(restoreFocus){
+            // Let the field and tab/click destination finish handling the event
+            // before returning keyboard control to the renderer.
+            QTimer::singleShot(0, this, [this](){
+                if(QApplication::applicationState() == Qt::ApplicationActive
+                        && !QApplication::activeModalWidget()
+                        && !QApplication::activePopupWidget())
+                    emit requestMainFocus();
+            });
+        }
+    }
+    return PropertiesAbstract::eventFilter(watched, event);
 }
 
 PropertiesTrackObj::~PropertiesTrackObj() {

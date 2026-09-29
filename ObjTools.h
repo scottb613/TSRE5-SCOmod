@@ -94,6 +94,9 @@ private:
     std::deque<Ref::RefItem*> lastItemsPtr;
     QVector<Ref::RefItem*> currentItemList;
     QCheckBox stickToTDB;
+    QCheckBox *autoStickTerrain = nullptr;
+    QComboBox *manualPlacementTarget = nullptr;
+    QDoubleSpinBox *autoPlacementRange = nullptr;
     QCheckBox stickToRDB;   
     QLineEdit autoPlacementLength;
     QLineEdit searchBox;
@@ -113,6 +116,8 @@ private:
     QComboBox autoPlacementRotType;
     QComboBox autoPlacementTarget;
     AutoPlacementWindow *autoPlacementWindow = NULL;
+    QFrame *wireSettingsCard = nullptr;
+    QWidget *wireSection = nullptr;
 
     void resetCategoryCombos(QComboBox* keepActive);
     void populateObjectListForKey(QString key, QString searchText = QString());

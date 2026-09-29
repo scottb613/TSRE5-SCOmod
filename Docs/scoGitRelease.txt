@@ -1,85 +1,95 @@
-# TSRE GenX v0.16 — 4 m Terrain Texture Hotfix and Full Release
+# TSRE GenX v0.17 — SNAP Wires, Route Diagnostics and Save Reliability
 
 TSRE GenX is a 64-bit Windows route editor for Microsoft Train Simulator and
 Open Rails routes. It combines the established TSRE editor with Qt 6/CMake,
-expanded terrain and map workflows, Dynamic Track, PolyVeg, route diagnostics,
-and a consistent GenX interface.
+terrain and map tools, Dynamic Track, PolyVeg, Activity Builder and Consist Builder.
 
-> **Current release: v0.16.** This is a full Windows release led by the
-> critical 4 m terrain-texture persistence hotfix. The published v0.15 release
-> remains immutable as the prior-release baseline.
+> **Current version: v0.17.** A full Windows release with native SNAP wires, expanded route diagnostics and save reliability improvements. v0.16 remains the immutable prior-release baseline.
 
-## Major Updates Since v0.15
+## Major Updates Since v0.16
 
-### Critical 4 m terrain-texture hotfix
+### Auto Place poles and native wire runs
 
-- Corrected the coordinate domain stored in terrain texture matrices for
-  native 512-sample/4 m terrain. GenX and Open Rails now consume the same
-  resolution-aware transforms that GenX saves, eliminating the former
-  renderer-only compensation.
-- Applied the correct domain to default/reset transforms, arbitrary rotation,
-  mirror operations, scale reporting, route-wide TERRTEX reset, and generated
-  whole-tile map textures for R=8, R=16, and R=32 terrain patches.
-- Preserved established 256-sample/8 m R=16 constants bit-for-bit.
-- Added conservative normalization for clear non-R16 fixed-16 signatures from
-  the former workaround. Affected terrain is marked modified so route Save can
-  persist the correction; ambiguous custom-scaled records are not guessed.
-- Corrected rotation-independent texture scale measurement so 45-degree
-  matrices retain their true scale and cannot feed a zero divisor to a later
-  scale edit.
-- Expanded the registered terrain-grid probe across R=8/16/32 transforms,
-  whole-tile map scale, legacy conversion, nonconversion safeguards, and
-  rotation-independent scale measurement.
+- F5 separates Objects and Wires, shows the selected shape, and accepts normal
+  E-selection of placed scenery as the placement source. Finite Range, spacing,
+  track/road targets, offsets and repeatable pole wobble support controlled runs.
+- Commit connects valid numbered SNAP attachments on compatible placed supports.
+  Shape-family prefix matching supports variants; eligible spans can cross nearby
+  track-node boundaries. Attachment discovery is no longer limited to 16 wires.
+- Adjust sag, width and maximum span, inspect blue raw wires, then Save to bake
+  and retain placements. Bake All Wires, Preview Off and selected-run Delete Wires
+  provide explicit control; recorded baked pairs are not duplicated.
+- The separate SCOsnapPole example ZIP supplies a ready-to-place 16-attachment
+  pole, textures and object-list entry. The new SNAP Pole and Wire User Guide
+  covers installation, model conventions, placement, baking and troubleshooting.
 
-### Terrain and editor identification
+### Generated work and safer cleanup
 
-- Added a read-only `Mesh Res` field to Terrain Object Properties. Supported
-  detailed grids are identified as `8m Normal` or `4m High Def`; distant and
-  nonstandard layouts report their actual spacing without being mislabeled.
-- Added Shift+M as the keyboard equivalent of View > Hide Terrain Shape. When
-  terrain is hidden, a visible saved-route map is temporarily hidden and then
-  restored with the terrain; menu state and F12 key help remain synchronized.
+- Raw PolyVeg uses instance ownership and a blue tint; manually placed copies of
+  the same vegetation remain ordinary scenery. Save bakes active raw wires and
+  owned pending PolyVeg on loaded tiles.
+- Bake & Save, Discard and Cancel handle pending generated work explicitly.
+  Saved world references and shared assets remain protected during cleanup,
+  including after a partially successful save. Cleanup failure keeps the editor
+  open for retry.
+- Wire and PolyVeg cleanup reject malformed or incomplete world data before
+  deleting generated assets. Discard invalidates affected selection/clipboard
+  references before object deletion.
+- Wire registry reads and writes share an 8,192-span limit. Rejected Commit
+  preserves the accepted file and in-memory span state instead of creating a
+  registry that cannot be reopened.
 
-### Track, grade, and object workflow
+### Route diagnostics and track-section compatibility
 
-- Track changes and deletions can proceed while interactives remain attached.
-  Surviving TrackDB/RoadDB item positions are adjusted and items on removed
-  geometry are deleted with the section instead of blocking the edit.
-- Standardized grade displays and inputs: two decimals for percent, one for per
-  mille, two for 1-in-X, and three for degrees. Dynamic Track, Track
-  Properties, Ruler, Selection Info, Grade Helper, and Lock Grade use the same
-  presentation without changing stored physical-grade formulas.
-- Plain E/Q/R/T/Y now activate Select, Place, Rotate, Translate, and Size
-  idempotently. Repeating a mode key no longer turns that mode off; special
-  Water and PolyVeg ruler ownership remains protected.
-- Reordered the F1 Ref selector so FULL DATABASE, NEXGEN TRACK, and TSRE TOOLS
-  appear first, and added numeric-aware track-category ordering so A10 follows
-  A9.
+- F11 loads and scans world tiles with progress, cancellation and explicit
+  incomplete-coverage reporting. It identifies stacked orphan track, isolated
+  pieces and TrackDB joint/connectivity defects without automatic route repair.
+- Orphan length and joint-gap thresholds, Jump/Select navigation, stable compact
+  rows, wrapped details, remembered No Factor dismissal and Reset Status make
+  diagnostic review easier. Valid terminal nodes and zero-length dynamic-track
+  subsections no longer produce the same false positives.
+- Rejected world files remain visible as diagnostics while valid tiles are
+  scanned. Confirmed removal of a malformed-filename file retains a recovery
+  copy; ordinary tile-load failures are diagnostic-only.
+- Unused low-numbered route-local track sections are accepted and preserved on
+  Save. Actual occupied-ID conflicts use explicit conversion, inspection or
+  cancel choices; conversion refuses incomplete world loading.
 
-### PolyVeg and Path Editor refinements
+### Track, scenery and moving tables
 
-- Added a dedicated read-only properties panel for generated PolyVeg bake
-  groups. It shows managed-object guidance, block and shape counts, tile
-  coordinates, and the shared HACKS action without exposing movement,
-  rotation, flags, detail, or random-transform controls.
-- Corrected Path Editor serialization when consecutive junctions have multiple
-  direct vector connections. Neutral vector anchors preserve the exact main or
-  passing route selected in the editor while older PAT files retain their
-  established ordered-pin fallback.
+- Place Guard accepts intentional elevated scenery with Stick to All while
+  retaining terrain-snapped checks. It prevents X-flipping track already in
+  TrackDB/RoadDB when enabled, independently of AutoTDB placement settings.
+- Pickup properties add track alignment and quarter-turn rotation, including
+  upright orientation on grades and retained relative orientation while snapping.
+- Animated turntable activation supports eligible Global and route-local shapes.
+  Transfer activation handles supported linear models with matching track paths.
+- Track context menus are cleaner, grade editing returns focus to the viewport,
+  and the save-time indicator flashes after more than an hour without a save.
 
-### Source stewardship
+### Terrain, textures and editor reliability
 
-- Added consistent TSRE GenX ownership, lineage, and GPL notices only to
-  first-party editor and regression-probe files created from scratch that
-  previously lacked a complete header. Piotr's headers, inherited source, all
-  third-party code, vendored OpenAL headers, and generated files remain
-  unchanged.
-- Preserved the complete v0.15 tag, release assets, frozen public documents,
-  and source snapshot as an immutable prior release.
+- An explicit Snow texture set complements the existing seasonal and Night
+  choices. Shape reload refreshes resolved seasonal textures across detail levels.
+- Repeated terrain patches sharing one texture destination no longer collide in
+  save staging; conflicting payloads still stop publication. Unloaded-terrain
+  checks protect route rendering and map-overlay cleanup.
+- Existing activity preview initializes its path and consist independently of
+  debug logging. Additional guards cover preview refresh, path chains, traffic
+  selection and timetable handling; unsupported actions no longer look usable.
+- Consist Builder restores panel layouts without triggering an extra menu sound,
+  retaining the normal launcher press cue.
+
+### Verification
+
+Final operator-run clean MinGW and MSVC Release builds each passed all **25
+registered CTest tests** on 29 September 2026. See `TEST-MATRIX-v0.17.md` for
+executable hashes, scope and remaining manual acceptance. Automated passes do not
+claim complete Activity Builder, model-rendering or simulator coverage.
 
 ## Installation
 
-1. Download **`tsre-scomod-v0.16.zip`** and its `.sha256` companion from this
+1. Download **`tsre-scomod-v0.17.zip`** and its `.sha256` companion from this
    release. GitHub's automatic “Source code” archives are source only and are
    not the runnable editor package.
 2. Verify the ZIP against the published SHA-256 companion.
@@ -97,6 +107,13 @@ Back up a route before major terrain conforming, 4 m terrain work, water
 processing, route-wide saves, or PolyVeg baking. Test high-risk workflows on a
 copy before committing them to a production route.
 
+### Optional SNAP-pole example
+
+Download `SCOsnapPole-TSRE-example-v0.17.zip` and its `.sha256` companion separately.
+Merge its SHAPES, TEXTURES and ADDONS folders into a backed-up route, then follow
+`SNAP-POLE-WIRE-USER-GUIDE.md`. This model ZIP is not the application installer.
+Blender is not required. Its runtime/simulator acceptance is recorded separately.
+
 ## Requirements and Limitations
 
 - 64-bit Windows 10 version 1809 or later, or Windows 11.
@@ -109,27 +126,24 @@ copy before committing them to a production route.
   simulator behavior after significant terrain, track, water, path, or
   vegetation changes.
 
-## Verification
-
-The operator accepted the complete v0.16 functional test matrix. Final clean
-MinGW and MSVC Release builds each passed all 15 registered CTest tests. The
-MinGW release executable SHA-256 is
-`3CDA231C4FCE074D26EAE8264BE53F28D21F2E5195D53F9F4820B4C1FAC62BBE`; the
-independent MSVC verification executable SHA-256 is
-`AE3BDA8ED28ACE6EAC7B9F207121B2CA61F6B9DA91D31642EF64A5748DB68204`.
-Complete timings and gate evidence are frozen in `TEST-MATRIX-v0.16.md`.
+- Wire discovery is intended for connected pole runs, not arbitrary branching or
+  ambiguous parallel networks. The route registry is limited to 8,192 spans.
+- Individual save files use atomic publication; the whole route is not one
+  transaction. Keep complete backups before conversion and major edits.
+- Activity/traffic extension preservation is not exhaustive; inspect simulator
+  compatibility before replacing important activity files.
 
 ## Source and Documentation
 
-The `v0.16` tag will identify the exact reviewed source for this release. Use
-the release ZIP for the runnable Windows editor and GitHub's source archives or
-the tagged repository tree for source. Verify the binary ZIP with the published
-SHA-256 companion; the package and frozen public-document manifests provide
-file-level verification inside the release.
+The `v0.17` tag identifies the reviewed source accompanying this release.
+Use `tsre-scomod-v0.17.zip` for the runnable editor; GitHub source archives do not
+contain the complete Windows runtime. Verify each download against its matching
+SHA-256 companion. Executable hashes in the test matrix are not ZIP checksums.
 
-The distribution includes the versioned release notes and test matrix plus the
-complete terrain, TERRTEX, PolyVeg, Water Tools, Dynamic Track, Grade Helper,
-and Path Editor/Full Map user guides.
+The public document set includes release notes, the test matrix, the SNAP Pole
+and Wire guide, and the terrain, TERRTEX, seasonal painting, PolyVeg, Water Tools,
+Dynamic Track, Grade Helper and Path Editor/Full Map guides. Its document manifest
+covers the versioned copies. Verify each downloaded ZIP against its own checksum.
 
 ## Acknowledgments
 
@@ -143,6 +157,8 @@ reference.
 
 Peter Gronbaek Andersen produced an independent Qt 6/CMake port whose build,
 dependency, deployment, and DDS work supplied important reviewed references.
+
+Wayne Campbell and Pete Willard are thanked for their MSTS/ORST exporter code, which was used as a reference.
 
 ## License
 

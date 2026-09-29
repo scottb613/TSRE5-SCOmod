@@ -9,6 +9,7 @@
  */
 
 #include "TSectionDAT.h"
+#include "RouteSectionPolicy.h"
 #include "Game.h"
 #include "ParserX.h"
 #include "FileBuffer.h"
@@ -20,10 +21,12 @@
 TSectionDAT::TSectionDAT(bool autoFix, bool loadRouteNow) {
 
     //// EFO
-        loadGlobal();
+        loaded = loadGlobal();
     
-    if(loadRouteNow)
-        loadRoute(autoFix);
+    if(loadRouteNow){
+        const bool routeLoaded = loadRoute(autoFix);
+        if(autoFix) loaded = loaded && routeLoaded;
+    }
 }
 
 TSectionDAT::TSectionDAT(const TSectionDAT& orig) {
@@ -202,6 +205,16 @@ bool TSectionDAT::loadGlobal() {
     if(Game::debugOutput) qDebug() << "TsectionDAT: " << tsectionMaxIdx << " " << tsectionShapes;
     routeMaxIdx = tsectionMaxIdx;
     routeShapes = tsectionShapes;
+    for(const auto &entry : sekcja){
+        if(entry.second == nullptr) continue;
+        globalSectionIds.insert(entry.first);
+        routeMaxIdx = std::max(routeMaxIdx, entry.first + 1);
+    }
+    for(const auto &entry : shape){
+        if(entry.second == nullptr) continue;
+        globalShapeIds.insert(entry.first);
+        routeShapes = std::max(routeShapes, entry.first + 1);
+    }
     return true;
 }
 
@@ -209,7 +222,7 @@ void TSectionDAT::mergeTSection(TSectionDAT* second, QHash<unsigned int,unsigned
     if (second->routeMaxIdx < 3) return;
     if(Game::debugOutput) qDebug() <<"1";
     int routeCount = routeMaxIdx;
-    for (int i = second->tsectionMaxIdx; i < second->routeMaxIdx; i++) {
+    for (int i : RouteSectionPolicy::savedIds(second->sekcja, second->localSectionIds, second->tsectionMaxIdx, second->globalSectionIds)) {
         if (second->sekcja[i] == NULL) 
             continue;
         unsigned int foundIdx = -1;
@@ -230,7 +243,7 @@ void TSectionDAT::mergeTSection(TSectionDAT* second, QHash<unsigned int,unsigned
         }
     }
     if(Game::debugOutput) qDebug() <<"2";
-    for (int i = second->tsectionShapes; i < second->routeShapes; i++) {
+    for (int i : RouteSectionPolicy::savedIds(second->shape, second->localShapeIds, second->tsectionShapes, second->globalShapeIds)) {
         if (second->shape[i] == NULL)
             continue;
         if (second->shape[i]->numpaths != 1)
@@ -271,8 +284,10 @@ bool TSectionDAT::saveRoute() {
 }
 
 void TSectionDAT::saveRouteToStream(QTextStream &out){
-    out << "TrackSections ( " << this->routeMaxIdx - tsectionMaxIdx << "\n";
-    for (int i = tsectionMaxIdx; i < this->routeMaxIdx; i++) {
+    const auto sections = RouteSectionPolicy::savedIds(sekcja, localSectionIds, tsectionMaxIdx, globalSectionIds);
+    const auto shapes = RouteSectionPolicy::savedIds(shape, localShapeIds, tsectionShapes, globalShapeIds);
+    out << "TrackSections ( " << sections.size() << "\n";
+    for (int i : sections) {
         if (this->sekcja[i] != NULL) {
             out << "	TrackSection ( \n";
             if (sekcja[i]->type == 0)
@@ -284,8 +299,8 @@ void TSectionDAT::saveRouteToStream(QTextStream &out){
     }
     out << ")\n";
     //return true;
-    out << "SectionIdx ( " << this->routeShapes - tsectionShapes << "\n";
-    for (int i = tsectionShapes; i<this->routeShapes; i++) {
+    out << "SectionIdx ( " << shapes.size() << "\n";
+    for (int i : shapes) {
         if (this->shape[i] != NULL) {
             out << "	TrackPath ( " << i << " " << shape[i]->path[0].n;
             for (int j = 0; j < shape[i]->path[0].n; j++)
@@ -324,7 +339,33 @@ bool TSectionDAT::loadRoute(bool autoFix) {
 void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
     int index = 0;
     QString sh;
-    int newIdx = 0, newSdx = 0;
+    int newIdx = tsectionMaxIdx, newSdx = tsectionShapes;
+    if(autoFix){
+        // Reserve every existing ID, including route IDs appearing later in
+        // the file, before assigning any replacement IDs.
+        for(const auto &entry : sekcja)
+            if(entry.second != nullptr) newIdx = std::max(newIdx, entry.first + 1);
+        for(const auto &entry : shape)
+            if(entry.second != nullptr) newSdx = std::max(newSdx, entry.first + 1);
+        const int startOffset = data->off;
+        QString block;
+        while(!(block = ParserX::NextTokenInside(data).toLower()).isEmpty()){
+            if(block == "tracksections" || block == "sectionidx"){
+                QString token;
+                while(!(token = ParserX::NextTokenInside(data).toLower()).isEmpty()){
+                    if(block == "tracksections" && token == "tracksection"){
+                        ParserX::GetNumber(data);
+                        newIdx = std::max(newIdx, int(ParserX::GetNumber(data)) + 1);
+                    } else if(block == "sectionidx" && token == "trackpath"){
+                        newSdx = std::max(newSdx, int(ParserX::GetNumber(data)) + 1);
+                    }
+                    ParserX::SkipToken(data);
+                }
+            }
+            ParserX::SkipToken(data);
+        }
+        data->off = startOffset;
+    }
     int prevIdx = -1;
     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
         //qDebug() << sh;
@@ -335,10 +376,10 @@ void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
                     int typ = (int) ParserX::GetNumber(data);
 
                     index = (int) ParserX::GetNumber(data);
-                    if (index < this->tsectionMaxIdx){
+                    if (RouteSectionPolicy::occupied(sekcja, index)){
                         if(autoFix){
-                            autoFixedSectionIds[index] = this->tsectionMaxIdx + newIdx;
-                            index = this->tsectionMaxIdx + newIdx;
+                            autoFixedSectionIds[index] = newIdx;
+                            index = newIdx;
                             newIdx++;
                         } else {
                             dataOutOfSync = true;
@@ -347,6 +388,7 @@ void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
                                         
                     if (index > this->routeMaxIdx)
                         this->routeMaxIdx = index;                    
+                    localSectionIds.insert(index);
                     sekcja[index] = new TSection(index);
                     sekcja[index]->type = typ;
                     if (typ == 0) {
@@ -377,10 +419,10 @@ void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
                 if (sh.toLower() == "trackpath") {
                     //   qDebug() << (int) ParserX::GetNumber(bufor);
                     index = (int) ParserX::GetNumber(data);
-                    if (index < this->tsectionShapes){
+                    if (RouteSectionPolicy::occupied(shape, index)){
                         if(autoFix){
-                            autoFixedShapeIds[index] = this->tsectionShapes + newSdx;
-                            index = this->tsectionShapes + newSdx;
+                            autoFixedShapeIds[index] = newSdx;
+                            index = newSdx;
                             newSdx++;
                         } else {
                             dataOutOfSync = true;
@@ -388,6 +430,7 @@ void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
                     }
                     if (index > this->routeShapes)
                         this->routeShapes = index;                    
+                    localShapeIds.insert(index);
                     shape[index] = new TrackShape(index);
                     shape[index]->dyntrack = true;
                     shape[index]->numpaths = 1;

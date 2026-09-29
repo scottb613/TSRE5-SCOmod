@@ -1716,7 +1716,8 @@ void TerrainLibQt::render(GLUU *gluu, float * playerT, float* playerW, float* ta
         i.next();
         if (i.value() == NULL) continue;
         Terrain* obj = (Terrain*) i.value()->t;
-        if(obj == NULL) continue;
+        // Failed terrain loads have no sample metadata for coordinate lookup.
+        if(obj == NULL || !obj->loaded) continue;
         int tileX = 0;
         int tileZ = 0;
         obj->getLowCornerTileXY(tileX, tileZ);

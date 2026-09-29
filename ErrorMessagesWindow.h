@@ -18,6 +18,7 @@
 class ErrorMessageProperties;
 struct PreciseTileCoordinate;
 class GameObj;
+class ErrorMessage;
 
 class ErrorMessagesWindow : public QWidget {
     Q_OBJECT
@@ -32,6 +33,9 @@ public slots:
     void jumpRequestReceived(PreciseTileCoordinate *c);
     void selectRequestReceived(GameObj *o);
     void refreshErrorList();
+    void scanRoute();
+    void markNoFactor(ErrorMessage *message);
+    void resetStatus();
     
 signals:
     void windowClosed();
@@ -42,6 +46,13 @@ private:
     QHash<int, QBrush> brushes;
     QTreeWidget errorList;
     ErrorMessageProperties *properties;
+    QPushButton *scanButton = nullptr;
+    QPushButton *resetButton = nullptr;
+    QDoubleSpinBox *orphanLength = nullptr;
+    QDoubleSpinBox *verticalThreshold = nullptr;
+    QDoubleSpinBox *horizontalThreshold = nullptr;
+    QLabel *scanStatus = nullptr;
+    bool scanning = false;
     
 };
 

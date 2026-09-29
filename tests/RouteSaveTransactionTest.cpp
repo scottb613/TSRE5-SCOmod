@@ -65,6 +65,48 @@ int main(int argc, char **argv) {
     if(invalid.addFile(temp.path() + "/outside.tdb", "bad", &error))
         return fail("A destination outside the route was accepted.");
 
+    // Model multiple dirty patches sharing a main or paired-season ACE.
+    const QString terrtex = routeRoot + "/Terrtex";
+    QDir().mkpath(terrtex + "/snow");
+    const QString mainAce = terrtex + "/shared.ace";
+    const QString snowAce = terrtex + "/snow/shared.ace";
+    const QString sharedBackups = temp.path() + "/shared-backups";
+    if(!writeFile(mainAce, "old-main") || !writeFile(snowAce, "old-snow"))
+        return fail("Could not create shared texture fixtures.");
+    RouteSaveTransaction shared(routeRoot, sharedBackups);
+    if(!shared.addFile(mainAce, "new-main", &error)
+            || !shared.addFile(terrtex + "/./shared.ace", "new-main", &error)
+            || !shared.addFile(terrtex + "/SHARED.ACE", "new-main", &error)
+            || !shared.addFile(snowAce, "new-snow", &error)
+            || !shared.addFile(snowAce, "new-snow", &error))
+        return fail("Identical shared texture staging failed: " + error);
+    if(shared.addFile(mainAce, "conflicting-main", &error)
+            || shared.addFile(terrtex + "/SHARED.ACE", "conflicting-main", &error)
+            || shared.addFile(mainAce, QByteArray(), &error))
+        return fail("Conflicting or empty shared texture data was accepted.");
+    if(readFile(mainAce) != "old-main" || readFile(snowAce) != "old-snow")
+        return fail("Staging shared textures changed the original files.");
+    if(!shared.commit(&error))
+        return fail(error);
+    if(readFile(mainAce) != "new-main" || readFile(snowAce) != "new-snow")
+        return fail("Shared texture commit did not preserve the accepted data.");
+    const QStringList generations = QDir(sharedBackups).entryList(
+        QDir::Dirs | QDir::NoDotAndDotDot);
+    if(generations.size() != 1)
+        return fail("Expected one shared texture backup generation.");
+    const QJsonObject sharedManifest = QJsonDocument::fromJson(readFile(
+        sharedBackups + "/" + generations.first() + "/manifest.json")).object();
+    if(sharedManifest.value("files").toArray().size() != 2)
+        return fail("Shared textures were not staged exactly once per destination.");
+
+    RouteSaveTransaction sharedFailure(routeRoot, sharedBackups);
+    if(!sharedFailure.addFile(mainAce, "partial-main", &error)
+            || !sharedFailure.addFile(mainAce, "partial-main", &error)
+            || !sharedFailure.addFile(routeRoot + "/absent/later.ace", "bad", &error))
+        return fail("Could not stage shared texture rollback test.");
+    if(sharedFailure.commit(&error) || readFile(mainAce) != "new-main")
+        return fail("Shared texture rollback failed after a later write error.");
+
     RouteSaveTransaction laterFailure(routeRoot, backupRoot);
     const QString missingParent = routeRoot + "/missing/sample_f.raw";
     if(!laterFailure.addFile(tdb, "partial-write", &error)

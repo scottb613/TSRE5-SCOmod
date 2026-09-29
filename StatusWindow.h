@@ -100,6 +100,7 @@ private:
     QString statC;
     QString statReadout;
     QString statReadoutY;
+    QString statReadoutAttention;
     QString statR;
     QString lastGuardStatus = "Place Guard: ON";
     bool snapping = false;
@@ -108,6 +109,8 @@ private:
     QTimer pinSaveTimer;
     QTimer guardErrorTimer;
     QTimer copiedStatusTimer;
+    QTimer saveAttentionTimer;
+    bool saveAttentionOrange = false;
     QToolButton pinPositionButton;
     QLabel *positionLabel = NULL;
     bool positionPinned = false;
