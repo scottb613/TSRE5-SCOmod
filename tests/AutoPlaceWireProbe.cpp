@@ -258,6 +258,53 @@ int main(int argc,char **argv) {
     compressedBinary.append(sizeBytes, 4); compressedBinary.append("@@@@", 4);
     compressedBinary.append(qCompress(binaryWorld.mid(16)).mid(4));
     validWorlds.append(compressedBinary);
+    // Discovery must find native/legacy bakes without loading unrelated
+    // scenery tiles, including binary strings at odd byte offsets.
+    QTemporaryDir discovery;
+    require(QDir().mkpath(discovery.path()+"/WORLD"),"wire discovery directory");
+    auto putDiscovery=[&](const QString &name,const QByteArray &data) {
+        QFile file(discovery.path()+"/WORLD/"+name);
+        require(file.open(QIODevice::WriteOnly) && file.write(data)==data.size(),"wire discovery fixture");
+    };
+    putDiscovery("w+000009+000009.w","Tr_Worldfile ( Static ( FileName ( Pole.s ) ) )");
+    QVector<QPair<int,int>> wireTiles;
+    int progressCalls=0;
+    auto reportDiscovery=[&](const QString &,int,int) { ++progressCalls; };
+    for(const auto &valid:validWorlds) {
+        putDiscovery("w+000001-000002.w",valid);
+        require(AutoPlaceWire::findWireWorldTiles(discovery.path(),wireTiles,error,reportDiscovery)
+                && wireTiles==QVector<QPair<int,int>>{{1,2}},
+                "wire discovery missed supported encoding or included unrelated scenery");
+    }
+    require(progressCalls==validWorlds.size()*2,"wire discovery did not report file progress");
+    putDiscovery("w+000001-000002.w","Tr_Worldfile ( Static ( FileName ( SCO_TelephoneWire_OR_Test_09.s ) ) )");
+    require(AutoPlaceWire::findWireWorldTiles(discovery.path(),wireTiles,error)
+            && wireTiles==QVector<QPair<int,int>>{{1,2}},"legacy wire discovery missed");
+    putDiscovery("w+000009+000009.w","Tr_Worldfile (");
+    require(!AutoPlaceWire::findWireWorldTiles(discovery.path(),wireTiles,error)
+            && wireTiles.isEmpty() && !error.isEmpty(),"discovery published partial results on malformed world");
+    putDiscovery("w+000009+000009.w","Tr_Worldfile ( )");
+    putDiscovery("invalid.w",validWorlds.first());
+    require(!AutoPlaceWire::findWireWorldTiles(discovery.path(),wireTiles,error)
+            && wireTiles.isEmpty(),"discovery accepted an invalid wire tile filename");
+    QTemporaryDir deferredCleanup;
+    require(QDir().mkpath(deferredCleanup.path()+"/WORLD")
+            && QDir().mkpath(deferredCleanup.path()+"/SHAPES")
+            && QDir().mkpath(deferredCleanup.path()+"/TEXTURES"),"deferred cleanup directories");
+    auto putDeferred=[&](const QString &path,const QByteArray &data) {
+        QFile file(deferredCleanup.path()+path);
+        require(file.open(QIODevice::WriteOnly) && file.write(data)==data.size(),"deferred cleanup fixture");
+    };
+    putDeferred("/WORLD/w+000001-000002.w",validWorlds.first());
+    putDeferred("/SHAPES/"+first,"shape");
+    putDeferred("/SHAPES/Pole.s",compressed.chopped(4));
+    putDeferred("/TEXTURES/APWireCharcoal_v1.dds","shared texture");
+    QJsonObject deferredSpans{{"first",QJsonObject{{"deleted",true}}}};
+    require(!AutoPlaceWire::pruneAssets(deferredCleanup.path(),deferredSpans,true,error)
+            && error=="Some wire assets are still referenced by saved world objects; retained for retry."
+            && QFile::exists(deferredCleanup.path()+"/TEXTURES/APWireCharcoal_v1.dds")
+            && QFile::exists(deferredCleanup.path()+"/SHAPES/"+first),
+            "pre-save cleanup scanned unrelated shapes or deleted saved wire assets");
     rejectWorld(binaryWorld.chopped(1));
     rejectWorld(compressed.chopped(4));
     rejectWorld(QByteArray::fromHex("fffe") + le(validText) + QByteArray(1, '\0'));

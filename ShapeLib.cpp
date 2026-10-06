@@ -13,6 +13,7 @@
 #include "Game.h"
 #include <QDebug>
 #include "SFile.h"
+#include "GltfPreview.h"
 
 //int ShapeLib::jestshape;
 //std::unordered_map<int, SFile*> ShapeLib::shape;
@@ -31,6 +32,7 @@ ShapeLib::~ShapeLib() {
 }
 
 void ShapeLib::reset() {
+    gltfShapes.clear();
     for(auto entry = shape.begin(); entry != shape.end(); ++entry)
         delete entry->second;
     jestshape = 0;
@@ -84,6 +86,12 @@ int ShapeLib::addShape(QString path, QString texPath) {
 bool ShapeLib::reloadShapeIfCached(QString path) {
     path = QDir::cleanPath(path);
     path.replace("\\", "/");
+    const auto gltf = gltfShapes.constFind(path.toLower());
+    if(gltf != gltfShapes.constEnd()) {
+        QString error;
+        if(!(*gltf)->load(path, error)) qWarning() << "glTF reload failed:" << error;
+        return true;
+    }
 
     for(auto it = shape.begin(); it != shape.end(); ++it) {
         SFile *cachedShape = it->second;
@@ -100,6 +108,27 @@ bool ShapeLib::reloadShapeIfCached(QString path) {
         return true;
     }
     return false;
+}
+
+std::shared_ptr<GltfPreview> ShapeLib::getGltfShape(const QString &path, QString &error) {
+    QString normalized = QDir::cleanPath(path);
+    normalized.replace("\\", "/");
+    const QString key = normalized.toLower();
+    const auto found = gltfShapes.constFind(key);
+    if(found != gltfShapes.constEnd()) {
+        error = (*found)->loadError;
+        return *found;
+    }
+    auto model = std::make_shared<GltfPreview>();
+    model->sourcePath = normalized;
+    if(!model->load(normalized, error)) qWarning() << "glTF load failed:" << error;
+    else if(!model->model.warnings.isEmpty()) qWarning() << "glTF preview limitations:" << model->model.warnings;
+    gltfShapes.insert(key, model);
+    return model;
+}
+
+void ShapeLib::releaseGltfGraphics() {
+    for(const auto &model : gltfShapes) model->release();
 }
 
 void ShapeLib::refreshSeasonTextures() {

@@ -15,8 +15,10 @@
 #include "PickupTrackAlignment.h"
 #include <QString>
 #include "FileBuffer.h"
+#include <memory>
 
 class TrackItemObj;
+class GltfPreview;
 
 class PickupObj : public WorldObj {
 public:
@@ -39,6 +41,8 @@ public:
     void rotateTrack90();
     bool followTrackHeading(float heading);
     void load(int x, int y);
+    QString getShapePath() override;
+    void reload() override;
     void set(int sh, FileBuffer* data);
     void set(QString sh, QString val);
     void set(QString sh, FileBuffer* data);
@@ -67,6 +71,9 @@ public:
     void render(GLUU* gluu, float lod, float posx, float posz, float* playerW, float* target, float fov, int selectionColor, int renderMode);
 
 private:
+    std::shared_ptr<GltfPreview> gltfShape;
+    bool gltfRenderFailed = false;
+    unsigned int gltfBoxRevision = 0;
     PickupTrackAlignment trackAlignment;
     float speedRange[2];
     int pickupType[2];

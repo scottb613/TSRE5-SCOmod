@@ -94,6 +94,8 @@
 #include "DynTrackObj.h"
 #include "TDB.h"
 #include "ForestDefinition.h"
+#include "ForestObj.h"
+#include "ForestReplacementPlan.h"
 #include "ForestGenerator.h"
 #include "ForestOsmCache.h"
 #include "ForestPatchBaker.h"
@@ -324,11 +326,11 @@ private:
 
 class PolyVegWaterClearance {
 public:
-    explicit PolyVegWaterClearance(double clearanceMetres)
-        : clearanceMetres(clearanceMetres) {}
+    explicit PolyVegWaterClearance(double clearanceMetres, bool excludeSubmergedAtZero = false)
+        : clearanceMetres(clearanceMetres), excludeSubmergedAtZero(excludeSubmergedAtZero) {}
 
     bool blocks(double planX, double planZ) {
-        if(Game::terrainLib == nullptr || clearanceMetres <= 0.0)
+        if(Game::terrainLib == nullptr || (clearanceMetres <= 0.0 && !excludeSubmergedAtZero))
             return false;
         const int centreTileX = tileForPlanCoordinate(planX);
         const int centreTileZ = tileForPlanCoordinate(planZ);
@@ -424,6 +426,10 @@ private:
             return;
         }
         submergedCells = submergedCells.simplified();
+        if(clearanceMetres <= 0.0) {
+            exclusionPaths.insert(key, submergedCells);
+            return;
+        }
         QPainterPathStroker setback;
         setback.setWidth(clearanceMetres*2.0);
         setback.setCapStyle(Qt::RoundCap);
@@ -433,6 +439,7 @@ private:
     }
 
     double clearanceMetres = 0.0;
+    bool excludeSubmergedAtZero = false;
     QHash<quint64, QPainterPath> exclusionPaths;
 };
 
@@ -528,12 +535,14 @@ QSize RouteEditorGLWidget::sizeHint() const {
 
 void RouteEditorGLWidget::cleanup() {
     makeCurrent();
+    if(currentShapeLib) currentShapeLib->releaseGltfGraphics();
     //delete gluu->m_program;
     //gluu->m_program = 0;
     doneCurrent();
 }
 
 void RouteEditorGLWidget::timerEvent(QTimerEvent *) {
+    if(forestReplacementBusy) return;
     // The OpenGL widget and its timer persist at Main Load. During a restored
     // route load, progress processing can dispatch this timer after the Route
     // pointer is assigned but before loading and camera initialization finish.
@@ -891,6 +900,7 @@ void RouteEditorGLWidget::setMoveStep(float val){
 }
 
 void RouteEditorGLWidget::paintGL(){
+    if(forestReplacementBusy) return;
     paintGL2();
     return;
 
@@ -4790,27 +4800,67 @@ bool RouteEditorGLWidget::applyWireDeletions() {
     // Keep deletion records until an explicit Commit replaces them. A registry
     // save may precede a world save, including when the editor is interrupted.
     QVector<WorldObj*> objects;
+    QSet<WorldObj*> seenObjects;
+    QScopedValueRollback<bool> busy(wireBakeBusy,true);
     if(wireCleanupAll) {
-        route->preloadWFiles(false);
+        QProgressDialog progress("Finding wire world tiles...",QString(),0,0,this);
+        GuiFunct::styleEditorDialog(&progress);
+        progress.setWindowTitle("Delete All Wire Bakes");
+        progress.setWindowModality(Qt::ApplicationModal);
+        progress.setMinimumDuration(0);
+        progress.setAutoClose(false); progress.setAutoReset(false);
+        progress.show();
+        const auto report=[&](const QString &phase,int done,int total) {
+            progress.setLabelText(phase); progress.setRange(0,qMax(1,total));
+            progress.setValue(done);
+            QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+            makeCurrent();
+        };
+        QVector<QPair<int,int>> wireTiles;
+        QString error;
+        QElapsedTimer elapsed; elapsed.start();
+        if(!AutoPlaceWire::findWireWorldTiles(Game::root+"/routes/"+Game::route,
+                                             wireTiles,error,report)) {
+            progress.close();
+            GuiFunct::showEditorStopped(this,"Wire Cleanup",error+"\n\nPending wire deletions are retained. Save stopped.");
+            return false;
+        }
+        int loaded=0;
+        for(const auto &coords:wireTiles) {
+            report("Loading wire world tiles...",loaded++,int(wireTiles.size()));
+            Tile *tile=route->requestTile(coords.first,coords.second,false);
+            if(!tile || tile->loaded!=1) {
+                progress.close();
+                GuiFunct::showEditorStopped(this,"Wire Cleanup",
+                    "A wire world tile could not be loaded. Pending deletions are retained; Save stopped.");
+                return false;
+            }
+        }
+        qDebug()<<"Wire cleanup: loaded"<<wireTiles.size()<<"wire world tiles in"<<elapsed.elapsed()<<"ms";
+        progress.close();
         QSet<QString> keep;
         for(const QString &key:wireSpans.keys()) {
             const auto span=wireSpans[key].toObject();
             if(!span["deleted"].toBool()) keep.insert(AutoPlaceWire::shapeName(key).toLower());
         }
         for(Tile *tile:route->tile) {
-            if(!tile || tile->loaded==-2) continue;
-            if(tile->loaded!=1) return false;
+            if(!tile || tile->loaded!=1) continue;
             for(const auto &entry:tile->obiekty) {
                 auto object=entry.second;
                 if(object && object->loaded && object->typeID==WorldObj::sstatic
                         && AutoPlaceWire::isWireShape(object->fileName)
-                        && !keep.contains(object->fileName.toLower())) objects.append(object);
+                        && !keep.contains(object->fileName.toLower())) {
+                    objects.append(object); seenObjects.insert(object);
+                }
             }
         }
     }
     for(const QString &key:wireSpans.keys()) {
         const auto span=wireSpans[key].toObject();
         if(!span["deleted"].toBool()) continue;
+        // The global pass has already examined every native wire placement.
+        // Avoid rescanning the same scenery tile once per deleted span.
+        if(wireCleanupAll && !span["external"].toBool()) continue;
         Tile *tile=route->requestTile(span["x"].toInt(),span["z"].toInt(),false);
         if(tile && tile->loaded==-2) continue; // No world file: no saved bake to remove.
         if(!tile || tile->loaded!=1) {
@@ -4827,7 +4877,7 @@ bool RouteEditorGLWidget::applyWireDeletions() {
             WorldObj *object=entry.second;
             if(object && object->loaded && object->typeID==WorldObj::sstatic
                     && object->fileName.compare(name,Qt::CaseInsensitive)==0)
-                if(!objects.contains(object)) objects.append(object);
+                if(!seenObjects.contains(object)) { objects.append(object); seenObjects.insert(object); }
         }
     }
     if(!objects.isEmpty()) Undo::Clear();
@@ -4913,7 +4963,22 @@ bool RouteEditorGLWidget::cleanupWireAssets(bool afterSave) {
     if(!wireRegistryReady || Game::serverClient) return true;
     auto retained=wireSpans;
     QString error;
-    if(!AutoPlaceWire::pruneAssets(Game::root+"/routes/"+Game::route,retained,wireCleanupAll,error)) {
+    QScopedValueRollback<bool> busy(wireBakeBusy,true);
+    QProgressDialog progress("Checking wire assets...",QString(),0,0,this);
+    GuiFunct::styleEditorDialog(&progress);
+    progress.setWindowTitle("Wire Cleanup"); progress.setWindowModality(Qt::ApplicationModal);
+    progress.setMinimumDuration(600);
+    progress.setAutoClose(false); progress.setAutoReset(false);
+    const auto report=[&](const QString &phase,int done,int total) {
+        if(done!=0 && done%16!=0) return;
+        progress.setLabelText(phase); progress.setRange(0,qMax(1,total)); progress.setValue(done);
+        QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+        makeCurrent();
+    };
+    const bool pruned=AutoPlaceWire::pruneAssets(Game::root+"/routes/"+Game::route,
+                                               retained,wireCleanupAll,error,false,report);
+    progress.close();
+    if(!pruned) {
         if(!afterSave && error=="Some wire assets are still referenced by saved world objects; retained for retry.")
             emit updStatus("Stat3","Unused wire files removed. Save the route to remove files still referenced by the saved world.");
         else GuiFunct::showEditorStopped(this,"Wire Cleanup",error+(afterSave
@@ -5289,7 +5354,7 @@ void RouteEditorGLWidget::renderWirePreview() {
 }
 
 void RouteEditorGLWidget::renderPolyVegBakeMarkers() {
-    if(!polyVegHelperVisible || route == NULL || camera == NULL
+    if(!Game::viewPolyVeg || !polyVegHelperVisible || route == NULL || camera == NULL
             || camera->pozT == NULL) return;
     if(polyVegBakeMarker == NULL) {
         polyVegBakeMarker = new OglObj();
@@ -5392,7 +5457,7 @@ void RouteEditorGLWidget::selectPolyVegBakeTile(int tileX, int tileZ) {
 }
 
 void RouteEditorGLWidget::pushPolyVegBakeMarkers() {
-    if(!polyVegHelperVisible || route == NULL
+    if(!Game::viewPolyVeg || !polyVegHelperVisible || route == NULL
             || camera == NULL || camera->pozT == NULL) return;
     if(polyVegBakeMarker == NULL) {
         polyVegBakeMarker = new OglObj();
@@ -5538,10 +5603,6 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     }
     const int sourceObjectCount = sourceObjects.size();
 
-    auto signedTile = [](int value) {
-        return QString("%1%2").arg(value < 0 ? '-' : '+')
-            .arg(std::abs(value), 5, 10, QLatin1Char('0'));
-    };
     const QString shapesPath = routePath + "/shapes";
     const QString confirmation = QString(
         "Bake configured vegetation on the pointer tile into 4x4 patch blocks?\n\n"
@@ -5566,7 +5627,8 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     }
     PolyVegViewportFreeze bakeViewportFreeze(this);
 
-    const ForestPatchBakeResult baked = ForestPatchBaker::bake(instances, 4);
+    const ForestPatchBakeResult baked = ForestPatchBaker::bake(
+        instances, 4, forestReplacementBakeProgress);
     if(!baked.isValid() || baked.patches.isEmpty()) {
         if(!polyVegBatchBake)
             singleBakeDialog.close();
@@ -5577,9 +5639,8 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     }
     QStringList outputNames;
     for(const ForestBakedPatch &patch : baked.patches) {
-        const QString name = QString("V%1%2-%3%4.s")
-            .arg(signedTile(tileX), signedTile(-tileZ))
-            .arg(patch.key.patchX).arg(patch.key.patchZ);
+        const QString name = ForestReplacementPlan::bakeShapeName(
+            tileX, tileZ, patch.key.patchX, patch.key.patchZ);
         outputNames.append(name);
     }
 
@@ -5596,7 +5657,9 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     QStringList transactionFiles = generatedFiles;
     transactionFiles.append(manifestPath);
     for(const QString &path : transactionFiles) {
-        if(!operationFiles.rememberFile(path, error)
+        if((polyVegReplacementFiles != nullptr
+                && !polyVegReplacementFiles->rememberFile(path, error))
+                || !operationFiles.rememberFile(path, error)
                 || !polyVegBakeSession.rememberFile(path, error)) {
             if(!polyVegBatchBake)
                 singleBakeDialog.close();
@@ -5607,7 +5670,11 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
 
     for(int index = 0; index < baked.patches.size(); ++index) {
         const QString shapePath = shapesPath + '/' + outputNames[index];
-        if(!ForestShapeTextIO::writePatch(shapePath, baked.patches[index], error)
+        const std::function<bool()> continueWriting = forestReplacementBakeProgress
+            ? std::function<bool()>([&]() {
+                return forestReplacementBakeProgress(index, baked.patches.size());
+              }) : std::function<bool()>();
+        if(!ForestShapeTextIO::writePatch(shapePath, baked.patches[index], error, continueWriting)
                 || !ForestShapeTextIO::writeDescriptor(shapePath, error)) {
             QString rollbackError;
             if(!operationFiles.rollback(rollbackError))
@@ -5739,6 +5806,582 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
         queuePolyVegSuccessSound();
     }
     return true;
+}
+
+void RouteEditorGLWidget::replaceRouteForests() {
+    const QString title = "Replace All Forest Regions";
+    if(forestReplacementBusy || route == nullptr || !route->loaded) return;
+    if(!Game::writeEnabled || Game::serverClient) {
+        GuiFunct::showEditorStopped(this, title,
+            "Forest replacement requires a writable local route.");
+        return;
+    }
+    if(Game::terrainLib == nullptr || Game::trackDB == nullptr || Game::roadDB == nullptr) {
+        GuiFunct::showEditorStopped(this, title,
+            "Terrain, TrackDB and RoadDB must be available to check replacement exclusions.");
+        return;
+    }
+    const QString routePath = Game::root + "/routes/" + Game::route;
+    const ForestCatalogLoadResult catalog = ForestDefinitionLoader::loadRoute(routePath);
+    const ForestRecipeDefinition *recipe = nullptr;
+    for(const ForestRecipeDefinition &entry : catalog.catalog.polyVeg)
+        if(entry.id == polyVegRecipeId) recipe = &entry;
+    if(!catalog.isValid() || recipe == nullptr) {
+        GuiFunct::showEditorStopped(this, title,
+            "Select a valid PolyVeg schema in the F6 Planter before replacing forests.\n\n"
+            + catalog.errors.join("\n"));
+        return;
+    }
+    // Validate the actual baker inputs before the survey or any route mutation.
+    for(const ForestVegetationDefinition &vegetation : recipe->vegetation) {
+        ForestShapeMesh mesh;
+        QString error;
+        if(!ForestShapeTextIO::readCruciform(
+                routePath + "/shapes/" + vegetation.shape, mesh, error)) {
+            GuiFunct::showEditorStopped(this, title,
+                "The selected PolyVeg schema contains an asset that cannot be baked.\n\n"
+                + error);
+            return;
+        }
+    }
+    ForestGenerationSettings settings;
+    settings.densityPerSquareMetre = polyVegDensity > 0
+        ? polyVegDensity : recipe->defaultDensityPerSquareMetre;
+    settings.maximumTrees = polyVegMaximumTrees > 0
+        ? polyVegMaximumTrees : recipe->defaultMaximumTrees;
+    settings.rowsEnabled = polyVegRowsEnabled;
+    settings.rowWidthMetres = polyVegRowWidthMetres;
+    settings.rowSpacingMetres = polyVegRowSpacingMetres;
+    settings.rowDirectionDegrees = polyVegRowDirectionDegrees;
+    if(settings.maximumTrees <= 0 || settings.maximumTrees > 1000000) {
+        GuiFunct::showEditorStopped(this, title,
+            "Choose a per-tile PolyVeg cap between 1 and 1,000,000 in F6.");
+        return;
+    }
+    if(!std::isfinite(settings.densityPerSquareMetre)
+            || settings.densityPerSquareMetre < recipe->densityLimitsPerSquareMetre.minimum
+            || settings.densityPerSquareMetre > recipe->densityLimitsPerSquareMetre.maximum
+            || settings.maximumTrees < recipe->minimumMaximumTrees
+            || settings.maximumTrees > recipe->maximumMaximumTrees
+            || (settings.rowsEnabled && (!std::isfinite(settings.rowWidthMetres)
+                || !std::isfinite(settings.rowSpacingMetres) || settings.rowWidthMetres < 0
+                || settings.rowSpacingMetres < 0 || !std::isfinite(settings.rowDirectionDegrees)))) {
+        GuiFunct::showEditorStopped(this, title,
+            "The current F6 planting settings are outside the selected schema's limits. "
+            "Select the schema again and check Density, Cap and Rows before replacement.");
+        return;
+    }
+
+    QScopedValueRollback<bool> busy(forestReplacementBusy, true);
+    QScopedValueRollback<bool> noAutoRepairForReplacement(Game::autoFix, false);
+    QScopedValueRollback<bool> noPlacementSnap(route->placementStickToTarget, false);
+    QScopedValueRollback<bool> noPlacementReuse(route->apCheckingDuplicates, false);
+    PolyVegViewportFreeze freeze(this);
+    QProgressDialog progress("Surveying route Forest regions...", "Cancel", 0, 0, this);
+    progress.setWindowTitle(title);
+    progress.setWindowModality(Qt::ApplicationModal);
+    progress.setMinimumDuration(0);
+    progress.setAutoClose(false);
+    progress.setAutoReset(false);
+    progress.setProperty("scoCenterOnScreen", true);
+    GuiFunct::styleEditorDialog(&progress);
+    GuiFunct::addEditorDialogHeader(&progress, title);
+    progress.show();
+    auto pump = [&progress]() {
+        QApplication::processEvents();
+        return !progress.wasCanceled();
+    };
+    QVector<ForestObj*> originals;
+    QVector<QPainterPath> groups;
+    QString failure;
+    bool cancelled = false;
+    {
+        QScopedValueRollback<bool> noAutoRepair(Game::autoFix, false);
+        QDir worlds(routePath + "/world");
+        const QStringList files = worlds.entryList({"*.w"}, QDir::Files, QDir::Name);
+        if(!worlds.exists()) failure = "The route world folder is missing.";
+        progress.setRange(0, files.size());
+        for(int i = 0; i < files.size() && failure.isEmpty(); ++i) {
+            progress.setLabelText(QString("Surveying world tiles: %1 of %2\nForest regions found: %3")
+                .arg(i+1).arg(files.size()).arg(originals.size()));
+            progress.setValue(i);
+            if(!pump()) { cancelled = true; break; }
+            bool xOk = false, zOk = false;
+            const QString &name = files[i];
+            const int x = name.mid(1, 7).toInt(&xOk);
+            const int z = -name.mid(8, 7).toInt(&zOk);
+            if(name.size() != 17 || !xOk || !zOk) {
+                failure = "The route contains an unrecognized world tile filename.";
+                break;
+            }
+            Tile *world = route->requestTile(x, z, false);
+            if(world == nullptr || world->loaded != 1 || world->x != x || world->z != z) {
+                failure = "A world tile could not be loaded; no forests have been replaced.";
+                break;
+            }
+        }
+        // Include loaded unsaved world tiles as well as the complete disk survey.
+        if(!cancelled && failure.isEmpty()) {
+            const auto tiles = route->tile.values();
+            progress.setRange(0, tiles.size());
+            for(int i = 0; i < tiles.size(); ++i) {
+                progress.setValue(i);
+                progress.setLabelText(QString("Merging forest footprints: tile %1 of %2\nForest regions found: %3")
+                    .arg(i+1).arg(tiles.size()).arg(originals.size()));
+                if(!pump()) { cancelled = true; break; }
+                Tile *world = tiles[i];
+                if(world == nullptr || world->loaded != 1) continue;
+                for(const auto &entry : world->obiekty) {
+                    WorldObj *object = entry.second;
+                    if(object == nullptr || !object->loaded || object->type != "forest") continue;
+                    ForestObj *forest = static_cast<ForestObj*>(object);
+                    const float *q = forest->qDirection;
+                    // Match ForestObj's terrain-projected rectangle rotation.
+                    const double yaw = (q[1]+0.00001f < 0 ? -1.0 : 1.0)*2.0*std::acos(q[3]);
+                    if(!std::isfinite(forest->areaX) || !std::isfinite(forest->areaZ)
+                            || forest->areaX <= 0 || forest->areaZ <= 0
+                            || forest->areaX > 100000 || forest->areaZ > 100000
+                            || !std::isfinite(forest->position[0])
+                            || !std::isfinite(forest->position[2]) || !std::isfinite(yaw)
+                            || std::abs(world->x*2048.0+forest->position[0]) > 100000000
+                            || std::abs(world->z*2048.0+forest->position[2]) > 100000000
+                            || !std::isfinite(q[0]) || !std::isfinite(q[1])
+                            || !std::isfinite(q[2])) {
+                        failure = "A Forest region has invalid dimensions or position. Repair it before replacement.";
+                        break;
+                    }
+                    ForestReplacementPlan::merge(groups, ForestReplacementPlan::footprint(
+                        world->x*2048.0+forest->position[0],
+                        world->z*2048.0+forest->position[2], forest->areaX, forest->areaZ, yaw));
+                    originals.append(forest);
+                    if((originals.size() & 63) == 0 && !pump()) { cancelled = true; break; }
+                }
+                if(cancelled || !failure.isEmpty()) break;
+            }
+        }
+    }
+    if(cancelled) { progress.close(); return; }
+    if(!failure.isEmpty() || originals.isEmpty()) {
+        progress.close();
+        if(!failure.isEmpty()) GuiFunct::showEditorStopped(this, title, failure);
+        else GuiFunct::showEditorNotice(this, title, "No Forest regions were found on this route.");
+        return;
+    }
+
+    QMap<ForestReplacementPlan::TileCoordinate, QPainterPath> tileAreas;
+    double totalArea = 0;
+    for(int groupIndex = 0; groupIndex < groups.size(); ++groupIndex) {
+        const QPainterPath &group = groups[groupIndex];
+        const QRectF bounds = group.boundingRect();
+        const int minX = tileForPlanCoordinate(bounds.left());
+        const int maxX = tileForPlanCoordinate(bounds.right());
+        const int minZ = tileForPlanCoordinate(bounds.top());
+        const int maxZ = tileForPlanCoordinate(bounds.bottom());
+        for(int x = minX; x <= maxX && !cancelled; ++x)
+            for(int z = minZ; z <= maxZ; ++z) {
+                if(!pump()) { cancelled = true; break; }
+                const QPainterPath clipped = group.intersected(ForestReplacementPlan::tileRectangle(x, z));
+                if(ForestReplacementPlan::area(clipped) <= 0.000001) continue;
+                auto &area = tileAreas[qMakePair(x, z)];
+                area = area.isEmpty() ? clipped : area.united(clipped);
+                progress.setLabelText(QString("Surveying replacement tiles...\n%1 merged areas; %2 affected tiles")
+                    .arg(groups.size()).arg(tileAreas.size()));
+            }
+        if(cancelled) break;
+    }
+    if(cancelled) { progress.close(); return; }
+    // Validate every affected terrain tile before placement or bake writes.
+    // Forest footprints can extend beyond the route's terrain coverage.
+    auto terrainForTile = [](int x, int z) -> Terrain* {
+        Game::terrainLib->load(x, z);
+        return Game::terrainLib->getTerrainByXY(x, z, true);
+    };
+    auto terrainProblem = [](const Terrain *ground) -> QString {
+        if(ground == nullptr) return "No terrain entry covers this tile.";
+        if(!ground->loaded) return "Terrain exists but could not be loaded.";
+        if(ground->terrainData == nullptr) return "Terrain height data is unavailable.";
+        return {};
+    };
+    QStringList terrainFailures;
+    QVector<ForestReplacementPlan::TileCoordinate> uncoveredTiles;
+    double omittedArea = 0;
+    int conflicts = 0;
+    progress.setRange(0, tileAreas.size());
+    int checked = 0;
+    {
+        QScopedValueRollback<bool> noAutoRepair(Game::autoFix, false);
+        for(auto it = tileAreas.cbegin(); it != tileAreas.cend(); ++it) {
+            progress.setValue(checked++);
+            progress.setLabelText(QString("Checking terrain, world tiles and existing PolyVeg: %1 of %2")
+                .arg(checked).arg(tileAreas.size()));
+            if(!pump()) { cancelled = true; break; }
+            const int x = it.key().first, z = it.key().second;
+            // A missing coverage entry is an unplantable route edge, not a
+            // failed terrain load. Exclude its footprint before any mutation.
+            Terrain *ground = terrainForTile(x, z);
+            if(ground == nullptr) {
+                uncoveredTiles.append(it.key());
+                omittedArea += ForestReplacementPlan::area(it.value());
+                qInfo().noquote() << QString("Forest replacement omitted tile %1, %2: no terrain coverage.")
+                    .arg(x).arg(-z);
+                continue;
+            }
+            const QString problem = terrainProblem(ground);
+            if(!problem.isEmpty()) {
+                const QString detail = QString("Tile %1, %2: %3").arg(x).arg(-z).arg(problem);
+                terrainFailures.append(detail);
+                qWarning().noquote() << "Forest replacement preflight:" << detail;
+            }
+            Tile *world = route->requestTile(x, z, false);
+            if(world == nullptr || world->x != x || world->z != z
+                    || (world->loaded != 1 && world->loaded != -2)) {
+                failure = "An affected world tile cannot be loaded safely.";
+                break;
+            }
+            bool conflict = false;
+            for(const auto &entry : world->obiekty) {
+                WorldObj *object = entry.second;
+                if(object && object->loaded && (object->polyVegRaw
+                        || PolyVegObject::isBakeShape(object->fileName))) conflict = true;
+            }
+            // Existing short-name assets may be referenced outside this tile,
+            // or belong to a deleted but unsaved bake. Never overwrite them.
+            for(int blockX = 0; blockX < 4; ++blockX)
+                for(int blockZ = 0; blockZ < 4; ++blockZ) {
+                    const QString shape = ForestReplacementPlan::bakeShapeName(x, z, blockX, blockZ);
+                    if(QFileInfo::exists(routePath + "/shapes/" + shape)
+                            || QFileInfo::exists(routePath + "/shapes/"
+                                + QFileInfo(shape).completeBaseName() + ".sd")) conflict = true;
+                }
+            if(conflict) ++conflicts;
+        }
+    }
+    progress.hide();
+    if(cancelled) return;
+    for(const auto &coordinate : uncoveredTiles) tileAreas.remove(coordinate);
+    // Recalculate the survey from the actual plantable tile union.
+    totalArea = 0;
+    for(const QPainterPath &tileArea : tileAreas) totalArea += ForestReplacementPlan::area(tileArea);
+    if(!terrainFailures.isEmpty()) {
+        GuiFunct::showEditorStopped(this, title,
+            QString("Terrain preflight found %1 affected tile(s) without usable terrain.\n\n%2%3\n\n"
+                "No replacement objects or bake files were created. Original forests remain. "
+                "Check terrain coverage and files at these coordinates before retrying.")
+                .arg(terrainFailures.size()).arg(terrainFailures.mid(0, 12).join("\n"))
+                .arg(terrainFailures.size() > 12
+                    ? "\nFurther affected tiles are listed in the editor log." : ""));
+        return;
+    }
+    if(!failure.isEmpty() || conflicts > 0 || tileAreas.isEmpty()) {
+        GuiFunct::showEditorStopped(this, title, !failure.isEmpty() ? failure
+            : conflicts > 0 ? QString("Survey found %1 affected tile(s) with existing PolyVeg or conflicting bake assets.\n\n"
+                "Replacement stopped to preserve that vegetation. Resolve those tiles before retrying.")
+                .arg(conflicts) : "No usable forest footprint remains.");
+        return;
+    }
+    // Coverage clips planting only. A successful route-wide replacement must
+    // remove every surveyed original, including wholly uncovered regions.
+    qInfo().noquote() << QString("Forest replacement survey: %1 originals to replace; "
+        "%2 uncovered tiles omitted from planting.")
+        .arg(originals.size()).arg(uncoveredTiles.size());
+    const double estimate = settings.rowsEnabled
+        ? totalArea / ((settings.rowWidthMetres > 0 ? settings.rowWidthMetres : recipe->minimumSeparationMetres)
+            * (settings.rowSpacingMetres > 0 ? settings.rowSpacingMetres : recipe->minimumSeparationMetres))
+        : totalArea*settings.densityPerSquareMetre;
+    if(!GuiFunct::confirmDestructiveAction(this, title,
+            QString("Replace every Forest region on this route?\n\n"
+                "Schema: %1 (%2)\nForests: %3; merged areas: %4\n"
+                "Tiles: %5; combined area: %6 km2\nDensity: %7 / km2\n"
+                "Estimated plants before exclusions/caps: %8\nCap PER TILE: %9; seed: %10\n"
+                "Rows: %11\nTDB clearance: %12 m; RDB clearance: %13 m\n"
+                "Water setback: %14 m\nSlope limit: %15 deg; spacing: %16 m; feather: %17 m\n\n"
+                "Submerged ground is always excluded. Overlap is planted once. "
+                "Each tile is baked before the next; rendering/editing stays paused.\n\n"
+                "Baking clears Undo. Cancel or errors roll back the batch. Empty tiles are counted and skipped. "
+                "Original forests remain until all tiles succeed. Save afterwards to keep the result.\n\n"
+                "Outside terrain coverage: %18 tiles; %19 km2 omitted.\n"
+                "Planting is clipped to covered tiles. All original Forest regions are removed on success.")
+                .arg(recipe->name, recipe->id).arg(originals.size()).arg(groups.size())
+                .arg(tileAreas.size()).arg(totalArea/1000000, 0, 'f', 3)
+                .arg(settings.densityPerSquareMetre*1000000, 0, 'f', 0)
+                .arg(estimate, 0, 'f', 0).arg(settings.maximumTrees).arg(polyVegSeed)
+                .arg(settings.rowsEnabled ? QString("on; width %1 m, spacing %2 m, direction %3 deg")
+                    .arg(settings.rowWidthMetres).arg(settings.rowSpacingMetres)
+                    .arg(settings.rowDirectionDegrees) : "off")
+                .arg(recipe->defaultTrackClearanceMetres).arg(recipe->defaultRoadClearanceMetres)
+                .arg(recipe->defaultWaterClearanceMetres).arg(recipe->maximumSlopeDegrees)
+                .arg(recipe->minimumSeparationMetres).arg(recipe->edgeFeatherMetres)
+                .arg(uncoveredTiles.size()).arg(omittedArea/1000000, 0, 'f', 6))) return;
+
+    struct TileBefore {
+        Tile *tile;
+        QSet<WorldObj*> objects;
+        bool modified;
+        int loaded;
+    };
+    QVector<TileBefore> before;
+    const ForestBakeSession previousSession = polyVegBakeSession;
+    const QSet<QString> previousUnsavedShapes = polyVegUnsavedBakeShapes;
+    ForestBakeSession replacementFiles;
+    QScopedValueRollback<ForestBakeSession*> rememberFiles(polyVegReplacementFiles, &replacementFiles);
+    QScopedValueRollback<bool> batch(polyVegBatchBake, true);
+    QScopedValueRollback<qint64> sourceCount(polyVegBatchSourceCount, 0);
+    QScopedValueRollback<qint64> blockCount(polyVegBatchBlockCount, 0);
+    setSelectedObj(nullptr);
+    Game::currentShapeLib = currentShapeLib;
+    PolyVegDatabaseClearance trackClearance(Game::trackDB, recipe->defaultTrackClearanceMetres);
+    PolyVegDatabaseClearance roadClearance(Game::roadDB, recipe->defaultRoadClearanceMetres);
+    PolyVegWaterClearance waterClearance(recipe->defaultWaterClearanceMetres, true);
+    qint64 rejectedTrack = 0, rejectedRoad = 0, rejectedWater = 0, rejectedSlope = 0;
+    int completed = 0;
+    int emptyTiles = 0;
+    int belowDensityTiles = 0;
+    int bakedTiles = 0;
+    settings.acceptsTerrain = [&](double x, double z) {
+        float height = 0;
+        if(!polyVegTerrainSlopeAccepted(x, z, recipe->maximumSlopeDegrees)
+                || !polyVegTerrainHeight(x, z, height)) { ++rejectedSlope; return false; }
+        if(trackClearance.blocks(x, height, z)) { ++rejectedTrack; return false; }
+        if(roadClearance.blocks(x, height, z)) { ++rejectedRoad; return false; }
+        if(waterClearance.blocks(x, z)) { ++rejectedWater; return false; }
+        return true;
+    };
+    settings.shouldCancel = [&]() { return progress.wasCanceled(); };
+    settings.progress = [&](int attempts, int, int accepted, int target) {
+        progress.setLabelText(QString("Generating tile %1 of %2\n%3 of %4 plants; %5 attempts\n"
+            "Already baked: %6 plants in %7 blocks")
+            .arg(completed+1).arg(tileAreas.size()).arg(accepted).arg(target).arg(attempts)
+            .arg(polyVegBatchSourceCount).arg(polyVegBatchBlockCount));
+        pump();
+    };
+    double maximumRadius = 0;
+    for(const auto &vegetation : recipe->vegetation)
+        maximumRadius = std::max(maximumRadius,
+            vegetation.footprintRadiusMetres*vegetation.uniformScale.maximum);
+    const double borderWidth = std::max(recipe->minimumSeparationMetres, 2*maximumRadius);
+    QMap<ForestReplacementPlan::TileCoordinate, QVector<ForestCandidate>> borders;
+    progress.reset();
+    progress.setRange(0, tileAreas.size());
+    progress.show();
+    int cappedTiles = 0;
+    bool undoTouched = false;
+    QScopedValueRollback<std::function<bool(int, int)>> bakeProgress(
+        forestReplacementBakeProgress, [&](int done, int total) {
+            progress.setLabelText(QString("Baking tile %1 of %2\nBake work: %3 of %4\n"
+                "Already baked: %5 plants in %6 blocks")
+                .arg(completed+1).arg(tileAreas.size()).arg(done).arg(total)
+                .arg(polyVegBatchSourceCount).arg(polyVegBatchBlockCount));
+            return pump();
+        });
+    for(auto it = tileAreas.cbegin(); it != tileAreas.cend(); ++it) {
+        progress.setValue(completed);
+        if(!pump()) { cancelled = true; break; }
+        const int x = it.key().first, z = it.key().second;
+        progress.setLabelText(QString("Loading terrain for tile %1 of %2")
+            .arg(completed+1).arg(tileAreas.size()));
+        const QString problem = terrainProblem(terrainForTile(x, z));
+        if(!problem.isEmpty()) {
+            failure = QString("Terrain became unavailable after preflight at tile %1, %2: %3")
+                .arg(x).arg(-z).arg(problem);
+            qWarning().noquote() << "Forest replacement:" << failure;
+            break;
+        }
+        // Clearance caches need only this tile and its neighbors. Keep the
+        // route's normal terrain cache, but do not accumulate clearance paths.
+        trackClearance = PolyVegDatabaseClearance(Game::trackDB, recipe->defaultTrackClearanceMetres);
+        roadClearance = PolyVegDatabaseClearance(Game::roadDB, recipe->defaultRoadClearanceMetres);
+        waterClearance = PolyVegWaterClearance(recipe->defaultWaterClearanceMetres, true);
+        settings.occupiedCandidates.clear();
+        const QRectF tileBounds(x*2048.0-1024, z*2048.0-1024, 2048, 2048);
+        const QRectF neighborhood = tileBounds.adjusted(-borderWidth, -borderWidth, borderWidth, borderWidth);
+        for(auto edge = borders.begin(); edge != borders.end();) {
+            if((edge.key().first+1)*2048.0-1024 < neighborhood.left()) {
+                edge = borders.erase(edge);
+                continue;
+            }
+            for(const ForestCandidate &candidate : edge.value())
+                if(neighborhood.contains(QPointF(candidate.x, candidate.z)))
+                    settings.occupiedCandidates.append(candidate);
+            ++edge;
+        }
+        const QPainterPath tileArea = it.value();
+        QList<QPolygonF> realEdges;
+        for(const QPainterPath &group : groups)
+            if(group.boundingRect().intersects(neighborhood))
+                realEdges.append(group.toSubpathPolygons());
+        settings.usableAreaOverride = ForestReplacementPlan::area(tileArea);
+        settings.samplingRectangles = ForestReplacementPlan::samplingRectangles(tileArea);
+        if(settings.samplingRectangles.isEmpty()) {
+            failure = "A forest footprint could not be sampled safely.";
+            break;
+        }
+        settings.containsPlantingPoint = [tileArea](double px, double pz) {
+            return tileArea.contains(QPointF(px, pz));
+        };
+        settings.plantingEdgeDistance = [&realEdges](double px, double pz) {
+            return ForestReplacementPlan::edgeDistance(QPointF(px, pz), realEdges);
+        };
+        settings.seed = polyVegSeed ^ polyVegTileKey(x, z);
+        ForestPlantingBoundary rectangle;
+        rectangle.outer = {{tileBounds.left(), tileBounds.top()}, {tileBounds.right(), tileBounds.top()},
+            {tileBounds.right(), tileBounds.bottom()}, {tileBounds.left(), tileBounds.bottom()}};
+        progress.setLabelText(QString("Generating tile %1 of %2\nForest footprint: %3 m2\n"
+            "Baked tiles: %4; empty tiles: %5")
+            .arg(completed+1).arg(tileAreas.size()).arg(settings.usableAreaOverride, 0, 'f', 2)
+            .arg(bakedTiles).arg(emptyTiles));
+        if(!pump()) { cancelled = true; break; }
+        const ForestGenerationResult generated = ForestGenerator::generate(*recipe, rectangle, settings);
+        qInfo().noquote() << QString("Forest replacement tile %1,%2: area=%3 m2; requested=%4; target=%5; "
+            "accepted=%6; attempts=%7; outside=%8; feather=%9; occupied=%10; terrain/exclusions=%11")
+            .arg(x).arg(-z).arg(generated.usableAreaSquareMetres, 0, 'f', 4)
+            .arg(generated.requestedCount).arg(generated.targetCount).arg(generated.candidates.size())
+            .arg(generated.attempts).arg(generated.rejectedOutside).arg(generated.rejectedEdgeFeather)
+            .arg(generated.rejectedOccupied).arg(generated.rejectedTerrain);
+        if(generated.cancelled || !pump()) { cancelled = true; break; }
+        const auto outcome = ForestReplacementPlan::tileOutcome(generated);
+        if(outcome == ForestReplacementPlan::TileOutcome::Error) {
+            failure = generated.errors.join("\n");
+            break;
+        }
+        if(outcome == ForestReplacementPlan::TileOutcome::Empty) {
+            ++emptyTiles;
+            if(generated.targetCount == 0) ++belowDensityTiles;
+            ++completed;
+            continue;
+        }
+        if(generated.objectLimitApplied) ++cappedTiles;
+        // Empty tiles do not create world files or invoke a baker with no raw
+        // inputs. Only a tile that actually has candidates enters the transaction.
+        Tile *world = route->requestTile(x, z, false);
+        TileBefore state {world, {}, world->isModified(), world->loaded};
+        for(const auto &entry : world->obiekty)
+            if(entry.second) state.objects.insert(entry.second);
+        before.append(state);
+        if(world->loaded == -2) world->initNew();
+        if(world->loaded != 1) { failure = "Could not initialize an affected world tile."; break; }
+        QVector<ForestCandidate> tileBorder;
+        undoTouched = true;
+        Undo::StateBegin();
+        int placedPlants = 0;
+        for(const ForestCandidate &candidate : generated.candidates) {
+            if((placedPlants & 127) == 0) {
+                progress.setLabelText(QString("Placing tile %1 of %2\n%3 of %4 plants")
+                    .arg(completed+1).arg(tileAreas.size()).arg(placedPlants)
+                    .arg(generated.candidates.size()));
+                if(!pump()) { cancelled = true; break; }
+            }
+            float position[3] {static_cast<float>(candidate.x-x*2048.0), 0,
+                              static_cast<float>(candidate.z-z*2048.0)};
+            // Prevent float rounding at the half-open tile boundary from
+            // placing a raw object on an untracked neighboring tile.
+            const float maximumLocal = std::nextafter(1024.0f, -1024.0f);
+            position[0] = std::clamp(position[0], -1024.0f, maximumLocal);
+            position[2] = std::clamp(position[2], -1024.0f, maximumLocal);
+            float height = 0;
+            if(!polyVegTerrainHeight(candidate.x, candidate.z, height)) {
+                failure = "Terrain height became unavailable during placement."; break;
+            }
+            const auto &vegetation = recipe->vegetation[candidate.vegetationIndex];
+            position[1] = height-(vegetation.hasPlantingDepth ? vegetation.plantingDepthMetres : 0);
+            Ref::RefItem reference;
+            reference.type = "static";
+            reference.clas = "Forest Replacement";
+            reference.filename.append(vegetation.shape);
+            float rotation[4]; Quat::fill(rotation);
+            Quat::rotateY(rotation, rotation, candidate.yawDegrees*M_PI/180.0);
+            WorldObj *placed = route->placeObject(x, z, position, rotation, 0, &reference);
+            if(!placed) { failure = "A generated vegetation object could not be placed."; break; }
+            placed->polyVegRaw = true;
+            placed->setUniformMatrixScale(candidate.uniformScale);
+            if(std::min({candidate.x-tileBounds.left(), tileBounds.right()-candidate.x,
+                    candidate.z-tileBounds.top(), tileBounds.bottom()-candidate.z}) <= borderWidth)
+                tileBorder.append(candidate);
+            ++placedPlants;
+        }
+        Undo::StateEnd();
+        if(cancelled || !failure.isEmpty()) break;
+        progress.setLabelText(QString("Baking tile %1 of %2\n%3 plants on this tile\nAlready baked: %4 plants in %5 blocks")
+            .arg(completed+1).arg(tileAreas.size()).arg(generated.candidates.size())
+            .arg(polyVegBatchSourceCount).arg(polyVegBatchBlockCount));
+        if(!pump()) { cancelled = true; break; }
+        polyVegBatchTileX = x;
+        polyVegBatchTileZ = z;
+        if(!bakeVegetationTile(false)) {
+            cancelled = progress.wasCanceled();
+            failure = "A replacement tile failed to bake.";
+            break;
+        }
+        borders.insert(it.key(), tileBorder);
+        ++completed;
+        ++bakedTiles;
+        if(!pump()) { cancelled = true; break; }
+        // generated and all raw world instances are released before the next tile.
+    }
+    if(!cancelled && failure.isEmpty()
+            && !ForestReplacementPlan::canCommitBatch(completed, tileAreas.size(), polyVegBatchSourceCount)) {
+        failure = QString("No vegetation was generated across the route. Original forests have been retained.\n\n"
+            "Empty tiles: %1; below density/row population threshold: %2\n"
+            "Rejected attempts: TDB %3; RDB %4; water %5; slope/terrain %6.\n\n"
+            "Check the schema density, footprint size and exclusions before retrying.")
+            .arg(emptyTiles).arg(belowDensityTiles).arg(rejectedTrack).arg(rejectedRoad)
+            .arg(rejectedWater).arg(rejectedSlope);
+    }
+    if(cancelled || !failure.isEmpty()) {
+        progress.setCancelButton(nullptr);
+        progress.setLabelText("Rolling back forest replacement...");
+        pump();
+        if(undoTouched) Undo::Clear();
+        for(const TileBefore &state : before) {
+            QVector<WorldObj*> added;
+            for(const auto &entry : state.tile->obiekty)
+                if(entry.second && !state.objects.contains(entry.second)) added.append(entry.second);
+            state.tile->purgeObjects(added);
+            state.tile->loaded = state.loaded;
+            state.tile->setModified(state.modified);
+        }
+        QString rollbackError;
+        const bool restored = replacementFiles.rollback(rollbackError);
+        if(restored) {
+            polyVegBakeSession = previousSession;
+            polyVegUnsavedBakeShapes = previousUnsavedShapes;
+        }
+        progress.close();
+        GuiFunct::showEditorStopped(this, title,
+            (cancelled ? QString("Replacement cancelled.") : failure)
+            + (restored ? "\n\nReplacement objects were removed; original forests remain."
+                        : "\n\nFile rollback failed. Keep the route open and do not save:\n" + rollbackError));
+    } else {
+        // Originals remain live until every affected tile has baked successfully.
+        for(ForestObj *forest : originals) {
+            forest->loaded = false;
+            forest->modified = true;
+            Tile *world = route->requestTile(forest->x, forest->y, false);
+            ++world->jestHiddenObj;
+            world->setModified(true);
+        }
+        replacementFiles.commit();
+        qInfo().noquote() << QString("Forest replacement completed: all %1 originals removed; "
+            "%2 plants baked.")
+            .arg(originals.size()).arg(polyVegBatchSourceCount);
+        Undo::Clear();
+        progress.setValue(tileAreas.size());
+        progress.close();
+        GuiFunct::showEditorNotice(this, title,
+            QString("Replaced %1 Forest regions across %2 merged areas and %3 processed tiles.\n\n"
+                "Baked %4 vegetation objects into %5 blocks.\nTiles limited by the per-tile cap: %6\n"
+                "Rejected attempts: TDB %7; RDB %8; water %9; slope/terrain %10.\n"
+                "Baked tiles: %11; empty tiles: %12 (%13 below population threshold).\n\n"
+                "Outside terrain coverage: %14 tiles; %15 km2 omitted from planting.\n"
+                "All surveyed original Forest regions have been removed.\n\n"
+                "Save normally to keep the replacement. Baking has cleared Undo history.")
+                .arg(originals.size()).arg(groups.size()).arg(completed)
+                .arg(polyVegBatchSourceCount).arg(polyVegBatchBlockCount).arg(cappedTiles)
+                .arg(rejectedTrack).arg(rejectedRoad).arg(rejectedWater).arg(rejectedSlope)
+                .arg(bakedTiles).arg(emptyTiles).arg(belowDensityTiles)
+                .arg(uncoveredTiles.size()).arg(omittedArea/1000000, 0, 'f', 6));
+        queuePolyVegSuccessSound();
+    }
+    QTimer::singleShot(0, this, &RouteEditorGLWidget::refreshPolyVegTileCounts);
 }
 
 void RouteEditorGLWidget::bakeAllVegetation() {
@@ -7895,8 +8538,13 @@ void RouteEditorGLWidget::getUnsavedInfo(QVector<QString> &items) {
 }
 
 bool RouteEditorGLWidget::hasPendingGeneratedWork() const {
-    if(!polyVegTiles(false).isEmpty() || !wireUnsavedBakes.isEmpty()
+    if(!wireUnsavedBakes.isEmpty()
             || !polyVegBakeSession.isEmpty() || !polyVegUnsavedBakeShapes.isEmpty()) return true;
+    return hasUnbakedGeneratedWork();
+}
+
+bool RouteEditorGLWidget::hasUnbakedGeneratedWork() const {
+    if(!polyVegTiles(false).isEmpty()) return true;
     for(const auto &value : wireSpans)
         if(AutoPlaceWire::isPending(value.toObject())) return true;
     return false;

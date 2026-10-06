@@ -13,6 +13,7 @@
 #include <QStringList>
 #include <QVector>
 #include <QVector3D>
+#include <functional>
 
 struct ForestShapeVertex {
     float x = 0.0f, y = 0.0f, z = 0.0f;
@@ -63,14 +64,16 @@ public:
     static bool readCruciform(const QString &path, ForestShapeMesh &mesh,
                               QString &error);
     static bool writePatch(const QString &path, const ForestBakedPatch &patch,
-                           QString &error);
+                           QString &error,
+                           const std::function<bool()> &continueWriting = {});
     static bool writeDescriptor(const QString &shapePath, QString &error);
 };
 
 class ForestPatchBaker {
 public:
     static ForestPatchBakeResult bake(const QVector<ForestBakeInstance> &instances,
-                                       int patchSpan = 1);
+                                       int patchSpan = 1,
+                                       const std::function<bool(int, int)> &progress = {});
 };
 
 #endif

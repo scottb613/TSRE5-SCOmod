@@ -22,6 +22,7 @@ public:
     virtual ~PropertiesForest();
     bool support(GameObj* obj);
     void showObj(GameObj* obj);
+    QPushButton *hacksButton() { return &hacks; }
     
 public slots:
     void sizeEnabled(QString val);
@@ -31,8 +32,10 @@ public slots:
     void customDetailLevelEdited(QString val);
     
 signals:
+    void hacksToggled(GameObj *obj, QPushButton *button, bool checked);
     
 private:
+    QPushButton hacks;
     ForestObj *forestObj;
     QLineEdit sizeX;
     QLineEdit sizeY;

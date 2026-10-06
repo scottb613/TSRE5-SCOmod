@@ -1,0 +1,3 @@
+# Preserve the pinned upstream header byte-for-byte, including its blank-line tab.
+# First-party files retain the normal release whitespace checks.
+cgltf.h whitespace=-blank-at-eol

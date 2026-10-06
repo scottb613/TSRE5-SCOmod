@@ -167,9 +167,11 @@ public slots:
     void bakeVegetationPointerTile();
     void bakeAllVegetation();
     void deleteAllPolyVegBakes();
+    void replaceRouteForests();
     void deleteAllWireBakes();
     void resetWirePreviewsOnExit();
     bool hasPendingGeneratedWork() const;
+    bool hasUnbakedGeneratedWork() const;
     void setTerrainToObj();
     void smoothTerrainToObj();
     void setTerrainToNearestDbTile();
@@ -327,9 +329,12 @@ private:
     bool polyVegBatchBake = false;
     int polyVegBatchTileX = 0;
     int polyVegBatchTileZ = 0;
-    int polyVegBatchSourceCount = 0;
-    int polyVegBatchBlockCount = 0;
+    qint64 polyVegBatchSourceCount = 0;
+    qint64 polyVegBatchBlockCount = 0;
     ForestBakeSession polyVegBakeSession;
+    ForestBakeSession *polyVegReplacementFiles = nullptr;
+    bool forestReplacementBusy = false;
+    std::function<bool(int, int)> forestReplacementBakeProgress;
     QBasicTimer timer;
     unsigned long long int lastTime = 0;
     unsigned long long int timeNow = 0;

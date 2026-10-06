@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
     TSREvc
-    VERSION 0.17.0
+    VERSION 0.18.0
     DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )
@@ -112,6 +112,24 @@ if(TSRE_ENABLE_WARNINGS)
 endif()
 
 if(BUILD_TESTING)
+    add_executable(tsre_gltf_graphics_probe
+        tests/GltfGraphicsProbe.cpp GltfModel.cpp GltfPreview.cpp)
+    target_include_directories(tsre_gltf_graphics_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_gltf_graphics_probe PRIVATE Qt6::Core Qt6::Gui Qt6::OpenGL)
+    add_test(NAME tsre_gltf_graphics_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_gltf_graphics_probe>")
+    set_tests_properties(tsre_gltf_graphics_probe PROPERTIES TIMEOUT 30)
+    add_executable(tsre_gltf_model_probe
+        tests/GltfModelProbe.cpp GltfModel.cpp)
+    target_include_directories(tsre_gltf_model_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_gltf_model_probe PRIVATE Qt6::Core Qt6::Gui)
+    add_test(NAME tsre_gltf_model_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_gltf_model_probe>"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/orts-static")
     add_executable(tsre_auto_place_wire_probe
         tests/AutoPlaceWireProbe.cpp
         AutoPlaceWire.cpp)
@@ -498,6 +516,18 @@ if(BUILD_TESTING)
             "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
             "$<TARGET_FILE:tsre_forest_patch_baker_probe>"
     )
+
+    add_executable(tsre_forest_replacement_probe
+        tests/ForestReplacementProbe.cpp
+        ForestGenerator.cpp
+        ForestPatchBaker.cpp
+        ForestBakeManifest.cpp)
+    target_include_directories(tsre_forest_replacement_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_forest_replacement_probe PRIVATE Qt6::Core Qt6::Gui)
+    add_test(NAME tsre_forest_replacement_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        "$<TARGET_FILE:tsre_forest_replacement_probe>")
 
     add_executable(
         tsre_bake_forest_patch

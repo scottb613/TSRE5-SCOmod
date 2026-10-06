@@ -1,0 +1,27 @@
+{
+  "license": "CC0-1.0",
+  "generator": "5.2.1 LTS",
+  "units": "metres",
+  "pivot": "ground centre",
+  "orts_minimum": [
+    -2,
+    0,
+    -3
+  ],
+  "orts_maximum": [
+    2,
+    2.85,
+    3
+  ],
+  "extensions": [
+    "KHR_materials_unlit"
+  ],
+  "files": {
+    "fixture_preview.png": "06766e84db62c5275cabfa545149aecfc8fe289c99e992fff962f2bf3f85fa88",
+    "orts_static_probe.bin": "2acb81025a42516d4d216981cab50dad0206f1ea67aa8f93ed269a52254a0ec8",
+    "orts_static_probe.blend": "729335580a6a0813873cd9705bcfd49a4a07a0cd754b5f9d74aa9de3873d79b8",
+    "orts_static_probe.glb": "af6420b3d7d90f1fe87c8f2acc65266e75b78f93621a5559add97d5a41ebd448",
+    "orts_static_probe.gltf": "12e6d72ec097c812792fdbefb5b9b8e246f1ff2591157e479122d2eb52ec5b3f",
+    "probe_quadrants.png": "841f7ee8778244d3d36a08de13e51dd7f355a1572722cd6eb4ca3a32c12c5be4"
+  }
+}

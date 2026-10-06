@@ -12,6 +12,7 @@
 #include "Game.h"
 #include "ShapeViewerGLWidget.h"
 #include "CameraRot.h"
+#include "GuiFunct.h"
 
 ShapeViewWindow::ShapeViewWindow(QWidget* parent) : QWidget(parent) {
     this->setWindowFlags(Qt::WindowMaximizeButtonHint);
@@ -21,6 +22,9 @@ ShapeViewWindow::ShapeViewWindow(QWidget* parent) : QWidget(parent) {
     this->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
     this->resize(384,256);
     glShapeWidget = new ShapeViewerGLWidget(parent);
+    connect(glShapeWidget, &ShapeViewerGLWidget::gltfPreviewError, this,
+            [this](const QString &error){ GuiFunct::showEditorStopped(this, "glTF preview", error); },
+            Qt::QueuedConnection);
     if(Game::colorShapeView != NULL)
         glShapeWidget->setBackgroundGlColor(Game::colorShapeView->redF(), Game::colorShapeView->greenF(), Game::colorShapeView->blueF());
     camera = new CameraRot();

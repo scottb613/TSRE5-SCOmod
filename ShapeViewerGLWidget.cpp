@@ -19,6 +19,8 @@
 #include <math.h>
 #include "GLUU.h"
 #include "SFile.h"
+#include "GltfPreview.h"
+#include <algorithm>
 #include "Eng.h"
 #include "EngLib.h"
 #include "Game.h"
@@ -26,11 +28,9 @@
 #include "CameraFree.h"
 #include "CameraConsist.h"
 #include "GLMatrix.h"
-#include "EngLib.h"
 #include "ConLib.h"
 #include "Consist.h" 
 #include "ShapeLib.h"
-#include "EngLib.h"
 #include "ActLib.h"
 #include "Activity.h"
 #include "ShapeTextureInfo.h"
@@ -45,11 +45,15 @@ m_zRot(0) {
 }
 
 ShapeViewerGLWidget::~ShapeViewerGLWidget() {
-
+    if(gltfPreview && context() && context()->isValid()) cleanup();
+    delete gltfPreview;
+    gltfPreview = nullptr;
 }
 
 void ShapeViewerGLWidget::cleanup() {
     makeCurrent();
+    if(gltfPreview) gltfPreview->release();
+    gltfRenderFailed = false;
     //delete gluu->m_program;
     //gluu->m_program = 0;
     doneCurrent();
@@ -321,6 +325,19 @@ void ShapeViewerGLWidget::paintGL() {
             //qDebug() << fabs(sFile->bound[2]-sFile->bound[3]);
             //qDebug() << fabs(sFile->bound[4]-sFile->bound[5]);
             camera->setPos(-max*1.2,fabs(sFile->bound[2]-sFile->bound[3])/2.0,0.0);
+        }
+    }
+
+    if(renderItem == 6 && gltfPreview && !gltfRenderFailed){
+        QMatrix4x4 projection;
+        QMatrix4x4 viewModel;
+        std::copy(gluu->pMatrix, gluu->pMatrix + 16, projection.data());
+        std::copy(gluu->mvMatrix, gluu->mvMatrix + 16, viewModel.data());
+        viewModel.translate(-(gltfPreview->model.minimum + gltfPreview->model.maximum) * 0.5f);
+        QString error;
+        if(!gltfPreview->draw(projection * viewModel, error)){
+            gltfRenderFailed = true;
+            emit gltfPreviewError(error);
         }
     }
 
@@ -632,6 +649,15 @@ void ShapeViewerGLWidget::showCon(int aid, int id){
 }
 
 void ShapeViewerGLWidget::showShape(QString path, QString texPath, SFile **currentSFile){
+    if(GltfModel::accepts(path)) {
+        QString error;
+        QStringList warnings;
+        if(showGltf(path, error, warnings)) {
+            if(currentSFile) *currentSFile = nullptr;
+            if(!warnings.isEmpty()) qWarning() << "glTF preview limitations:" << warnings;
+        } else emit gltfPreviewError(error);
+        return;
+    }
     int shapeId;
     if(texPath.length() > 0)
         shapeId = currentShapeLib->addShape(path, texPath);
@@ -648,6 +674,34 @@ void ShapeViewerGLWidget::showShape(QString path, QString texPath, SFile **curre
     renderItem = 4;
     con = NULL;
     eng = NULL;
+}
+
+bool ShapeViewerGLWidget::showGltf(const QString &path, QString &error, QStringList &warnings){
+    auto pending = std::make_unique<GltfPreview>();
+    if(!pending->load(path, error)) return false;
+    warnings = pending->model.warnings;
+    if(gltfPreview){
+        if(context() && context()->isValid()){
+            makeCurrent();
+            gltfPreview->release();
+            doneCurrent();
+        }
+        delete gltfPreview;
+    }
+    gltfPreview = pending.release();
+    gltfRenderFailed = false;
+    renderItem = 6;
+    sFile = nullptr;
+    con = nullptr;
+    eng = nullptr;
+    cameraInit = false;
+    const QVector3D size = gltfPreview->model.maximum - gltfPreview->model.minimum;
+    const float extent = std::max({1.0f, size.x(), size.y(), size.z()});
+    camera->setPos(-extent * 1.5f, 0, 0);
+    camera->setPlayerRot(float(M_PI / 2.0), 0);
+    resetRot();
+    update();
+    return true;
 }
 
 void ShapeViewerGLWidget::showShape(SFile *currentSFile){

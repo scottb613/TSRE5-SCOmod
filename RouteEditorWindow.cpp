@@ -381,6 +381,11 @@ RouteEditorWindow::RouteEditorWindow() {
     }
     PropertiesStatic *staticProperties =
         qobject_cast<PropertiesStatic*>(objProperties["Static"]);
+    PropertiesForest *forestProperties =
+        qobject_cast<PropertiesForest*>(objProperties["Forest"]);
+    if(forestProperties != NULL && trackProperties != NULL)
+        QObject::connect(forestProperties, &PropertiesForest::hacksToggled,
+                         trackProperties, &PropertiesTrackObj::toggleHacksForSelection);
     if(staticProperties != NULL && trackProperties != NULL){
         QObject::connect(staticProperties, &PropertiesStatic::hacksToggled,
                          trackProperties, &PropertiesTrackObj::toggleHacksForSelection);
@@ -409,6 +414,9 @@ RouteEditorWindow::RouteEditorWindow() {
         QObject::connect(trackProperties,
                          &PropertiesTrackObj::deleteAllPolyVegBakesRequested,
                          glWidget, &RouteEditorGLWidget::deleteAllPolyVegBakes);
+        QObject::connect(trackProperties,
+                         &PropertiesTrackObj::replaceRouteForestsRequested,
+                         glWidget, &RouteEditorGLWidget::replaceRouteForests);
         QObject::connect(trackProperties,
                          &PropertiesTrackObj::deleteAllWireBakesRequested,
                          glWidget, &RouteEditorGLWidget::deleteAllWireBakes);
@@ -678,6 +686,10 @@ RouteEditorWindow::RouteEditorWindow() {
     vViewForestRegions = GuiFunct::newMenuCheckAction(tr("&Forest Region"), this, Game::viewForestRegions);
     viewMenu->addAction(vViewForestRegions);
     QObject::connect(vViewForestRegions, SIGNAL(triggered(bool)), this, SLOT(viewForestRegions(bool)));
+    vViewPolyVeg = GuiFunct::newMenuCheckAction(tr("&PolyVeg"), this, Game::viewPolyVeg);
+    viewMenu->addAction(vViewPolyVeg);
+    vViewPolyVeg->setToolTip(tr("Uncheck to hide all PolyVeg shapes and bake markers."));
+    QObject::connect(vViewPolyVeg, &QAction::toggled, this, &RouteEditorWindow::viewPolyVeg);
     vViewTrackDbLines = GuiFunct::newMenuCheckAction(tr("Track&DB Lines"), this); 
     viewMenu->addAction(vViewTrackDbLines);
     QObject::connect(vViewTrackDbLines, SIGNAL(triggered(bool)), this, SLOT(viewTrackDbLines(bool)));    
@@ -1233,7 +1245,8 @@ void RouteEditorWindow::closeEvent(QCloseEvent * event ){
    
     UnsavedDialog unsavedDialog;   /// EFO need to add the stwqc here when terrain and world are split
     unsavedDialog.setMsg("Save changes in route?");
-    if(glWidget->hasPendingGeneratedWork()) unsavedDialog.setGeneratedWorkPrompt();
+    if(glWidget->hasPendingGeneratedWork())
+        unsavedDialog.setGeneratedWorkPrompt(glWidget->hasUnbakedGeneratedWork());
     for(int i = 0; i < unsavedItems.size(); i++){
         unsavedDialog.items.addItem(unsavedItems[i]);
     }
@@ -1857,6 +1870,8 @@ void RouteEditorWindow::showProperties(GameObj* obj){
                 qobject_cast<PropertiesTerrain*>(objProperties["Terrain"]);
             PropertiesSignal *signalProperties =
                 qobject_cast<PropertiesSignal*>(objProperties["Signal"]);
+            PropertiesForest *forestProperties =
+                qobject_cast<PropertiesForest*>(objProperties["Forest"]);
             if(polyVegBakeProperties != NULL && polyVegBakeProperties->support(obj))
                 visibleHacksButton = polyVegBakeProperties->hacksButton();
             else if(staticProperties != NULL && staticProperties->support(obj))
@@ -1865,6 +1880,8 @@ void RouteEditorWindow::showProperties(GameObj* obj){
                 visibleHacksButton = terrainProperties->hacksButton();
             else if(signalProperties != NULL && signalProperties->support(obj))
                 visibleHacksButton = signalProperties->hacksButton();
+            else if(forestProperties != NULL && forestProperties->support(obj))
+                visibleHacksButton = forestProperties->hacksButton();
         }
         trackProperties->adoptHacksButton(visibleHacksButton);
     }
@@ -2007,6 +2024,11 @@ void RouteEditorWindow::viewInteractives(bool show){
 }
 void RouteEditorWindow::viewForestRegions(bool show){
     Game::viewForestRegions = show;
+}
+void RouteEditorWindow::viewPolyVeg(bool show){
+    Game::viewPolyVeg = show;
+    qInfo() << "PolyVeg visibility:" << (show ? "visible" : "hidden");
+    glWidget->update();
 }
 void RouteEditorWindow::viewTrackDbLines(bool show){
     Game::viewTrackDbLines = show;

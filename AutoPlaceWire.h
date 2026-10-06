@@ -6,6 +6,8 @@
 #include <QVector3D>
 #include <QString>
 #include <QSet>
+#include <QPair>
+#include <functional>
 
 // Independent AP wire geometry/serialization. No PolyVeg data or ownership.
 namespace AutoPlaceWire {
@@ -39,8 +41,11 @@ Mesh mesh(const QJsonObject &span, bool distant = false);
 QString shapeName(const QString &key);
 QJsonObject reconcileReservation(QJsonObject span, bool present);
 bool isWireShape(const QString &name);
+using CleanupProgress = std::function<void(const QString &, int, int)>;
+bool findWireWorldTiles(const QString &routePath, QVector<QPair<int, int>> &tiles,
+                        QString &error, const CleanupProgress &progress = {});
 bool pruneAssets(const QString &routePath, QJsonObject &spans, bool all, QString &error,
-                 bool allowSavedReferences = false);
+                 bool allowSavedReferences = false, const CleanupProgress &progress = {});
 bool discardBakes(const QString &routePath, QJsonObject &spans,
                   const QSet<QString> &keys, QString &error);
 QSet<QString> connectedSpans(const QJsonObject &spans, const QString &support, int node, bool road);

@@ -33,6 +33,8 @@
 #include "ShapeHierarchyInfo.h"
 #include "ContentHierarchyInfo.h"
 #include "SFile.h"
+#include "GltfModel.h"
+#include <QStatusBar>
 
 ShapeViewerWindow::ShapeViewerWindow() : QMainWindow() {
     Game::shadowsEnabled = 0;
@@ -44,6 +46,11 @@ ShapeViewerWindow::ShapeViewerWindow() : QMainWindow() {
 
     navigatorWidget = new ShapeViewerNavigatorWidget(this);
     glShapeWidget = new ShapeViewerGLWidget(this);
+    connect(glShapeWidget, &ShapeViewerGLWidget::gltfPreviewError, this,
+            [this](const QString &message){
+                statusBar()->showMessage("glTF preview failed: " + message);
+                GuiFunct::showEditorStopped(this, "glTF preview", message);
+            }, Qt::QueuedConnection);
     if(Game::colorShapeView != NULL)
         glShapeWidget->setBackgroundGlColor(Game::colorShapeView->redF(), Game::colorShapeView->greenF(), Game::colorShapeView->blueF());
 
@@ -285,6 +292,24 @@ void ShapeViewerWindow::loadFile(QString path){
     qDebug() << dir;
     QString filename = path.section("/",-1,-1);
     qDebug() << filename;
+
+    if(GltfModel::accepts(path)){
+        QString error;
+        QStringList warnings;
+        if(!glShapeWidget->showGltf(path, error, warnings)){
+            GuiFunct::showEditorStopped(this, "glTF preview", error);
+            return;
+        }
+        currentShape = nullptr;
+        currentItemType = "gltf";
+        texturesWindow->clearLists();
+        hierarchyWindow->clearLists();
+        updateTextureInfo(true);
+        statusBar()->showMessage("glTF editor preview: base colour and cutouts. "
+                + warnings.join(" "));
+        return;
+    }
+    statusBar()->clearMessage();
     
     if(filename.endsWith(".s", Qt::CaseInsensitive)){
         if(dir.endsWith("/shapes", Qt::CaseInsensitive)){

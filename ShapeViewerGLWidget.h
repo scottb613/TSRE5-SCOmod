@@ -17,9 +17,11 @@
 #include <QOpenGLBuffer>
 #include <QMatrix4x4>
 #include <QBasicTimer>
+#include <QStringList>
 #include <math.h>
 
 class SFile;
+class GltfPreview;
 class Eng;
 class Consist;
 class GLUU;
@@ -56,6 +58,7 @@ public:
     void fillCurrentShapeHierarchyInfo(ShapeHierarchyInfo *info);
     void fillCurrentShapeTextureInfo(QHash<int, ShapeTextureInfo*> &list);
     void fillCurrentContentHierarchyInfo(QVector<ContentHierarchyInfo*> &list);
+    bool showGltf(const QString &path, QString &error, QStringList &warnings);
 public slots:
     void showEng(QString path, QString name);
     void showEng(Eng *e);
@@ -78,6 +81,7 @@ signals:
     void selected(int id);
     void refreshItem();
     void replaceSelectedUnitRequested();
+    void gltfPreviewError(const QString &message);
     
 protected:
     void initializeGL() Q_DECL_OVERRIDE;
@@ -109,6 +113,8 @@ private:
     bool mouseRPressed = false;
     bool mouseLPressed = false;
     SFile* sFile = NULL;
+    GltfPreview* gltfPreview = nullptr;
+    bool gltfRenderFailed = false;
     Eng* eng = NULL;
     Consist* con = NULL;
     Camera* camera = NULL;

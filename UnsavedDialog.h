@@ -23,7 +23,7 @@ public:
     void setMsg(QString msg);
     void setSubtitle(QString subtitle);
     void hideButtons();
-    void setGeneratedWorkPrompt();
+    void setGeneratedWorkPrompt(bool needsBake);
     int changed = 0;
     
 public slots:

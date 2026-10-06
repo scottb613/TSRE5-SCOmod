@@ -193,7 +193,7 @@ foreach ($document in @(
     "TEST-MATRIX-$Version.md", 'THIRD-PARTY-NOTICES.txt',
     'POLYVEG-USER-GUIDE.md', 'WATER-RULER-USER-GUIDE.md',
     'scoFileEdit.txt', 'scoGitRelease.txt', 'scoKeyList.txt',
-    'scoUiStyle.txt', 'scoWorkList.txt', 'workList.rtf'
+    'scoUiStyle.txt', 'scoWorkList.txt'
 )) {
     $documentPath = Join-Path $releaseCopy $document
     if (Test-Path -LiteralPath $documentPath -PathType Leaf) {

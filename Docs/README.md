@@ -9,20 +9,16 @@ GenX is an actively developed editor, not a demonstration port. Back up a
 route before major terrain, water, track, or vegetation work and evaluate new
 workflows on a copy first.
 
-> **Current version: v0.17.** Native SNAP wires, expanded route diagnostics, safer generated-work cleanup and editor reliability improvements. Both clean Release compiler lanes passed all 25 tests. See the test matrix for coverage.
+> **Current version: v0.18.** Forest-to-PolyVeg replacement, lightweight glTF/GLB model support, independent PolyVeg visibility and wire workflow improvements. Both clean Release compiler lanes passed all 28 tests and the operator accepted remaining manual checks on 6 October 2026. v0.17 remains the immutable prior-release baseline.
 
-> **Prior release: v0.16.** Earlier release records remain unchanged.
+## v0.18 Highlights
 
-## v0.17 Highlights
+- Route-wide Forest replacement with coverage checks, exclusions and rollback.
+- Shape Viewer and Static/Pickup glTF/GLB base-colour previews and placement.
+- Independent View > PolyVeg visibility for vegetation and bake markers.
+- Clear Save & Quit versus Bake & Save prompts and responsive wire deletion.
 
-- F5 pole placement, numbered SNAP wire runs, Commit/Bake/Save and scoped cleanup.
-- Separate SCOsnapPole example ZIP and complete SNAP Pole and Wire guide.
-- F11 full-route scans, review controls and route-local track-section preservation.
-- Pickup alignment, moving-table activation, Snow textures and shape reload.
-- Safer terrain/generated saves, activity preview and Consist Builder launch audio.
-
-See [v0.17 release notes](RELEASE-NOTES-v0.17.md) for the full changes since v0.16
-and [the test matrix](TEST-MATRIX-v0.17.md) for verified results and acceptance scope.
+See [v0.18 release notes](RELEASE-NOTES-v0.18.md) for the new changes followed by the complete grouped GenX feature summary, and [the test matrix](TEST-MATRIX-v0.18.md) for verified results and coverage limits.
 
 ## Previous Release Highlights
 
@@ -119,7 +115,7 @@ locally only for forensic comparison. Use v0.15 instead.
 
 ### Source
 
-1. Use the `v0.17` tag for the exact release source or
+1. Use the `v0.18` tag for the exact release source, or
    `tsre-scomod-wip` for continuing development.
 2. Install the Qt 6.11.1 and vcpkg prerequisites described by the checked-in
    CMake presets.
@@ -137,7 +133,7 @@ plugins, and packaged assets must remain compiler-matched.
 
 ### Packaged Binary
 
-Download `tsre-scomod-v0.17.zip` and its matching `.sha256` companion. GitHub source archives are not
+Download `tsre-scomod-v0.18.zip` and its matching `.sha256` companion from the v0.18 release. GitHub source archives are not
 runnable Windows packages. Verify the checksum, extract the complete ZIP to a
 permanent writable folder, and run **AddShortcutDesktop.cmd**. Launch using the
 generated **TSRE GenX** shortcut. Move the shortcut only after creating it and
@@ -163,18 +159,15 @@ from the application. See [SNAP Pole and Wire User Guide](SNAP-POLE-WIRE-USER-GU
 
 ## Verification
 
-Final operator-run clean MinGW and MSVC Release builds each passed all 25
-registered tests on 29 September 2026. See [TEST-MATRIX-v0.17.md](TEST-MATRIX-v0.17.md)
-for exact hashes, timings, remaining manual checks and packaging status. These
-passes do not establish exhaustive simulator or Activity Builder coverage.
+Both operator-run clean v0.18 Release builds passed all 28 registered tests on 6 October 2026: MinGW in 4.82 s and MSVC in 5.00 s. The operator accepted the remaining manual checks. See [TEST-MATRIX-v0.18.md](TEST-MATRIX-v0.18.md) for executable hashes and coverage limits. These results do not claim exhaustive simulator compatibility or full PBR/animation support.
 
 ## Documentation
 
 This source folder contains the public editor source and synchronized release
 documents:
 
-- [`RELEASE-NOTES-v0.17.md`](RELEASE-NOTES-v0.17.md) — grouped release notes.
-- [`TEST-MATRIX-v0.17.md`](TEST-MATRIX-v0.17.md) — current verification record.
+- [`RELEASE-NOTES-v0.18.md`](RELEASE-NOTES-v0.18.md) — latest changes and grouped feature summary.
+- [`TEST-MATRIX-v0.18.md`](TEST-MATRIX-v0.18.md) — current verification record.
 - [`SNAP-POLE-WIRE-USER-GUIDE.md`](SNAP-POLE-WIRE-USER-GUIDE.md) — pole installation, placement, wire lifecycle and model conventions.
 - [`POLYVEG-USER-GUIDE.md`](POLYVEG-USER-GUIDE.md) — complete PolyVeg schema,
   planting, ruler, bake, cleanup, and troubleshooting cheat sheet.
@@ -209,7 +202,7 @@ documents:
   tile selection, reset boundaries, save/reload validation, and troubleshooting.
 - [`scoKeyList.txt`](scoKeyList.txt) — Route Editor shortcuts.
 - [`scoUiStyle.txt`](scoUiStyle.txt) — canonical interface rules.
-- [`scoWorkList.txt`](scoWorkList.txt) — historical engineering record.
+- [`scoWorkList.txt`](scoWorkList.txt) — grouped feature summary.
 - [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt) — third-party licenses
   and acknowledgments.
 

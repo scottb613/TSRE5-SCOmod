@@ -125,6 +125,7 @@ public:
     static bool viewTerrainShape;
     static bool viewInteractives;
     static bool viewForestRegions;
+    static bool viewPolyVeg;
     static bool viewTrackDbLines;
     static bool viewTsectionLines;
     static bool viewMarkers;

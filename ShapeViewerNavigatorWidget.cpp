@@ -115,9 +115,10 @@ void ShapeViewerNavigatorWidget::listDirectoryFiles(QString filepath){
         if(pfile == "." || pfile == "..")   
             continue;
         if(!pfile.endsWith(".s", Qt::CaseInsensitive) 
+                && !pfile.endsWith(".gltf", Qt::CaseInsensitive)
+                && !pfile.endsWith(".glb", Qt::CaseInsensitive)
                 && !pfile.endsWith(".con", Qt::CaseInsensitive) 
-                && !pfile.endsWith(".eng", Qt::CaseInsensitive)
-                && !pfile.endsWith(".s", Qt::CaseInsensitive))
+                && !pfile.endsWith(".eng", Qt::CaseInsensitive))
             continue;
         filenames.push_back(pfile);
     }

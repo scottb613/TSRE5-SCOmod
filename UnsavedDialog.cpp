@@ -128,11 +128,15 @@ void UnsavedDialog::setSubtitle(QString subtitle){
     subtitleLabel.show();
 }
 
-void UnsavedDialog::setGeneratedWorkPrompt(){
-    bok->setText("Bake & Save");
+void UnsavedDialog::setGeneratedWorkPrompt(bool needsBake){
+    bok->setText(needsBake ? "Bake & Save" : "Save & Quit");
     if(bexit) bexit->setText("Discard");
-    setMsg("The generated items listed below have not been baked and saved. "
-           "Bake & Save saves all route changes before exiting. "
+    const QString saveMessage = needsBake
+        ? "The generated items listed below include unbaked objects. "
+          "Bake & Save bakes remaining raw objects and saves all route changes before exiting. "
+        : "The generated items listed below are already baked, but their route placements have not been saved. "
+          "Save & Quit saves all route changes before exiting. ";
+    setMsg(saveMessage +
            "Discard exits without saving route changes and removes pending generated "
            "objects, their owned shapes and tracking data. Previously saved bakes "
            "and shared source assets are preserved.");

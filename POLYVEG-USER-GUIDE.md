@@ -10,6 +10,14 @@ performance.
 > baking deliberately clears the Undo history. Save and inspect a small test
 > area before committing a large planting operation.
 
+## View visibility
+
+Use **View > PolyVeg**, beside **Forest Region**, to show or hide generated raw
+PolyVeg, all vegetation shapes named by the route's PolyVeg schema, and baked
+blocks (including saved/reopened placements). Checked means visible. Unchecking also hides bake
+markers and prevents viewport picking of hidden vegetation. This session-only
+view setting leaves planting, baking and saved route contents unchanged.
+
 ## Quick start
 
 1. Run SCO LIDEX **Create Map Tiles** for the route. PolyVeg polygon planting
@@ -27,6 +35,34 @@ performance.
 7. Inspect the raw objects. Use **Undo** immediately if the result is wrong.
 8. Save when planting looks right: Save automatically bakes owned raw PolyVeg on loaded tiles, together with active raw wires, before writing world placements.
 9. For an explicit bake first, use **Bake PolyVeg Tile** or **Bake PolyVeg Area**, then Save and reopen to inspect the result.
+
+## Replace legacy Forest regions across the route
+
+Select the desired schema and planting settings in F6. Select an existing
+Forest region, then choose **Hacks...** on its **Forest Region** card and
+**Replace All Forest Regions** in HACKS.
+
+The tool surveys the entire current route, merges overlapping Forest footprints,
+and asks you to confirm the schema, region count, merged area, affected tiles,
+and planting settings. The F6 **Cap applies per tile** for this action.
+Original forest populations and textures do not determine the replacement mix.
+Mapped forest polygons are not required.
+
+TrackDB, RoadDB, water, slope, spacing and feather settings apply. Submerged
+ground is always excluded, including at zero water setback. Existing PolyVeg
+or conflicting bake assets on affected tiles block the operation and are
+reported before replacement.
+
+Progress and Cancel remain available while rendering and editing are paused.
+Each tile is generated and baked before proceeding to the next; raw vegetation
+for the entire route is never accumulated. Empty tiles are counted and skipped;
+exclusions or a tiny fragment below the density threshold do not stop the batch.
+If the entire route produces zero plants, its original forests remain unchanged.
+Cancel/errors remove this batch's additions and restore its
+generated files; original forests remain until all tiles succeed. Baking clears
+Undo history. Save normally after success and inspect the route after reopening.
+If file rollback reports an I/O error, keep the route open and resolve it before
+saving. Work on a backed-up route.
 
 ## Required route files
 
@@ -319,3 +355,21 @@ For production route work, use this order:
 8. Bake one tile and inspect it.
 9. Bake the remaining loaded area.
 10. Save, reopen, and perform a final visual inspection.
+
+## Replace all legacy Forest regions
+
+Select a Forest region and use **Hacks... > Replace All Forest Regions**. Select
+and check your F6 PolyVeg schema and settings first. The tool surveys the whole
+route, merges overlapping footprints, checks terrain and existing vegetation,
+and asks for confirmation before generating and baking one tile at a time.
+
+Planting respects track/road/water clearances, submerged ground, slope and spacing.
+Terrain coverage gaps are omitted and reported. Empty tiles are counted. Progress
+and Cancel are available while rendering and editing pause.
+
+Successful replacement removes **all original Forest regions**, including those
+outside terrain coverage. Cancel or handled failures preserve originals and roll
+back new objects/assets. A wholly empty or uncovered route cannot commit.
+
+Back up first. **Save after successful completion**, then reopen and inspect.
+Baking clears Undo. Existing PolyVeg on affected covered tiles blocks replacement.

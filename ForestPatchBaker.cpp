@@ -213,13 +213,15 @@ bool ForestShapeTextIO::readCruciform(const QString &path, ForestShapeMesh &mesh
 }
 
 ForestPatchBakeResult ForestPatchBaker::bake(const QVector<ForestBakeInstance> &instances,
-                                             int patchSpan) {
+                                             int patchSpan,
+                                             const std::function<bool(int, int)> &progress) {
     ForestPatchBakeResult result;
     if(patchSpan < 1 || patchSpan > 16 || 16 % patchSpan != 0) {
         result.errors.append("Patch span must divide the tile's 16-patch grid.");
         return result;
     }
     QHash<QString, ForestShapeMesh> templates;
+    int processed = 0;
     QHash<ForestPatchKey, QVector<ForestBakeInstance>> groups;
     for(const ForestBakeInstance &instance : instances) {
         if(instance.shapePath.trimmed().isEmpty()
@@ -244,6 +246,13 @@ ForestPatchBakeResult ForestPatchBaker::bake(const QVector<ForestBakeInstance> &
         patch.originY /= static_cast<double>(group.value().size());
         QHash<QString, int> meshByTexture;
         for(const ForestBakeInstance &instance : group.value()) {
+            if(progress && (processed % 128 == 0)
+                    && !progress(processed, instances.size())) {
+                result.errors.append("Vegetation bake cancelled.");
+                result.patches.clear();
+                return result;
+            }
+            ++processed;
             if(!templates.contains(instance.shapePath)) {
                 ForestShapeMesh source; QString error;
                 if(!ForestShapeTextIO::readCruciform(instance.shapePath, source, error)) {
@@ -303,7 +312,16 @@ ForestPatchBakeResult ForestPatchBaker::bake(const QVector<ForestBakeInstance> &
 
 bool ForestShapeTextIO::writePatch(const QString &path,
                                    const ForestBakedPatch &patch,
-                                   QString &error) {
+                                   QString &error,
+                                   const std::function<bool()> &continueWriting) {
+    int work = 0;
+    auto keepWriting = [&]() {
+        if(continueWriting && (++work % 1024 == 0) && !continueWriting()) {
+            error = "Vegetation shape writing cancelled.";
+            return false;
+        }
+        return true;
+    };
     qint64 vertexTotal = 0, indexTotal = 0;
     double radius = 1.0;
     for(const ForestShapeMesh &mesh : patch.meshes) {
@@ -326,6 +344,7 @@ bool ForestShapeTextIO::writePatch(const QString &path,
             return false;
         }
         for(const ForestShapeVertex &v : mesh.vertices) {
+            if(!keepWriting()) return false;
             if(!finiteFloat(v.x) || !finiteFloat(v.y) || !finiteFloat(v.z)
                     || !finiteFloat(v.nx) || !finiteFloat(v.ny)
                     || !finiteFloat(v.nz) || !finiteFloat(v.u)
@@ -364,16 +383,22 @@ bool ForestShapeTextIO::writePatch(const QString &path,
         << " texture_filter_names ( 1 named_filter_mode ( MipLinear ) )\r\n"
         << " points ( " << vertexCount << "\r\n";
     for(const ForestShapeMesh &mesh : patch.meshes)
-        for(const ForestShapeVertex &v : mesh.vertices)
+        for(const ForestShapeVertex &v : mesh.vertices) {
+            if(!keepWriting()) { file.cancelWriting(); return false; }
             out << "  point ( " << v.x << ' ' << v.y << ' ' << v.z << " )\r\n";
+        }
     out << " )\r\n uv_points ( " << vertexCount << "\r\n";
     for(const ForestShapeMesh &mesh : patch.meshes)
-        for(const ForestShapeVertex &v : mesh.vertices)
+        for(const ForestShapeVertex &v : mesh.vertices) {
+            if(!keepWriting()) { file.cancelWriting(); return false; }
             out << "  uv_point ( " << v.u << ' ' << v.v << " )\r\n";
+        }
     out << " )\r\n normals ( " << vertexCount << "\r\n";
     for(const ForestShapeMesh &mesh : patch.meshes)
-        for(const ForestShapeVertex &v : mesh.vertices)
+        for(const ForestShapeVertex &v : mesh.vertices) {
+            if(!keepWriting()) { file.cancelWriting(); return false; }
             out << "  vector ( " << v.nx << ' ' << v.ny << ' ' << v.nz << " )\r\n";
+        }
     out << " )\r\n sort_vectors ( 1 vector ( 0 0 0 ) )\r\n colours ( 0 )\r\n"
         << " matrices ( 1 matrix MAIN ( 1 0 0 0 1 0 0 0 1 0 0 0 ) )\r\n"
         << " images ( " << patch.meshes.size() << "\r\n";
@@ -404,6 +429,7 @@ bool ForestShapeTextIO::writePatch(const QString &path,
     for(const ForestShapeMesh &mesh : patch.meshes) {
         for(qsizetype vertexIndex = 0;
                 vertexIndex < mesh.vertices.size(); ++vertexIndex) {
+            if(!keepWriting()) { file.cancelWriting(); return false; }
             out << "     vertex ( 00000000 " << globalVertex << ' ' << globalVertex
                 << " FFFFFFFF FF000000 vertex_uvs ( 1 " << globalVertex << " ) )\r\n";
             ++globalVertex;
@@ -416,12 +442,21 @@ bool ForestShapeTextIO::writePatch(const QString &path,
         const ForestShapeMesh &mesh = patch.meshes[meshIndex];
         out << "     prim_state_idx ( " << meshIndex << " )\r\n indexed_trilist ( vertex_idxs ( "
             << mesh.indices.size();
-        for(int index : mesh.indices) out << ' ' << meshOffset + index;
+        for(int index : mesh.indices) {
+            if(!keepWriting()) { file.cancelWriting(); return false; }
+            out << ' ' << meshOffset + index;
+        }
         const int meshTriangles = mesh.indices.size()/3;
         out << " ) normal_idxs ( " << meshTriangles;
-        for(int i = 0; i < meshTriangles; ++i) out << " 0 3";
+        for(int i = 0; i < meshTriangles; ++i) {
+            if(!keepWriting()) { file.cancelWriting(); return false; }
+            out << " 0 3";
+        }
         out << " ) flags ( " << meshTriangles;
-        for(int i = 0; i < meshTriangles; ++i) out << " 00000000";
+        for(int i = 0; i < meshTriangles; ++i) {
+            if(!keepWriting()) { file.cancelWriting(); return false; }
+            out << " 00000000";
+        }
         out << " ) )\r\n";
         meshOffset += mesh.vertices.size();
     }

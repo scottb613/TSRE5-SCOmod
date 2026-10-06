@@ -62,6 +62,7 @@ signals:
     void resetRouteTerrtexRequested();
     void disableRouteWaterRequested();
     void deleteAllPolyVegBakesRequested();
+    void replaceRouteForestsRequested();
     void deleteAllWireBakesRequested();
     
 private:

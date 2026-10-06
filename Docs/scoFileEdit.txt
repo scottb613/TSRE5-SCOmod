@@ -4,6 +4,25 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.18 source changes (selected feature files; prior entries follow)
+
+- ForestReplacementPlan.h, ForestGenerator.cpp/.h, ForestPatchBaker.cpp/.h,
+  PropertiesForest.cpp/.h, PropertiesTrackObj.cpp/.h and RouteEditorGLWidget.cpp/.h:
+  route-wide replacement, footprint generation, cancellation and batch rollback.
+- GltfModel.cpp/.h, GltfPreview.cpp/.h, GltfPlacementMath.h, GltfTextureBudget.h,
+  third_party/cgltf, ShapeLib.cpp/.h, StaticObj.cpp/.h, PickupObj.cpp/.h,
+  Tile.cpp, ObjTools.cpp and Shape Viewer integration: bounded native-model previews.
+- PolyVegObject.cpp/.h, Game.cpp/.h, Tile.cpp, StaticObj.cpp and route UI:
+  independent vegetation visibility and bake-marker filtering.
+- AutoPlaceWire.cpp/.h, RouteEditorGLWidget.cpp/.h, RouteEditorWindow.cpp/.h,
+  UnsavedDialog.cpp/.h: targeted wire deletion/progress and generated-work prompts.
+- ShapeViewerGLWidget.cpp, ShapeViewerNavigatorWidget.cpp, StaticObj.cpp:
+  duplicate include/filter and redundant pointer-check cleanup.
+- ForestReplacementProbe.cpp, GltfModelProbe.cpp, GltfGraphicsProbe.cpp and
+  AutoPlaceWireProbe.cpp: replacement, model/resource/render and wire cleanup cases.
+- CMakeLists.txt, vcpkg.json, Game.cpp and TSRE5_resource.rc: version/build identity.
+- Regression/UI PowerShell defaults target the current v0.18 pack.
+
 v0.17 source changes (selected feature files; prior entries follow)
 
 - AutoPlaceWire.cpp/.h, AutoPlaceRange.h, AutoPlaceInput.h, WireAttachmentOrder.h,

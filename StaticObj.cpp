@@ -24,6 +24,8 @@
 #include "ErrorMessage.h"
 #include "Renderer.h"
 #include "PolyVegObject.h"
+#include "GltfPreview.h"
+#include "GltfPlacementMath.h"
 
 StaticObj::StaticObj() {
     this->shape = -1;
@@ -36,6 +38,7 @@ bool StaticObj::allowNew(){
 }
 
 StaticObj::StaticObj(const StaticObj& o) : WorldObj(o) {
+    gltfShape = o.gltfShape;
     snapablePoints.append(o.snapablePoints);
     
 }
@@ -62,6 +65,15 @@ void StaticObj::loadingFixes(){
 }
 
 ErrorMessage* StaticObj::checkForErrors(){
+    if(gltfShape && !gltfShape->loadError.isEmpty()) {
+        auto *e = new ErrorMessage(ErrorMessage::Type_Warning, ErrorMessage::Source_World,
+                "Unable to display glTF scenery: " + fileName, gltfShape->loadError
+                + "\nThe existing world reference is retained for saving and repair.");
+        e->setObject((GameObj*)this);
+        e->setLocationXYZ(x, -y, position[0], position[1], -position[2]);
+        ErrorMessagesLib::PushErrorMessage(e);
+        return e;
+    }
     
     if(abs(position[0]) > 2047 || abs(position[2]) > 2047){
         ErrorMessage *e = new ErrorMessage(
@@ -103,10 +115,20 @@ ErrorMessage* StaticObj::checkForErrors(){
 }
 
 void StaticObj::load(int x, int y) {
-    this->shape = Game::currentShapeLib->addShape(resPath +"/"+ fileName);
-    this->shapePointer = Game::currentShapeLib->shape[this->shape];
-    this->shapeState = shapePointer->newState();
-    shapePointer->setAnimated(shapeState, isAnimated());
+    if(GltfModel::accepts(fileName)) {
+        QString error;
+        gltfShape = Game::currentShapeLib->getGltfShape(resPath + "/" + fileName, error);
+        shape = -1;
+        shapePointer = nullptr;
+        shapeState = 0;
+        gltfRenderFailed = false;
+    } else {
+        gltfShape.reset();
+        this->shape = Game::currentShapeLib->addShape(resPath +"/"+ fileName);
+        this->shapePointer = Game::currentShapeLib->shape[this->shape];
+        this->shapeState = shapePointer->newState();
+        shapePointer->setAnimated(shapeState, isAnimated());
+    }
     this->x = x;
     this->y = y;
     this->position[2] = -this->position[2];
@@ -167,6 +189,10 @@ void StaticObj::updateSim(float deltaTime){
 }
 
 void StaticObj::pushRenderItems(float lod, float posx, float posz, float* playerW, float* target, float fov, int selectionColor){
+    if(!Game::viewPolyVeg && PolyVegObject::isVegetationShape(fileName, polyVegRaw)) return;
+    // The batched renderer is inactive in this editor. GLB is currently scoped
+    // to the active immediate renderer; do not put it in the SFile-only queue.
+    if(gltfShape) return;
     if (!loaded) return;
     if (shape < 0) return;
     if (jestPQ < 2) return;
@@ -236,6 +262,37 @@ void StaticObj::pushRenderItems(float lod, float posx, float posz, float* player
 }
 
 void StaticObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos, float* target, float fov, int selectionColor, int renderMode) {
+    if(!Game::viewPolyVeg && PolyVegObject::isVegetationShape(fileName, polyVegRaw)) return;
+    if(gltfShape) {
+        if(!loaded || jestPQ < 2 || gltfShape->model.primitives.empty()) return;
+        if(renderMode == gluu->RENDER_SHADOWMAP && Game::mstsShadows
+                && getShadowType() != WorldObj::ShadowDynamic) return;
+        Mat4::multiply(gluu->mvMatrix, gluu->mvMatrix, matrix);
+        const QMatrix4x4 world = GltfPlacementMath::matrix(gluu->mvMatrix);
+        QMatrix4x4 projection;
+        const float *projectionValues = renderMode == gluu->RENDER_SHADOWMAP
+                ? gluu->pShadowMatrix : gluu->pMatrix;
+        std::copy(projectionValues, projectionValues + 16, projection.data());
+        QString error;
+        if(!gltfShape->draw(projection * world, error, selectionColor, world.determinant() < 0)) {
+            if(!gltfRenderFailed) qWarning() << "glTF draw failed:" << error;
+            gltfRenderFailed = true;
+            return;
+        }
+        gltfRenderFailed = false;
+        size = (gltfShape->model.maximum - gltfShape->model.minimum).length()
+                * std::max({matrixScale[0], matrixScale[1], matrixScale[2]});
+        if(selected && renderMode == gluu->RENDER_DEFAULT) {
+            if(gltfBoxRevision != gltfShape->revision) {
+                box.deleteVBO();
+                gltfBoxRevision = gltfShape->revision;
+            }
+            gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform,
+                    *reinterpret_cast<float(*)[4][4]>(gluu->mvMatrix));
+            drawBox();
+        }
+        return;
+    }
     if (!loaded) return;
     if (shape < 0) return;
     if (jestPQ < 2) return;
@@ -323,7 +380,7 @@ void StaticObj::snapped(int side){
 }
 
 bool StaticObj::hasLinePoints(){
-
+    if(gltfShape) return false;
     return true;
 }
 
@@ -342,12 +399,12 @@ void StaticObj::getLinePoints(float *&punkty){
 }
 
 void StaticObj::loadSnapablePoints() {
+    if(gltfShape || !shapePointer) return;
     if(snapable == true)
         return;
     snapable = this->shapePointer->isSnapable();
     if(snapable)
-        if(shapePointer != NULL)
-            this->shapePointer->addSnapablePoints(this->snapablePoints);
+        this->shapePointer->addSnapablePoints(this->snapablePoints);
 }
 
 void StaticObj::renderSnapableEndpoints(GLUU* gluu) {
@@ -402,6 +459,14 @@ void StaticObj::insertSnapablePoints(QVector<float>& points){
 }
 
 bool StaticObj::getSimpleBorder(float* border){
+    if(gltfShape) {
+        if(gltfShape->model.primitives.empty()) return false;
+        for(int axis = 0; axis < 3; ++axis) {
+            border[axis * 2] = gltfShape->model.minimum[axis];
+            border[axis * 2 + 1] = gltfShape->model.maximum[axis];
+        }
+        return true;
+    }
     if (shapePointer == 0) return false;
     if (!shapePointer->loaded)
         return false;
@@ -416,6 +481,11 @@ bool StaticObj::getSimpleBorder(float* border){
 }
 
 bool StaticObj::getBoxPoints(QVector<float>& points){
+    if(gltfShape) {
+        if(gltfShape->model.primitives.empty()) return false;
+        GltfPlacementMath::boxPoints(gltfShape->model.minimum, gltfShape->model.maximum, points);
+        return true;
+    }
     if (shapePointer == 0) return false;
     if (!shapePointer->loaded)
         return false;
@@ -428,6 +498,7 @@ QString StaticObj::getName(){
 
 QString StaticObj::getShapePath(){
     if (!loaded) return "";
+    if(gltfShape) return gltfShape->sourcePath;
     if (shapePointer == 0) return "";
     return shapePointer->pathid+"|"+shapePointer->texPath;
 }
@@ -484,6 +555,13 @@ void StaticObj::removeCollisions(){
 }
 
 void StaticObj::reload(){
+    if(gltfShape) {
+        QString error;
+        if(!gltfShape->load(resPath + "/" + fileName, error)) qWarning() << "glTF reload failed:" << error;
+        // The next draw refreshes the bounds in the owning OpenGL context.
+        else { gltfRenderFailed = false; }
+        return;
+    }
     if(shapePointer != NULL)
         shapePointer->reload();
 }

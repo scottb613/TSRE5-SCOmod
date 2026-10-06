@@ -219,10 +219,31 @@ ForestGenerationResult ForestGenerator::generate(
         result.errors.append("Planting boundary has no usable bounding area.");
         return result;
     }
+    QVector<double> samplingAreas;
+    double totalSamplingArea = 0;
+    for(const ForestSamplingRectangle &rectangle : settings.samplingRectangles) {
+        const double area = (rectangle.maximumX-rectangle.minimumX)
+            * (rectangle.maximumZ-rectangle.minimumZ);
+        if(!std::isfinite(rectangle.minimumX) || !std::isfinite(rectangle.minimumZ)
+                || !std::isfinite(rectangle.maximumX) || !std::isfinite(rectangle.maximumZ)
+                || rectangle.maximumX <= rectangle.minimumX
+                || rectangle.maximumZ <= rectangle.minimumZ || !std::isfinite(area)) {
+            result.errors.append("Invalid forest sampling rectangle.");
+            return result;
+        }
+        totalSamplingArea += area;
+        samplingAreas.append(totalSamplingArea);
+    }
+    if(!std::isfinite(totalSamplingArea)) {
+        result.errors.append("Forest sampling area exceeds the supported numeric range.");
+        return result;
+    }
 
     result.usableAreaSquareMetres = std::fabs(signedRingArea(boundary.outer));
     for(const ForestPlanRing &hole : boundary.holes)
         result.usableAreaSquareMetres -= std::fabs(signedRingArea(hole));
+    if(settings.usableAreaOverride >= 0.0)
+        result.usableAreaSquareMetres = settings.usableAreaOverride;
     if(result.usableAreaSquareMetres <= Epsilon) {
         result.errors.append("Planting boundary has no usable polygon area.");
         return result;
@@ -236,8 +257,12 @@ ForestGenerationResult ForestGenerator::generate(
         ? result.usableAreaSquareMetres
             / (resolvedRowWidth*resolvedRowSpacing)
         : result.usableAreaSquareMetres * settings.densityPerSquareMetre;
-    result.requestedCount = std::max(0,
-        static_cast<int>(std::llround(requestedCount)));
+    if(!std::isfinite(requestedCount)
+            || requestedCount > std::numeric_limits<int>::max()/100) {
+        result.errors.append("Requested planting exceeds the supported per-tile population.");
+        return result;
+    }
+    result.requestedCount = std::max(0, static_cast<int>(std::llround(requestedCount)));
     result.targetCount = result.requestedCount;
     if(settings.maximumTrees > 0 && result.targetCount > settings.maximumTrees) {
         result.targetCount = settings.maximumTrees;
@@ -256,7 +281,15 @@ ForestGenerationResult ForestGenerator::generate(
     const double rowNormalX = std::cos(rowRadians);
     const double rowNormalZ = -std::sin(rowRadians);
     QHash<qint64, QVector<int>> occupiedCells;
+    QVector<ForestCandidate> occupiedCandidates = settings.occupiedCandidates;
     double largestAcceptedRadius = 0.0;
+    for(int index = 0; index < occupiedCandidates.size(); ++index) {
+        const ForestCandidate &candidate = occupiedCandidates[index];
+        occupiedCells[cellKey(static_cast<int>(std::floor(candidate.x/cellSize)),
+                             static_cast<int>(std::floor(candidate.z/cellSize)))].append(index);
+        largestAcceptedRadius = std::max(largestAcceptedRadius,
+                                         candidate.scaledFootprintRadiusMetres);
+    }
     const int maximumAttempts = std::max(1000, result.targetCount * 100);
 
     while(result.candidates.size() < result.targetCount
@@ -270,10 +303,18 @@ ForestGenerationResult ForestGenerator::generate(
                 || result.attempts % 1000 == 0))
             settings.progress(result.attempts, maximumAttempts,
                               result.candidates.size(), result.targetCount);
-        ForestPlanPoint point {
-            random.range(minimumX, maximumX),
-            random.range(minimumZ, maximumZ)
-        };
+        ForestPlanPoint point;
+        if(settings.samplingRectangles.isEmpty()) {
+            point = {random.range(minimumX, maximumX), random.range(minimumZ, maximumZ)};
+        } else {
+            const double selectedArea = random.unit()*totalSamplingArea;
+            const auto selected = std::upper_bound(samplingAreas.cbegin(), samplingAreas.cend(), selectedArea);
+            const int index = std::min(static_cast<int>(selected-samplingAreas.cbegin()),
+                                       static_cast<int>(settings.samplingRectangles.size())-1);
+            const ForestSamplingRectangle &rectangle = settings.samplingRectangles[index];
+            point = {random.range(rectangle.minimumX, rectangle.maximumX),
+                     random.range(rectangle.minimumZ, rectangle.maximumZ)};
+        }
         if(settings.rowsEnabled) {
             // Use a route-global origin so rows remain continuous across
             // clipped polygon pieces and neighboring planting operations.
@@ -294,13 +335,17 @@ ForestGenerationResult ForestGenerator::generate(
             point.z += rowAdjustment*rowNormalZ
                 + alongAdjustment*rowAlongZ;
         }
-        if(!pointInBoundary(point, boundary)) {
+        if(!pointInBoundary(point, boundary)
+                || (settings.containsPlantingPoint
+                    && !settings.containsPlantingPoint(point.x, point.z))) {
             ++result.rejectedOutside;
             continue;
         }
         if(recipe.edgeFeatherMetres > Epsilon) {
             const double edgeAcceptance = std::clamp(
-                distanceToBoundary(point, boundary) / recipe.edgeFeatherMetres,
+                (settings.plantingEdgeDistance
+                    ? settings.plantingEdgeDistance(point.x, point.z)
+                    : distanceToBoundary(point, boundary)) / recipe.edgeFeatherMetres,
                 0.0, 1.0);
             if(random.unit() > edgeAcceptance) {
                 ++result.rejectedEdgeFeather;
@@ -333,7 +378,7 @@ ForestGenerationResult ForestGenerator::generate(
                     continue;
                 const QVector<int> &nearby = nearbyIt.value();
                 for(int acceptedIndex : nearby) {
-                    const ForestCandidate &accepted = result.candidates.at(acceptedIndex);
+                    const ForestCandidate &accepted = occupiedCandidates.at(acceptedIndex);
                     const double offsetX = point.x - accepted.x;
                     const double offsetZ = point.z - accepted.z;
                     const double requiredDistance = std::max(
@@ -362,8 +407,9 @@ ForestGenerationResult ForestGenerator::generate(
             vegetation.yawDegrees.minimum, vegetation.yawDegrees.maximum);
         candidate.uniformScale = scale;
         candidate.scaledFootprintRadiusMetres = radius;
-        const int candidateIndex = result.candidates.size();
+        const int candidateIndex = occupiedCandidates.size();
         result.candidates.append(candidate);
+        occupiedCandidates.append(candidate);
         occupiedCells[cellKey(cellX, cellZ)].append(candidateIndex);
         largestAcceptedRadius = std::max(largestAcceptedRadius, radius);
     }

@@ -16,6 +16,10 @@
 #include "WorldObj.h"
 #include "SFile.h"
 #include "StaticObj.h"
+#include "PolyVegObject.h"
+#include "ShapeLib.h"
+#include "GltfPreview.h"
+#include "GuiFunct.h"
 #include "DynTrackObj.h"
 #include "ForestObj.h"
 #include "TransferObj.h"
@@ -741,6 +745,24 @@ WorldObj* Tile::placeObject(float* p, float* q, Ref::RefItem* itemData, float* t
     }
 
     QString itemShapeName = itemData->getNextShapeName();
+    if(GltfModel::accepts(itemShapeName)) {
+        QString error;
+        if(itemData->type != "static" && itemData->type != "pickup")
+            error = "glTF placement currently supports Static scenery and Pickups only.";
+        else if(!Game::currentShapeLib) error = "The route shape library is unavailable.";
+        else {
+            const auto asset = Game::currentShapeLib->getGltfShape(nowy->resPath + "/" + itemShapeName, error);
+            // Explicit placement retries a repaired asset; ordinary tile loads
+            // still share cached failures rather than rereading per instance.
+            if(!error.isEmpty()) asset->load(nowy->resPath + "/" + itemShapeName, error);
+            if(asset->model.primitives.empty() && error.isEmpty()) error = "The model has no drawable geometry.";
+        }
+        if(!error.isEmpty()) {
+            GuiFunct::showEditorStopped(nullptr, "Model placement stopped", error);
+            delete nowy;
+            return nullptr;
+        }
+    }
     nowy->set("ref_class", itemData->clas);
     nowy->set("ref_filename", itemShapeName);
     nowy->set("ref_value", itemData->value);
@@ -1066,6 +1088,8 @@ void Tile::pushRenderItems(float* playerT, float* playerW, float* target, float 
 
     for (int i = 0; i < jestObiektow; i++) {
         if(obiekty[i] == NULL) continue;
+        if(!Game::viewPolyVeg && PolyVegObject::isVegetationShape(
+                obiekty[i]->fileName, obiekty[i]->polyVegRaw)) continue;
        
         if (obiekty[i]->loaded) {
             lodx = (x - playerT[0])*2048 + obiekty[i]->position[0] - playerW[0];
@@ -1106,6 +1130,8 @@ void Tile::render(float * playerT, float* playerW, float* target, float fov, int
     float lodx, lodz, lod;
     for (int i = 0; i < jestObiektow; i++) {
         if(obiekty[i] == NULL) continue;
+        if(!Game::viewPolyVeg && PolyVegObject::isVegetationShape(
+                obiekty[i]->fileName, obiekty[i]->polyVegRaw)) continue;
         if (obiekty[i]->loaded) {
             lodx = (x - playerT[0])*2048 + obiekty[i]->position[0] - playerW[0];
             lodz = (z - playerT[1])*2048 + obiekty[i]->position[2] - playerW[2];

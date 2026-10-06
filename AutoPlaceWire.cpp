@@ -43,8 +43,51 @@ bool isWireShape(const QString &name) {
     return QFileInfo(name).fileName()==name && pattern.match(name).hasMatch();
 }
 
+bool findWireWorldTiles(const QString &routePath, QVector<QPair<int, int>> &tiles,
+                        QString &error, const CleanupProgress &progress) {
+    tiles.clear(); error.clear();
+    QDir world(routePath+"/WORLD");
+    if(!world.exists() || !world.isReadable()) {
+        error="Wire cleanup requires a readable WORLD folder."; return false;
+    }
+    const auto files=world.entryList({"*.w"},QDir::Files);
+    QVector<QPair<int,int>> found;
+    int done=0;
+    for(const QString &file:files) {
+        if(progress) progress("Finding wire world tiles...",done++,int(files.size()));
+        QFile input(world.filePath(file));
+        QString text; QByteArray binary;
+        if(!input.open(QIODevice::ReadOnly) || input.size()>WireAssetScan::MaximumExpandedWorldBytes) {
+            error="Cannot scan saved world file for wire cleanup: "+file; return false;
+        }
+        const auto data=input.readAll();
+        if(input.error()!=QFileDevice::NoError || !WireAssetScan::decodedWorldFile(data,text,binary)) {
+            error="Cannot decode saved world file for wire cleanup: "+file; return false;
+        }
+        // Conservative discovery only: exact shape-name ownership is checked
+        // again on loaded objects. Include missing assets and untracked bakes.
+        bool hasWire=false;
+        binary=binary.toLower();
+        for(const QString &prefix:{QString("apw_"),QString("sco_telephonewire_or_test")}) {
+            QStringEncoder encoder(QStringEncoder::Utf16LE);
+            const QByteArray utf16Prefix=encoder(prefix);
+            hasWire=hasWire || text.contains(prefix,Qt::CaseInsensitive)
+                || binary.contains(prefix.toLatin1()) || binary.contains(utf16Prefix);
+        }
+        if(!hasWire) continue;
+        bool validX=false,validZ=false;
+        const int x=file.mid(1,7).toInt(&validX),z=-file.mid(8,7).toInt(&validZ);
+        if(file.size()!=17 || !file.startsWith('w',Qt::CaseInsensitive) || !validX || !validZ) {
+            error="Invalid wire world filename: "+file; return false;
+        }
+        found.append({x,z});
+    }
+    tiles=found;
+    return true;
+}
+
 bool pruneAssets(const QString &routePath, QJsonObject &spans, bool all, QString &error,
-                 bool allowSavedReferences) {
+                 bool allowSavedReferences, const CleanupProgress &progress) {
     error.clear();
     QSet<QString> candidates, keep;
     for(const QString &key:spans.keys()) {
@@ -66,7 +109,16 @@ bool pruneAssets(const QString &routePath, QJsonObject &spans, bool all, QString
     candidates.subtract(keep);
     if(candidates.isEmpty() && !all) return true;
     QSet<QString> referenced;
-    for(const QString &file:world.entryList({"*.w"},QDir::Files)) {
+    struct EncodedName { QString name; QByteArray ascii,utf16; };
+    QVector<EncodedName> encodedNames;
+    for(const QString &name:candidates) {
+        QStringEncoder encoder(QStringEncoder::Utf16LE);
+        encodedNames.append({name,name.toLatin1(),encoder(name)});
+    }
+    const auto worldFiles=world.entryList({"*.w"},QDir::Files);
+    int worldsDone=0;
+    for(const QString &file:worldFiles) {
+        if(progress) progress("Checking saved wire references...",worldsDone++,int(worldFiles.size()));
         QFile input(world.filePath(file));
         if(!input.open(QIODevice::ReadOnly) || input.size()>WireAssetScan::MaximumExpandedWorldBytes) {
             error="Cannot scan saved world file for wire cleanup: "+file; return false;
@@ -78,11 +130,10 @@ bool pruneAssets(const QString &routePath, QJsonObject &spans, bool all, QString
             error="Cannot decode saved world file for wire cleanup: "+file; return false;
         }
         text=text.toLower(); binary=binary.toLower();
-        for(const QString &name:candidates) {
-            QStringEncoder encoder(QStringEncoder::Utf16LE);
-            const QByteArray utf16Name=encoder(name);
-            if(text.contains(name) || binary.contains(name.toLatin1()) || binary.contains(utf16Name))
-                referenced.insert(name);
+        for(const auto &name:encodedNames) {
+            if(referenced.contains(name.name)) continue;
+            if(text.contains(name.name) || binary.contains(name.ascii) || binary.contains(name.utf16))
+                referenced.insert(name.name);
         }
     }
     // Scan everything before deleting anything. Saved references and newly
@@ -95,7 +146,10 @@ bool pruneAssets(const QString &routePath, QJsonObject &spans, bool all, QString
     }
     // Shared textures may also be used by a surviving non-wire shape. Inspect
     // all remaining shape payloads before deleting these exact generated names.
-    if(all) {
+    // Before world placements are saved, wire shapes still have saved
+    // references. Retain shared textures until that save instead of scanning
+    // every scenery shape during the initial Delete All operation.
+    if(all && referenced.isEmpty()) {
         QDir textures(routePath+"/TEXTURES");
         QStringList unused;
         static const QRegularExpression texturePattern(
@@ -103,7 +157,10 @@ bool pruneAssets(const QString &routePath, QJsonObject &spans, bool all, QString
             QRegularExpression::CaseInsensitiveOption);
         for(const QString &file:textures.entryList(QDir::Files))
             if(texturePattern.match(file).hasMatch()) unused.append(file);
-        if(!unused.isEmpty()) for(const QString &file:shapes.entryList({"*.s"},QDir::Files)) {
+        const auto shapeFiles=shapes.entryList({"*.s"},QDir::Files);
+        int shapesDone=0;
+        if(!unused.isEmpty()) for(const QString &file:shapeFiles) {
+            if(progress) progress("Checking shared wire textures...",shapesDone++,int(shapeFiles.size()));
             QFile input(shapes.filePath(file)); QByteArray data;
             if(!input.open(QIODevice::ReadOnly) || input.size()>WireAssetScan::MaximumExpandedWorldBytes
                     || !WireAssetScan::expandedWorldFile(input.readAll(),data)) {

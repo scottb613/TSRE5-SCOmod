@@ -20,6 +20,7 @@
 #include "SoundList.h"
 #include "TRitem.h"
 #include "GuiFunct.h"
+#include "GltfModel.h"
 #include <algorithm>
 #include <QCollator>
 #include <QMapIterator>
@@ -862,7 +863,7 @@ void ObjTools::routeLoaded(Route* a){
     if(!routeShapes.exists()) qDebug() << "No Route Shapes Directory Found";
     
     foreach(QString dirFile, routeShapes.entryList()){
-        if(dirFile.endsWith(".s", Qt::CaseInsensitive))                {
+        if(dirFile.endsWith(".s", Qt::CaseInsensitive) || GltfModel::accepts(dirFile)) {
           
             Ref::RefItem item;
             item.filename.push_back(dirFile);

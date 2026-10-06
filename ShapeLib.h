@@ -3,8 +3,11 @@
 
 #include <unordered_map>
 #include <QString>
+#include <QHash>
+#include <memory>
 
 class SFile;
+class GltfPreview;
 
 class ShapeLib {
 public:
@@ -20,8 +23,10 @@ public:
     int addShape(QString path, QString texPath);
     bool reloadShapeIfCached(QString path);
     void refreshSeasonTextures();
+    std::shared_ptr<GltfPreview> getGltfShape(const QString &path, QString &error);
+    void releaseGltfGraphics();
 private:
-
+    QHash<QString, std::shared_ptr<GltfPreview>> gltfShapes;
 };
 
 #endif	/* SHAPELIB_H */

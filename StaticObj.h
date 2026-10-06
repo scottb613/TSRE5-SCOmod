@@ -14,6 +14,9 @@
 #include "WorldObj.h"
 #include <QString>
 #include "FileBuffer.h"
+#include <memory>
+
+class GltfPreview;
 
 class StaticObj : public WorldObj  {
     Q_OBJECT
@@ -53,6 +56,9 @@ public slots:
     void menuRot();
     
 private:
+    std::shared_ptr<GltfPreview> gltfShape;
+    bool gltfRenderFailed = false;
+    unsigned int gltfBoxRevision = 0;
     void loadSnapablePoints();
     bool getSimpleBorder(float* border);
     bool getBoxPoints(QVector<float> &points);

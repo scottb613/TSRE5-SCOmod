@@ -448,6 +448,17 @@ public:
             "The deletion remains Undo-friendly until the route is saved.");
         GuiFunct::styleEditorActionButton(deletePolyVegBakes);
         cleanupLayout->addWidget(deletePolyVegBakes);
+        QPushButton *replaceForests = new QPushButton("Replace All Forest Regions");
+        replaceForests->setToolTip(
+            "Surveys all route Forest regions, merges overlapping footprints, then "
+            "replaces them with the selected F6 PolyVeg schema, baking one tile at a time.");
+        GuiFunct::styleEditorActionButton(replaceForests);
+        cleanupLayout->addWidget(replaceForests);
+        QObject::connect(replaceForests, &QPushButton::clicked, owner, [this]() {
+            this->owner->userButtonPressed();
+            emit this->owner->replaceRouteForestsRequested();
+            this->owner->requestMainFocus();
+        });
         QPushButton *deleteWireBakes = new QPushButton("Delete All Wire Bakes");
         deleteWireBakes->setToolTip("Deletes all tracked AP wire bakes across the route and turns off every wire preview.");
         GuiFunct::styleEditorActionButton(deleteWireBakes);

@@ -87,6 +87,16 @@ PropertiesForest::PropertiesForest() {
                       this, SLOT(densitykmEnabled(QString)));
     GuiFunct::alignEditorForm(vlist);
     regionCard.second->addLayout(vlist);
+    hacks.setText("Hacks...");
+    hacks.setCheckable(true);
+    hacks.setProperty("editorPopupKey", "hacksHelper");
+    hacks.setFocusPolicy(Qt::NoFocus);
+    GuiFunct::styleEditorActionButton(&hacks);
+    QObject::connect(&hacks, &QPushButton::toggled, this, [this](bool checked) {
+        GuiFunct::setEditorPopupButtonActive(&hacks, checked);
+        emit hacksToggled(worldObj, &hacks, checked);
+    });
+    regionCard.second->addWidget(&hacks);
     vbox->addWidget(regionCard.first);
 
     addSubtitle("Position & Rotation");

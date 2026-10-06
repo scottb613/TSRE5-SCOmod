@@ -22,6 +22,9 @@
 #include "TS.h"
 #include "ErrorMessagesLib.h"
 #include "ErrorMessage.h"
+#include "GltfPreview.h"
+#include "GltfPlacementMath.h"
+#include <algorithm>
 
 PickupObj::PickupObj() {
     this->shape = -1;
@@ -30,6 +33,7 @@ PickupObj::PickupObj() {
 }
 
 PickupObj::PickupObj(const PickupObj& o) : WorldObj(o) {
+    gltfShape = o.gltfShape;
     trackAlignment = o.trackAlignment;
     speedRange[0] = o.speedRange[0];
     speedRange[1] = o.speedRange[1];
@@ -57,7 +61,16 @@ PickupObj::~PickupObj() {
 }
 
 void PickupObj::load(int x, int y) {
-    this->shape = Game::currentShapeLib->addShape(resPath +"/"+ fileName);
+    if(GltfModel::accepts(fileName)) {
+        QString error;
+        gltfShape = Game::currentShapeLib->getGltfShape(resPath + "/" + fileName, error);
+        shape = -1;
+        shapePointer = nullptr;
+        gltfRenderFailed = false;
+    } else {
+        gltfShape.reset();
+        this->shape = Game::currentShapeLib->addShape(resPath +"/"+ fileName);
+    }
     this->x = x;
     this->y = y;
     this->position[2] = -this->position[2];
@@ -124,6 +137,15 @@ void PickupObj::deleteTrItems(){
 }
 
 ErrorMessage* PickupObj::checkForErrors(){
+    if(gltfShape && !gltfShape->loadError.isEmpty()) {
+        auto *e = new ErrorMessage(ErrorMessage::Type_Warning, ErrorMessage::Source_World,
+                "Unable to display glTF pickup: " + fileName, gltfShape->loadError
+                + "\nThe existing world and track-item references are retained for repair.");
+        e->setObject((GameObj*)this);
+        e->setLocationXYZ(x, -y, position[0], position[1], -position[2]);
+        ErrorMessagesLib::PushErrorMessage(e);
+        // Continue validating track items; shape failure must not hide TDB errors.
+    }
     TDB* tdb = Game::trackDB;
     TRitem* item = NULL;
     for(int i = 0; i<this->trItemIdCount/2; i++){
@@ -329,6 +351,37 @@ void PickupObj::set(QString sh, FileBuffer* data) {
 }
 
 void PickupObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos, float* target, float fov, int selectionColor, int renderMode) {
+    if(gltfShape) {
+        if(!loaded || jestPQ < 2) return;
+        if(!gltfShape->model.primitives.empty()) {
+            gluu->mvPushMatrix();
+            Mat4::multiply(gluu->mvMatrix, gluu->mvMatrix, matrix);
+            const QMatrix4x4 world = GltfPlacementMath::matrix(gluu->mvMatrix);
+            QMatrix4x4 projection;
+            const float *values = renderMode == gluu->RENDER_SHADOWMAP ? gluu->pShadowMatrix : gluu->pMatrix;
+            std::copy(values, values + 16, projection.data());
+            QString error;
+            if(!gltfShape->draw(projection * world, error, selectionColor, world.determinant() < 0)) {
+                if(!gltfRenderFailed) qWarning() << "glTF pickup draw failed:" << error;
+                gltfRenderFailed = true;
+            } else {
+                gltfRenderFailed = false;
+                size = (gltfShape->model.maximum - gltfShape->model.minimum).length();
+                if(selected && renderMode == gluu->RENDER_DEFAULT) {
+                    if(gltfBoxRevision != gltfShape->revision) {
+                        box.deleteVBO();
+                        gltfBoxRevision = gltfShape->revision;
+                    }
+                    gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform,
+                            *reinterpret_cast<float(*)[4][4]>(gluu->mvMatrix));
+                    drawBox();
+                }
+            }
+            gluu->mvPopMatrix();
+        }
+        if(Game::viewInteractives && renderMode != gluu->RENDER_SHADOWMAP) renderTritems(gluu, selectionColor);
+        return;
+    }
     if (!loaded) return;
     if (shape < 0) return;
     if (jestPQ < 2) return;
@@ -423,6 +476,14 @@ void PickupObj::renderTritems(GLUU* gluu, int selectionColor){
 };
 
 bool PickupObj::getSimpleBorder(float* border){
+    if(gltfShape) {
+        if(gltfShape->model.primitives.empty()) return false;
+        for(int axis = 0; axis < 3; ++axis) {
+            border[axis * 2] = gltfShape->model.minimum[axis];
+            border[axis * 2 + 1] = gltfShape->model.maximum[axis];
+        }
+        return true;
+    }
     if (shape < 0) return false;
     if (!Game::currentShapeLib->shape[shape]->loaded)
         return false;
@@ -437,6 +498,11 @@ bool PickupObj::getSimpleBorder(float* border){
 }
 
 bool PickupObj::getBoxPoints(QVector<float>& points){
+        if(gltfShape) {
+            if(gltfShape->model.primitives.empty()) return false;
+            GltfPlacementMath::boxPoints(gltfShape->model.minimum, gltfShape->model.maximum, points);
+            return true;
+        }
         float bound[6];
         if (!getSimpleBorder((float*)&bound)) return false;
         
@@ -597,4 +663,16 @@ if(Game::legacySupport)   *(out) << "		VDbId ( " << this->vDbId << " )\n";  // E
 if(this->staticDetailLevel > -1)
 *(out) << "		StaticDetailLevel ( "<<this->staticDetailLevel<<" )\n";
 *(out) << "	)\n";
+}
+
+QString PickupObj::getShapePath() {
+    if(gltfShape) return gltfShape->sourcePath;
+    return WorldObj::getShapePath();
+}
+
+void PickupObj::reload() {
+    if(!gltfShape) { WorldObj::reload(); return; }
+    QString error;
+    if(!gltfShape->load(resPath + "/" + fileName, error)) qWarning() << "glTF pickup reload failed:" << error;
+    else gltfRenderFailed = false;
 }

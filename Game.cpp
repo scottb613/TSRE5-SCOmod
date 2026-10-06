@@ -43,7 +43,7 @@
 //////// Version
 //////////////////////////////////
 
-QString Game::AppVersion = "v0.17";  // over-ride from main.cpp
+QString Game::AppVersion = "v0.18";  // over-ride from main.cpp
 
 
 bool Game::ServerMode = false;
@@ -107,6 +107,7 @@ bool Game::viewTerrainGrid = false;
 bool Game::viewTerrainShape = true;
 bool Game::viewInteractives = true;
 bool Game::viewForestRegions = true;
+bool Game::viewPolyVeg = true;
 bool Game::viewTrackDbLines = true;
 bool Game::viewTsectionLines = true;
 bool Game::viewPointer3d = true;

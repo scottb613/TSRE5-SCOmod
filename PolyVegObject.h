@@ -13,6 +13,8 @@ namespace PolyVegObject {
 QString labelForShape(const QString &fileName, bool generatedRaw = false);
 bool isRawShape(const QString &fileName);
 bool isBakeShape(const QString &fileName);
+// Display classification includes saved schema shapes, without claiming ownership.
+bool isVegetationShape(const QString &fileName, bool generatedRaw = false);
 }
 
 #endif

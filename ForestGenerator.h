@@ -26,6 +26,22 @@ struct ForestPlantingBoundary {
     QVector<ForestPlanRing> holes;
 };
 
+struct ForestCandidate {
+    int vegetationIndex = -1;
+    QString vegetationId;
+    QString shape;
+    double x = 0.0;
+    double z = 0.0;
+    double yawDegrees = 0.0;
+    double uniformScale = 1.0;
+    double scaledFootprintRadiusMetres = 0.0;
+};
+
+struct ForestSamplingRectangle {
+    double minimumX = 0.0, minimumZ = 0.0;
+    double maximumX = 0.0, maximumZ = 0.0;
+};
+
 struct ForestGenerationSettings {
     double densityPerSquareMetre = 0.0;
     int maximumTrees = 0;
@@ -38,17 +54,16 @@ struct ForestGenerationSettings {
     std::function<void(int attempts, int maximumAttempts,
                        int accepted, int target)> progress;
     std::function<bool()> shouldCancel;
-};
-
-struct ForestCandidate {
-    int vegetationIndex = -1;
-    QString vegetationId;
-    QString shape;
-    double x = 0.0;
-    double z = 0.0;
-    double yawDegrees = 0.0;
-    double uniformScale = 1.0;
-    double scaledFootprintRadiusMetres = 0.0;
+    // Batch planting clips sampling to one tile, but retains the real union
+    // boundary for containment, area and feathering. Ordinary planting leaves
+    // these overrides empty and retains its existing behavior.
+    double usableAreaOverride = -1.0;
+    std::function<bool(double x, double z)> containsPlantingPoint;
+    std::function<double(double x, double z)> plantingEdgeDistance;
+    QVector<ForestCandidate> occupiedCandidates;
+    // Non-overlapping proposal rectangles around sparse union fragments.
+    // Weight by rectangle area so proposals remain uniform over their union.
+    QVector<ForestSamplingRectangle> samplingRectangles;
 };
 
 struct ForestGenerationResult {
