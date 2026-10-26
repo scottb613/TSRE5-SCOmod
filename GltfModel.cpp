@@ -22,10 +22,12 @@
 #include <tuple>
 
 namespace {
-constexpr qint64 maxFileBytes = 64 * 1024 * 1024;
+constexpr size_t maxParserBytes = 64 * 1024 * 1024;
 constexpr size_t maxResourceBytes = 256 * 1024 * 1024;
+// Permit a standard 4K square; decimal 16 million rejects 4096-by-4096.
+constexpr size_t maxImagePixels = 4096 * 4096;
 constexpr size_t maxVertices = 3000000;
-struct ParseBudget { size_t remaining = maxFileBytes; };
+struct ParseBudget { size_t remaining = maxParserBytes; };
 void *allocate(void *user, cgltf_size size) {
     auto &budget = *static_cast<ParseBudget *>(user);
     if(size > budget.remaining) return nullptr;
@@ -35,21 +37,33 @@ void *allocate(void *user, cgltf_size size) {
 }
 void deallocate(void *, void *ptr) { std::free(ptr); }
 
-bool readFile(const QString &path, QByteArray &bytes, QString &error) {
+bool readFile(const QString &path, QByteArray &bytes, QString &error,
+              size_t maximumBytes) {
     QFile file(path);
-    if(!file.open(QIODevice::ReadOnly) || file.size() < 1 || file.size() > maxFileBytes) {
-        error = "Missing, empty, or oversized resource: " + QFileInfo(path).fileName();
+    if(!file.open(QIODevice::ReadOnly) || file.size() < 1) {
+        error = "Missing or empty resource: " + QFileInfo(path).fileName();
         return false;
     }
-    bytes = file.read(maxFileBytes + 1);
-    if(bytes.size() != file.size() || bytes.size() > maxFileBytes) {
+    if(quint64(file.size()) > maximumBytes) {
+        error = "Resource exceeds the preview memory budget: " + QFileInfo(path).fileName();
+        return false;
+    }
+    // Bound the read itself, including a file that grows after the size check.
+    bytes = file.read(qint64(maximumBytes) + 1);
+    if(size_t(bytes.size()) > maximumBytes) {
+        error = "Resource exceeds the preview memory budget: " + QFileInfo(path).fileName();
+        bytes.clear();
+        return false;
+    }
+    if(bytes.size() != file.size()) {
         error = "Cannot read complete resource: " + QFileInfo(path).fileName();
         return false;
     }
     return true;
 }
 
-bool readUri(const char *uri, const QDir &directory, QByteArray &bytes, QString &error) {
+bool readUri(const char *uri, const QDir &directory, QByteArray &bytes, QString &error,
+             size_t maximumBytes = maxResourceBytes) {
     const QByteArray encoded(uri ? uri : "");
     if(encoded.startsWith("data:")) {
         const int comma = encoded.indexOf(',');
@@ -57,10 +71,14 @@ bool readUri(const char *uri, const QDir &directory, QByteArray &bytes, QString 
             error = "Only base64 data resources are supported.";
             return false;
         }
+        if(size_t(encoded.size()-comma-1) > 4*((maximumBytes+2)/3)) {
+            error = "Embedded resource exceeds the preview memory budget.";
+            return false;
+        }
         const auto decoded = QByteArray::fromBase64Encoding(encoded.mid(comma + 1),
                 QByteArray::AbortOnBase64DecodingErrors);
-        if(!decoded || decoded.decoded.size() > maxFileBytes) {
-            error = "Invalid or oversized base64 resource.";
+        if(!decoded || size_t(decoded.decoded.size()) > maximumBytes) {
+            error = "Invalid base64 resource or preview memory budget exceeded.";
             return false;
         }
         bytes = decoded.decoded;
@@ -81,7 +99,7 @@ bool readUri(const char *uri, const QDir &directory, QByteArray &bytes, QString 
         error = "Missing resource or resource outside the model directory: " + relative;
         return false;
     }
-    return readFile(resolved, bytes, error);
+    return readFile(resolved, bytes, error, maximumBytes);
 }
 
 bool finite(const QVector3D &v) {
@@ -93,13 +111,14 @@ bool decodeImage(const cgltf_image *image, const QDir &directory,
     QByteArray bytes;
     if(image->buffer_view) {
         const auto *view = image->buffer_view;
-        if(view->size > maxFileBytes || !cgltf_buffer_view_data(view)) {
+        if(!cgltf_buffer_view_data(view)) {
             error = "Invalid embedded image.";
             return false;
         }
         bytes = QByteArray(reinterpret_cast<const char *>(cgltf_buffer_view_data(view)),
                 static_cast<qsizetype>(view->size));
-    } else if(!readUri(image->uri, directory, bytes, error)) return false;
+    } else if(!readUri(image->uri, directory, bytes, error,
+                      maxResourceBytes-resourceBytes)) return false;
     QBuffer buffer(&bytes);
     buffer.open(QIODevice::ReadOnly);
     QImageReader reader(&buffer);
@@ -107,8 +126,8 @@ bool decodeImage(const cgltf_image *image, const QDir &directory,
     const QSize size = reader.size();
     if((format != "png" && format != "jpeg" && format != "jpg")
             || !size.isValid() || size.width() > 8192 || size.height() > 8192
-            || size_t(size.width()) * size_t(size.height()) > 16000000) {
-        error = "Preview requires PNG/JPEG images within the 16 megapixel limit.";
+            || size_t(size.width()) * size_t(size.height()) > maxImagePixels) {
+        error = "Preview requires PNG/JPEG images within the 4096-by-4096 pixel budget.";
         return false;
     }
     const size_t decodedBytes = size_t(size.width()) * size_t(size.height()) * 4;
@@ -135,7 +154,7 @@ bool GltfModel::load(const QString &path, QString &error) {
     GltfModel pending;
     if(!accepts(path)) { error = "Expected a .gltf or .glb model."; return false; }
     QByteArray source;
-    if(!readFile(path, source, error)) return false;
+    if(!readFile(path, source, error, maxResourceBytes+maxParserBytes)) return false;
     ParseBudget budget;
     cgltf_options options{};
     options.memory = {allocate, deallocate, &budget};
@@ -209,11 +228,6 @@ bool GltfModel::load(const QString &path, QString &error) {
                 + "' is rejected by the verified ORTS image schema; verify simulator compatibility before testing.";
     }
     // Check arithmetic before cgltf_validate computes accessor byte ranges.
-    for(size_t i = 0; i < data->buffers_count; ++i) {
-        if(data->buffers[i].size > maxFileBytes) {
-            error = "Declared buffer exceeds the preview limit."; return false;
-        }
-    }
     for(size_t i = 0; i < data->buffer_views_count; ++i) {
         const auto &view = data->buffer_views[i];
         if(!view.buffer || view.offset > view.buffer->size
@@ -238,12 +252,13 @@ bool GltfModel::load(const QString &path, QString &error) {
     size_t resourceBytes = 0;
     for(size_t i = 0; i < data->buffers_count; ++i) {
         auto &buffer = data->buffers[i];
-        if(buffer.size > maxFileBytes || buffer.size > maxResourceBytes - resourceBytes) {
+        if(buffer.size > maxResourceBytes - resourceBytes) {
             error = "Model exceeds the preview buffer budget."; return false;
         }
         resourceBytes += buffer.size;
         if(buffer.uri) {
-            if(!readUri(buffer.uri, directory, buffers[i], error)) return false;
+            if(!readUri(buffer.uri, directory, buffers[i], error,
+                        buffer.size+maxResourceBytes-resourceBytes)) return false;
             if(size_t(buffers[i].size()) < buffer.size) {
                 error = "External buffer is shorter than its declared size."; return false;
             }
@@ -322,9 +337,9 @@ bool GltfModel::load(const QString &path, QString &error) {
             const cgltf_texture_view *texture = nullptr;
             const auto *material = primitive.material;
             if(material) {
-                if(material->alpha_mode == cgltf_alpha_mode_blend) {
-                    error = "Blended materials require the later transparency stage."; return false;
-                }
+                output.blended = material->alpha_mode == cgltf_alpha_mode_blend;
+                if(output.blended)
+                    pending.warnings << "Transparent materials use a simplified base-colour preview sorted by material surface; final glass shading is rendered by Open Rails.";
                 output.doubleSided = material->double_sided;
                 output.masked = material->alpha_mode == cgltf_alpha_mode_mask;
                 output.alphaCutoff = material->alpha_cutoff;

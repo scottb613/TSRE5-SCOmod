@@ -10,6 +10,8 @@
 #include <QByteArray>
 #include <QList>
 #include <QString>
+#include <QTemporaryDir>
+#include <memory>
 
 class RouteSaveTransaction {
 public:
@@ -27,6 +29,8 @@ private:
     struct FileEntry {
         QString destination;
         QByteArray data;
+        QString stagedPath;
+        qsizetype size = 0;
         bool existed = false;
         QString backupName;
         QByteArray originalHash;
@@ -35,6 +39,9 @@ private:
     QString routeRoot;
     QString backupRoot;
     QList<FileEntry> files;
+    // Bound retained payload memory; temporary files disappear on destruction.
+    std::unique_ptr<QTemporaryDir> staging;
+    qsizetype residentBytes = 0;
 };
 
 #endif

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
     TSREvc
-    VERSION 0.18.0
+    VERSION 0.19.0
     DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )
@@ -291,6 +291,48 @@ if(BUILD_TESTING)
             "$<TARGET_FILE:tsre_terrain_grid_math_probe>"
     )
 
+    add_executable(tsre_texture_paint_math_probe tests/TexturePaintMathProbe.cpp)
+    add_executable(tsre_terrtex_mipmaps_probe
+        tests/TerrtexMipmapsProbe.cpp
+        TerrtexMipmaps.cpp
+        AceFormatValidator.cpp)
+    target_include_directories(tsre_terrtex_mipmaps_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_terrtex_mipmaps_probe PRIVATE Qt6::Gui Qt6::Core)
+    add_test(NAME tsre_terrtex_mipmaps_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_terrtex_mipmaps_probe>")
+    target_include_directories(tsre_texture_paint_math_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_texture_paint_math_probe PRIVATE Qt6::Core)
+    add_test(NAME tsre_texture_paint_math_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_texture_paint_math_probe>"
+    )
+
+    add_executable(tsre_dds_writer_probe
+        tests/DdsWriterProbe.cpp
+        DdsWriter.cpp
+        DdsDecoder.cpp
+        TerrtexMipmaps.cpp
+        RouteSaveTransaction.cpp)
+    target_include_directories(tsre_dds_writer_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_dds_writer_probe PRIVATE Qt6::Gui Qt6::Core)
+    add_test(NAME tsre_dds_writer_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_dds_writer_probe>")
+
+    add_executable(tsre_shape_texture_path_probe tests/ShapeTexturePathProbe.cpp)
+    target_include_directories(tsre_shape_texture_path_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_shape_texture_path_probe PRIVATE Qt6::Core)
+    add_test(
+        NAME tsre_shape_texture_path_probe
+        COMMAND
+            "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+            "$<TARGET_FILE:tsre_shape_texture_path_probe>"
+    )
     add_executable(
         tsre_text_encoding_probe
         tests/TextStreamEncodingProbe.cpp

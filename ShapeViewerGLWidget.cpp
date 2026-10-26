@@ -45,7 +45,7 @@ m_zRot(0) {
 }
 
 ShapeViewerGLWidget::~ShapeViewerGLWidget() {
-    if(gltfPreview && context() && context()->isValid()) cleanup();
+    if(context() && context()->isValid()) cleanup();
     delete gltfPreview;
     gltfPreview = nullptr;
 }
@@ -53,6 +53,7 @@ ShapeViewerGLWidget::~ShapeViewerGLWidget() {
 void ShapeViewerGLWidget::cleanup() {
     makeCurrent();
     if(gltfPreview) gltfPreview->release();
+    if(currentShapeLib) currentShapeLib->releaseGltfGraphics();
     gltfRenderFailed = false;
     //delete gluu->m_program;
     //gluu->m_program = 0;
@@ -186,6 +187,9 @@ void ShapeViewerGLWidget::fillCurrentContentHierarchyInfo(QVector<ContentHierarc
 void ShapeViewerGLWidget::paintGL() {
     Game::currentShapeLib = currentShapeLib;
     //Game::currentEngLib = currentEngLib;
+    // A Qt composition or transparent pass may leave depth writes disabled.
+    // Clear with writes enabled so previous frames cannot hide roster bodies.
+    glDepthMask(GL_TRUE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // disable shadows temporaily

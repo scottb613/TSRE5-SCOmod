@@ -17,6 +17,15 @@ inline QMatrix4x4 matrix(const float *legacyMatrix) {
     result.scale(-1, 1, 1);
     return result;
 }
+// The shared loader rotates glTF into OR-local coordinates for route objects.
+// Rolling stock needs the opposite local Z direction used by legacy SFile.
+// A Y half-turn compensates without reflecting artwork or changing unit offsets.
+inline QMatrix4x4 rollingStockMatrix(const float *legacyMatrix) {
+    QMatrix4x4 result;
+    std::copy(legacyMatrix, legacyMatrix + 16, result.data());
+    result.rotate(180.0f, 0, 1, 0);
+    return result;
+}
 inline QVector3D selectionRgb(int encoded) {
     const unsigned int value = static_cast<unsigned int>(encoded);
     return QVector3D(float((value >> 16) & 255) / 255,

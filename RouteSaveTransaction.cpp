@@ -5,6 +5,7 @@
 // Licensed under GNU GPL v3 or later. See LICENSE.md.
 
 #include "RouteSaveTransaction.h"
+#include "SaveProgress.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -21,6 +22,8 @@
 namespace {
 
 const int BackupGenerationsToKeep = 5;
+constexpr qsizetype ResidentPayloadLimit = 4 * 1024 * 1024;
+constexpr qsizetype LargePayloadThreshold = 1024 * 1024;
 
 QString normalizedPath(const QString &path) {
     return QDir::fromNativeSeparators(
@@ -145,6 +148,7 @@ bool restoreManifest(const QString &routeRoot,
     for(const QJsonValue &value : entries){
         const QJsonObject entry = value.toObject();
         const QString destination = entry.value("destination").toString();
+        SaveProgress::report(QString("Restoring previous save file: %1").arg(QFileInfo(destination).fileName()));
         if(!isInsideRoute(destination, routeRoot)){
             if(error)
                 *error = QString("Recovery destination is outside the active route: %1")
@@ -211,6 +215,7 @@ RouteSaveTransaction::RouteSaveTransaction(const QString &routeRoot,
 bool RouteSaveTransaction::addFile(const QString &destination,
                                    const QByteArray &data,
                                    QString *error) {
+    if(error) error->clear();
     const QString cleanDestination = normalizedPath(destination);
     if(!isInsideRoute(cleanDestination, routeRoot)){
         if(error)
@@ -227,7 +232,21 @@ bool RouteSaveTransaction::addFile(const QString &destination,
         if(entry.destination.compare(cleanDestination, Qt::CaseInsensitive) == 0){
             // Several terrain patches can share one ACE destination. Stage
             // identical bytes once, but never silently choose between edits.
-            if(entry.data == data)
+            bool identical = entry.size == data.size();
+            if(identical && !entry.stagedPath.isEmpty()) {
+                QFile staged(entry.stagedPath);
+                identical = staged.open(QIODevice::ReadOnly);
+                for(qsizetype offset = 0; identical && offset < data.size();) {
+                    const QByteArray chunk = staged.read(LargePayloadThreshold);
+                    identical = !chunk.isEmpty()
+                        && chunk == data.mid(offset, chunk.size());
+                    offset += chunk.size();
+                }
+                identical = identical && staged.size() == data.size();
+            } else if(identical) {
+                identical = entry.data == data;
+            }
+            if(identical)
                 return true;
             if(error)
                 *error = QString("Duplicate save destination: %1").arg(cleanDestination);
@@ -237,14 +256,41 @@ bool RouteSaveTransaction::addFile(const QString &destination,
 
     FileEntry entry;
     entry.destination = cleanDestination;
-    entry.data = data;
+    entry.size = data.size();
+    if(data.size() > LargePayloadThreshold
+            || data.size() > ResidentPayloadLimit - residentBytes) {
+        if(!staging)
+            staging = std::make_unique<QTemporaryDir>(
+                QDir::tempPath() + "/tsre-save-XXXXXX");
+        if(!staging->isValid()) {
+            if(error) *error = "Could not create temporary route-save staging.";
+            return false;
+        }
+        entry.stagedPath = staging->filePath(QString::number(files.size()));
+        SaveProgress::report(QString("Staging save file: %1")
+            .arg(QFileInfo(cleanDestination).fileName()));
+        if(!writeBytesAtomically(entry.stagedPath, data, error))
+            return false;
+    } else {
+        entry.data = data;
+        residentBytes += data.size();
+    }
     files.append(entry);
     return true;
 }
 
 bool RouteSaveTransaction::commit(QString *error) {
+    if(error) error->clear();
     if(files.isEmpty())
         return true;
+    for(const FileEntry &entry : files) {
+        if(!entry.stagedPath.isEmpty()
+                && QFileInfo(entry.stagedPath).size() != entry.size) {
+            if(error) *error = "Temporary route-save payload is missing or truncated: "
+                + entry.destination;
+            return false;
+        }
+    }
     if(!QDir().mkpath(backupRoot)){
         if(error)
             *error = QString("Could not create route backup directory %1").arg(backupRoot);
@@ -277,6 +323,9 @@ bool RouteSaveTransaction::commit(QString *error) {
     QJsonArray manifestFiles;
     for(int i = 0; i < files.size(); ++i){
         FileEntry &entry = files[i];
+        SaveProgress::set(0.5*i/qMax(1,files.size()));
+        SaveProgress::report(QString("Backing up save file %1 of %2: %3")
+            .arg(i+1).arg(files.size()).arg(QFileInfo(entry.destination).fileName()));
         entry.existed = QFileInfo::exists(entry.destination);
         entry.backupName = QString("%1-%2")
                 .arg(i, 4, 10, QChar('0'))
@@ -318,8 +367,14 @@ bool RouteSaveTransaction::commit(QString *error) {
     if(!writeManifest(generationDir, manifest, error))
         return false;
 
+    int filesWritten = 0;
     for(const FileEntry &entry : files){
-        if(!writeBytesAtomically(entry.destination, entry.data, error)){
+        SaveProgress::set(0.5 + 0.5*filesWritten++/qMax(1,files.size()));
+        SaveProgress::report(QString("Writing saved file: %1").arg(QFileInfo(entry.destination).fileName()));
+        const bool written = entry.stagedPath.isEmpty()
+            ? writeBytesAtomically(entry.destination, entry.data, error)
+            : copyAtomically(entry.stagedPath, entry.destination, error);
+        if(!written){
             QString restoreError;
             if(!restoreManifest(routeRoot, generationDir, manifest, &restoreError) && error)
                 *error += QString("\nRollback also failed: %1").arg(restoreError);

@@ -47,6 +47,36 @@ int main(int argc, char **argv) {
     const QString routeRoot = temp.path() + "/route";
     const QString backupRoot = temp.path() + "/appdata/backups";
     QDir().mkpath(routeRoot);
+    {
+        // Large TERRTEX payloads spill to temporary disk staging, including
+        // duplicate detection and rollback after a later destination fails.
+        const QString texture = routeRoot + "/large.dds";
+        const QString descriptor = routeRoot + "/large.t";
+        const QByteArray original(2*1024*1024, 'A');
+        QByteArray source = original;
+        QByteArray replacement(original.size(), 'B');
+        QString error;
+        RouteSaveTransaction staged(routeRoot, backupRoot);
+        if(!staged.addFile(texture, source, &error)
+                || !staged.addFile(texture, source, &error))
+            return fail("Could not stage identical large payloads: " + error);
+        if(staged.addFile(texture, replacement, &error))
+            return fail("Conflicting staged payload was accepted.");
+        source.fill('C'); // The transaction owns a snapshot of the staged bytes.
+        if(!staged.commit(&error) || readFile(texture) != original)
+            return fail("Large staged payload did not publish unchanged: " + error);
+        if(!writeFile(descriptor, "old-descriptor")
+                || !writeFile(routeRoot + "/staged-blocked", "not-a-directory"))
+            return fail("Could not create staged rollback fixture.");
+        RouteSaveTransaction rollback(routeRoot, backupRoot);
+        if(!rollback.addFile(texture, replacement, &error)
+                || !rollback.addFile(descriptor, "new-descriptor", &error)
+                || !rollback.addFile(routeRoot + "/staged-blocked/file", "fail", &error))
+            return fail("Could not stage rollback payloads: " + error);
+        if(rollback.commit(&error) || readFile(texture) != original
+                || readFile(descriptor) != "old-descriptor")
+            return fail("Large payload/descriptor rollback did not restore originals.");
+    }
     const QString tdb = routeRoot + "/sample.tdb";
     const QString tit = routeRoot + "/sample.tit";
     if(!writeFile(tdb, "old-tdb") || !writeFile(tit, "old-tit"))

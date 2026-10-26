@@ -57,10 +57,13 @@ int main(int argc, char *argv[])
     QTextStream utf16Output(&output);
     setUtf16Encoding(utf16Output);
     utf16Output.setGenerateByteOrderMark(true);
-    utf16Output << "SIMISA@@@@@@@@@@JINX0a0t______\n";
-    utf16Output << "Tr_Activity ( \""
-                << QString::fromUtf8("Zażółć €")
-                << "\" )\n";
+    const QString expectedUtf16 =
+        QStringLiteral("SIMISA@@@@@@@@@@JINX0a0t______\n")
+        + "Tr_Activity ( \"" + QString::fromUtf8("Zażółć €") + "\" )\n"
+        + QStringLiteral("TrPathName ( M\u00fcnster )\n"
+                         "PathID ( M\u00fcnster )\n"
+                         "Service_Definition ( \u00c4\u00d6\u00dc_\u00e4\u00f6\u00fc_\u00df )\n");
+    utf16Output << expectedUtf16;
     utf16Output.flush();
 
     if (utf16Output.status() != QTextStream::Ok)
@@ -77,6 +80,14 @@ int main(int argc, char *argv[])
             || static_cast<unsigned char>(result.at(1)) != 0xfe) {
         return 6;
     }
+
+    output.close();
+    if (!output.open(QIODevice::ReadOnly | QIODevice::Text))
+        return 7;
+    QTextStream utf16Input(&output);
+    setUtf16Encoding(utf16Input);
+    if (utf16Input.readAll() != expectedUtf16)
+        return 8;
 
     return 0;
 }

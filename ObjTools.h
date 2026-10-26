@@ -25,6 +25,10 @@ public:
     ObjTools(QString name);
     virtual ~ObjTools();
     QWidget *autoPlacementPanel() const;
+    QWidget *polyVegRecipeHost() const;
+    bool polyVegCorridorSelected() const;
+    void setPolyVegCorridorStatus(const QString &text);
+    void setPolyVegCorridorCounts(int raw, int blocks, int tiles);
     
 public slots:
     void routeLoaded(Route * a);
@@ -52,6 +56,7 @@ public slots:
     void autoSnapableRadiusEnabled(QString val);
     void chSnapableOnlyRotation(int val);
     void autoPlacementPanelVisibilityChanged(bool visible);
+    void activateAutoPlaceRuler();
 
     void showLastItemsContextMenu(QPoint val);
     void lastItemsMenuFindSimilar();
@@ -67,6 +72,12 @@ public slots:
 signals:
     void enableTool(QString name);
     void userModeChanged();
+    void polyVegRecipeHostRequested(bool corridor);
+    void polyVegCorridorSettingsChanged(int target, int side, double range,
+                                       double setback, double width);
+    void plantPolyVegCorridorRequested(bool active);
+    void undoPolyVegCorridorRequested();
+    void bakePolyVegCorridorRequested();
     void requestMainFocus();
 
     void sendMsg(QString name);
@@ -116,6 +127,13 @@ private:
     QComboBox autoPlacementRotType;
     QComboBox autoPlacementTarget;
     AutoPlacementWindow *autoPlacementWindow = NULL;
+    QButtonGroup *autoPlacementModes = nullptr;
+    QCheckBox *autoPlacementChoices[3] = {};
+    QLabel *autoPlacementLabels[3] = {};
+    QPushButton *plantCorridor = nullptr;
+    QWidget *polyVegRecipeContainer = nullptr;
+    QLabel *corridorStatus = nullptr;
+    QLabel *corridorCounts = nullptr;
     QFrame *wireSettingsCard = nullptr;
     QWidget *wireSection = nullptr;
 

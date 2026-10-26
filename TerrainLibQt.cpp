@@ -10,6 +10,7 @@
 
 #include "TerrainLibQt.h"
 #include "Terrain.h"
+#include "SaveProgress.h"
 #include "GLMatrix.h"
 #include <QOpenGLShaderProgram>
 #include <algorithm>
@@ -274,33 +275,26 @@ void TerrainLibQt::getUnsavedInfo(QVector<QString> &items) {
 }
 
 bool TerrainLibQt::save(QString *error) {
-    if (!Game::writeEnabled) return true;
-    qDebug() << "save terrain";
-    QHashIterator<unsigned int, TerrainInfo*> i(terrainQt);
-    while (i.hasNext()) {
-        i.next();
-        if (i.value() == NULL) continue;
-        Terrain* tTile = (Terrain*) i.value()->t;
-        if (tTile == NULL) continue;
-        if (tTile->loaded && tTile->isModified()) {
-            if(!tTile->save(error))
-                return false;
-            tTile->setModified(false);
-        }
+    if(!Game::writeEnabled) return true;
+    QVector<Terrain*> pending;
+    for(auto *info : terrainQt) if(info && info->t) {
+        Terrain *t = static_cast<Terrain*>(info->t);
+        if(t->loaded && t->isModified()) pending.append(t);
     }
-    qDebug() << "save lo terrain";
-    QHashIterator<unsigned int, TerrainInfo*> i2(terrainQtLo);
-    while (i2.hasNext()) {
-        i2.next();
-        if (i2.value() == NULL) continue;
-        Terrain* tTile = (Terrain*) i2.value()->t;
-        if (tTile == NULL) continue;
-        if (tTile->loaded && tTile->isModified()) {
-            if(!tTile->save(error))
-                return false;
-            tTile->setModified(false);
-        }
+    for(auto *info : terrainQtLo) if(info && info->t) {
+        Terrain *t = static_cast<Terrain*>(info->t);
+        if(t->loaded && t->isModified() && !pending.contains(t)) pending.append(t);
     }
+    int total = 0, completed = 0;
+    for(Terrain *t : pending) total += t->pendingSaveWork();
+    for(Terrain *t : pending) {
+        const int work = t->pendingSaveWork();
+        SaveProgress::Range tile(double(completed)/qMax(1,total), double(completed+work)/qMax(1,total));
+        if(!t->save(error)) return false;
+        t->setModified(false);
+        completed += work;
+    }
+    SaveProgress::set(1);
     return true;
 }
 

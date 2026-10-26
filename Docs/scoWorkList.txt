@@ -1,7 +1,8 @@
-TSRE GenX v0.18 Feature Summary
+TSRE GenX v0.19 Feature Summary
 
-Full v0.18 release; both clean Release lanes passed 28/28 tests and manual checks were accepted.
-New v0.18 changes are listed first in RELEASE-NOTES-v0.18.md.
+Full release capped 26 October 2026 from published v0.18.
+Current and established editor capabilities are grouped below.
+Current changes: RELEASE-NOTES-v0.19.md. Clean MinGW/MSVC suites PASS 32/32 each; final manual checks accepted.
 
 ## All GenX Features at a Glance
 
@@ -14,9 +15,10 @@ New v0.18 changes are listed first in RELEASE-NOTES-v0.18.md.
 - Native 4 m/8 m terrain tools and resolution-aware texture matrices keep saved
   terrain mapping consistent with Open Rails; ambiguous custom scales are preserved.
 - Main/Snow previews, Recent textures, seasonal/Night sets, paired Mirror Season
-  painting, ACE/DDS alternatives and coordinated cache refresh improve texturing.
+  painting, immediate preset loading, texture scale, native ACE/RGB24 DDS output, optional saved mipmaps and coordinated cache refresh improve texturing.
 - Water rulers, shoreline processing, fitted seam-matched surfaces, terrain
   adjustment, Waterbed Offset and Undo support river and shoreline work.
+- A final-production TERRTEX hack converts the full route and its seasonal ACE/DDS textures to opaque DXT1 with progress and interruption checkpoints. It is lossy, should run once, and retains no TERRTEX originals or backups.
 - Confirmed terrain/TERRTEX resets, Water Tiles Off and generated-map cleanup retain
   protected source assets. Terrain saves coordinate heights, flags, metadata and textures.
 
@@ -25,15 +27,15 @@ New v0.18 changes are listed first in RELEASE-NOTES-v0.18.md.
 - F6 PolyVeg plants repeatable vegetation from SCO LIDEX geodata, corridors or Area
   rulers using route-local schemas, density/rows, seed, caps and clearance controls.
 - The full-screen Schema Editor manages recipes and assets. Tile/LOD baking,
-  raw/baked status, jump controls, bake-group properties and ownership manifests
+  raw/baked status, bake-group properties and ownership manifests
   support review, safe saves, rebaking and cleanup.
 - Forest-to-PolyVeg replacement and independent vegetation visibility extend that
-  workflow to existing routes without altering unrelated scenery.
-- F5 Auto Place supports track/road runs, finite range, spacing, offsets, selected
-  scenery as the source and repeatable pole wobble.
+  workflow to existing routes without altering unrelated scenery. Optional OSM, full-tile planting, corridor setback/width and zero-result diagnostics support local planting.
+- F5 Auto Place supports track/road runs and cyan Ruler (ap) fence lines, finite range, spacing, offsets, selected
+  scenery as the source and repeatable pole wobble. Ruler placement supports editable points, corner preservation, smooth ordinary post headings and automatic guide reset.
 - Numbered SNAP attachments support native wire Commit, blue previews, sag/width/
   span controls, Bake All Wires and selected-run/route-wide deletion. Recorded pairs
-  prevent duplicates; saved references and shared textures govern cleanup.
+  prevent duplicates; saved references and shared textures govern cleanup. Plain wire retains sag; straight Barbed uses adjustable crossed alpha strips and brown steel artwork.
 
 ### Track, grades and interactive objects
 
@@ -46,7 +48,7 @@ New v0.18 changes are listed first in RELEASE-NOTES-v0.18.md.
 - Pickup track alignment/quarter-turn rotation and eligible turntable/transfer
   activation improve interactive placement. Static instance scale is preserved.
 - Legacy shapes and lightweight glTF/GLB previews coexist in supported viewers
-  and Static/Pickup placement workflows.
+  and Static/Pickup placement workflows. Consist previews also support glTF/GLB bodies and freight models, standard 4K textures and simplified transparency.
 
 ### Maps, paths and Activity Builder
 
@@ -60,7 +62,7 @@ New v0.18 changes are listed first in RELEASE-NOTES-v0.18.md.
   overlap display and Undo/Redo support path construction. ORTS Extended AI controls
   include horn, uncouple, join/split and pass-red operations.
 - Existing activity/traffic controls have guarded selection and preview paths;
-  full Activity Builder and simulator compatibility remain subject to manual checks.
+  full Activity Builder and simulator compatibility remain subject to manual checks. Unicode path metadata and cloning retain German umlauts and other supported letters.
 
 ### Editor workflow, diagnostics and save safety
 
@@ -76,7 +78,7 @@ New v0.18 changes are listed first in RELEASE-NOTES-v0.18.md.
   protect compatible existing definitions.
 - Coordinated key-file save generations, atomic file publication, rollback and
   protected generated-asset cleanup reduce interrupted-save risk. A whole route
-  remains more than one transaction; complete route backups are still required.
+  remains more than one transaction; complete route backups are still required. Overall save progress includes generated baking, texture encoding and publication; large transaction payloads spill to temporary disk staging.
 - Consist Builder includes normalized ORTS/MSTS includes, missing-stock replacement,
   independent preview colours, resource cleanup and isolated rendering state.
 

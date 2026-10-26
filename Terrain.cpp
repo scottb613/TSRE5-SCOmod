@@ -20,8 +20,15 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QBuffer>
+#include <QDirIterator>
+#include <QMap>
+#include <QSet>
+#include <QScopedValueRollback>
 #include "ReadFile.h"
 #include "AceLib.h"
+#include "DdsWriter.h"
+#include "TerrainTextureFormat.h"
+#include "SaveProgress.h"
 #include "TexLib.h"
 #include "TerrainLib.h"
 #include "GLMatrix.h"
@@ -126,7 +133,11 @@ QStringList Terrain::textureSubdirCandidatesForFlags(int flags, QString season) 
     QStringList out;
 
     if (key == "snow" || key == "winter" || key == "autumnsnow" || key == "wintersnow" || key == "springsnow") {
-        if ((flags & Game::TextureFlags["snow"]) != 0 || (flags & Game::TextureFlags["snowtrack"]) != 0)
+        // The editor's Snow choice also previews shapes declaring WinterSnow
+        // (for example seasonal vegetation with ESD_Alternative_Texture 252).
+        if ((flags & Game::TextureFlags["snow"]) != 0
+                || (flags & Game::TextureFlags["snowtrack"]) != 0
+                || (key == "snow" && (flags & Game::TextureFlags["wintersnow"]) != 0))
             out << "snow/";
     }
 
@@ -166,16 +177,33 @@ QString Terrain::pairedTerrtexSubdir() {
     return "snow/";
 }
 
-QString Terrain::resolveTexturePath(QString basePath, QStringList seasonSubdirs, QString textureName) {
+QString Terrain::resolveTexturePath(QString basePath, QStringList seasonSubdirs, QString textureName, bool shapeTexture) {
     textureName.replace("\\", "/");
-    if (QFileInfo(textureName).isAbsolute())
+    if (QFileInfo(textureName).isAbsolute()) {
+        if (shapeTexture) {
+            const QFileInfo requested(textureName);
+            return TexLib::resolveTexturePath({requested.absolutePath()}, requested.fileName());
+        }
         return textureName;
+    }
 
     basePath.replace("\\", "/");
     if (!basePath.endsWith("/"))
         basePath += "/";
     basePath.replace("//", "/");
 
+    if (shapeTexture) {
+        QStringList roots;
+        for (QString subdir : seasonSubdirs) {
+            subdir.replace("\\", "/");
+            roots << QDir::cleanPath(basePath + subdir);
+        }
+        roots << basePath;
+        const QString resolved = TexLib::resolveTexturePath(roots, textureName);
+        if (QFile::exists(resolved))
+            return resolved;
+        return QDir::cleanPath(basePath + textureName);
+    }
     for (int i = 0; i < seasonSubdirs.size(); i++) {
         QString subdir = seasonSubdirs[i];
         subdir.replace("\\", "/");
@@ -186,6 +214,7 @@ QString Terrain::resolveTexturePath(QString basePath, QStringList seasonSubdirs,
         candidate.replace("//", "/");
         if (QFile::exists(candidate))
             return candidate;
+
     }
 
     QString rootCandidate = basePath + textureName;
@@ -209,6 +238,8 @@ QString Terrain::terrainPlaceholderPath(QString seasonSubdir) {
 }
 
 int Terrain::loadTextureForPainting(QString path) {
+    // Painting and seasonal conversion use the same canonical cache key.
+    path = QDir::fromNativeSeparators(QDir::cleanPath(path)).toLower();
     int textureId = TexLib::getTex(path);
     if (textureId >= 0
             && TexLib::mtex.find(textureId) != TexLib::mtex.end()
@@ -222,11 +253,27 @@ int Terrain::loadTextureForPainting(QString path) {
     return TexLib::addTex(path, true);
 }
 
-void Terrain::ensurePairedSeasonPlaceholder(QString textureName) {
+void Terrain::ensurePairedSeasonPlaceholder(QString textureName, int patchIdx, Brush *brush) {
     QString pairedSubdir = Terrain::pairedTerrtexSubdir();
     QString targetDir = Terrain::routeTerrtexPath(pairedSubdir);
     QString target = targetDir + textureName;
     target.replace("//", "/");
+    if(brush->ddsOutput) {
+        // Stage the companion with the terrain transaction, never copy ACE
+        // bytes into a DDS filename or create an unnecessary ACE companion.
+        const QString source = QFile::exists(target)
+            ? target : Terrain::terrainPlaceholderPath(pairedSubdir);
+        const int sourceId = Terrain::loadTextureForPainting(source);
+        if(sourceId < 0 || !TexLib::mtex[sourceId] || !TexLib::mtex[sourceId]->loaded)
+            return;
+        texMirrorId[patchIdx] = TexLib::cloneTex(sourceId);
+        Texture *companion = TexLib::mtex[texMirrorId[patchIdx]];
+        companion->pathid = target;
+        companion->saveDds24 = true;
+        companion->saveMipmaps = brush->createMipmaps;
+        texMirrorModified[patchIdx] = true;
+        return;
+    }
     if (QFile::exists(target))
         return;
 
@@ -808,26 +855,6 @@ int Terrain::getTexture(int x, int z, float posx, float posz) {
 }
 
 void Terrain::convertTexToDefaultCoords(int idx) {
-    /*float x11 = (0) * tfile->tdata[(idx)*13 + 3 + 6] + (0) * tfile->tdata[(idx)*13 + 4 + 6] + tfile->tdata[(idx)*13 + 1 + 6];
-    float y11 = (0) * tfile->tdata[(idx)*13 + 5 + 6] + (0) * tfile->tdata[(idx)*13 + 6 + 6] + tfile->tdata[(idx)*13 + 2 + 6];
-    //qDebug() << x11 << " " <<y11;
-    float x21 = (16) * tfile->tdata[(idx)*13 + 3 + 6] + (0) * tfile->tdata[(idx)*13 + 4 + 6] + tfile->tdata[(idx)*13 + 1 + 6];
-    float y21 = (16) * tfile->tdata[(idx)*13 + 5 + 6] + (0) * tfile->tdata[(idx)*13 + 6 + 6] + tfile->tdata[(idx)*13 + 2 + 6];
-    //qDebug() << x21 << " " <<y21;
-    float x12 = (0) * tfile->tdata[(idx)*13 + 3 + 6] + (16) * tfile->tdata[(idx)*13 + 4 + 6] + tfile->tdata[(idx)*13 + 1 + 6];
-    float y12 = (0) * tfile->tdata[(idx)*13 + 5 + 6] + (16) * tfile->tdata[(idx)*13 + 6 + 6] + tfile->tdata[(idx)*13 + 2 + 6];
-    //qDebug() << x12 << " " <<y12;
-    float x22 = (16) * tfile->tdata[(idx)*13 + 3 + 6] + (16) * tfile->tdata[(idx)*13 + 4 + 6] + tfile->tdata[(idx)*13 + 1 + 6];
-    float y22 = (16) * tfile->tdata[(idx)*13 + 5 + 6] + (16) * tfile->tdata[(idx)*13 + 6 + 6] + tfile->tdata[(idx)*13 + 2 + 6];
-    //qDebug() << x22 << " " <<y22;
-    float t;*/
-    /*if ((x11 < x21) && (y11 == y21)) {
-        qDebug() << "rot1 - ok";
-    } else {
-        qDebug() << "rot";
-        TexLib::mtex[texid[idx]]->crop(x11, y11, x22, y22);
-        TexLib::mtex[texid[idx]]->advancedCrop((float*)&tfile->tdata[(idx)*13 + 6]);
-    }*/
     const int samplesPerPatch = terrainPatchSampleCount(tfile);
     if(samplesPerPatch <= 0)
         return;
@@ -845,8 +872,8 @@ void Terrain::convertTexToDefaultCoords(int idx) {
     }
     if(Game::debugOutput) qDebug() << "rot ->";
     
-    // EFO Texture resolution?
-    TexLib::mtex[texid[idx]]->advancedCrop((float*)&tfile->tdata[(idx)*13 + 6], 512, 512);
+    // Bake the coordinate transform at the original texture dimensions.
+    TexLib::mtex[texid[idx]]->advancedCrop((float*)&tfile->tdata[(idx)*13 + 6]);
     setInsetPatchTextureTransform(tfile, idx);
     this->refresh();
 }
@@ -2190,6 +2217,9 @@ void Terrain::paintTextureOnTile(Brush* brush, int y, int u, float x, float z) {
     if (y > patches-1 || u > patches-1 || y < 0 || u < 0) return;
     //qDebug() << "painttile " << y << " " << u;
     QString name = this->getTileName(mojex, -mojez) + "_" + QString::number(y) + "_" + QString::number(u) + ".ace";
+    const QString existingName = *tfile->materials[(int)tfile->tdata[(y*patches+u)*13+6]].tex[0];
+    if(TerrainTextureFormat::isPaintedPatchName(existingName,name))
+        name = existingName;
     if (texid[y * patches + u] < 0)
         return;
     
@@ -2212,7 +2242,7 @@ void Terrain::paintTextureOnTile(Brush* brush, int y, int u, float x, float z) {
         //TexLib::mtex[texid[y * 16 + u]]->GLTextures();
     }
     if (newSwatch)
-        ensurePairedSeasonPlaceholder(name);
+        ensurePairedSeasonPlaceholder(name, y * patches + u, brush);
     convertTexToDefaultCoords(y * patches + u);
 
     TexLib::mtex[texid[y * patches + u]]->sendToUndo(texid[y * patches + u]);
@@ -3701,7 +3731,15 @@ void Terrain::fillHeightMap(float* data){
     this->refresh();
 }
 
+int Terrain::pendingSaveWork() const {
+    int work = 1; // descriptor/height data and transaction publication
+    if(tfile) for(int i=0; i<qMin(256,tfile->patchsetNpatches*tfile->patchsetNpatches); ++i)
+        work += int(texModified[i]) + int(texMirrorModified[i]);
+    return work;
+}
+
 bool Terrain::save(QString *error) {
+    SaveProgress::report(QString("Preparing terrain tile %1...").arg(name));
     const QString routeRoot = QDir::cleanPath(
         Game::root + "/routes/" + Game::route);
     QString path = routeRoot + "/" + TileDir[(int)lowTile] + "/";
@@ -3711,9 +3749,12 @@ bool Terrain::save(QString *error) {
 
     const float previousFloor = tfile->floor;
     const float previousScale = tfile->scale;
+    QMap<QString *, QString> originalTextureReferences;
     auto fail = [&](const QString &message){
         tfile->floor = previousFloor;
         tfile->scale = previousScale;
+        for(auto it = originalTextureReferences.constBegin(); it != originalTextureReferences.constEnd(); ++it)
+            *it.key() = it.value();
         if(error)
             *error = message;
         return false;
@@ -3774,59 +3815,150 @@ bool Terrain::save(QString *error) {
             return fail(error ? *error : QString("Terrain flag staging failed."));
     }
 
-    const QString descriptorPath = QDir::cleanPath(path + filename + ".t");
-    if(!encode([this](QDataStream &stream){ tfile->save(stream); },
-               data, descriptorPath)
-            || !transaction.addFile(descriptorPath, data, error))
-        return fail(error ? *error : QString("Terrain descriptor encoding failed."));
-
     QVector<int> savedMainTextures;
     QVector<int> savedMirrorTextures;
+    struct TextureSave { Texture *texture; QString destination; int patch; bool mirror; };
+    QVector<TextureSave> textureSaves;
+    QSet<QString> plannedDestinations;
+    QSet<QString> changedTextureDestinations;
+    QMap<int, QString> patchOutputNames;
+    auto serializeTexture = [&](Texture *texture, bool dds, bool mips){
+        if((texture->sourceWidth > 0 && texture->width < texture->sourceWidth)
+                || (texture->sourceHeight > 0 && texture->height < texture->sourceHeight)) {
+            if(error) *error = QString("TERRTEX dimensions changed from %1 x %2 to %3 x %4. "
+                "Save stopped to preserve the original file. Reload the texture at full resolution.")
+                .arg(texture->sourceWidth).arg(texture->sourceHeight).arg(texture->width).arg(texture->height);
+            return false;
+        }
+        if(!texture->editable) texture->setEditable();
+        if(!texture->imageData || (texture->bytesPerPixel != 3 && texture->bytesPerPixel != 4)) {
+            if(error) *error = "Terrain texture has no supported editable RGB data.";
+            return false;
+        }
+        if(dds) {
+            const QImage image(texture->imageData,texture->width,texture->height,
+                texture->width*texture->bytesPerPixel,texture->bytesPerPixel == 4
+                    ? QImage::Format_RGBA8888 : QImage::Format_RGB888);
+            return DdsWriter::serialize24(image,mips,data,error);
+        }
+        QScopedValueRollback<bool> mipChoice(texture->saveMipmaps,mips);
+        return AceLib::serialize(texture,data,error);
+    };
     int patches = tfile->patchsetNpatches;
     for (int u = 0; u < patches; u++)
         for (int y = 0; y < patches; y++) {
             const int patch = y * patches + u;
             if (!texModified[patch] && !texMirrorModified[patch])
                 continue;
-            if(texModified[patch]){
-                auto textureIt = TexLib::mtex.find(texid[patch]);
+            for(bool mirror : {false,true}) {
+                if(mirror ? !texMirrorModified[patch] : !texModified[patch]) continue;
+                const int id = mirror ? texMirrorId[patch] : texid[patch];
+                auto textureIt = TexLib::mtex.find(id);
                 Texture *texture = textureIt == TexLib::mtex.end()
                     ? NULL : textureIt->second;
                 if(texture == NULL)
-                    return fail(QString("Terrain texture %1 is unavailable.")
-                        .arg(texid[patch]));
-                if(!texture->editable)
-                    texture->setEditable();
-                QString aceError;
-                if(!AceLib::serialize(texture, data, &aceError)
-                        || !transaction.addFile(texture->pathid, data, error))
-                    return fail(aceError.isEmpty() && error ? *error : aceError);
-                savedMainTextures.append(patch);
-            }
-            if(texMirrorModified[patch]){
-                auto textureIt = TexLib::mtex.find(texMirrorId[patch]);
-                Texture *texture = textureIt == TexLib::mtex.end()
-                    ? NULL : textureIt->second;
-                if(texture == NULL)
-                    return fail(QString("Paired-season terrain texture %1 is unavailable.")
-                        .arg(texMirrorId[patch]));
-                if(!texture->editable)
-                    texture->setEditable();
-                QFileInfo targetInfo(texture->pathid);
-                if(!QDir().mkpath(targetInfo.absolutePath()))
-                    return fail(QString("Could not create terrain texture directory %1")
-                        .arg(targetInfo.absolutePath()));
-                QString aceError;
-                if(!AceLib::serialize(texture, data, &aceError)
-                        || !transaction.addFile(texture->pathid, data, error))
-                    return fail(aceError.isEmpty() && error ? *error : aceError);
-                savedMirrorTextures.append(patch);
+                    return fail(QString("Terrain texture %1 is unavailable.").arg(id));
+                QString destination = TerrainTextureFormat::outputPath(texture->pathid,texture->saveDds24);
+                if(!mirror) patchOutputNames[patch] = QFileInfo(destination).fileName();
+                else if(patchOutputNames.contains(patch))
+                    destination = QFileInfo(destination).absolutePath() + '/' + patchOutputNames[patch];
+                textureSaves.append({texture,destination,patch,mirror});
+                if(texture->pathid.compare(destination,Qt::CaseInsensitive)!=0)
+                    changedTextureDestinations.insert(destination.toLower());
+                plannedDestinations.insert(destination.toLower());
             }
         }
+
+    int textureDone = 0;
+    for(const TextureSave &save : textureSaves) {
+        SaveProgress::Range textureStage(0.65*textureDone/qMax(1,textureSaves.size()),
+            0.65*(textureDone+1)/qMax(1,textureSaves.size()));
+        ++textureDone;
+        SaveProgress::report(QString("Encoding %1 TERRTEX: tile %2, patch %3 of %4")
+            .arg(save.texture->saveDds24 ? "DDS RGB24" : "ACE").arg(name).arg(save.patch+1).arg(patches*patches));
+        if(!QDir().mkpath(QFileInfo(save.destination).absolutePath()))
+            return fail("Could not create TERRTEX output directory: " + QFileInfo(save.destination).absolutePath());
+        if(!serializeTexture(save.texture,save.texture->saveDds24,save.texture->saveMipmaps)
+                || !transaction.addFile(save.destination,data,error))
+            return fail(error ? *error : QString("Terrain texture staging failed."));
+        if(save.mirror) savedMirrorTextures.append(save.patch);
+        else {
+            savedMainTextures.append(save.patch);
+            const int material = int(tfile->tdata[save.patch*13+6]);
+            for(QString *reference : {tfile->materials[material].tex[0],tfile->amaterials[material].tex[0]}) {
+                if(!originalTextureReferences.contains(reference)) originalTextureReferences.insert(reference,*reference);
+                *reference = QFileInfo(save.destination).fileName();
+            }
+        }
+    }
+    // Changing a patch's filename extension also changes how its seasonal
+    // variants are resolved. Convert only existing variants of that patch;
+    // explicitly painted main/mirror destinations already take precedence.
+    SaveProgress::Range tail(0.65, 1);
+    QSet<QString> renamedNames;
+    for(const TextureSave &save : textureSaves) {
+        const QString oldName = QFileInfo(save.texture->pathid).fileName();
+        if(oldName.compare(QFileInfo(save.destination).fileName(),Qt::CaseInsensitive)!=0)
+            renamedNames.insert(oldName.toLower());
+    }
+    QMap<QString, QStringList> variantsByName;
+    if(!renamedNames.isEmpty()) {
+        QDirIterator files(Terrain::routeTerrtexPath(),QStringList()<<"*.ace"<<"*.dds",
+            QDir::Files | QDir::NoSymLinks,QDirIterator::Subdirectories);
+        while(files.hasNext()) {
+            const QString source = files.next();
+            const QString fileName = QFileInfo(source).fileName().toLower();
+            if(renamedNames.contains(fileName)) variantsByName[fileName].append(source);
+        }
+    }
+    struct Conversion { QString source, destination; Texture *settings; };
+    QVector<Conversion> conversions;
+    for(const TextureSave &save : textureSaves) {
+        const QString oldName = QFileInfo(save.texture->pathid).fileName();
+        if(oldName.compare(QFileInfo(save.destination).fileName(),Qt::CaseInsensitive)==0) continue;
+        for(const QString &source : variantsByName.value(oldName.toLower())) {
+            const QString destination = QFileInfo(source).absolutePath() + '/' + QFileInfo(save.destination).fileName();
+            if(plannedDestinations.contains(destination.toLower())) continue;
+            conversions.append({source,destination,save.texture});
+            plannedDestinations.insert(destination.toLower());
+        }
+    }
+    int converted = 0;
+    for(const Conversion &conversion : conversions) {
+        SaveProgress::Range variant(0.3*converted/qMax(1,conversions.size()),
+            0.3*(converted+1)/qMax(1,conversions.size()));
+        ++converted;
+        const QString source = conversion.source, destination = conversion.destination;
+        SaveProgress::report("Converting matching seasonal TERRTEX: " + QFileInfo(source).fileName());
+        const int id = Terrain::loadTextureForPainting(source);
+        if(id < 0 || !TexLib::mtex[id] || !TexLib::mtex[id]->loaded)
+            return fail("Could not load matching seasonal TERRTEX: " + source);
+        if(!serializeTexture(TexLib::mtex[id],conversion.settings->saveDds24,conversion.settings->saveMipmaps)
+                || !transaction.addFile(destination,data,error))
+            return fail(error ? *error : QString("Seasonal TERRTEX conversion failed."));
+        plannedDestinations.insert(destination.toLower());
+        changedTextureDestinations.insert(destination.toLower());
+    }
+    SaveProgress::Range publication(0.3, 1);
+    const QString descriptorPath = QDir::cleanPath(path + filename + ".t");
+    if(!encode([this](QDataStream &stream){ tfile->save(stream); },data,descriptorPath)
+            || !transaction.addFile(descriptorPath,data,error))
+        return fail(error ? *error : QString("Terrain descriptor encoding failed."));
 
     QString transactionError;
     if(!transaction.commit(&transactionError))
         return fail(transactionError);
+
+    // A previously saved opposite-format target may already be cached.
+    // Reload it only after the transaction succeeds; never reuse stale pixels.
+    for(const QString &destination : changedTextureDestinations)
+        if(TexLib::getTex(destination) >= 0) TexLib::addTex(destination,true);
+
+    for(const TextureSave &save : textureSaves) {
+        save.texture->hashid.removeAll(save.texture->pathid.toLower());
+        save.texture->pathid = save.destination.toLower();
+        if(!save.texture->hashid.contains(save.texture->pathid)) save.texture->hashid.append(save.texture->pathid);
+    }
 
     modifiedF = false;
     for(int patch : savedMainTextures)

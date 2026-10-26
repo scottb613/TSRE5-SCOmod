@@ -304,6 +304,17 @@ int main(int argc, char **argv) {
                     "corrupt compressed world should stop destructive prune");
     passed &= check(QFileInfo::exists(protectedShape),
                     "failed world decode should preserve generated assets");
+    const QString emptyRoute = temporary.path() + "/empty-registry";
+    passed &= check(QDir().mkpath(emptyRoute + "/OpenRails"), "empty registry directory should create");
+    const QString emptyManifest = emptyRoute + "/OpenRails/forest-bakes.json";
+    QFile emptyFile(emptyManifest);
+    passed &= check(emptyFile.open(QIODevice::WriteOnly), "empty registry should open");
+    emptyFile.write("{\"version\":1,\"blocks\":[]}");
+    emptyFile.close();
+    ForestBakePruneResult emptyResult;
+    passed &= check(ForestBakeManifest::pruneUnreferenced(emptyRoute, emptyResult, error, nullptr, false)
+            && emptyResult.removedManifest && !QFileInfo::exists(emptyManifest),
+        "Save cleanup must remove a residual empty registry after the final bake is cleared");
     if(passed) std::cout << "Forest bake manifest prune probe passed.\n";
     return passed ? 0 : 1;
 }

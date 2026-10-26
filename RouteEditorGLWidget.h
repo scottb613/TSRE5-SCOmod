@@ -20,7 +20,9 @@
 #include <QBasicTimer>
 #include <QJsonObject>
 #include <QSet>
+#include <QPair>
 #include "ForestBakeManifest.h"
+#include "PolyVegCorridor.h"
 #include "CameraFree.h"
 #include "CameraConsist.h"
 #include "WorldObj.h"
@@ -143,7 +145,7 @@ public slots:
     void paintToolResetTile();
     void plantNearestOsmForest();
     void setPolyVegSettings(QString recipeId, double density, int maximumTrees,
-                            quint64 seed, bool floodFill,
+                            quint64 seed, bool useOsm, bool floodFill,
                             bool disablePlantReport, bool rowsEnabled,
                             double rowWidthMetres,
                             double rowSpacingMetres,
@@ -152,18 +154,25 @@ public slots:
     void refreshPolyVegTileCounts();
     void requestPolyVegHelper();
     void placePolyVegRuler(double widthMetres, bool closedShape);
+    void newAutoPlaceRuler();
+    void addAutoPlaceRulerPoints();
+    void editAutoPlaceRulerPoints();
+    void clearAutoPlaceRuler();
+    void commitAutoPlaceRuler();
     void addPolyVegRulerPoints();
     void editPolyVegRulerPoints();
     void setPolyVegRulerWidth(double widthMetres);
     void setPolyVegRulerArea(bool closedShape);
     void plantPolyVegRuler(bool overrideForestCoverage);
+    void setPolyVegCorridorSettings(int target, int side, double range,
+                                   double setback, double width);
+    void setPolyVegCorridorMode(bool active);
+    void clearPolyVegCorridor();
+    void setPolyVegFullTileMode(bool active);
+    void setPolyVegClearBakeMode(bool active);
+    void setPolyVegBakeTileMode(bool active);
     void removePolyVegRuler();
-    void jumpNextPolyVegRawTile();
-    void resetPolyVegRawJump();
-    void jumpNextPolyVegBakeTile();
-    void resetPolyVegBakeJump();
     void setPolyVegHelperVisible(bool visible);
-    void bakeVegetationCurrentTile();
     void bakeVegetationPointerTile();
     void bakeAllVegetation();
     void deleteAllPolyVegBakes();
@@ -213,6 +222,7 @@ signals:
     void reloadMkrLists();
     void waterRulerPlacementRequested();
     void polyVegRulerPlacementRequested();
+    void autoPlaceRulerPlacementRequested();
     
     void sendMsg(QString name);
     void sendMsg(QString name, bool val);
@@ -229,7 +239,11 @@ signals:
     void waterHelperStatus(QString text);
     void polyVegHelperRequested();
     void polyVegPanelStatus(QString text);
+    void polyVegFullTileModeChanged(bool active);
+    void polyVegClearBakeModeChanged(bool active);
+    void polyVegBakeTileModeChanged(bool active);
     void polyVegTileCounts(int rawCount, int bakedCount, int bakedTileCount);
+    void polyVegRulerCleared();
     void primaryEditorToolsEnabled(bool enabled);
     void terrainShapeToggleRequested();
 
@@ -253,6 +267,23 @@ protected:
     void drawPointer();
     void pushRenderPointer();
 private:
+    bool rejectPolyVegPlantedArea(const QPainterPath &area);
+    void plantPolyVegRegion(bool overrideForestCoverage, bool fullTile,
+                           int tileX, int tileZ, bool alignmentCorridor = false);
+    void preparePolyVegCorridor(int tileX, int tileZ, float x, float y, float z, int mode);
+    void plantPolyVegCorridor();
+    int corridorTarget = 0;
+    int corridorSide = 0;
+    double corridorRange = 500;
+    double corridorSetback = 10;
+    double corridorWidth = 40;
+    bool corridorBusy = false;
+    TDB *corridorSourceDatabase = nullptr;
+    int corridorSourceNode = -1;
+    PolyVegCorridor::Samples corridorSamples;
+    QPainterPath corridorBoundary;
+    bool polyVegFullTileClickConsumed = false;
+    void clearPolyVegBakeTile(int tileX, int tileZ);
     void setupVertexAttribs();
     void applyStatusPanelCommand(const QString &name, bool allowToggleOff);
     void setSelectedObj(GameObj* o, bool refreshProperties = true);
@@ -275,11 +306,12 @@ private:
     void positionWaterMessage();
     void renderPolyVegBakeMarkers();
     void setSpecialRulerPanelControlsActive(bool active);
-    bool bakeVegetationTile(bool usePointerTile);
+    bool bakeVegetationTile(bool usePointerTile, const QPair<int, int> *clickedTile = nullptr);
     QString polyVegRecipeId;
     double polyVegDensity = -1.0;
     int polyVegMaximumTrees = -1;
     quint64 polyVegSeed = 1;
+    bool polyVegUseOsm = true;
     bool polyVegFloodFill = false;
     bool polyVegDisablePlantReport = false;
     bool polyVegRowsEnabled = false;
@@ -297,6 +329,7 @@ private:
     QString wireRegistryPath, wireSection;
     bool wireRegistryReady = false;
     bool wireBakeBusy = false;
+    bool routeSaveBusy = false;
     bool wireCleanupAll = false;
     bool cleanupWireAssets(bool afterSave = true);
     bool loadWireRegistry();
@@ -310,7 +343,8 @@ private:
     // Stable placement references: Recent Items may retain these addresses.
     std::map<QString, Ref::RefItem> autoPlacementPickedReferences;
     int wirePreviewTileX = 0, wirePreviewTileZ = 0;
-    void rebuildWirePreview(float sagPercent, float widthMm, float maxSpan);
+    void rebuildWirePreview(float sagPercent, float widthMm, float maxSpan,
+                            QString wireType = "plain", float barbSpacing = 0.25f);
     void updateWireAvailability();
     void renderWirePreview();
     double polyVegRulerWidth = 100.0;
@@ -320,11 +354,6 @@ private:
     void pushPolyVegBakeMarkers();
     void selectPolyVegBakeTile(int tileX, int tileZ);
     QVector<QPair<int, int>> polyVegTiles(bool baked) const;
-    void jumpNextPolyVegTile(bool baked);
-    QVector<QPair<int, int>> polyVegRawJumpTiles;
-    QVector<QPair<int, int>> polyVegBakeJumpTiles;
-    int polyVegRawJumpIndex = -1;
-    int polyVegBakeJumpIndex = -1;
     bool polyVegHelperVisible = false;
     bool polyVegBatchBake = false;
     int polyVegBatchTileX = 0;
@@ -377,6 +406,7 @@ private:
     RulerObj* activeWaterRuler = NULL;
     RulerObj* activeVegetationRuler = NULL;
     RulerObj* activeGradeRuler = NULL;
+    RulerObj* activeAutoPlaceRuler = NULL;
     bool waterScanUndoAvailable = false;
     bool waterScanPending = false;
     bool specialRulerPanelControlsActive = false;

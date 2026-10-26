@@ -129,6 +129,10 @@ $scaffoldPattern = '(?ms)\r?\n# Keep the scaffold configurable before the frozen
 $publicCMake = [regex]::Replace($publicCMake, $scaffoldPattern, "`r`n")
 $publicCMake = $publicCMake.Replace('TSREvcWIP/', '')
 $publicCMake = $publicCMake.Replace(
+    'PRIVATE TSREvcWIP)',
+    'PRIVATE "${TSRE_SOURCE_DIR}")'
+)
+$publicCMake = $publicCMake.Replace(
     '${CMAKE_CURRENT_SOURCE_DIR}/docsInternal/proposals/forest.v1.example.json',
     '${CMAKE_CURRENT_SOURCE_DIR}/tests/data/forest.v1.example.json'
 )

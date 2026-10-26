@@ -40,12 +40,23 @@ void DdsLib::run() {
     }
 
     texture->width = image.width;
+    texture->saveDds24 = true;
     texture->height = image.height;
-    texture->bytesPerPixel = 4;
-    texture->type = GL_RGBA;
-    texture->imageData = new unsigned char[image.rgba.size()];
-    std::memcpy(
-        texture->imageData, image.rgba.constData(), image.rgba.size());
+    texture->sourceWidth = image.width;
+    texture->sourceHeight = image.height;
+    const bool opaque=image.opaqueRgb24 || image.opaqueDxt1;
+    texture->bytesPerPixel = opaque ? 3 : 4;
+    texture->bpp = texture->bytesPerPixel * 8;
+    texture->imageSize = image.width * image.height * texture->bytesPerPixel;
+    texture->type = opaque ? GL_RGB : GL_RGBA;
+    texture->imageData = new unsigned char[texture->imageSize];
+    if(opaque) {
+        // Keep opaque RGB24 and BC1 data in RGB storage. Inventing an alpha
+        // channel lets the legacy AA border-removal option make it transparent
+        // and would prevent a subsequent RGB24 paint/save cycle.
+        for(int i=0;i<image.width*image.height;++i)
+            std::memcpy(texture->imageData+i*3,image.rgba.constData()+i*4,3);
+    } else std::memcpy(texture->imageData,image.rgba.constData(),image.rgba.size());
     texture->loaded = true;
     texture->editable = true;
 }

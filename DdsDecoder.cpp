@@ -345,5 +345,12 @@ bool DdsDecoder::decode(
     image.width = width;
     image.height = height;
     image.rgba = std::move(rgba);
+    image.opaqueDxt1 = (pixelFlags & DdsPixelFormatFourCc) != 0 && fourCc == FourCcDxt1;
+    if(image.opaqueDxt1) for(qsizetype i=3;i<image.rgba.size();i+=4) {
+        if(static_cast<uchar>(image.rgba[i])!=255) { image.opaqueDxt1=false; break; }
+    }
+    image.opaqueRgb24 = (pixelFlags & DdsPixelFormatFourCc) == 0
+        && (pixelFlags & DdsPixelFormatRgb) != 0 && rgbBits == 24
+        && alphaMask == 0 && (pixelFlags & 1) == 0;
     return true;
 }

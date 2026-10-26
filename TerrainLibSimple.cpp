@@ -10,6 +10,7 @@
 
 #include "TerrainLibSimple.h"
 #include "Terrain.h"
+#include "SaveProgress.h"
 #include "GLMatrix.h"
 #include <QOpenGLShaderProgram>
 #include <algorithm>
@@ -165,19 +166,23 @@ void TerrainLibSimple::getUnsavedInfo(QVector<QString> &items){
     }
 }
 
-bool TerrainLibSimple::save(QString *error){
-    if (!Game::writeEnabled) return true;
-    qDebug() << "save terrain";
-    for (auto it = terrain.begin(); it != terrain.end(); ++it) {
-        //console.log(obj.type);
-        Terrain* tTile = (Terrain*) it->second;
-        if (tTile == NULL) continue;
-        if (tTile->loaded && tTile->isModified()) {
-            if(!tTile->save(error))
-                return false;
-            tTile->setModified(false);
-        }
+bool TerrainLibSimple::save(QString *error) {
+    if(!Game::writeEnabled) return true;
+    QVector<Terrain*> pending;
+    for(const auto &entry : terrain) {
+        Terrain *t = entry.second;
+        if(t && t->loaded && t->isModified()) pending.append(t);
     }
+    int total = 0, completed = 0;
+    for(Terrain *t : pending) total += t->pendingSaveWork();
+    for(Terrain *t : pending) {
+        const int work = t->pendingSaveWork();
+        SaveProgress::Range tile(double(completed)/qMax(1,total), double(completed+work)/qMax(1,total));
+        if(!t->save(error)) return false;
+        t->setModified(false);
+        completed += work;
+    }
+    SaveProgress::set(1);
     return true;
 }
 

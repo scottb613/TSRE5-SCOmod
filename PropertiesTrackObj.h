@@ -12,6 +12,7 @@
 #define	PROPERTIESTRACKOBJ_H
 
 #include "PropertiesAbstract.h"
+#include "GameObj.h"
 
 class TrackObj;
 class GradeHelperWindow;
@@ -60,6 +61,7 @@ signals:
     void setMoveStep(float val);
     void requestMainFocus();
     void resetRouteTerrtexRequested();
+    void compressRouteTerrtexRequested();
     void disableRouteWaterRequested();
     void deleteAllPolyVegBakesRequested();
     void replaceRouteForestsRequested();
@@ -70,6 +72,7 @@ private:
     friend class HacksWindow;
     TrackObj* trackObj = NULL;
     WorldObj* hacksSelection = NULL;
+    GameObj::TypeObj hacksContextType = GameObj::none;
     QComboBox elevType;
     QLineEdit elevStep;
     QLineEdit elevProm;

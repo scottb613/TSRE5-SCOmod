@@ -15,6 +15,7 @@
 #include <QString>
 #include "FileBuffer.h"
 #include "ComplexLine.h"
+#include <QVector3D>
 
 class OglObj;
 
@@ -31,7 +32,8 @@ public:
     enum SpecialSelectionKind {
         WaterSelection = 0,
         VegetationSelection = 1,
-        GradeSelection = 2
+        GradeSelection = 2,
+        AutoPlaceSelection = 3
     };
     static constexpr int SpecialSelectionWindow = 14;
     static constexpr int SpecialSelectionKindShift = 18;
@@ -71,6 +73,10 @@ public:
     void setVegetationWidth(float metres);
     void appendVegetationPoint(int x, int z, float *p);
     bool isGradeRuler() const;
+    bool isAutoPlaceRuler() const;
+    void setAutoPlaceRuler(bool enabled);
+    void appendAutoPlacePoint(int x,int z,float *p);
+    QVector3D getPointLocalPosition(int index) const;
     void setGradeRuler(bool enabled);
     void appendGradePoint(int x, int z, float *p);
     bool isSpecialRuler() const;
@@ -114,6 +120,7 @@ private:
     bool vegetationArea = false;
     float vegetationWidth = 100.0f;
     bool gradeRuler = false;
+    bool autoPlaceRuler = false;
     bool specialPointMoved = false;
     float specialPointStartPosition[3] {0.0f, 0.0f, 0.0f};
     

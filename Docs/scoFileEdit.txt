@@ -4,6 +4,34 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.19 terrain, placement and production workflows
+
+- Texture.cpp/.h, TexturePaintMath.h, Brush.h, TerrainTools.cpp/.h: paint scale, immediate presets, output controls, alignment, source dimensions and production action.
+- AceLib.cpp, AceFormatValidator.cpp, DdsDecoder.cpp/.h, DdsLib.cpp, DdsWriter.cpp/.h, TerrtexMipmaps.cpp/.h: native output, validated mipmaps and opaque DXT1 production encoding.
+- Terrain.cpp/.h, TerrainLibQt.cpp, TerrainLibSimple.cpp, TerrainTextureFormat.h, TexLib.cpp, ShapeTexturePath.h, SFile.cpp, ForestObj.cpp, TFile.cpp: format/seasonal references, texture lookup, cache and saved dimension handling.
+- SaveProgress.h, Route.cpp/.h, RouteEditorGLWidget.cpp/.h, RouteSaveTransaction.cpp/.h, ActLib.cpp, ForestBakeManifest.cpp: total bake/save progress, payload staging and generated ownership.
+- TerrtexProduction.h, PropertiesTrackObj.cpp/.h, RouteEditorWindow.cpp: selection-sensitive HACKS, full-route conversion/checkpoints/reference updates and UI wiring.
+- AutoPlaceRuler.h, AutoPlaceWire.cpp/.h, RulerObj.cpp/.h, ObjTools.cpp/.h, WorldObj.cpp/.h: cyan AP guide, ordinary post headings, corners/reset/F1/latch, ruler-run wires and straight alpha Barbed artwork.
+- EditorCollapsibleSection.h, PolyVegHelper.cpp/.h, PolyVegClearance.h, PolyVegCorridor.h, PolyVegPlantDiagnostics.h, PolyVegPlantingArea.h: compact local/mapped/corridor planting and diagnostics.
+- Eng.cpp/.h, GltfModel.cpp/.h, GltfPreview.cpp, GltfPlacementMath.h, ShapeViewerGLWidget.cpp: rolling-stock dispatch, bounded resources/4K images, transparency and orientation/state correction.
+- ActivityPathId.h, ActivityTools.cpp, ActivityTrackViewer.cpp: Unicode-safe path metadata and cloning.
+- CMakeLists.txt, CMakePresets.json, vcpkg.json, Game.cpp, TSRE5_resource.rc and registered probes: build/version/regression integration. Regression helpers and operator release/export scripts reviewed separately.
+
+v0.19 PolyVeg panel layout
+
+- PolyVegHelper.cpp: New Ruler/Plant Ruler shared full-label action row.
+
+v0.19 shape texture lookup
+
+- Terrain.cpp/.h, SFile.cpp, ForestObj.cpp: Snow/WinterSnow selection and shape lookup.
+- TexLib.cpp, ShapeTexturePath.h: DDS preference within seasonal/route roots.
+- tests/ShapeTexturePathProbe.cpp, CMakeLists.txt: texture precedence regression probe.
+
+v0.19 development start
+
+- CMakeLists.txt, vcpkg.json, Game.cpp and TSRE5_resource.rc: version identity.
+- Editor/viewer launchers and regression/UI PowerShell defaults: v0.19 test pack.
+
 v0.18 source changes (selected feature files; prior entries follow)
 
 - ForestReplacementPlan.h, ForestGenerator.cpp/.h, ForestPatchBaker.cpp/.h,

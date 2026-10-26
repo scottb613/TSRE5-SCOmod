@@ -1,61 +1,91 @@
-# TSRE GenX v0.18 — Forest Replacement, glTF Models and Wire Workflow
+# TSRE GenX v0.19 — Terrain Textures, Auto Place and Production Workflows
 
 TSRE GenX is a 64-bit Windows route editor for Microsoft Train Simulator and
 Open Rails routes. It combines the established TSRE editor with Qt 6/CMake,
 terrain and map tools, Dynamic Track, PolyVeg, Activity Builder and Consist Builder.
 
-> **Current version: v0.18.** Both operator-run clean Release builds passed all 28 registered tests on 6 October 2026. The operator accepted the remaining manual checks. This full Windows release follows the immutable v0.17 baseline.
+> **Current version: v0.19.** Both operator-run clean Release builds passed all 32 registered tests on 26 October 2026. The operator accepted the final manual checks. This full Windows release follows the immutable v0.18 baseline.
 
-## New in v0.18
+## Major Updates Since v0.18
 
-### Forest regions and PolyVeg
+### Terrain textures, presets and output
 
-- **Replace All Forest Regions** in the shared HACKS popup converts the route's
-  legacy Forest regions using the selected F6 PolyVeg schema. Overlapping regions
-  share one planting footprint; rotation, holes and cross-tile spacing are preserved.
-- Preflight checks terrain coverage, schema inputs and conflicting generated assets.
-  Planting uses density/rows, seed, per-tile cap, slope, spacing, feathering,
-  TrackDB/RoadDB clearances and water exclusion. Ground outside terrain coverage
-  receives no plants; unreadable existing terrain stops the operation.
-- Progress and cancellation cover generation, placement and baking. Originals
-  remain until the entire batch succeeds; failure or cancellation rolls back new
-  objects and owned assets. Entirely uncovered or all-empty batches cannot commit.
-  A successful batch removes **all surveyed original Forest regions**, including
-  those outside planting coverage. Review the result and use normal Save afterward.
-- **View > PolyVeg** independently hides or shows raw plants, baked vegetation,
-  schema-listed vegetation shapes and bake markers, including selection and shadows.
-  Visibility starts enabled each session and does not change saved route content.
+- Selecting a saved texture preset immediately loads its source and brush settings;
+  the separate Apply button is removed. Invalid/missing sources report an error.
+  Brush Scale, full rotation, previews and Recent controls support repeated painting.
+- Independent **Mipmaps** and **DDS** output switches apply to subsequently painted
+  patches. DDS uses native opaque RGB24 output; ACE remains available. Presets do
+  not change output switches. Existing base dimensions are preserved, including
+  2048-square TERRTEX, and matching seasonal format conversions are coordinated.
+- Saved mipmaps use linear-light, alpha-aware filtering with repeating texture
+  edges. Unsupported ACE mip dimensions stop Save instead of silently resizing.
+- Corrected rectangular painting/cropping, RGB pixel-row alignment and canonical
+  texture cache keys. Distant-terrain reset chooses terrainDM.dds, terrainDM.ace,
+  then terrain.ace according to available assets.
+- Shape textures prefer DDS over ACE within each ordered seasonal directory.
+  Snow also recognizes WinterSnow-capable vegetation, retaining seasonal precedence
+  and ordinary missing-texture fallback.
 
-### Open Rails glTF/GLB models
+### Full-operation progress and final route production
 
-- Shape Viewer and route shape selection accept `.gltf` and `.glb` alongside legacy
-  `.s` models. Static scenery and Pickup objects retain their native model references
-  through normal placement and world-file saves.
-- The lightweight editor preview supports base colour, PNG/JPEG textures, opaque
-  and cutout surfaces, transforms, bounds and selection. Rigid animated models
-  display their authored rest pose. Original model resources remain unchanged.
-- Open Rails supplies final material shading and animation. TSRE does not claim
-  full PBR parity or animation playback. Skinning, morphs, compressed geometry,
-  blended materials and unsupported required features are rejected explicitly.
-  DDS-only preview, vertex colours, seasonal/night visibility and LOD remain outside
-  current support. A warning identifies the tested Open Rails embedded-DDS parser
-  limitation even when TSRE can show a PNG fallback.
-- Shared model resources, bounded loading and context-aware GPU cleanup protect
-  repeated placement and coexistence with legacy shapes. Basic placement,
-  save/reopen and simulator display have operator evidence; remaining acceptance
-  is listed in the test matrix.
+- Route Save reports the combined operation, including pending PolyVeg and wire
+  baking, terrain/TERRTEX encoding, file publication and generated-asset cleanup.
+  The display reaches 100% only after the operation succeeds.
+- Large save payloads use temporary disk staging rather than retaining an entire
+  terrain batch in memory. Existing transaction backup, rollback and duplicate
+  destination protections remain; complete route backups are still required.
+- Selection-sensitive **HACKS** shows actions relevant to the current object or
+  terrain. Terrain offers **Compress TERRTEX — DXT1** for the complete route,
+  including seasonal ACE and DDS files and terrain-reference updates.
+- **Production compression introduces loss, removes alpha, should be run once,
+  and retains no TERRTEX originals or backups.** Use it on the final upload copy
+  after editing is complete. Progress, per-file verification and interruption
+  checkpoints support large routes; this is not an archival or reversible save.
 
-### Wire saving and route-wide deletion
+### Ruler (ap), fence posts and wire choices
 
-- Exit offers **Save & Quit** when generated objects are already baked and only
-  route saving remains. **Bake & Save** remains available when raw wires or PolyVeg
-  still need baking; Discard and Cancel preserve their existing safeguards.
-- Route-wide wire deletion shows discovery, targeted tile loading and cleanup
-  progress. It loads saved tiles identified as wire candidates and includes loaded
-  unsaved wires, avoiding unconditional loading of every scenery tile.
-- Saved world references protect generated shapes until Save; surviving shapes
-  protect shared textures. Malformed saved worlds stop discovery before removal.
-  Recorded saved wire pairs continue to prevent duplicate Commit/Bake placements.
+- F5 Objects can follow the editable cyan **Ruler (ap)** independently of tracks
+  and roads. It is also available with the other rulers under F1 **TSRE Tools**;
+  placement opens Auto Place on Objects with the appropriate Follow mode.
+- Spacing, offsets, terrain following and ordinary point-edit controls apply.
+  **Preserve Corners** forces posts at 45–90 degree turns. Ordinary post headings
+  bisect their actual neighboring spans; preserved corner orientation is exempt.
+- The half-height guide has visible edit handles. Its placement button latches;
+  a second click clears it. Successful object placement clears/resets the guide;
+  partial placement retains it for a duplicate-safe retry. Guides are session-only.
+- Wires find compatible SNAP supports along ruler-placed runs without a nearby
+  track/road. Existing pair reservations prevent duplicates; Max Span and bounded
+  nearest-span discovery still require inspection near parallel or branching lines.
+- **Plain** remains the default with its existing sagging geometry. **Barbed** is
+  straight, with brown steel wire and blunt, constant-width barbs drawn on two
+  crossed alpha strips. Barbs are shorter and thicker; Width scales the silhouette.
+  Raw blue guides bake into textured scenery on Save. Existing bakes retain their
+  material until explicitly deleted and replaced.
+
+### PolyVeg planting and controls
+
+- Compact collapsible controls, aligned Density/Cap values, a separate Seed column
+  and adjacent ruler actions improve F6 layout. The old Jump controls are removed.
+- **Use OSM** is optional for local ruler/area/full-tile planting. Turning it off
+  avoids requiring map derivatives; terrain, slope, water and database clearances
+  remain. Mapped polygon/flood workflows still require their geodata.
+- **Plant Full Tile** arms the next terrain click for one tile, with cancellation
+  and existing planting exclusions. F5 corridors offer side, setback, width and
+  range controls with shared schema/settings and duplicate-area checks.
+- Zero-result reports explain coverage, targets, terrain and exclusion counts;
+  they scroll and can be copied. Report suppression leaves validation errors visible.
+
+### glTF/GLB consists and international path names
+
+- Consist Viewer and on-track previews accept glTF/GLB locomotive/wagon bodies
+  and freight models alongside legacy shapes. Authored offsets/pivots and Flip
+  are retained; corrected handedness/direction and depth clears improve previews.
+- Standard 4096-square textures and bounded larger containers are supported.
+  Simplified transparent surfaces draw after solids with graphics-state restoration.
+  Open Rails still owns final PBR shading and animation; TSRE displays rest pose.
+- Path metadata and standalone cloning preserve German umlauts, sharp s and other
+  Unicode letters/combining accents without transliteration. Existing UTF-16
+  route/activity/service/path serialization is retained.
 
 ## All GenX Features at a Glance
 
@@ -68,9 +98,10 @@ terrain and map tools, Dynamic Track, PolyVeg, Activity Builder and Consist Buil
 - Native 4 m/8 m terrain tools and resolution-aware texture matrices keep saved
   terrain mapping consistent with Open Rails; ambiguous custom scales are preserved.
 - Main/Snow previews, Recent textures, seasonal/Night sets, paired Mirror Season
-  painting, ACE/DDS alternatives and coordinated cache refresh improve texturing.
+  painting, immediate preset loading, texture scale, native ACE/RGB24 DDS output, optional saved mipmaps and coordinated cache refresh improve texturing.
 - Water rulers, shoreline processing, fitted seam-matched surfaces, terrain
   adjustment, Waterbed Offset and Undo support river and shoreline work.
+- A final-production TERRTEX hack converts the full route and its seasonal ACE/DDS textures to opaque DXT1 with progress and interruption checkpoints. It is lossy, should run once, and retains no TERRTEX originals or backups.
 - Confirmed terrain/TERRTEX resets, Water Tiles Off and generated-map cleanup retain
   protected source assets. Terrain saves coordinate heights, flags, metadata and textures.
 
@@ -79,15 +110,15 @@ terrain and map tools, Dynamic Track, PolyVeg, Activity Builder and Consist Buil
 - F6 PolyVeg plants repeatable vegetation from SCO LIDEX geodata, corridors or Area
   rulers using route-local schemas, density/rows, seed, caps and clearance controls.
 - The full-screen Schema Editor manages recipes and assets. Tile/LOD baking,
-  raw/baked status, jump controls, bake-group properties and ownership manifests
+  raw/baked status, bake-group properties and ownership manifests
   support review, safe saves, rebaking and cleanup.
 - Forest-to-PolyVeg replacement and independent vegetation visibility extend that
-  workflow to existing routes without altering unrelated scenery.
-- F5 Auto Place supports track/road runs, finite range, spacing, offsets, selected
-  scenery as the source and repeatable pole wobble.
+  workflow to existing routes without altering unrelated scenery. Optional OSM, full-tile planting, corridor setback/width and zero-result diagnostics support local planting.
+- F5 Auto Place supports track/road runs and cyan Ruler (ap) fence lines, finite range, spacing, offsets, selected
+  scenery as the source and repeatable pole wobble. Ruler placement supports editable points, corner preservation, smooth ordinary post headings and automatic guide reset.
 - Numbered SNAP attachments support native wire Commit, blue previews, sag/width/
   span controls, Bake All Wires and selected-run/route-wide deletion. Recorded pairs
-  prevent duplicates; saved references and shared textures govern cleanup.
+  prevent duplicates; saved references and shared textures govern cleanup. Plain wire retains sag; straight Barbed uses adjustable crossed alpha strips and brown steel artwork.
 
 ### Track, grades and interactive objects
 
@@ -100,7 +131,7 @@ terrain and map tools, Dynamic Track, PolyVeg, Activity Builder and Consist Buil
 - Pickup track alignment/quarter-turn rotation and eligible turntable/transfer
   activation improve interactive placement. Static instance scale is preserved.
 - Legacy shapes and lightweight glTF/GLB previews coexist in supported viewers
-  and Static/Pickup placement workflows.
+  and Static/Pickup placement workflows. Consist previews also support glTF/GLB bodies and freight models, standard 4K textures and simplified transparency.
 
 ### Maps, paths and Activity Builder
 
@@ -114,7 +145,7 @@ terrain and map tools, Dynamic Track, PolyVeg, Activity Builder and Consist Buil
   overlap display and Undo/Redo support path construction. ORTS Extended AI controls
   include horn, uncouple, join/split and pass-red operations.
 - Existing activity/traffic controls have guarded selection and preview paths;
-  full Activity Builder and simulator compatibility remain subject to manual checks.
+  full Activity Builder and simulator compatibility remain subject to manual checks. Unicode path metadata and cloning retain German umlauts and other supported letters.
 
 ### Editor workflow, diagnostics and save safety
 
@@ -130,7 +161,7 @@ terrain and map tools, Dynamic Track, PolyVeg, Activity Builder and Consist Buil
   protect compatible existing definitions.
 - Coordinated key-file save generations, atomic file publication, rollback and
   protected generated-asset cleanup reduce interrupted-save risk. A whole route
-  remains more than one transaction; complete route backups are still required.
+  remains more than one transaction; complete route backups are still required. Overall save progress includes generated baking, texture encoding and publication; large transaction payloads spill to temporary disk staging.
 - Consist Builder includes normalized ORTS/MSTS includes, missing-stock replacement,
   independent preview colours, resource cleanup and isolated rendering state.
 
@@ -143,41 +174,51 @@ terrain and map tools, Dynamic Track, PolyVeg, Activity Builder and Consist Buil
 - The route-regression harness records file/terrain/database evidence. Automated
   checks complement the workflow-specific manual checks in the test matrix.
 
+
 ## Installation
 
-The binary asset is **`tsre-scomod-v0.18.zip`** with its `.sha256`
-companion, available from this release.
+The binary asset is **`tsre-scomod-v0.19.zip`** with its `.sha256` companion.
+This full release contains the reviewed, compiler-matched MinGW runtime.
 
-1. Download the binary ZIP and matching checksum when released. GitHub's automatic
-   source archives are not the runnable editor package.
+1. Download the binary ZIP and matching checksum from the v0.19 release.
+   GitHub's automatic source archives are not the runnable Windows package.
 2. Verify the ZIP against its SHA-256 companion.
 3. Extract the **complete archive** to a permanent writable location.
 4. Run **`AddShortcutDesktop.cmd`** from the extracted folder.
 5. Launch through the generated **TSRE GenX** shortcut. Move the shortcut only
-   after creating it.
-6. Keep the application folder intact: executable, runtime libraries, plugins,
-   assets and documents must remain together. The shortcut targets that folder.
+   after creating it, and keep the extracted application folder intact.
+6. Keep the executable, matched runtime libraries, plugins, assets and documents
+   together. Do not mix compiler runtimes or copy only a new executable into an old pack.
 
-Back up routes before terrain conforming, 4 m work, water processing, route-wide
-saves, Forest replacement or PolyVeg baking. Test these workflows on a copy first.
-The separately released SCOsnapPole example and `SNAP-POLE-WIRE-USER-GUIDE.md`
-provide model conventions and installation guidance; the example is not an installer.
+Back up routes before terrain conforming, water processing, route-wide saves,
+Forest replacement or PolyVeg baking. Test substantial work on a copy first.
+Production DXT1 conversion deliberately retains no TERRTEX backup: use a separate
+final upload copy and retain your editable route separately.
 
-## Requirements, Verification and Documentation
+## Requirements and Limitations
 
 - 64-bit Windows 10 version 1809 or later, or Windows 11. Windows 7 and Qt5/qmake
-  builds are outside the supported platform.
-- Existing MSTS/Open Rails route content; SCO LIDEX derivatives for geodata planting.
+  builds are unsupported.
+- Existing MSTS/Open Rails route content; SCO LIDEX derivatives for mapped PolyVeg.
 - Source builds use Qt 6.11.1; MinGW 13.1 is the release baseline and MSVC v143
-  the independent verification lane.
-- Wire discovery targets connected support runs; ambiguous branching/parallel
-  networks require review. The route wire registry supports up to 8,192 spans.
-- See `TEST-MATRIX-v0.18.md` for verified results and coverage. Earlier release
-  passes do not count as v0.18 acceptance. Final executable hashes are recorded in the test matrix; verify the ZIP against its matching checksum companion.
-- Terrain, TERRTEX, seasonal painting, PolyVeg, Water Tools, Dynamic Track, Grade
-  Helper, Path Editor/Full Map and SNAP Pole/Wire guides describe detailed workflows.
-  The work list contains the same grouped feature summary without historical detail.
+  is the independent verification lane.
+- Wire discovery is bounded to 512 supports and 256 tiles per run, with an
+  8,192-span registry. It cannot infer the intended path among nearby parallel lines.
+- glTF preview is a bounded base-colour/rest-pose preview, not full simulator
+  PBR, animation or intersecting-transparency parity.
+- Both clean Release compiler suites passed 32/32 tests. The operator accepted
+  the final manual checks. See the current test matrix for hashes and coverage.
 
+## Source and Documentation
+
+The immutable **v0.19** tag identifies the exact reviewed release source. `tsre-scomod-wip` remains the maintained public source branch.
+`TEST-MATRIX-v0.19.md` records build hashes, tests and manual coverage. Verify the
+binary ZIP with its matching SHA-256 companion before extraction.
+
+The package includes terrain, TERRTEX, seasonal painting, PolyVeg, Water Tools,
+Dynamic Track, Grade Helper, Path Editor/Full Map and SNAP Pole/Wire guides.
+`scoWorkList.txt` contains the same grouped feature summary without release history.
+The optional SCOsnapPole model example remains a separate route-content download.
 ## Acknowledgments
 
 Piotr Gadecki (GokuMK) created TSRE5 and its core route, terrain, texture,

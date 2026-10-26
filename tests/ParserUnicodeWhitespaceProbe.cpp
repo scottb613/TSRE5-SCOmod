@@ -6,9 +6,11 @@
 
 #include "FileBuffer.h"
 #include "ParserX.h"
+#include "ActivityPathId.h"
 
 #include <QDebug>
 #include <QString>
+#include <QStringList>
 
 FileBuffer::FileBuffer() = default;
 
@@ -46,6 +48,37 @@ static bool expectToken(FileBuffer *buffer, const QString &expected){
 }
 
 int main(){
+    const QStringList pathIds {
+        QStringLiteral("M\u00fcnster"),
+        QStringLiteral("\u00c4\u00d6\u00dc_\u00e4\u00f6\u00fc_\u00df-01"),
+        QStringLiteral("Mu\u0308nster"),
+        QStringLiteral("Za\u017c\u00f3\u0142\u0107"),
+        QStringLiteral("\u6771\u4eac_12"),
+        QStringLiteral("Muenster_ICE-123")
+    };
+    for(const QString &id : pathIds){
+        if(cleanActivityPathId(id) != id){
+            qCritical() << "Path ID spelling was changed" << id;
+            return 13;
+        }
+        // Exercise the same quoting/parser pair used by PAT, SRV and ACT
+        // references, including Latin-1 umlauts that do not require quotes.
+        for(const QString &token : {QStringLiteral("TrPathName"),
+                QStringLiteral("PathID"), QStringLiteral("Service_Definition")}){
+            FileBuffer idBuffer = makeBuffer(token + " ( "
+                + ParserX::AddComIfReq(id) + " )\n");
+            if(!expectToken(&idBuffer, token)
+                    || ParserX::GetString(&idBuffer) != id){
+                qCritical() << "Activity/path/service ID did not round-trip" << id;
+                return 14;
+            }
+        }
+    }
+    if(cleanActivityPathId(QStringLiteral("../bad\\id:(*)?\"<>|"))
+            != QStringLiteral("_bad_id_")){
+        qCritical() << "Unsafe path filename characters were not filtered";
+        return 15;
+    }
     const QChar nbsp(0x00a0);
     const QString source =
         "Wagon ( TestEngine\n"

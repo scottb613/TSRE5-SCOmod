@@ -33,6 +33,9 @@ QSet<QString> AutoPlaceWire::connectedSpans(const QJsonObject &spans,
 #include <cmath>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QImage>
+#include <QColor>
+#include <QPainter>
 #include "WireAssetScan.h"
 
 namespace AutoPlaceWire {
@@ -153,7 +156,7 @@ bool pruneAssets(const QString &routePath, QJsonObject &spans, bool all, QString
         QDir textures(routePath+"/TEXTURES");
         QStringList unused;
         static const QRegularExpression texturePattern(
-            "^(APWireCharcoal_v1|SCO_TelephoneWire_OR_Test(?:_[0-9]{2})?)\\.dds$",
+            "^(APWireCharcoal_v1|APWireBrownSteel_v1|APWireBarbedBrown_v[234]|SCO_TelephoneWire_OR_Test(?:_[0-9]{2})?)\\.dds$",
             QRegularExpression::CaseInsensitiveOption);
         for(const QString &file:textures.entryList(QDir::Files))
             if(texturePattern.match(file).hasMatch()) unused.append(file);
@@ -228,7 +231,37 @@ QString shapeName(const QString &key) {
     return "APW_" + QString::fromLatin1(QCryptographicHash::hash(key.toUtf8(),
         QCryptographicHash::Sha256).toHex().left(24)) + ".s";
 }
+static Mesh alphaBarbedMesh(const QJsonObject &span) {
+    Mesh result;
+    // Scale the complete alpha silhouette around the strand centre. Keep the
+    // 3 mm default appearance and longitudinal repeat spacing unchanged.
+    const float scale=float(qBound(1.0,span["width"].toDouble(3.0),100.0)/3.0);
+    const float halfWidth=0.030f*scale;
+    constexpr float repeatMetres=0.25f;
+    for(const auto &value:span["wires"].toArray()) {
+        const auto wire=value.toObject();
+        const auto a=vector(wire["a"]), b=vector(wire["b"]);
+        auto horizontal=b-a; horizontal.setY(0);
+        if(horizontal.length()<0.1f) continue;
+        const auto tangent=(b-a).normalized();
+        const auto side=QVector3D::crossProduct(horizontal.normalized(),{0,1,0});
+        const auto up=QVector3D::crossProduct(side,tangent).normalized();
+        const float repeats=(b-a).length()/repeatMetres;
+        for(const auto &axis:{side,up}) {
+            const QVector3D points[4]={a-axis*halfWidth,b-axis*halfWidth,b+axis*halfWidth,a+axis*halfWidth};
+            const QVector2D uv[4]={{0,1},{repeats,1},{repeats,0},{0,0}};
+            const auto normal=QVector3D::crossProduct(tangent,axis).normalized();
+            const int indices[6]={0,1,2,0,2,3};
+            for(int sign:{1,-1}) for(int i=0;i<6;i+=3) {
+                const int triangle[3]={indices[i],indices[i+(sign>0?1:2)],indices[i+(sign>0?2:1)]};
+                for(int index:triangle) result<<Vertex{points[index],normal*float(sign),uv[index]};
+            }
+        }
+    }
+    return result;
+}
 Mesh mesh(const QJsonObject &span, bool distant) {
+    if(isBarbed(span)) return alphaBarbedMesh(span);
     Mesh result;
     const float radius = span["width"].toDouble(20) * 0.0005f;
     auto face = [&](QVector3D a, QVector3D b, QVector3D c, QVector3D outward) {
@@ -279,6 +312,14 @@ Mesh mesh(const QJsonObject &span, bool distant) {
     }
     return result;
 }
+Mesh previewMesh(const QJsonObject &span) {
+    if(!isBarbed(span)) return mesh(span);
+    // Raw definitions use a clearly visible blue centre-line guide. The
+    // crossed alpha material appears on Bake/Save, not as solid blue strips.
+    auto guide=span; guide["wireType"]="plain"; guide["sag"]=0;
+    guide["width"]=qMax(8.0,span["width"].toDouble(3.0));
+    return mesh(guide);
+}
 bool writeRegistry(const QString &path, const QJsonObject &registry, QString &error) {
     if(!registryWithinLimit(registry["spans"].toObject(), error)) return false;
     QSaveFile file(path);
@@ -288,21 +329,71 @@ bool writeRegistry(const QString &path, const QJsonObject &registry, QString &er
     }
     return true;
 }
+static QByteArray barbedAlphaTexture() {
+    constexpr int width=256, height=128;
+    QImage mask(width,height,QImage::Format_ARGB32_Premultiplied);
+    mask.fill(Qt::transparent);
+    {
+        QPainter painter(&mask); painter.setRenderHint(QPainter::Antialiasing);
+        // Draw in metres to preserve the intended diameters despite unequal UV
+        // scales. Barbs are half-length, twice-thickness cut wire ends.
+        painter.scale(width/0.25,height/0.06);
+        painter.setPen(QPen(Qt::white,0.003,Qt::SolidLine,Qt::FlatCap));
+        painter.drawLine(QPointF(-0.004,0.03),QPointF(0.254,0.03));
+        painter.setPen(QPen(Qt::white,0.006,Qt::SolidLine,Qt::FlatCap));
+        for(const auto &tip:{QPointF(0.115,0.01825),QPointF(0.135,0.01825),
+                QPointF(0.115,0.04175),QPointF(0.135,0.04175)})
+            painter.drawLine(QPointF(0.125,0.03),tip);
+    }
+    auto noise=[](int x,int y) {
+        quint32 n=quint32(x&255)*0x9e3779b9u+quint32(y&127)*0x85ebca6bu+0x13579bdu;
+        n=(n^(n>>16))*0x7feb352du; n=(n^(n>>15))*0x846ca68bu;
+        return float((n^(n>>16))&255)/255.f;
+    };
+    QImage image(width,height,QImage::Format_RGBA8888);
+    for(int y=0;y<height;++y) for(int x=0;x<width;++x) {
+        const float oxide=noise(x/8,y/8), grain=(noise(x,y)-0.5f)*8;
+        const float wear=noise(x/4,y)>0.88f ? 1.f : 0.f;
+        image.setPixelColor(x,y,QColor(qRound(76+13*oxide+grain+10*wear),
+            qRound(68-2*oxide+grain+14*wear),qRound(57-8*oxide+grain+18*wear),qAlpha(mask.pixel(x,y))));
+    }
+    QByteArray bytes; QDataStream out(&bytes,QIODevice::WriteOnly);
+    out.setByteOrder(QDataStream::LittleEndian); out.writeRawData("DDS ",4);
+    for(quint32 n:{124u,0x2100fu,128u,256u,1024u,0u,9u}) out<<n;
+    for(int i=0;i<11;++i) out<<quint32(0);
+    for(quint32 n:{32u,0x41u,0u,32u,0xff0000u,0xff00u,0xffu,0xff000000u,0x401008u,0u,0u,0u,0u}) out<<n;
+    for(int level=0;level<9;++level) {
+        for(int y=0;y<image.height();++y) for(int x=0;x<image.width();++x) {
+            const QColor p=image.pixelColor(x,y);
+            const char pixel[4]={char(p.blue()),char(p.green()),char(p.red()),char(p.alpha())};
+            out.writeRawData(pixel,4);
+        }
+        if(level<8) image=image.scaled(qMax(1,image.width()/2),qMax(1,image.height()/2),Qt::IgnoreAspectRatio,Qt::SmoothTransformation);
+    }
+    return bytes;
+}
 bool writeShape(const QString &routePath, const QJsonObject &span, QString &error) {
+    if(!validWireType(span["wireType"].toString("plain"))) { error="Unknown AP wire type."; return false; }
+    const bool barbed=isBarbed(span);
     const auto near=mesh(span), far=mesh(span,true);
     if(near.isEmpty() || far.isEmpty()) { error="Wire span has no valid geometry."; return false; }
     const QString name=shapeName(span["key"].toString());
     const QString shapes=routePath+"/SHAPES/", textures=routePath+"/TEXTURES/";
     if(!QDir().mkpath(shapes) || !QDir().mkpath(textures)) { error="Cannot create wire asset directories."; return false; }
     // Shared, versioned texture: explicit full mip chain is essential for OR loaders.
-    const QString texture="APWireCharcoal_v1.dds";
+    const QString texture=barbed ? "APWireBarbedBrown_v4.dds" : "APWireCharcoal_v1.dds";
     QByteArray dds;
-    QDataStream data(&dds,QIODevice::WriteOnly); data.setByteOrder(QDataStream::LittleEndian);
-    data.writeRawData("DDS ",4);
-    for(quint32 n : {124u,0x2100fu,4u,4u,16u,0u,3u}) data << n;
-    for(int i=0;i<11;++i) data << quint32(0);
-    for(quint32 n : {32u,0x41u,0u,32u,0xff0000u,0xff00u,0xffu,0xff000000u,0x401008u,0u,0u,0u,0u}) data << n;
-    for(int i=0;i<21;++i) { const char pixel[4]={64,62,60,char(255)}; data.writeRawData(pixel,4); }
+    if(barbed) {
+        static const QByteArray brown=barbedAlphaTexture();
+        dds=brown;
+    } else {
+        QDataStream data(&dds,QIODevice::WriteOnly); data.setByteOrder(QDataStream::LittleEndian);
+        data.writeRawData("DDS ",4);
+        for(quint32 n : {124u,0x2100fu,4u,4u,16u,0u,3u}) data << n;
+        for(int i=0;i<11;++i) data << quint32(0);
+        for(quint32 n : {32u,0x41u,0u,32u,0xff0000u,0xff00u,0xffu,0xff000000u,0x401008u,0u,0u,0u,0u}) data << n;
+        for(int i=0;i<21;++i) { const char pixel[4]={64,62,60,char(255)}; data.writeRawData(pixel,4); }
+    }
     QFile existing(textures+texture);
     if(existing.exists()) {
         if(!existing.open(QIODevice::ReadOnly) || existing.readAll()!=dds) {
@@ -323,26 +414,30 @@ bool writeShape(const QString &routePath, const QJsonObject &span, QString &erro
     auto vec=[&](QVector3D v) { out<<v.x()<<' '<<v.y()<<' '<<-v.z(); };
     out<<"SIMISA@@@@@@@@@@JINX0s1t______\r\nshape (\r\n shape_header ( 00000000 00000000 )\r\n"
        <<" volumes ( 1 vol_sphere ( vector ( 0 0 0 ) "<<radius<<" ) )\r\n"
-       <<" shader_names ( 1 named_shader ( TexDiff ) )\r\n texture_filter_names ( 1 named_filter_mode ( MipLinear ) )\r\n points ( "<<all.size()<<"\r\n";
+       <<" shader_names ( 1 named_shader ( "<<(barbed?"BlendATexDiff":"TexDiff")<<" ) )\r\n texture_filter_names ( 1 named_filter_mode ( MipLinear ) )\r\n points ( "<<all.size()<<"\r\n";
     for(const auto &v:all) { out<<" point ( "; vec(v.point); out<<" )\r\n"; }
-    out<<" ) uv_points ( 1 uv_point ( 0.5 0.5 ) )\r\n normals ( "<<all.size()<<"\r\n";
+    if(barbed) {
+        out<<" ) uv_points ( "<<all.size()<<"\r\n";
+        for(const auto &v:all) out<<" uv_point ( "<<v.uv.x()<<' '<<v.uv.y()<<" )\r\n";
+        out<<" )\r\n normals ( "<<all.size()<<"\r\n";
+    } else out<<" ) uv_points ( 1 uv_point ( 0.5 0.5 ) )\r\n normals ( "<<all.size()<<"\r\n";
     for(const auto &v:all) { out<<" vector ( "; vec(v.normal); out<<" )\r\n"; }
     out<<" ) sort_vectors ( 1 vector ( 0 0 0 ) ) colours ( 0 )\r\n"
        <<" matrices ( 1 matrix MAIN ( 1 0 0 0 1 0 0 0 1 0 0 0 ) )\r\n"
        <<" images ( 1 image ( "<<texture<<" ) ) textures ( 1 texture ( 0 0 0 ff000000 ) ) light_materials ( 0 )\r\n"
        <<" light_model_cfgs ( 1 light_model_cfg ( 00000000 uv_ops ( 1 uv_op_copy ( 1 0 ) ) ) )\r\n"
-       <<" vtx_states ( 1 vtx_state ( 00000000 0 -6 0 00000002 ) )\r\n"
-       <<" prim_states ( 1 prim_state ap_wire ( 00000000 0 tex_idxs ( 1 0 ) 0 0 0 0 1 ) )\r\n"
+       <<" vtx_states ( 1 vtx_state ( 00000000 0 "<<(barbed?-9:-6)<<" 0 00000002 ) )\r\n"
+       <<" prim_states ( 1 prim_state ap_wire ( 00000000 0 tex_idxs ( 1 0 ) 0 0 "<<(barbed?1:0)<<" 0 1 ) )\r\n"
        <<" lod_controls ( 1 lod_control ( distance_levels_header ( 0 ) distance_levels ( 3\r\n";
     for(int lod=0;lod<3;++lod) {
         int count=lod==0?near.size():lod==1?far.size():3;
         int offset=lod==1?near.size():0, triangles=count/3;
-        out<<" distance_level ( distance_level_header ( dlevel_selection ( "<<(lod==0?300:lod==1?750:2000)
+        out<<" distance_level ( distance_level_header ( dlevel_selection ( "<<(lod==0?(barbed?75:300):lod==1?750:2000)
            <<" ) hierarchy ( 1 -1 ) ) sub_objects ( 1 sub_object (\r\n"
            <<" sub_object_header ( 00000400 -1 -1 000001d2 000001c4 geometry_info ( "<<triangles<<" 1 0 "<<count
            <<" 0 0 1 0 0 0 geometry_nodes ( 1 geometry_node ( 1 0 0 0 0 cullable_prims ( 1 "<<triangles<<' '<<count
            <<" ) ) ) geometry_node_map ( 1 0 ) ) subobject_shaders ( 1 0 ) subobject_light_cfgs ( 1 0 ) 0 )\r\n vertices ( "<<count<<"\r\n";
-        for(int i=0;i<count;++i) { int index=lod==2?0:offset+i; out<<" vertex ( 00000000 "<<index<<' '<<index<<" FFFFFFFF FF000000 vertex_uvs ( 1 0 ) )\r\n"; }
+        for(int i=0;i<count;++i) { int index=lod==2?0:offset+i; out<<" vertex ( 00000000 "<<index<<' '<<index<<" FFFFFFFF FF000000 vertex_uvs ( 1 "<<(barbed?index:0)<<" ) )\r\n"; }
         out<<" ) vertex_sets ( 1 vertex_set ( 0 0 "<<count<<" ) ) primitives ( 2 prim_state_idx ( 0 ) indexed_trilist ( vertex_idxs ( "<<count;
         for(int i=0;i<count;++i) out<<' '<<i;
         out<<" ) normal_idxs ( "<<triangles;

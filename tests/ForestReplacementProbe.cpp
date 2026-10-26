@@ -1,6 +1,9 @@
 // TSRE GenX forest replacement regression probe. GPL v3 or later.
 #include "ForestReplacementPlan.h"
+#include "PolyVegPlantingArea.h"
+#include "PolyVegClearance.h"
 #include "ForestBakeManifest.h"
+#include "PolyVegCorridor.h"
 #include <QCoreApplication>
 #include <iostream>
 #include <QFile>
@@ -198,6 +201,120 @@ int main(int argc, char **argv) {
     ok &= check(tileOutcome(cancelled) == TileOutcome::Cancelled, "Cancel must never become an empty-tile success");
     const auto invalid = ForestGenerator::generate(ForestRecipeDefinition(), box, settings);
     ok &= check(tileOutcome(invalid) == TileOutcome::Error, "Invalid generation must still abort and roll back");
+
+    // Corridor geometry and generation reuse the same boundary/cap/spacing contract.
+    const PolyVegCorridor::Samples alignment {{900, 10, 0}, {1100, 30, 0}};
+    const auto corridorBoth = PolyVegCorridor::boundary(alignment, 0, 10, 40);
+    const auto corridorLeft = PolyVegCorridor::boundary(alignment, 1, 10, 40);
+    const auto corridorRight = PolyVegCorridor::boundary(alignment, 2, 10, 40);
+    ok &= check(std::abs(area(corridorBoth)-16000) < 0.01
+            && std::abs(area(corridorLeft)-8000) < 0.01
+            && std::abs(area(corridorRight)-8000) < 0.01,
+        "Corridor width is per side; setback must not contribute to planted area");
+    ok &= check(corridorLeft.contains({1000, -30}) && !corridorLeft.contains({1000, 30})
+            && corridorRight.contains({1000, 30}) && !corridorRight.contains({1000, -30})
+            && !corridorBoth.contains({1000, 0}) && !corridorBoth.contains({1000, 55})
+            && !corridorBoth.contains({899, 30}) && !corridorBoth.contains({1101, 30}),
+        "Left/right, centre setback, outer boundary and run endpoints must be respected");
+    auto reversedAlignment = alignment;
+    std::reverse(reversedAlignment.begin(), reversedAlignment.end());
+    const auto reversedLeft = PolyVegCorridor::boundary(reversedAlignment, 1, 10, 40);
+    ok &= check(reversedLeft.contains({1000, 30}) && !reversedLeft.contains({1000, -30}),
+        "Backward runs must reverse the meaning of left/right");
+    ok &= check(std::abs(PolyVegCorridor::alignmentHeight(alignment, 1000, -30)-20) < 1e-9
+            && std::abs(PolyVegCorridor::alignmentHeight(alignment, 900, 30)-10) < 1e-9,
+        "Terrain-off planting must interpolate alignment height at the closest station");
+    const PolyVegCorridor::Samples bend {{-2048, 2, -2048}, {-1948, 4, -2048}, {-1948, 6, -1948}};
+    const auto bent = PolyVegCorridor::boundary(bend, 0, 10, 40);
+    ok &= check(bent.contains({-2000, -2078}) && bent.contains({-1918, -2000})
+            && !bent.contains({-2000, -2048}) && !bent.contains({-1948, -2000}),
+        "Curved corridors at negative world coordinates must follow the alignment and retain its clear zone");
+    auto duplicated = alignment;
+    duplicated.insert(1, duplicated.first());
+    ok &= check(std::abs(area(PolyVegCorridor::boundary(duplicated, 0, 10, 40))-16000) < 0.01
+            && PolyVegCorridor::boundary({}, 0, 10, 40).isEmpty()
+            && PolyVegCorridor::boundary(alignment, 0, -1, 40).isEmpty()
+            && PolyVegCorridor::boundary(alignment, 0, 10, 0).isEmpty(),
+        "Duplicate samples must not change the corridor; invalid settings must produce no boundary");
+    ForestPlantingBoundary corridorBox;
+    const auto corridorBounds = corridorBoth.boundingRect();
+    corridorBox.outer = {{corridorBounds.left(), corridorBounds.top()}, {corridorBounds.right(), corridorBounds.top()},
+        {corridorBounds.right(), corridorBounds.bottom()}, {corridorBounds.left(), corridorBounds.bottom()}};
+    ForestGenerationSettings corridorSettings;
+    corridorSettings.densityPerSquareMetre = 0.01;
+    corridorSettings.maximumTrees = 50;
+    corridorSettings.seed = 19;
+    corridorSettings.usableAreaOverride = area(corridorBoth);
+    corridorSettings.samplingRectangles = samplingRectangles(corridorBoth);
+    corridorSettings.containsPlantingPoint = [corridorBoth](double x, double z) { return corridorBoth.contains({x, z}); };
+    corridorSettings.plantingEdgeDistance = [corridorBoth](double x, double z) {
+        return edgeDistance({x, z}, corridorBoth.toSubpathPolygons());
+    };
+    const auto corridorPlants = ForestGenerator::generate(recipe, corridorBox, corridorSettings);
+    const auto corridorRepeat = ForestGenerator::generate(recipe, corridorBox, corridorSettings);
+    ok &= check(corridorPlants.isValid() && corridorPlants.objectLimitApplied
+            && corridorPlants.candidates.size() == 50 && corridorRepeat.candidates.size() == 50,
+        "The corridor cap must apply once across both sides and all tiles");
+    bool onFirstTile = false, onSecondTile = false;
+    for(int i = 0; i < corridorPlants.candidates.size(); ++i) {
+        const auto &plant = corridorPlants.candidates[i];
+        onFirstTile = onFirstTile || plant.x < 1024;
+        onSecondTile = onSecondTile || plant.x >= 1024;
+        ok &= check(corridorBoth.contains({plant.x, plant.z})
+                && plant.x == corridorRepeat.candidates[i].x && plant.z == corridorRepeat.candidates[i].z,
+            "Corridor plants must stay inside the bands and reproduce their seed");
+    }
+    ok &= check(onFirstTile && onSecondTile, "Corridor generation must span tile boundaries");
+    const PolyVegClearance::Segment sourceTrack {0,100,0, 100,100,0, 17};
+    const PolyVegClearance::Segment parallelTrack {0,100,25, 100,100,25, 18};
+    ok &= check(sourceTrack.blocks(50,100,10,400)
+            && !sourceTrack.blocks(50,70,-10,400),
+        "Ordinary recipe clearance must retain 3D distance above and below the alignment");
+    ok &= check(!sourceTrack.blocks(50,100,10,400,17)
+            && !sourceTrack.blocks(50,70,-10,400,17)
+            && sourceTrack.blocks(50,100,10,400,18),
+        "Corridor setback must replace clearance only for its followed node on either side and elevation");
+    ok &= check(parallelTrack.blocks(50,100,10,400,17)
+            && !parallelTrack.blocks(50,100,-10,400,17),
+        "Other nearby nodes must retain recipe clearance during corridor planting");
+    int leftCount = 0, rightCount = 0;
+    for(const auto &plant : corridorPlants.candidates) {
+        if(PolyVegCorridor::sideOf(alignment, plant.x, plant.z) == 1) ++leftCount;
+        else ++rightCount;
+    }
+    ok &= check(leftCount > 0 && rightCount > 0,
+        "Both Sides must generate candidates on both sides of the alignment");
+    auto reversed = alignment;
+    std::reverse(reversed.begin(), reversed.end());
+    ok &= check(PolyVegCorridor::sideOf(alignment, 1000, -30) == 1
+            && PolyVegCorridor::sideOf(reversed, 1000, -30) == 2,
+        "Backward runs must reverse Left and Right");
+    ForestPlantingBoundary ownedBoundary;
+    ownedBoundary.outer = {{0,0}, {100,0}, {100,100}, {0,100}};
+    ownedBoundary.holes = {{{40,40}, {60,40}, {60,60}, {40,60}}};
+    const auto owned = PolyVegPlantingArea::fromBoundary(ownedBoundary);
+    QPainterPath repeatArea; repeatArea.addRect(10,10,20,20);
+    QPainterPath overlapArea; overlapArea.addRect(90,10,20,20);
+    QPainterPath adjacentArea; adjacentArea.addRect(100,0,100,100);
+    QPainterPath holeArea; holeArea.addRect(45,45,10,10);
+    ok &= check(PolyVegPlantingArea::overlaps(repeatArea, owned)
+            && PolyVegPlantingArea::overlaps(overlapArea, owned)
+            && !PolyVegPlantingArea::overlaps(adjacentArea, owned)
+            && !PolyVegPlantingArea::overlaps(holeArea, owned),
+        "Duplicate-area guard must reject contained and partial overlap, allow shared edges and holes");
+    ok &= check(PolyVegPlantingArea::overlaps(corridorBoth, corridorLeft)
+            && !PolyVegPlantingArea::overlaps(corridorLeft, corridorRight),
+        "Both Sides must conflict with an existing one-sided run while disjoint sides remain plantable");
+    corridorSettings.occupiedCandidates = corridorPlants.candidates;
+    const auto neighboringPlants = ForestGenerator::generate(recipe, corridorBox, corridorSettings);
+    for(const auto &plant : neighboringPlants.candidates)
+        for(const auto &previous : corridorPlants.candidates)
+            ok &= check(std::hypot(plant.x-previous.x, plant.z-previous.z) >= 6,
+                "Repeated corridor planting must preserve footprint spacing against existing raw plants");
+    corridorSettings.shouldCancel = []() { return true; };
+    const auto cancelledCorridor = ForestGenerator::generate(recipe, corridorBox, corridorSettings);
+    ok &= check(cancelledCorridor.cancelled && cancelledCorridor.candidates.isEmpty(),
+        "Cancelled corridor generation must not return a partial placement batch");
 
     QTemporaryDir temporary;
     QString error;

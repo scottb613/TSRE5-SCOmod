@@ -135,6 +135,25 @@ int main(int argc, char **argv) {
     legacy.scale(2, 3, 4);
     check((GltfPlacementMath::matrix(legacy.constData()).map(QVector3D(1, 2, 3))
                 - QVector3D(-2, 26, -32)).length() < .0001f, "rotated scaled route placement");
+    QMatrix4x4 roster;
+    roster.translate(0, 0, 20);
+    const QMatrix4x4 vehicle = GltfPlacementMath::rollingStockMatrix(roster.constData());
+    check(vehicle.determinant() > 0
+            && (vehicle.map(QVector3D(1, 2, 3)) - QVector3D(-1, 2, 17)).length() < .0001f,
+            "rolling stock aligns forward direction while retaining handedness and offset");
+    roster.rotate(180, 0, 1, 0);
+    const QMatrix4x4 flippedVehicle = GltfPlacementMath::rollingStockMatrix(roster.constData());
+    check(flippedVehicle.determinant() > 0
+            && (flippedVehicle.map(QVector3D(1, 2, 3)) - QVector3D(1, 2, 23)).length() < .0001f,
+            "consist flip rotates rolling stock without mirroring its artwork");
+    QMatrix4x4 loaderOrientation;
+    loaderOrientation.rotate(180, 0, 1, 0);
+    check(((vehicle * loaderOrientation).map(QVector3D(0, 0, 3))
+                - QVector3D(0, 0, 23)).length() < .0001f,
+            "loaded glTF forward axis matches legacy rolling-stock local Z");
+    check(((flippedVehicle * loaderOrientation).map(QVector3D(0, 0, 3))
+                - QVector3D(0, 0, 17)).length() < .0001f,
+            "normal consist flip reverses loaded glTF forward axis once");
     const int pickId = (7 << 20) | (2345 << 4);
     const QVector3D pickRgb = GltfPlacementMath::selectionRgb(pickId);
     check((qRound(pickRgb.x()*255) << 16 | qRound(pickRgb.y()*255) << 8 | qRound(pickRgb.z()*255)) == pickId,
@@ -170,6 +189,23 @@ int main(int argc, char **argv) {
     const QString binaryPath = directory.filePath("model.glb");
     check(write(binaryPath, glb(original, bytes)), "write GLB");
     check(model.load(binaryPath, error), "load GLB binary chunk");
+    {
+        // A small triangle in a large BIN chunk isolates file/buffer acceptance
+        // from the independent geometry and decoded-texture budgets.
+        QByteArray largeBytes = bytes;
+        largeBytes.resize(64 * 1024 * 1024 + 4, char(0));
+        QJsonObject largeJson = original;
+        QJsonArray largeBuffers = largeJson["buffers"].toArray();
+        QJsonObject largeBuffer = largeBuffers[0].toObject();
+        largeBuffer["byteLength"] = largeBytes.size();
+        largeBuffers[0] = largeBuffer;
+        largeJson["buffers"] = largeBuffers;
+        const QString largePath = directory.filePath("over64mib.glb");
+        check(write(largePath, glb(largeJson, largeBytes)), "write GLB above former 64 MiB cap");
+        GltfModel largeModel;
+        check(largeModel.load(largePath, error) && largeModel.primitives.size() == 1,
+                "load GLB and declared BIN buffer above former 64 MiB cap");
+    }
     check(near(model.minimum.x(), -5), "GLB and glTF geometry match");
 
     QJsonObject json = original;
@@ -326,8 +362,59 @@ int main(int argc, char **argv) {
     json["images"] = QJsonArray{QJsonObject{{"bufferView", 3}, {"mimeType", "image/png"}}};
     check(write(binaryPath, glb(json, texturedBytes)), "write GLB with embedded PNG");
     check(model.load(binaryPath, error) && model.primitives[0].image.size() == QSize(2, 2), "GLB buffer-view PNG");
+    // A conventional 4K texture exceeds decimal 16 million pixels, but fits
+    // the bounded preview budget. Exercise the actual GLB image decode path.
+    QImage image4k(4096, 4096, QImage::Format_RGBA8888);
+    image4k.fill(Qt::green);
+    QByteArray png4k;
+    QBuffer png4kBuffer(&png4k); png4kBuffer.open(QIODevice::WriteOnly);
+    check(image4k.save(&png4kBuffer, "PNG"), "encode 4096-square PNG");
+    image4k = QImage();
+    QByteArray bytes4k = texturedBytes.left(pngOffset) + png4k;
+    QJsonObject json4k = json;
+    QJsonArray buffers4k = json4k["buffers"].toArray();
+    QJsonObject buffer4k = buffers4k[0].toObject();
+    buffer4k["byteLength"] = bytes4k.size();
+    buffer4k["uri"] = "data:application/octet-stream;base64," + QString::fromLatin1(bytes4k.toBase64());
+    buffers4k[0] = buffer4k; json4k["buffers"] = buffers4k;
+    QJsonArray views4k = json4k["bufferViews"].toArray();
+    QJsonObject imageView4k = views4k[3].toObject();
+    imageView4k["byteLength"] = png4k.size();
+    views4k[3] = imageView4k; json4k["bufferViews"] = views4k;
+    check(write(binaryPath, glb(json4k, bytes4k)), "write GLB with embedded 4K PNG");
+    check(model.load(binaryPath, error) && !model.primitives.empty()
+            && model.primitives[0].image.size() == QSize(4096, 4096),
+            "accept standard 4K embedded base-colour texture");
+
+    QImage imageOverBudget(4097, 4096, QImage::Format_RGBA8888);
+    imageOverBudget.fill(Qt::green);
+    QByteArray pngOverBudget;
+    QBuffer pngOverBuffer(&pngOverBudget); pngOverBuffer.open(QIODevice::WriteOnly);
+    check(imageOverBudget.save(&pngOverBuffer, "PNG"), "encode over-budget PNG");
+    imageOverBudget = QImage();
+    QJsonObject jsonOverBudget = json;
+    jsonOverBudget["images"] = QJsonArray{QJsonObject{
+        {"uri", "data:image/png;base64," + QString::fromLatin1(pngOverBudget.toBase64())}}};
+    check(!load(model, path, jsonOverBudget, error)
+            && error.contains("pixel budget"), "reject image beyond 4K pixel budget");
+
     material["alphaMode"] = "BLEND"; json["materials"] = QJsonArray{material};
-    check(!load(model, path, json, error), "reject unsupported blend rather than rendering opaque");
+    check(load(model, path, json, error) && !model.primitives.empty()
+            && model.primitives[0].blended && !model.primitives[0].masked
+            && model.warnings.join(" ").contains("Transparent materials"),
+            "accept blended base-colour material with labelled preview limitation");
+    {
+        // Exercise the source limit without allocating a huge test-side buffer.
+        const QString oversizedPath = directory.path() + "/oversized.glb";
+        QFile oversized(oversizedPath);
+        const bool prepared = oversized.open(QIODevice::WriteOnly)
+            && oversized.resize(320ll*1024*1024 + 1);
+        oversized.close();
+        check(prepared, "prepare oversized source fixture");
+        if(prepared)
+            check(!model.load(oversizedPath, error) && error.contains("memory budget"),
+                "source budget checked before parser or allocation");
+    }
     std::cout << "glTF model probe: " << failures << " failures\n";
     return failures ? 1 : 0;
 }

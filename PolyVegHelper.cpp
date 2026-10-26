@@ -5,12 +5,12 @@
 // Licensed under GNU GPL v3 or later. See LICENSE.md.
 
 #include "PolyVegHelper.h"
+#include "EditorCollapsibleSection.h"
 
 #include "ForestDefinition.h"
 #include "Game.h"
 #include "GuiFunct.h"
 
-#include <QApplication>
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
@@ -31,12 +31,12 @@
 #include <QScrollBar>
 #include <QSaveFile>
 #include <QSignalBlocker>
-#include <QSlider>
+#include <QFormLayout>
+#include <QStackedWidget>
 #include <QSpinBox>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <cmath>
-#include <functional>
 
 namespace {
 
@@ -81,56 +81,6 @@ protected:
     }
 };
 
-class CyclingJumpButton : public QPushButton {
-public:
-    CyclingJumpButton(const QString &text, QWidget *parent,
-                      std::function<void()> advance,
-                      std::function<void()> reset)
-        : QPushButton(text, parent), advanceAction(std::move(advance)),
-          resetAction(std::move(reset)) {
-        clickTimer.setSingleShot(true);
-        clickTimer.setInterval(QApplication::doubleClickInterval());
-        inactivityTimer.setSingleShot(true);
-        inactivityTimer.setInterval(15000);
-        QObject::connect(&clickTimer, &QTimer::timeout, this, [this]() {
-            if(advanceAction) advanceAction();
-            inactivityTimer.start();
-        });
-        QObject::connect(&inactivityTimer, &QTimer::timeout, this, [this]() {
-            if(resetAction) resetAction();
-        });
-        setToolTip("Single-click advances from nearest to progressively farther "
-                   "tiles. Double-click resets immediately; 15 seconds without "
-                   "another click resets automatically.");
-    }
-
-protected:
-    void mouseReleaseEvent(QMouseEvent *event) override {
-        QPushButton::mouseReleaseEvent(event);
-        if(event->button() != Qt::LeftButton) return;
-        if(suppressRelease) {
-            suppressRelease = false;
-            return;
-        }
-        clickTimer.start();
-    }
-
-    void mouseDoubleClickEvent(QMouseEvent *event) override {
-        clickTimer.stop();
-        inactivityTimer.stop();
-        suppressRelease = true;
-        QPushButton::mouseDoubleClickEvent(event);
-        if(resetAction) resetAction();
-    }
-
-private:
-    QTimer clickTimer;
-    QTimer inactivityTimer;
-    std::function<void()> advanceAction;
-    std::function<void()> resetAction;
-    bool suppressRelease = false;
-};
-
 QString polyVegHelperSettingsPath() {
     return Game::routeAppDataDir() + "/polyveg-helper.json";
 }
@@ -161,542 +111,374 @@ void writePolyVegHelperSettings(const QJsonObject &settings) {
 PolyVegHelper::PolyVegHelper(QWidget *parent)
     : QWidget(parent) {
     GuiFunct::applyEditorPanelStyle(this);
-    const qreal panelScale = qBound(0.75f, Game::uiScale, 1.25f);
-    const int numericFieldWidth = qRound(96.0 * panelScale);
-    const int cardHorizontalPadding = qRound(6.0 * panelScale);
-    const int cardVerticalPadding = qRound(5.0 * panelScale);
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(6, 6, 6, 6);
-    layout->setSpacing(5);
-    auto addSubtitle = [this, layout](const QString &text) {
-        QLabel *label = new QLabel(QString(QChar(0x2022)) + ' ' + text, this);
-        GuiFunct::styleEditorSubtitle(label);
-        layout->addWidget(label);
-    };
-
-    QLabel *heading = new QLabel("POLYVEG PLANTER", this);
+    auto *layout = new QVBoxLayout(this);
+    const auto scaled = [](int pixels) { return qRound(pixels*qBound(0.75f, Game::uiScale, 1.25f)); };
+    layout->setContentsMargins(scaled(6), scaled(6), scaled(6), scaled(6));
+    layout->setSpacing(scaled(5));
+    auto *heading = new QLabel("PolyVeg Planter", this);
     GuiFunct::styleEditorTitle(heading);
     layout->addWidget(heading);
-
-    addSubtitle("Planting");
-    QFrame *plantingCard = new QFrame(this);
-    GuiFunct::styleEditorPanelCard(plantingCard);
-    QVBoxLayout *plantingCardLayout = new QVBoxLayout(plantingCard);
-    plantingCardLayout->setContentsMargins(
-        cardHorizontalPadding, cardVerticalPadding,
-        cardHorizontalPadding, cardVerticalPadding);
-    plantingCardLayout->setSpacing(cardVerticalPadding);
-    QVBoxLayout *planting = new QVBoxLayout;
-    planting->setContentsMargins(0, 0, 0, 0);
-    planting->setSpacing(cardVerticalPadding);
-    definition = new QComboBox(plantingCard);
-    density = new SelectAllDoubleSpinBox(plantingCard);
+    recipeHome = new QWidget(this);
+    recipeHomeLayout = new QVBoxLayout(recipeHome);
+    recipeHomeLayout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(recipeHome);
+    recipePanel = new QFrame(recipeHome);
+    GuiFunct::styleEditorPanelCard(recipePanel);
+    recipeHomeLayout->addWidget(recipePanel);
+    auto *recipeLayout = new QVBoxLayout(recipePanel);
+    recipeLayout->setContentsMargins(scaled(6), scaled(5), scaled(6), scaled(5));
+    recipeLayout->setSpacing(scaled(3));
+    definition = new QComboBox(recipePanel);
+    definition->setMinimumWidth(0);
+    definition->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    auto *editSchema = new QPushButton("Edit", recipePanel);
+    GuiFunct::styleEditorActionButton(editSchema);
+    editSchema->setToolTip("Edit schema (Shift+F6).");
+    auto *schemaRow = new QHBoxLayout;
+    schemaRow->addWidget(new QLabel("Schema:", recipePanel));
+    schemaRow->addWidget(definition, 1);
+    recipeLayout->addLayout(schemaRow);
+    editSchema->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    recipeLayout->addWidget(editSchema);
+    connect(editSchema, &QPushButton::clicked, this, &PolyVegHelper::schemaEditorRequested);
+    auto borderedCell = [scaled](QWidget *parent, const QString &name,
+                                 QWidget *editor, QLabel *caption = nullptr) {
+        auto *cell = new QFrame(parent);
+        cell->setObjectName(name);
+        GuiFunct::styleEditorPanelCard(cell);
+        auto *cellLayout = new QVBoxLayout(cell);
+        cellLayout->setContentsMargins(scaled(3), scaled(2), scaled(3), scaled(2));
+        cellLayout->setSpacing(scaled(2));
+        if(caption) cellLayout->addWidget(caption);
+        cellLayout->addWidget(editor);
+        return cell;
+    };
+    auto *values = new QGridLayout;
+    values->setContentsMargins(0, 0, 0, 0);
+    values->setHorizontalSpacing(scaled(5));
+    values->setVerticalSpacing(scaled(2));
+    values->setColumnStretch(0, 1);
+    values->setColumnStretch(1, 1);
+    densityLabel = new QLabel("Density:", recipePanel);
+    capLabel = new QLabel("Cap:", recipePanel);
+    seedLabel = new QLabel("Seed", recipePanel);
+    density = new SelectAllDoubleSpinBox(recipePanel);
     density->setDecimals(0);
     density->setSingleStep(recipeSliderIncrement);
     density->setGroupSeparatorShown(true);
-    density->setFixedWidth(numericFieldWidth);
-    density->setStyleSheet(
-        "QDoubleSpinBox { border: 1px solid #70590e; }"
-        "QDoubleSpinBox:hover { border: 1px solid #f08200; }"
-        "QDoubleSpinBox:focus { border: 1px solid #8a7116; }"
-        "QDoubleSpinBox:focus:hover { border: 1px solid #f08200; }");
-    densitySlider = new QSlider(Qt::Horizontal, plantingCard);
-    maximumTrees = new SelectAllSpinBox(plantingCard);
+    maximumTrees = new SelectAllSpinBox(recipePanel);
     maximumTrees->setSingleStep(recipeSliderIncrement);
     maximumTrees->setGroupSeparatorShown(true);
-    maximumTrees->setFixedWidth(numericFieldWidth);
-    maximumTreesSlider = new QSlider(Qt::Horizontal, plantingCard);
-    seed = new QComboBox(plantingCard);
-    for(int value = 1; value <= 20; ++value)
-        seed->addItem(QString::number(value), value);
-    seed->setFixedWidth(qRound(80.0 * panelScale));
-    seed->setToolTip(
-        "The seed selects a repeatable random tree layout. Use the same seed "
-        "to reproduce a layout, or choose another seed to rearrange the trees.");
-    QHBoxLayout *schemaHeading = new QHBoxLayout;
-    schemaHeading->setContentsMargins(0, 0, 0, 0);
-    schemaHeading->addWidget(new QLabel("Schema:", plantingCard));
-    schemaHeading->addWidget(definition, 1);
-    planting->addLayout(schemaHeading);
-
-    QHBoxLayout *schemaActions = new QHBoxLayout;
-    schemaActions->setContentsMargins(0, 0, 0, 0);
-    schemaActions->setSpacing(cardHorizontalPadding);
-    QPushButton *editSchema = new QPushButton("EDIT SCHEMA", plantingCard);
-    editSchema->setToolTip(
-        "Open the full-screen PolyVeg Schema Editor (Shift+F6).");
-    editSchema->setProperty("scoSoundOnPress", true);
-    GuiFunct::styleEditorActionButton(editSchema);
-    schemaActions->addWidget(editSchema, 1);
-    planting->addLayout(schemaActions);
-    connect(editSchema, &QPushButton::clicked, this,
-            &PolyVegHelper::schemaEditorRequested);
-
-    QHBoxLayout *densityHeading = new QHBoxLayout;
-    densityHeading->setContentsMargins(0, 0, 0, 0);
-    densityLabel = new QLabel("Density (km2):", plantingCard);
-    densityHeading->addWidget(densityLabel);
-    densityHeading->addStretch(1);
-    densityHeading->addWidget(density);
-    planting->addLayout(densityHeading);
-    planting->addWidget(densitySlider);
-
-    QHBoxLayout *capHeading = new QHBoxLayout;
-    capHeading->setContentsMargins(0, 0, 0, 0);
-    capHeading->addWidget(new QLabel("Cap:", plantingCard));
-    capHeading->addStretch(1);
-    capHeading->addWidget(maximumTrees);
-    planting->addLayout(capHeading);
-    planting->addWidget(maximumTreesSlider);
-
-    QHBoxLayout *seedHeading = new QHBoxLayout;
-    seedHeading->setContentsMargins(0, 0, 0, 0);
-    seedHeading->addWidget(new QLabel("Seed:", plantingCard));
-    seedHeading->addStretch(1);
-    seedHeading->addWidget(seed);
-    planting->addLayout(seedHeading);
-    plantingCardLayout->addLayout(planting);
-    layout->addWidget(plantingCard);
-
-    QWidget *plantingOptionsRow = new QWidget(this);
-    QHBoxLayout *plantOptions = new QHBoxLayout(plantingOptionsRow);
+    seed = new QComboBox(recipePanel);
+    for(int value = 1; value <= 20; ++value) seed->addItem(QString::number(value), value);
+    seed->setToolTip("Range: 1–20. The same boundary, settings and seed reproduce the candidate layout.");
+    values->addWidget(borderedCell(recipePanel, "polyVegDensityCell", density, densityLabel), 0, 0);
+    values->addWidget(borderedCell(recipePanel, "polyVegCapCell", maximumTrees, capLabel), 0, 1);
+    values->addWidget(borderedCell(recipePanel, "polyVegSeedCell", seed, seedLabel), 0, 2);
+    recipeLayout->addLayout(values);
+    useOsm = new QCheckBox("Use OSM", recipePanel);
+    useOsm->setChecked(true);
+    useOsm->setToolTip("Require mapped forest coverage. Off hides Map Polygons and bypasses OSM; terrain and schema clearances still apply.");
+    disablePlantReport = new QCheckBox("No Report", recipePanel);
+    disablePlantReport->setChecked(true);
+    disablePlantReport->setToolTip("Suppress the planting detail report. Input/cache errors still appear. Enabled by default.");
+    auto *plantOptions = new QHBoxLayout;
     plantOptions->setContentsMargins(0, 0, 0, 0);
-    plantOptions->setSpacing(cardHorizontalPadding);
-    QFrame *floodFillCell = new QFrame(plantingOptionsRow);
-    GuiFunct::styleEditorPanelCard(floodFillCell);
-    QHBoxLayout *floodFillLayout = new QHBoxLayout(floodFillCell);
-    floodFillLayout->setContentsMargins(
-        cardHorizontalPadding, cardVerticalPadding,
-        cardHorizontalPadding, cardVerticalPadding);
-    floodFill = new QCheckBox("Flood Fill", floodFillCell);
-    floodFill->setToolTip(
-        "Off plants only the polygon beneath the pointer, clipped to the "
-        "pointer tile. On plants every polygon on that tile with the same "
-        "LIDEX category and fill color.");
-    floodFillLayout->addWidget(floodFill);
+    plantOptions->setSpacing(scaled(4));
+    plantOptions->addWidget(borderedCell(recipePanel, "polyVegOsmCell", useOsm), 1);
+    plantOptions->addWidget(borderedCell(recipePanel, "polyVegReportCell", disablePlantReport), 1);
+    recipeLayout->addLayout(plantOptions);
 
-    QFrame *disableReportCell = new QFrame(plantingOptionsRow);
-    GuiFunct::styleEditorPanelCard(disableReportCell);
-    QHBoxLayout *disableReportLayout = new QHBoxLayout(disableReportCell);
-    disableReportLayout->setContentsMargins(
-        cardHorizontalPadding, cardVerticalPadding,
-        cardHorizontalPadding, cardVerticalPadding);
-    disablePlantReport = new QCheckBox("Disable Report", disableReportCell);
-    disablePlantReport->setToolTip(
-        "Suppresses the successful post-plant report. Successful planting still "
-        "plays SCOsuccess.wav when UI Sounds is enabled.");
-    disableReportLayout->addWidget(disablePlantReport);
-    plantOptions->addWidget(floodFillCell, 1);
-    plantOptions->addWidget(disableReportCell, 1);
-    layout->addWidget(plantingOptionsRow);
-
-    QFrame *rowsCard = new QFrame(this);
-    GuiFunct::styleEditorPanelCard(rowsCard);
-    QVBoxLayout *rowsCardLayout = new QVBoxLayout(rowsCard);
-    rowsCardLayout->setContentsMargins(
-        cardHorizontalPadding, cardVerticalPadding,
-        cardHorizontalPadding, cardVerticalPadding);
-    rowsCardLayout->setSpacing(cardVerticalPadding);
-    rows = new QCheckBox("Enable Rows", rowsCard);
-    rows->setToolTip(
-        "Aligns planting positions into continuous parallel rows. Row Width "
-        "sets the spacing between rows and Direction rotates the row pattern.");
-    rowsCardLayout->addWidget(rows);
-
-    rowControls = new QWidget(rowsCard);
-    QVBoxLayout *rowLayout = new QVBoxLayout(rowControls);
-    rowLayout->setContentsMargins(cardHorizontalPadding, cardVerticalPadding,
-                                  0, 0);
-    rowLayout->setSpacing(cardVerticalPadding);
-    QHBoxLayout *rowWidthHeading = new QHBoxLayout;
-    rowWidthHeading->addWidget(new QLabel("Row Width (m):", rowControls));
-    rowWidthHeading->addStretch(1);
-    rowWidthValue = new SelectAllSpinBox(rowControls);
-    rowWidthValue->setRange(0, 500);
-    rowWidthValue->setSingleStep(1);
+    rowControls = new QWidget(recipePanel);
+    auto *rowLayout = new QFormLayout(rowControls);
+    rowLayout->setFormAlignment(Qt::AlignRight | Qt::AlignTop);
+    rowLayout->setContentsMargins(0, 0, 0, 0);
+    auto rowField = [this](int maximum, int value) {
+        auto *field = new SelectAllSpinBox(rowControls);
+        field->setRange(0, maximum);
+        field->setValue(value);
+        return field;
+    };
+    rowWidthValue = rowField(500, 10);
+    rowSpacingValue = rowField(500, 10);
+    rowDirectionValue = rowField(360, 0);
     rowWidthValue->setSpecialValueText("Auto");
-    rowWidthValue->setValue(10);
-    rowWidthValue->setFixedWidth(numericFieldWidth);
-    rowWidthHeading->addWidget(rowWidthValue);
-    rowLayout->addLayout(rowWidthHeading);
-    rowWidth = new QSlider(Qt::Horizontal, rowControls);
-    rowWidth->setRange(0, 500);
-    rowWidth->setSingleStep(1);
-    rowWidth->setPageStep(10);
-    rowWidth->setValue(10);
-    rowWidth->setToolTip(
-        "Range - 0-500 m. 0 uses the selected definition's minimum separation.");
-    rowWidthValue->setToolTip(rowWidth->toolTip());
-    rowLayout->addWidget(rowWidth);
-
-    QHBoxLayout *rowSpacingHeading = new QHBoxLayout;
-    rowSpacingHeading->addWidget(new QLabel("Spacing (m):", rowControls));
-    rowSpacingHeading->addStretch(1);
-    rowSpacingValue = new SelectAllSpinBox(rowControls);
-    rowSpacingValue->setRange(0, 500);
-    rowSpacingValue->setSingleStep(1);
     rowSpacingValue->setSpecialValueText("Auto");
-    rowSpacingValue->setValue(10);
-    rowSpacingValue->setFixedWidth(numericFieldWidth);
-    rowSpacingHeading->addWidget(rowSpacingValue);
-    rowLayout->addLayout(rowSpacingHeading);
-    rowSpacing = new QSlider(Qt::Horizontal, rowControls);
-    rowSpacing->setRange(0, 500);
-    rowSpacing->setSingleStep(1);
-    rowSpacing->setPageStep(10);
-    rowSpacing->setValue(10);
-    rowSpacing->setToolTip(
-        "Range - 0-500 m. Sets plant-to-plant spacing along each row; "
-        "0 uses the selected definition's minimum separation.");
-    rowSpacingValue->setToolTip(rowSpacing->toolTip());
-    rowLayout->addWidget(rowSpacing);
-
-    QHBoxLayout *rowDirectionHeading = new QHBoxLayout;
-    rowDirectionHeading->addWidget(new QLabel("Direction:", rowControls));
-    rowDirectionHeading->addStretch(1);
-    rowDirectionValue = new SelectAllSpinBox(rowControls);
-    rowDirectionValue->setRange(0, 360);
-    rowDirectionValue->setSingleStep(1);
+    rowWidthValue->setToolTip("Range: 0–500 m. Separation between rows; 0 (Auto) uses the schema minimum separation.");
+    rowSpacingValue->setToolTip("Range: 0–500 m. Plant spacing along each row; 0 (Auto) uses the schema minimum separation.");
     rowDirectionValue->setSuffix(QString(QChar(0x00B0)));
-    rowDirectionValue->setValue(0);
-    rowDirectionValue->setFixedWidth(numericFieldWidth);
-    rowDirectionHeading->addWidget(rowDirectionValue);
-    rowLayout->addLayout(rowDirectionHeading);
-    rowDirection = new QSlider(Qt::Horizontal, rowControls);
-    rowDirection->setRange(0, 360);
-    rowDirection->setSingleStep(1);
-    rowDirection->setPageStep(15);
-    rowDirection->setValue(0);
-    rowDirection->setToolTip(
-        "Range - 0-360 degrees clockwise from the route plan's north axis.");
-    rowDirectionValue->setToolTip(rowDirection->toolTip());
-    rowLayout->addWidget(rowDirection);
-    rowControls->setVisible(false);
-    rowsCardLayout->addWidget(rowControls);
-    layout->addWidget(rowsCard);
+    rowDirectionValue->setToolTip("Range: 0–360 degrees clockwise from route-plan north.");
+    rowLayout->addRow("Row Separation (m):", rowWidthValue);
+    rowLayout->addRow("Plant Spacing (m):", rowSpacingValue);
+    rowLayout->addRow("Direction:", rowDirectionValue);
+    rowsSection = new EditorCollapsibleSection("Rows", rowControls, recipePanel);
+    rows = rowsSection->toggleButton();
+    rows->setToolTip("Expand to enable row planting; collapse to use Density. Straight parallel rows in the route plan, independent of corridor direction.");
+    recipeLayout->addWidget(rowsSection);
 
-    addSubtitle("Planting Tools");
-    QFrame *plantingToolsCard = new QFrame(this);
-    GuiFunct::styleEditorPanelCard(plantingToolsCard);
-    QVBoxLayout *plantingToolsLayout = new QVBoxLayout(plantingToolsCard);
-    plantingToolsLayout->setContentsMargins(
-        cardHorizontalPadding, cardVerticalPadding,
-        cardHorizontalPadding, cardVerticalPadding);
-    plantingToolsLayout->setSpacing(cardVerticalPadding);
-    QHBoxLayout *widthHeading = new QHBoxLayout;
-    widthHeading->setContentsMargins(0, 0, 0, 0);
-    widthHeading->addWidget(new QLabel("Ruler Width (m):", plantingToolsCard));
-    widthHeading->addStretch(1);
-    rulerWidthValue = new SelectAllSpinBox(plantingToolsCard);
+    auto *plantToolSubtitle = new QLabel(QString(QChar(0x2022)) + " Plant Tool", this);
+    GuiFunct::styleEditorSubtitle(plantToolSubtitle);
+    layout->addWidget(plantToolSubtitle);
+    methodButtons = new QButtonGroup(this);
+    methodButtons->setExclusive(true);
+    auto *methodGrid = new QGridLayout;
+    methodGrid->setContentsMargins(0, 0, 0, 0);
+    methodGrid->setSpacing(0);
+    const QString methodNames[] = {"Map Polygons", "Ruler / Area", "Full Tile"};
+    for(int page = 0; page < 3; ++page) {
+        methodLabels[page] = new QLabel(methodNames[page], this);
+        methodLabels[page]->setAlignment(Qt::AlignCenter);
+        methodLabels[page]->setWordWrap(true);
+        methodChoices[page] = new QCheckBox(this);
+        methodChoices[page]->setAccessibleName(methodNames[page]);
+        methodButtons->addButton(methodChoices[page], page);
+        auto *labelCell = borderedCell(this,
+            QString("polyVegMethodLabel%1").arg(page), methodLabels[page]);
+        auto *choiceCell = borderedCell(this,
+            QString("polyVegMethodChoice%1").arg(page), methodChoices[page]);
+        choiceCell->layout()->setAlignment(methodChoices[page], Qt::AlignHCenter);
+        methodGrid->addWidget(labelCell, 0, page);
+        methodGrid->addWidget(choiceCell, 1, page);
+        methodGrid->setColumnStretch(page, 1);
+        if(page == 0) methodChoices[page]->setChecked(true);
+        methodLabels[page]->setEnabled(page == 0);
+    }
+    methodChoices[0]->setToolTip("Plant Map Polygons. Requires Use OSM.");
+    methodChoices[1]->setToolTip("Plant along a Ruler or inside a Closed Area.");
+    methodChoices[2]->setToolTip("Plant a Full Tile by clicking terrain.");
+    layout->addLayout(methodGrid);
+    methodPages = new QStackedWidget(this);
+    auto *methods = methodPages;
+    layout->addWidget(methods);
+    auto *mapPage = new QWidget(methods);
+    auto *mapLayout = new QVBoxLayout(mapPage);
+    mapLayout->setContentsMargins(0, 0, 0, 0);
+    floodFill = new QCheckBox("Flood Fill", mapPage);
+    floodFill->setToolTip("Plant all polygons on the clicked tile with the same LIDEX category and fill colour.");
+    mapLayout->addWidget(floodFill);
+    auto *mapHelp = new QLabel("Right-click a map polygon and choose Plant PolyVeg.", mapPage);
+    mapHelp->setWordWrap(true);
+    mapLayout->addWidget(mapHelp);
+    methods->addWidget(mapPage);
+    auto *rulerPage = new QWidget(methods);
+    auto *rulerLayout = new QVBoxLayout(rulerPage);
+    rulerLayout->setContentsMargins(0, 0, 0, 0);
+    rulerWidthValue = new SelectAllSpinBox(rulerPage);
     rulerWidthValue->setRange(0, 1000);
     rulerWidthValue->setSingleStep(rulerWidthSliderIncrement);
     rulerWidthValue->setValue(100);
-    rulerWidthValue->setFixedWidth(numericFieldWidth);
-    widthHeading->addWidget(rulerWidthValue);
-    plantingToolsLayout->addLayout(widthHeading);
-    rulerWidth = new QSlider(Qt::Horizontal, plantingToolsCard);
-    rulerWidth->setRange(0, 1000 / rulerWidthSliderIncrement);
-    rulerWidth->setSingleStep(1);
-    rulerWidth->setPageStep(100 / rulerWidthSliderIncrement);
-    rulerWidth->setValue(100 / rulerWidthSliderIncrement);
-    rulerWidth->setToolTip("Range - 0-1000 m");
-    rulerWidthValue->setToolTip(rulerWidth->toolTip());
-    plantingToolsLayout->addWidget(rulerWidth);
-
-    QVBoxLayout *rulerButtons = new QVBoxLayout;
-    rulerButtons->setContentsMargins(0, 0, 0, 0);
-    rulerButtons->setSpacing(cardHorizontalPadding);
-    placeRuler = new QPushButton("New Ruler (PolyVeg)", plantingToolsCard);
-    placeRuler->setCheckable(true);
-    placeRuler->setToolTip(
-        "Starts a new PolyVeg ruler; click again to remove it.");
-    addRulerPoints = new QPushButton("Add Points", plantingToolsCard);
-    editRulerPoints = new QPushButton("Edit Points", plantingToolsCard);
-    addRulerPoints->setCheckable(true);
-    editRulerPoints->setCheckable(true);
-    addRulerPoints->setToolTip(
-        "Continues placing points on the existing PolyVeg ruler.");
-    editRulerPoints->setToolTip(
-        "Switches to point-selection mode for the existing PolyVeg ruler.");
-    QPushButton *plantRuler = new QPushButton("Plant Ruler (PolyVeg)",
-                                              plantingToolsCard);
-    GuiFunct::styleEditorActionButton(placeRuler);
-    GuiFunct::styleEditorActionButton(addRulerPoints);
-    GuiFunct::styleEditorActionButton(editRulerPoints);
-    GuiFunct::styleEditorActionButton(plantRuler);
+    rulerWidthValue->setToolTip("Corridor: full width. Area: exterior buffer width. Metres.");
+    auto *widthRow = new QFormLayout;
+    widthRow->setFormAlignment(Qt::AlignRight | Qt::AlignTop);
+    widthRow->addRow("Width (m):", rulerWidthValue);
+    rulerLayout->addLayout(widthRow);
+    placeRuler = new QPushButton("New Ruler", rulerPage);
+    addRulerPoints = new QPushButton("Add Points", rulerPage);
+    editRulerPoints = new QPushButton("Edit Points", rulerPage);
+    auto *plantRuler = new QPushButton("Plant Ruler", rulerPage);
     rulerModeButtons = new QButtonGroup(this);
-    // Selection is managed explicitly so New Ruler can toggle itself off.
     rulerModeButtons->setExclusive(false);
-    rulerModeButtons->addButton(placeRuler);
-    rulerModeButtons->addButton(addRulerPoints);
-    rulerModeButtons->addButton(editRulerPoints);
-    rulerButtons->addWidget(placeRuler);
-    QHBoxLayout *pointModeButtons = new QHBoxLayout;
-    pointModeButtons->setContentsMargins(0, 0, 0, 0);
-    pointModeButtons->setSpacing(cardHorizontalPadding);
-    pointModeButtons->addWidget(addRulerPoints, 1);
-    pointModeButtons->addWidget(editRulerPoints, 1);
-    rulerButtons->addLayout(pointModeButtons);
-    rulerButtons->addWidget(plantRuler);
-    plantingToolsLayout->addLayout(rulerButtons);
-
-    QFrame *rulerAreaCell = new QFrame(plantingToolsCard);
-    GuiFunct::styleEditorPanelCard(rulerAreaCell);
-    QHBoxLayout *rulerAreaLayout = new QHBoxLayout(rulerAreaCell);
-    rulerAreaLayout->setContentsMargins(
-        cardHorizontalPadding, cardVerticalPadding,
-        cardHorizontalPadding, cardVerticalPadding);
-    rulerArea = new QCheckBox("Area", rulerAreaCell);
-    rulerArea->setToolTip(
-        "Off creates a corridor ruler. On keeps the clicked polygon interior "
-        "filled and applies Width as an exterior buffer.");
-    rulerAreaLayout->addWidget(rulerArea);
-
-    QFrame *rulerOverrideCell = new QFrame(plantingToolsCard);
-    GuiFunct::styleEditorPanelCard(rulerOverrideCell);
-    QHBoxLayout *rulerOverrideLayout = new QHBoxLayout(rulerOverrideCell);
-    rulerOverrideLayout->setContentsMargins(
-        cardHorizontalPadding, cardVerticalPadding,
-        cardHorizontalPadding, cardVerticalPadding);
-    rulerOverride = new QRadioButton("Unrestricted", rulerOverrideCell);
+    auto *rulerActions = new QGridLayout;
+    int index = 0;
+    for(auto *button : {placeRuler, addRulerPoints, editRulerPoints, plantRuler}) {
+        GuiFunct::styleEditorActionButton(button);
+        rulerActions->addWidget(button, index / 2, index % 2);
+        if(button != plantRuler) {
+            button->setCheckable(true);
+            rulerModeButtons->addButton(button);
+        }
+        ++index;
+    }
+    rulerLayout->addLayout(rulerActions);
+    rulerArea = new QCheckBox("Closed Area", rulerPage);
+    rulerOverride = new QRadioButton("Unrestricted", rulerPage);
     rulerOverride->setAutoExclusive(false);
-    rulerOverride->setToolTip(
-        "Allows the ruler to plant anywhere while retaining the normal water, "
-        "road, track, building, and developed-land exclusions.");
-    rulerOverrideLayout->addWidget(rulerOverride);
-    QHBoxLayout *rulerOptions = new QHBoxLayout;
+    auto *rulerOptions = new QHBoxLayout;
     rulerOptions->setContentsMargins(0, 0, 0, 0);
-    rulerOptions->setSpacing(cardHorizontalPadding);
-    rulerOptions->addWidget(rulerAreaCell, 1);
-    rulerOptions->addWidget(rulerOverrideCell, 1);
-    plantingToolsLayout->addLayout(rulerOptions);
-    layout->addWidget(plantingToolsCard);
+    rulerOptions->setSpacing(scaled(4));
+    rulerOptions->addWidget(borderedCell(rulerPage, "polyVegClosedAreaCell", rulerArea), 1);
+    rulerOptions->addWidget(borderedCell(rulerPage, "polyVegUnrestrictedCell", rulerOverride), 1);
+    rulerLayout->addLayout(rulerOptions);
+    methods->addWidget(rulerPage);
+    auto *tilePage = new QWidget(methods);
+    auto *tileLayout = new QVBoxLayout(tilePage);
+    tileLayout->setContentsMargins(0, 0, 0, 0);
+    plantFullTile = new QPushButton("Plant Full Tile", tilePage);
+    plantFullTile->setCheckable(true);
+    GuiFunct::styleEditorActionButton(plantFullTile);
+    plantFullTile->setToolTip("Arm, then click terrain to plant one tile. Click again to cancel.");
+    tileLayout->addWidget(plantFullTile);
+    methods->addWidget(tilePage);
+    connect(methodButtons, &QButtonGroup::idToggled, this,
+            [this](int, bool checked) { if(checked) selectMethodPage(); });
 
-    addSubtitle("Bake");
-    QFrame *bakeActionCard = new QFrame(this);
-    GuiFunct::styleEditorPanelCard(bakeActionCard);
-    QVBoxLayout *bakeButtons = new QVBoxLayout(bakeActionCard);
-    bakeButtons->setContentsMargins(cardHorizontalPadding, cardVerticalPadding,
-                                    cardHorizontalPadding, cardVerticalPadding);
-    bakeButtons->setSpacing(cardHorizontalPadding);
-    QPushButton *bake = new QPushButton("Bake PolyVeg Tile", bakeActionCard);
-    QPushButton *bakeAll = new QPushButton("Bake PolyVeg Area", bakeActionCard);
-    bakeAll->setToolTip(
-        "Bakes loaded tiles inside the current camera tile LOD that contain "
-        "unbaked PolyVeg. It never loads the rest of the route.");
-    GuiFunct::styleEditorActionButton(bake);
-    GuiFunct::styleEditorActionButton(bakeAll);
-    bakeButtons->addWidget(bake);
-    bakeButtons->addWidget(bakeAll);
-    layout->addWidget(bakeActionCard);
-
-    addSubtitle("Jump");
-    QFrame *jumpActionCard = new QFrame(this);
-    GuiFunct::styleEditorPanelCard(jumpActionCard);
-    CyclingJumpButton *jumpRaw = new CyclingJumpButton(
-        "PolyVeg Raw", jumpActionCard,
-        [this]() { emit jumpRawRequested(); },
-        [this]() { emit resetRawJumpRequested(); });
-    CyclingJumpButton *jumpBake = new CyclingJumpButton(
-        "PolyVeg Bake", jumpActionCard,
-        [this]() { emit jumpBakeRequested(); },
-        [this]() { emit resetBakeJumpRequested(); });
-    GuiFunct::styleEditorActionButton(jumpRaw);
-    GuiFunct::styleEditorActionButton(jumpBake);
-    QHBoxLayout *jumpButtons = new QHBoxLayout(jumpActionCard);
-    jumpButtons->setContentsMargins(cardHorizontalPadding, cardVerticalPadding,
-                                    cardHorizontalPadding, cardVerticalPadding);
-    jumpButtons->setSpacing(cardHorizontalPadding);
-    jumpButtons->addWidget(jumpRaw);
-    jumpButtons->addWidget(jumpBake);
-    layout->addWidget(jumpActionCard);
-    layout->addStretch(1);
-
-    addSubtitle("Status");
-    QFrame *statusCard = new QFrame(this);
-    statusCard->setObjectName("polyVegStatusCard");
-    GuiFunct::styleEditorPanelCard(statusCard);
-    statusCard->setStyleSheet(QString(
-        "QLabel[polyVegStatusValue=\"true\"] { color: %1;"
-        " font-weight: bold; border: none; }"
-        "QLabel[polyVegStatusCaption=\"true\"] { color: #c7c7c7;"
-        " border: none; }").arg(Game::StyleMainLabel));
-    statusCard->setToolTip(
-        "Loaded-world totals: individual Raw objects, generated Baked block "
-        "objects, and loaded tiles containing at least one baked block.");
-    QVBoxLayout *statusLayout = new QVBoxLayout(statusCard);
-    statusLayout->setContentsMargins(qRound(8.0 * panelScale),
-                                     qRound(6.0 * panelScale),
-                                     qRound(8.0 * panelScale),
-                                     qRound(6.0 * panelScale));
-    statusLayout->setSpacing(qRound(5.0 * panelScale));
-
-    statusMessage = new QPlainTextEdit(statusCard);
+    for(int i = 1; i < methods->count(); ++i)
+        methods->widget(i)->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
+    auto *bakeOpsSubtitle = new QLabel(QString(QChar(0x2022)) + " Bake Ops", this);
+    GuiFunct::styleEditorSubtitle(bakeOpsSubtitle);
+    layout->addWidget(bakeOpsSubtitle);
+    auto *bakeBody = new QWidget(this);
+    auto *bakeActions = new QGridLayout(bakeBody);
+    bakeActions->setContentsMargins(0, 0, 0, 0);
+    bakeTile = new QPushButton("Bake Tile", bakeBody);
+    auto *bake = bakeTile;
+    bakeTile->setCheckable(true);
+    bakeTile->setToolTip("Arm, then click the tile to bake its raw PolyVeg. Resets after one click. Click again, press Escape or change tools to cancel.");
+    auto *bakeAll = new QPushButton("Bake Area", bakeBody);
+    clearBake = new QPushButton("Clear Bake", bakeBody);
+    clearBake->setCheckable(true);
+    clearBake->setToolTip("Arm, then click a tile to remove all its PolyVeg bakes. Resets after one click. Save commits JSON and generated-file cleanup; Undo before Save restores the bakes. Raw plants remain.");
+    for(auto *button : {bake, bakeAll, clearBake}) GuiFunct::styleEditorActionButton(button);
+    bakeActions->addWidget(bake, 0, 0);
+    bakeActions->addWidget(clearBake, 0, 1);
+    bakeActions->addWidget(bakeAll, 1, 0, 1, 2);
+    bakeActions->setColumnStretch(0, 1);
+    bakeActions->setColumnStretch(1, 1);
+    bakeAll->setToolTip("Bake pending PolyVeg on loaded tiles inside camera Tile LOD. Save also bakes pending PolyVeg.");
+    layout->addWidget(bakeBody);
+    statusMessage = new QPlainTextEdit(this);
     statusMessage->setReadOnly(true);
     statusMessage->setFocusPolicy(Qt::NoFocus);
-    statusMessage->setLineWrapMode(QPlainTextEdit::WidgetWidth);
-    statusMessage->setStyleSheet(QString(
-        "QPlainTextEdit { color: %1; }").arg(Game::StyleMainLabel));
-    const int messageHeight = statusMessage->fontMetrics().lineSpacing() * 2 + 12;
-    statusMessage->setFixedHeight(messageHeight);
+    statusMessage->setFixedHeight(statusMessage->fontMetrics().lineSpacing() * 2 + 12);
     statusMessage->setPlainText("Ready.");
-    statusLayout->addWidget(statusMessage);
-
-    QFrame *messageSeparator = new QFrame(statusCard);
-    messageSeparator->setFrameShape(QFrame::HLine);
-    messageSeparator->setFrameShadow(QFrame::Sunken);
-    statusLayout->addWidget(messageSeparator);
-
-    QGridLayout *bakedTilesLayout = new QGridLayout;
-    bakedTilesLayout->setContentsMargins(0, 0, 0, 0);
-    QLabel *bakedTilesCaption = new QLabel("BAKED TILES", statusCard);
-    bakedTilesCaption->setAlignment(Qt::AlignCenter);
-    bakedTilesCaption->setProperty("polyVegStatusCaption", true);
+    layout->addWidget(statusMessage);
+    auto *statusCard = new QFrame(this);
+    statusCard->setObjectName("polyVegStatusCard");
+    GuiFunct::styleEditorPanelCard(statusCard);
+    statusCard->setStyleSheet("QLabel[polyVegStatusValue=\"true\"] { color: #b76512; border: none; }");
+    statusCard->setToolTip("Loaded-world totals: individual raw PolyVeg, baked blocks, and tiles containing baked blocks.");
+    auto *counts = new QHBoxLayout(statusCard);
+    counts->setContentsMargins(scaled(6), scaled(5), scaled(6), scaled(5));
+    counts->setSpacing(scaled(4));
+    statusRawValue = new QLabel("0", statusCard);
+    statusBakedValue = new QLabel("0", statusCard);
     statusBakedTilesValue = new QLabel("0", statusCard);
-    statusBakedTilesValue->setAlignment(Qt::AlignCenter);
-    statusBakedTilesValue->setProperty("polyVegStatusValue", true);
-    bakedTilesLayout->addWidget(statusBakedTilesValue, 0, 0);
-    bakedTilesLayout->addWidget(bakedTilesCaption, 1, 0);
-    bakedTilesLayout->setColumnStretch(0, 1);
-    statusLayout->addLayout(bakedTilesLayout);
-
-    QFrame *statusSeparator = new QFrame(statusCard);
-    statusSeparator->setFrameShape(QFrame::HLine);
-    statusSeparator->setFrameShadow(QFrame::Sunken);
-    statusLayout->addWidget(statusSeparator);
-
-    QGridLayout *objectStatusLayout = new QGridLayout;
-    objectStatusLayout->setContentsMargins(0, 0, 0, 0);
-    objectStatusLayout->setHorizontalSpacing(qRound(12.0 * panelScale));
-    objectStatusLayout->setVerticalSpacing(0);
-    const QStringList objectCaptions {
-        QStringLiteral("RAW OBJECTS"),
-        QStringLiteral("BAKED BLOCKS")
-    };
-    QLabel **objectValues[] { &statusRawValue, &statusBakedValue };
-    for(int column = 0; column < 2; ++column) {
-        *objectValues[column] = new QLabel("0", statusCard);
-        (*objectValues[column])->setAlignment(Qt::AlignCenter);
-        (*objectValues[column])->setProperty("polyVegStatusValue", true);
-        QLabel *caption = new QLabel(objectCaptions[column], statusCard);
-        caption->setAlignment(Qt::AlignCenter);
-        caption->setProperty("polyVegStatusCaption", true);
-        objectStatusLayout->addWidget(*objectValues[column], 0, column);
-        objectStatusLayout->addWidget(caption, 1, column);
-        objectStatusLayout->setColumnStretch(column, 1);
+    for(auto item : {qMakePair(QString("Raw:"), statusRawValue),
+                     qMakePair(QString("Blocks:"), statusBakedValue),
+                     qMakePair(QString("Tiles:"), statusBakedTilesValue)}) {
+        counts->addWidget(new QLabel(item.first, statusCard));
+        counts->addWidget(item.second, 1);
+        item.second->setProperty("polyVegStatusValue", true);
+        item.second->setAlignment(Qt::AlignCenter);
     }
-    statusLayout->addLayout(objectStatusLayout);
     layout->addWidget(statusCard);
-
-    connect(definition, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int){
+    layout->addStretch(1);
+    connect(definition, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
         applyDefinitionSettings(true);
         publishSettings();
     });
-    connect(density, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double value){
-        const QSignalBlocker blocker(densitySlider);
-        densitySlider->setValue(qRound(value / recipeSliderIncrement));
+    connect(density, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &PolyVegHelper::publishSettings);
+    connect(maximumTrees, qOverload<int>(&QSpinBox::valueChanged), this, &PolyVegHelper::publishSettings);
+    connect(seed, qOverload<int>(&QComboBox::currentIndexChanged), this, &PolyVegHelper::publishSettings);
+    connect(useOsm, &QCheckBox::toggled, this, [this](bool checked) {
+        floodFill->setEnabled(checked);
+        updateMethodChoices();
         publishSettings();
     });
-    connect(densitySlider, &QSlider::valueChanged, this, [this](int value){
-        density->setValue(value * recipeSliderIncrement);
-    });
-    connect(maximumTrees, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, [this](int value){
-        const QSignalBlocker blocker(maximumTreesSlider);
-        maximumTreesSlider->setValue(qRound(
-            static_cast<double>(value) / recipeSliderIncrement));
-        publishSettings();
-    });
-    connect(maximumTreesSlider, &QSlider::valueChanged,
-            this, [this](int value){
-        maximumTrees->setValue(value * recipeSliderIncrement);
-    });
-    connect(seed, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int){ publishSettings(); });
-    connect(floodFill, &QCheckBox::toggled,
-            this, [this](bool){ publishSettings(); });
-    connect(disablePlantReport, &QCheckBox::toggled,
-            this, [this](bool){ publishSettings(); });
-    connect(rows, &QCheckBox::toggled, this, [this](bool checked){
+    for(auto *check : {floodFill, disablePlantReport})
+        connect(check, &QCheckBox::toggled, this, &PolyVegHelper::publishSettings);
+    connect(rows, &QPushButton::toggled, this, [this](bool checked) {
         rowControls->setVisible(checked);
         publishSettings();
     });
-    connect(rowWidth, &QSlider::valueChanged, this, [this](int value){
-        const QSignalBlocker blocker(rowWidthValue);
-        rowWidthValue->setValue(value);
-        publishSettings();
-    });
-    connect(rowWidthValue, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, [this](int value){
-        const QSignalBlocker blocker(rowWidth);
-        rowWidth->setValue(value);
-        publishSettings();
-    });
-    connect(rowSpacing, &QSlider::valueChanged, this, [this](int value){
-        const QSignalBlocker blocker(rowSpacingValue);
-        rowSpacingValue->setValue(value);
-        publishSettings();
-    });
-    connect(rowSpacingValue, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, [this](int value){
-        const QSignalBlocker blocker(rowSpacing);
-        rowSpacing->setValue(value);
-        publishSettings();
-    });
-    connect(rowDirection, &QSlider::valueChanged, this, [this](int value){
-        const QSignalBlocker blocker(rowDirectionValue);
-        rowDirectionValue->setValue(value);
-        publishSettings();
-    });
-    connect(rowDirectionValue, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, [this](int value){
-        const QSignalBlocker blocker(rowDirection);
-        rowDirection->setValue(value);
-        publishSettings();
-    });
-    connect(bake, &QPushButton::clicked, this, &PolyVegHelper::bakeRequested);
-    connect(bakeAll, &QPushButton::clicked, this, &PolyVegHelper::bakeAllRequested);
-    connect(placeRuler, &QPushButton::clicked, this, [this](bool checked){
-        if(!checked){
+    for(auto *field : {rowWidthValue, rowSpacingValue, rowDirectionValue})
+        connect(field, qOverload<int>(&QSpinBox::valueChanged), this, &PolyVegHelper::publishSettings);
+    connect(clearBake, &QPushButton::toggled, this, [this](bool active) {
+        if(active) {
+            bakeTile->setChecked(false);
+            plantFullTile->setChecked(false);
             selectRulerMode(nullptr);
-            setStatus("Ready.");
-            emit removeRulerRequested();
-            return;
         }
-        selectRulerMode(placeRuler);
-        emit placeRulerRequested(rulerWidthValue->value(),
-                                 rulerArea->isChecked());
+        emit clearBakeRequested(active);
     });
-    connect(addRulerPoints, &QPushButton::clicked, this, [this](){
-        selectRulerMode(addRulerPoints);
-        emit addRulerPointsRequested();
+    connect(bakeTile, &QPushButton::toggled, this, [this](bool active) {
+        if(active) {
+            clearBake->setChecked(false);
+            plantFullTile->setChecked(false);
+            selectRulerMode(nullptr);
+        }
+        emit bakeRequested(active);
     });
-    connect(editRulerPoints, &QPushButton::clicked, this, [this](){
-        selectRulerMode(editRulerPoints);
-        emit editRulerPointsRequested();
+    connect(bakeAll, &QPushButton::clicked, this, [this]() {
+        clearPlacementTools();
+        emit bakeAllRequested();
     });
-    connect(rulerArea, &QCheckBox::toggled, this, [this](bool checked){
-        if(rulerModeButtons->checkedButton() != nullptr)
-            emit rulerAreaChanged(checked);
+    connect(placeRuler, &QPushButton::clicked, this, [this](bool checked) {
+        selectRulerMode(checked ? placeRuler : nullptr);
+        if(checked) emit placeRulerRequested(rulerWidthValue->value(), rulerArea->isChecked());
+        else emit removeRulerRequested();
     });
-    connect(rulerWidth, &QSlider::valueChanged, this, [this](int value){
-        const QSignalBlocker blocker(rulerWidthValue);
-        const int widthMetres = value * rulerWidthSliderIncrement;
-        rulerWidthValue->setValue(widthMetres);
-        emit rulerWidthChanged(widthMetres);
+    connect(addRulerPoints, &QPushButton::clicked, this, [this]() {
+        selectRulerMode(addRulerPoints); emit addRulerPointsRequested();
     });
-    connect(rulerWidthValue, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, [this](int value){
-        const QSignalBlocker blocker(rulerWidth);
-        rulerWidth->setValue(qRound(
-            static_cast<double>(value) / rulerWidthSliderIncrement));
-        emit rulerWidthChanged(value);
+    connect(editRulerPoints, &QPushButton::clicked, this, [this]() {
+        selectRulerMode(editRulerPoints); emit editRulerPointsRequested();
     });
-    connect(plantRuler, &QPushButton::clicked, this, [this](){
+    connect(rulerArea, &QCheckBox::toggled, this, [this](bool checked) {
+        if(rulerModeButtons->checkedButton()) emit rulerAreaChanged(checked);
+    });
+    connect(rulerWidthValue, qOverload<int>(&QSpinBox::valueChanged), this, &PolyVegHelper::rulerWidthChanged);
+    connect(plantFullTile, &QPushButton::toggled, this, [this](bool active) {
+        if(active) selectRulerMode(nullptr);
+        emit fullTilePlantingRequested(active);
+    });
+    connect(plantRuler, &QPushButton::clicked, this, [this]() {
+        plantFullTile->setChecked(false);
         emit plantRulerRequested(rulerOverride->isChecked());
     });
+    for(auto *form : findChildren<QFormLayout*>()) form->setVerticalSpacing(scaled(3));
+    resizeNumericFields();
+}
+
+void PolyVegHelper::selectMethodPage() {
+    const int page = methodButtons->checkedId();
+    for(int i = 0; i < 3; ++i)
+        methodLabels[i]->setEnabled(i == page && methodChoices[i]->isEnabled());
+    if(page < 0 || page >= methodPages->count() || page == methodPages->currentIndex()) return;
+    clearPlacementTools();
+    emit removeRulerRequested();
+    for(int i = 0; i < methodPages->count(); ++i)
+        methodPages->widget(i)->setSizePolicy(QSizePolicy::Preferred,
+            i == page ? QSizePolicy::Preferred : QSizePolicy::Ignored);
+    methodPages->setCurrentIndex(page);
+}
+
+void PolyVegHelper::updateMethodChoices() {
+    const bool mapAvailable = useOsm->isChecked();
+    methodChoices[0]->setEnabled(mapAvailable);
+    // Keep unavailable choices visible. Fall forward only when the selected
+    // method becomes unavailable; other active tools keep their selection.
+    if(!mapAvailable && methodButtons->checkedId() == 0)
+        methodChoices[1]->setChecked(true);
+    selectMethodPage();
+}
+
+void PolyVegHelper::setRecipeHost(QWidget *host) {
+    auto *destination = host ? qobject_cast<QVBoxLayout*>(host->layout()) : recipeHomeLayout;
+    if(destination) destination->addWidget(recipePanel);
+    recipePanel->show();
+    rowsSection->setVisible(host == nullptr);
+    recipeHostWidth = host ? host->property("numericFieldWidth").toInt() : 0;
+    resizeNumericFields();
+}
+
+void PolyVegHelper::resizeNumericFields() {
+    // Density/Cap share their compact width; Seed is the intentional narrow
+    // third column. Other numeric rows retain the aligned panel width.
+    int width = 0;
+    for(QAbstractSpinBox *field : QList<QAbstractSpinBox*>{density, maximumTrees,
+                      rowWidthValue, rowSpacingValue, rowDirectionValue, rulerWidthValue}) {
+        field->setMinimumWidth(0);
+        field->setMaximumWidth(QWIDGETSIZE_MAX);
+        width = qMax(width, field->sizeHint().width());
+    }
+    density->setFixedWidth(width);
+    maximumTrees->setFixedWidth(width);
+    for(auto *field : {rowWidthValue, rowSpacingValue, rowDirectionValue, rulerWidthValue})
+        field->setFixedWidth(qMax(width, recipeHostWidth));
+    seed->setMinimumWidth(0);
+    seed->setMaximumWidth(QWIDGETSIZE_MAX);
+    seed->setFixedWidth(seed->sizeHint().width());
 }
 
 void PolyVegHelper::openForCurrentRoute() {
@@ -714,9 +496,31 @@ void PolyVegHelper::openForCurrentRoute() {
     emit countsRequested();
 }
 
+void PolyVegHelper::clearRulerTools() {
+    selectRulerMode(nullptr);
+}
+
 void PolyVegHelper::clearPlacementTools() {
+    bakeTile->setChecked(false);
+    clearBake->setChecked(false);
+    plantFullTile->setChecked(false);
     selectRulerMode(nullptr);
     setStatus("Ready.");
+}
+
+void PolyVegHelper::setBakeTileActive(bool active) {
+    const QSignalBlocker blocker(bakeTile);
+    bakeTile->setChecked(active);
+}
+
+void PolyVegHelper::setClearBakeActive(bool active) {
+    const QSignalBlocker blocker(clearBake);
+    clearBake->setChecked(active);
+}
+
+void PolyVegHelper::setFullTilePlantingActive(bool active) {
+    const QSignalBlocker blocker(plantFullTile);
+    plantFullTile->setChecked(active);
 }
 
 void PolyVegHelper::setStatus(const QString &text) {
@@ -725,6 +529,7 @@ void PolyVegHelper::setStatus(const QString &text) {
 }
 
 void PolyVegHelper::activateRuler() {
+    methodChoices[1]->setChecked(true);
     selectRulerMode(placeRuler);
     emit placeRulerRequested(rulerWidthValue->value(), rulerArea->isChecked());
 }
@@ -737,31 +542,35 @@ void PolyVegHelper::selectRulerMode(QPushButton *button) {
 void PolyVegHelper::loadDefinitions() {
     QString previousId = definition->currentData().toString();
     const QJsonObject savedSettings = readPolyVegHelperSettings();
+    const QString routeKey = Game::root + "/routes/" + Game::route;
+    // Start each route/session in density mode. F5/F6 refreshes within this
+    // route preserve an explicit Rows choice made during the current session.
+    const bool keepRowsEnabled = rowsRouteKey == routeKey && rows->isChecked();
+    rowsRouteKey = routeKey;
     {
+        const QSignalBlocker osmBlocker(useOsm);
         const QSignalBlocker floodBlocker(floodFill);
         const QSignalBlocker reportBlocker(disablePlantReport);
         const QSignalBlocker rowsBlocker(rows);
-        const QSignalBlocker rowWidthBlocker(rowWidth);
         const QSignalBlocker rowWidthValueBlocker(rowWidthValue);
-        const QSignalBlocker rowSpacingBlocker(rowSpacing);
         const QSignalBlocker rowSpacingValueBlocker(rowSpacingValue);
-        const QSignalBlocker rowDirectionBlocker(rowDirection);
         const QSignalBlocker rowDirectionValueBlocker(rowDirectionValue);
+        useOsm->setChecked(savedSettings.value("useOsm").toBool(true));
+        floodFill->setEnabled(useOsm->isChecked());
         floodFill->setChecked(savedSettings.value("floodFill").toBool(false));
-        disablePlantReport->setChecked(
-            savedSettings.value("disablePlantReport").toBool(false));
-        rows->setChecked(savedSettings.value("rowsEnabled").toBool(false));
-        rowWidth->setValue(qBound(0,
+        // Apply the requested new default once, then retain the user's choice.
+        disablePlantReport->setChecked(savedSettings.value("noReportDefaultVersion").toInt() >= 1
+            ? savedSettings.value("disablePlantReport").toBool(true) : true);
+        rows->setChecked(keepRowsEnabled);
+        rowWidthValue->setValue(qBound(0,
             savedSettings.value("rowWidthMetres").toInt(10), 500));
-        rowSpacing->setValue(qBound(0,
+        rowSpacingValue->setValue(qBound(0,
             savedSettings.value("rowSpacingMetres").toInt(10), 500));
-        rowDirection->setValue(qBound(0,
+        rowDirectionValue->setValue(qBound(0,
             savedSettings.value("rowDirectionDegrees").toInt(0), 360));
-        rowWidthValue->setValue(rowWidth->value());
-        rowSpacingValue->setValue(rowSpacing->value());
-        rowDirectionValue->setValue(rowDirection->value());
     }
-    rowControls->setVisible(rows->isChecked());
+    rowsSection->setExpanded(rows->isChecked());
+    updateMethodChoices();
     if(previousId.isEmpty())
         previousId = savedSettings.value("selectedDefinition").toString();
     const ForestCatalogLoadResult result = ForestDefinitionLoader::loadRoute(
@@ -774,7 +583,6 @@ void PolyVegHelper::loadDefinitions() {
         definition->setEnabled(false);
         densityLabel->setEnabled(false);
         density->setEnabled(false);
-        densitySlider->setEnabled(false);
         definition->setToolTip(result.errors.join("\n"));
         return;
     }
@@ -783,7 +591,6 @@ void PolyVegHelper::loadDefinitions() {
     definition->setToolTip(QString());
     densityLabel->setEnabled(true);
     density->setEnabled(true);
-    densitySlider->setEnabled(true);
     int selectedIndex = 0;
     for(const ForestRecipeDefinition &recipe : result.catalog.polyVeg) {
         const QString displayName = recipe.name == "SCO Northeastern Mixed Woodland"
@@ -814,9 +621,7 @@ void PolyVegHelper::applyDefinitionSettings(bool restoreSavedValues) {
         return;
 
     const QSignalBlocker densityBlocker(density);
-    const QSignalBlocker densitySliderBlocker(densitySlider);
     const QSignalBlocker maximumBlocker(maximumTrees);
-    const QSignalBlocker maximumSliderBlocker(maximumTreesSlider);
     const QSignalBlocker seedBlocker(seed);
 
     const double minimumDensity =
@@ -826,24 +631,17 @@ void PolyVegHelper::applyDefinitionSettings(bool restoreSavedValues) {
     const int minimumTrees = definition->currentData(Qt::UserRole + 5).toInt();
     const int maximumTreeLimit = definition->currentData(Qt::UserRole + 6).toInt();
     density->setRange(minimumDensity, maximumDensity);
-    densitySlider->setRange(
-        static_cast<int>(std::ceil(minimumDensity / recipeSliderIncrement)),
-        static_cast<int>(std::floor(maximumDensity / recipeSliderIncrement)));
+
     maximumTrees->setRange(minimumTrees, maximumTreeLimit);
-    maximumTreesSlider->setRange(
-        static_cast<int>(std::ceil(
-            static_cast<double>(minimumTrees) / recipeSliderIncrement)),
-        static_cast<int>(std::floor(
-            static_cast<double>(maximumTreeLimit) / recipeSliderIncrement)));
-    const QString densityRange = QString("Range - %1-%2/km2")
-        .arg(minimumDensity, 0, 'f', 0)
-        .arg(maximumDensity, 0, 'f', 0);
+    const QString densityRange = QString("Range: %1–%2 plants/km². Used while Rows is collapsed.")
+        .arg(density->minimum(), 0, 'f', 0)
+        .arg(density->maximum(), 0, 'f', 0);
     density->setToolTip(densityRange);
-    densitySlider->setToolTip(densityRange);
-    const QString capRange = QString("Range - %1-%2")
-        .arg(minimumTrees).arg(maximumTreeLimit);
+    densityLabel->setToolTip(densityRange);
+    const QString capRange = QString("Range: %1–%2 objects. Cap applies to the whole planting operation; Replace All Forest Regions uses this cap per tile.")
+        .arg(maximumTrees->minimum()).arg(maximumTrees->maximum());
     maximumTrees->setToolTip(capRange);
-    maximumTreesSlider->setToolTip(capRange);
+    capLabel->setToolTip(capRange);
 
     double selectedDensity =
         definition->currentData(Qt::UserRole + 1).toDouble()*1000000.0;
@@ -863,12 +661,8 @@ void PolyVegHelper::applyDefinitionSettings(bool restoreSavedValues) {
             selectedSeed = recipeSettings.value("seed").toInt(selectedSeed);
     }
     density->setValue(qBound(minimumDensity, selectedDensity, maximumDensity));
-    densitySlider->setValue(qRound(
-        density->value() / recipeSliderIncrement));
     maximumTrees->setValue(qBound(minimumTrees, selectedMaximumTrees,
                                   maximumTreeLimit));
-    maximumTreesSlider->setValue(qRound(
-        static_cast<double>(maximumTrees->value()) / recipeSliderIncrement));
     int selectedSeedIndex = seed->findData(qMax(0, selectedSeed));
     if(selectedSeedIndex < 0) {
         seed->addItem(QString::number(qMax(0, selectedSeed)),
@@ -876,6 +670,17 @@ void PolyVegHelper::applyDefinitionSettings(bool restoreSavedValues) {
         selectedSeedIndex = seed->count() - 1;
     }
     seed->setCurrentIndex(selectedSeedIndex);
+    QString seedRange = "Range: 1–20.";
+    QStringList restoredSeeds;
+    for(int i = 0; i < seed->count(); ++i) {
+        const int value = seed->itemData(i).toInt();
+        if(value < 1 || value > 20) restoredSeeds.append(QString::number(value));
+    }
+    if(!restoredSeeds.isEmpty()) seedRange += " Restored choices also available: " + restoredSeeds.join(", ") + ".";
+    seedRange += " The same boundary, settings and seed reproduce the candidate layout.";
+    seed->setToolTip(seedRange);
+    seedLabel->setToolTip(seedRange);
+    resizeNumericFields();
 }
 
 void PolyVegHelper::publishSettings() {
@@ -892,22 +697,25 @@ void PolyVegHelper::publishSettings() {
     savedSettings.insert("selectedDefinition", definitionId);
     savedSettings.insert("definitions", definitions);
     savedSettings.remove("limitToPointerTile");
+    savedSettings.insert("useOsm", useOsm->isChecked());
     savedSettings.insert("floodFill", floodFill->isChecked());
     savedSettings.insert("disablePlantReport", disablePlantReport->isChecked());
+    savedSettings.insert("noReportDefaultVersion", 1);
     savedSettings.insert("rowsEnabled", rows->isChecked());
-    savedSettings.insert("rowWidthMetres", rowWidth->value());
-    savedSettings.insert("rowSpacingMetres", rowSpacing->value());
-    savedSettings.insert("rowDirectionDegrees", rowDirection->value());
+    savedSettings.insert("rowWidthMetres", rowWidthValue->value());
+    savedSettings.insert("rowSpacingMetres", rowSpacingValue->value());
+    savedSettings.insert("rowDirectionDegrees", rowDirectionValue->value());
     writePolyVegHelperSettings(savedSettings);
 
     emit settingsChanged(definitionId,
                          density->value()/1000000.0,
                          maximumTrees->value(),
                          seed->currentData().toULongLong(),
-                         floodFill->isChecked(),
+                         useOsm->isChecked(),
+                         useOsm->isChecked() && floodFill->isChecked(),
                          disablePlantReport->isChecked(),
-                         rows->isChecked(), rowWidth->value(), rowSpacing->value(),
-                         rowDirection->value());
+                         rows->isChecked(), rowWidthValue->value(), rowSpacingValue->value(),
+                         rowDirectionValue->value());
 }
 
 void PolyVegHelper::setTileCounts(int rawCount, int bakedCount,
@@ -915,4 +723,8 @@ void PolyVegHelper::setTileCounts(int rawCount, int bakedCount,
     statusRawValue->setText(QString::number(rawCount));
     statusBakedValue->setText(QString::number(bakedCount));
     statusBakedTilesValue->setText(QString::number(bakedTileCount));
+    // Counts are delivered during scene edits too; repaint the framed values
+    // immediately instead of waiting for another panel interaction.
+    for(auto *value : {statusRawValue, statusBakedValue, statusBakedTilesValue})
+        if(value->isVisible()) value->repaint();
 }

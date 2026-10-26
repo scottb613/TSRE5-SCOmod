@@ -135,6 +135,7 @@ RulerObj::RulerObj(const RulerObj& o) : WorldObj(o){
     vegetationArea = o.vegetationArea;
     vegetationWidth = o.vegetationWidth;
     gradeRuler = o.gradeRuler;
+    autoPlaceRuler = o.autoPlaceRuler;
     internalLodControl = o.internalLodControl;
 }
 
@@ -382,6 +383,7 @@ bool RulerObj::isWaterRuler() const {
 
 void RulerObj::setWaterRuler(bool enabled) {
     waterRuler = enabled;
+    if(enabled) autoPlaceRuler=false;
     if(enabled){
         vegetationRuler = false;
         gradeRuler = false;
@@ -405,6 +407,7 @@ bool RulerObj::isVegetationRuler() const {
 
 void RulerObj::setVegetationRuler(bool enabled) {
     vegetationRuler = enabled;
+    if(enabled) autoPlaceRuler=false;
     if(enabled){
         waterRuler = false;
         gradeRuler = false;
@@ -513,6 +516,7 @@ bool RulerObj::isGradeRuler() const {
 
 void RulerObj::setGradeRuler(bool enabled) {
     gradeRuler = enabled;
+    if(enabled) autoPlaceRuler=false;
     if(enabled){
         waterRuler = false;
         vegetationRuler = false;
@@ -527,10 +531,25 @@ void RulerObj::appendGradePoint(int px, int pz, float *p) {
 }
 
 bool RulerObj::isSpecialRuler() const {
-    return waterRuler || vegetationRuler || gradeRuler;
+    return waterRuler || vegetationRuler || gradeRuler || autoPlaceRuler;
+}
+
+bool RulerObj::isAutoPlaceRuler() const { return autoPlaceRuler; }
+void RulerObj::setAutoPlaceRuler(bool enabled) {
+    autoPlaceRuler=enabled;
+    if(enabled) { waterRuler=false; vegetationRuler=false; gradeRuler=false; }
+    setModified();
+    if(line3d) line3d->deleteVBO();
+}
+void RulerObj::appendAutoPlacePoint(int px,int pz,float *p) { appendSpecialPoint(px,pz,p); }
+QVector3D RulerObj::getPointLocalPosition(int index) const {
+    if(index<0 || index>=points.size()) return {};
+    const auto &p=points[index];
+    return QVector3D(p.position[0],p.position[1],p.position[2]);
 }
 
 int RulerObj::specialSelectionKind() const {
+    if(autoPlaceRuler) return AutoPlaceSelection;
     if(vegetationRuler)
         return VegetationSelection;
     if(gradeRuler)
@@ -691,6 +710,7 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
     
     int useSC = (float)selectionColor/(float)(selectionColor+0.000001);
     const bool specialRuler = isSpecialRuler();
+    const float specialPostHeight = autoPlaceRuler ? VegetationPostHeight*0.5f : VegetationPostHeight;
     const bool directSpecialSelection = specialRuler
             && ((selectionColor >> 20) & 0xF) == SpecialSelectionWindow;
     
@@ -766,7 +786,9 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
             specialHandlePick3d->initLitTriangles(
                 pickPositions.constData(), static_cast<int>(pickPositions.size()));
             vegetationPost3d = new OglObj();
-            if(gradeRuler)
+            if(autoPlaceRuler)
+                vegetationPost3d->setMaterial(0.0f,0.9f,0.9f);
+            else if(gradeRuler)
                 vegetationPost3d->setMaterial(1.0f,0.0f,1.0f);
             else if(waterRuler)
                 vegetationPost3d->setMaterial(0.10f,0.45f,1.0f);
@@ -775,10 +797,12 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
             else
                 vegetationPost3d->setMaterial(0.13f,0.55f,0.13f);
             vegetationPost3d->setLineWidth(8);
-            float postPoints[6] = { 0, 0, 0, 0, VegetationPostHeight, 0 };
+            float postPoints[6] = { 0, 0, 0, 0, specialPostHeight, 0 };
             vegetationPost3d->init(postPoints, 6, RenderItem::V, GL_LINES);
             vegetationPostSelected3d = new OglObj();
-            if(gradeRuler)
+            if(autoPlaceRuler)
+                vegetationPostSelected3d->setMaterial(0.35f,1.0f,1.0f);
+            else if(gradeRuler)
                 vegetationPostSelected3d->setMaterial(1.0f,0.0f,1.0f);
             else if(waterRuler)
                 vegetationPostSelected3d->setMaterial(0.10f,0.45f,1.0f);
@@ -825,7 +849,9 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
     if(line3d == NULL){
         line3d = new OglObj();
         line3d->setLineWidth(2);
-        if(gradeRuler)
+        if(autoPlaceRuler)
+            line3d->setMaterial(0.0f,0.9f,0.9f);
+        else if(gradeRuler)
             line3d->setMaterial(1.0f,0.0f,1.0f);
         else if(vegetationRuler && vegetationArea)
             line3d->setMaterial(0.42f,0.88f,0.48f);
@@ -1062,7 +1088,7 @@ void RulerObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos,
                 else
                     vegetationPost3d->render(pointSelectionColor);
                 Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, 0,
-                                VegetationPostHeight + VegetationHandleGap
+                                specialPostHeight + VegetationHandleGap
                                 + VegetationHandleSize*0.5f, 0);
                 gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
                 if(selectionColor == 0){
@@ -1137,6 +1163,7 @@ bool RulerObj::select(int value){
 
 
 void RulerObj::save(QTextStream* out){
+    if(autoPlaceRuler) return; // Session-only guide, never exported into route world files.
     if (!loaded) return;
     if (jestPQ < 2) return;
     

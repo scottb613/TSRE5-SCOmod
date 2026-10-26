@@ -31,6 +31,9 @@ public:
     Texture* tex = 0;
     Transformation texTransformation = RANDOM;
     int texRotationDegrees = 0;
+    int texScalePercent = 100;
+    bool createMipmaps = false;
+    bool ddsOutput = false;
     bool useTexture = false;
     bool mirrorSeason = false;
     int color[3];

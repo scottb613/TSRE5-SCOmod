@@ -485,7 +485,7 @@ void ForestObj::drawShape(){
                 }
             }
 
-        texturePath = new QString(Terrain::resolveTexturePath(resPath.toLower(), Terrain::textureSubdirCandidatesForSeason(Game::season), treeTexture.toLower()));
+        texturePath = new QString(Terrain::resolveTexturePath(resPath.toLower(), Terrain::textureSubdirCandidatesForSeason(Game::season), treeTexture.toLower(), true));
         shape.setMaterial(texturePath);
         shape.init(punkty, ptr, RenderItem::VNTA, GL_TRIANGLES);
         /*shape.VAO.create();

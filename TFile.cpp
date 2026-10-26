@@ -14,6 +14,7 @@
 #include <QSaveFile>
 #include "ReadFile.h"
 #include <QDataStream>
+#include <QVector>
 #include "Game.h"
 #include "TerrainGridMath.h"
 
@@ -696,8 +697,8 @@ void TFile::save(QDataStream &write){
     // 151 
     int t151 = 0;
     t151+=5;
-    int* t152 = new int[materialsCount*2];
-    int* t153 = new int[materialsCount*2];
+    QVector<int> t152(materialsCount*2);
+    QVector<int> t153(materialsCount*2);
     Mat tmat;
     for(int j = 0; j < materialsCount*2; j++){
         t152[j] = 1;

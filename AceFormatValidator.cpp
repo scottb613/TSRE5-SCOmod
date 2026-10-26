@@ -108,7 +108,7 @@ bool AceFormatValidator::inspect(const unsigned char *data, qsizetype length,
 
         qint64 bytesPerRow = qint64(layout.width) * 3;
         if(layout.channelType == 1)
-            bytesPerRow += qint64(layout.width) + layout.height / 8;
+            bytesPerRow += qint64(layout.width) + (layout.width + 7) / 8;
         else if(layout.channelType == 2)
             bytesPerRow += (qint64(layout.width) + 7) / 8;
         if(!checkedProduct(bytesPerRow, layout.height,

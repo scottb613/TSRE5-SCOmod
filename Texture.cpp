@@ -1,15 +1,16 @@
 /*  This file is part of TSRE5.
  *
- *  TSRE5 - train sim game engine and MSTS/OR Editors. 
+ *  TSRE5 - train sim game engine and MSTS/OR Editors.
  *  Copyright (C) 2016 Piotr Gadecki <pgadecki@gmail.com>
  *
- *  Licensed under GNU General Public License 3.0 or later. 
+ *  Licensed under GNU General Public License 3.0 or later.
  *
  *  See LICENSE.md or https://www.gnu.org/licenses/gpl.html
  */
 
 #include "Texture.h"
 #include "Brush.h"
+#include "TexturePaintMath.h"
 #include "Undo.h"
 #include <QOpenGLShaderProgram>
 #include <QString>
@@ -19,25 +20,38 @@
 #include "Game.h"
 #include <cmath>
 
+namespace {
+class TightPixelRows {
+    GLenum parameter;
+    GLint previous;
+public:
+    explicit TightPixelRows(GLenum parameter) : parameter(parameter) {
+        glGetIntegerv(parameter,&previous);
+        glPixelStorei(parameter,1);
+    }
+    ~TightPixelRows() { glPixelStorei(parameter,previous); }
+};
+}
+
 Texture::Texture() {
 }
 
 Texture::Texture(QString pathid) {
     this->pathid = pathid;
-    
- //       pathid = evaluatePathId();  
+
+ //       pathid = evaluatePathId();
 //
-  
-    
+
+
     this->hashid.push_back(pathid);
     // TexLib adds an alternate ACE/DDS hash only when its substitution or
     // upgrade policy actually resolves the request to the other file type.
 }
-    
+
 Texture::Texture(int x, int y, int bpp, Brush* brush){
     width = x;
     height = y;
-    bpp = bpp;
+    this->bpp = bpp;
     bytesPerPixel = (bpp / 8);
     imageSize = (bytesPerPixel * width * height);
     imageData = new unsigned char[imageSize];
@@ -53,15 +67,20 @@ Texture::Texture(int x, int y, int bpp, Brush* brush){
 }
 
 Texture::Texture(const Texture* orig) {
-    qDebug() << "clone tex" << orig->pathid;
-    //QOpenGLFunctions_3_2_Core *f = QOpenGLContext::currentContext()->functions();
+    TightPixelRows pack(GL_PACK_ALIGNMENT);
+    TightPixelRows unpack(GL_UNPACK_ALIGNMENT);
+    if(Game::debugOutput) qDebug() << "clone tex" << orig->pathid;
+    sourceWidth = orig->sourceWidth;
+    sourceHeight = orig->sourceHeight;
     width = orig->width;
     height = orig->height;
     bpp = orig->bpp;
     type = orig->type;
     bytesPerPixel = orig->bytesPerPixel;
-    
-    //QOpenGLFunctions_3_2_Core *f = new QOpenGLFunctions_3_2_Core();
+    imageSize = bytesPerPixel * width * height;
+    saveMipmaps = orig->saveMipmaps;
+    saveDds24 = orig->saveDds24;
+
     if(orig->editable){
         imageData = new unsigned char[bytesPerPixel*width*height];
         memcpy(imageData, orig->imageData, bytesPerPixel*width*height);
@@ -79,25 +98,13 @@ Texture::Texture(const Texture* orig) {
     glTexImage2D(GL_TEXTURE_2D, 0, type, width, height, 0, type, GL_UNSIGNED_BYTE, imageData);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    //delete imageData;
     glLoaded = true;
 
-    /*unsigned int* pex = new unsigned int[1];
-    f->glGenBuffers(1, pex);
-    f->glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pex[0]);
-    f->glBufferData(GL_PIXEL_UNPACK_BUFFER, bytesPerPixel*width*height, 0, GL_STREAM_DRAW_ARB);
-    imageData = (unsigned byte*)f->glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
-    
-    
-    
-    f->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height,
-                type, GL_UNSIGNED_BYTE, 0);
-    
-    f->glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);*/
     loaded = true;
 }
 
 void Texture::setEditable(){
+    TightPixelRows pack(GL_PACK_ALIGNMENT);
     imageData = new unsigned char[bytesPerPixel*width*height];
 
     //QOpenGLFunctions_3_2_Core *f = QOpenGLContext::currentContext()-> functions();
@@ -107,24 +114,24 @@ void Texture::setEditable(){
 }
 
 unsigned char * Texture::getImageData(int width, int height){
-    if(!editable) 
+    if(!editable)
         setEditable();
-    
+
     //qDebug() << width << height << bytesPerPixel;
     unsigned char * out = new unsigned char[width*height*bytesPerPixel];
-    
+
     float scalew = (float)this->width/width;
     float scaleh = (float)this->height/height;
-        
+
     int lineWidth = (this->width*bytesPerPixel);
-    //if( lineWidth%4 !=0) 
+    //if( lineWidth%4 !=0)
     //    lineWidth = lineWidth + 4 - lineWidth%4;
     //lineWidth /= 4;
     //if(lineWidth*4 < this->width*bytesPerPixel)
     //    lineWidth = lineWidth*4+4;
     //else
     //    lineWidth = lineWidth*4;
-    
+
     for(int i = 0; i < height; i++ )
         for(int j = 0; j < width; j++ ){
             int wsi = scaleh*i;
@@ -135,78 +142,76 @@ unsigned char * Texture::getImageData(int width, int height){
             if(bytesPerPixel == 4)
                 out[i*width*bytesPerPixel + j*bytesPerPixel+3] = imageData[wsi*lineWidth + hsi*bytesPerPixel+3];
         }
-    
+
     return out;
 }
 
 void Texture::advancedCrop(float* texCoords, int w, int h){
     if(!editable)
         setEditable();
-    
-    if(w == 0) 
+
+    if(w == 0)
         w = width;
-    if(h == 0) 
+    if(h == 0)
         h = height;
     float texCoords2[7];
     texCoords2[1] = texCoords[1]*w;
     texCoords2[2] = texCoords[2]*h;
-    texCoords2[3] = texCoords[3]*16.0;//*width;
-    texCoords2[4] = texCoords[4]*16.0;//*height;
-    texCoords2[5] = texCoords[5]*16.0;//*width;
-    texCoords2[6] = texCoords[6]*16.0;//*height;
-    
-    //qDebug() << "Texture166:" << width << height << bytesPerPixel << "--" << w << h;
-    //qDebug() << "Texture167:"<< texCoords2[1] << texCoords2[2] << texCoords2[3] << texCoords2[4] << texCoords2[5] << texCoords2[6];
-    //qDebug() << "Texture168:"<< texCoords[1] << texCoords[2] << texCoords[3] << texCoords[4] << texCoords[5] << texCoords[6];
-    
-    unsigned char* newData = new unsigned char[w*h*this->bytesPerPixel];    
-    
+    texCoords2[3] = texCoords[3]*16.0;
+    texCoords2[4] = texCoords[4]*16.0;
+    texCoords2[5] = texCoords[5]*16.0;
+    texCoords2[6] = texCoords[6]*16.0;
+
+
+    unsigned char* newData = new unsigned char[w*h*this->bytesPerPixel];
+
     float ii, jj;
     float widthRatio = (float)width/w;
-    float heightTatio = (float)height/h;
-    for(int i = 0; i < w; i++)
-        for(int j = 0; j < h; j++){
+    float heightRatio = (float)height/h;
+    for(int i = 0; i < h; i++)
+        for(int j = 0; j < w; j++){
             jj = texCoords2[1] + texCoords2[3]*j + texCoords2[4]*i;
             ii = texCoords2[2] + texCoords2[5]*j + texCoords2[6]*i;
-            ii *= widthRatio;
-            jj *= heightTatio;
+            ii *= heightRatio;
+            jj *= widthRatio;
 
-            while(ii >= width)
-                ii -= width;
-            while(jj >= height)
-                jj -= height;
-            
+            while(ii >= height)
+                ii -= height;
+            while(jj >= width)
+                jj -= width;
+
             while(ii < 0)
-                ii += width;
+                ii += height;
             while(jj < 0)
-                jj += height;
-                            
+                jj += width;
+
             newData[i*w*bytesPerPixel+j*bytesPerPixel+0] = imageData[(int)ii*width*bytesPerPixel+(int)jj*bytesPerPixel+0];
             newData[i*w*bytesPerPixel+j*bytesPerPixel+1] = imageData[(int)ii*width*bytesPerPixel+(int)jj*bytesPerPixel+1];
             newData[i*w*bytesPerPixel+j*bytesPerPixel+2] = imageData[(int)ii*width*bytesPerPixel+(int)jj*bytesPerPixel+2];
             if(this->bytesPerPixel == 4)
-                newData[i*width*bytesPerPixel+j*bytesPerPixel+3] = imageData[(int)ii*width*bytesPerPixel+(int)jj*bytesPerPixel+3];            
+                newData[i*w*bytesPerPixel+j*bytesPerPixel+3] = imageData[(int)ii*width*bytesPerPixel+(int)jj*bytesPerPixel+3];
         }
-        
-    qDebug() << "advanced rot finished";
+
+    if(Game::debugOutput) qDebug() << "advanced rot finished";
     delete[] this->imageData;
     this->imageData = newData;
     this->width = w;
     this->height = h;
+    this->imageSize = w*h*bytesPerPixel;
     this->update();
 }
 
 void Texture::crop(float x1, float y1, float x2, float y2){
-    if(!editable) 
+    if(!editable)
         setEditable();
 
     qDebug() << "Texture211:" << x1 <<" "<<y1<<" "<<x2<<" "<<y2;
 
     if(x1 < x2 && y1 < y2)
-        return;   
-    
-    unsigned char* newData = new unsigned char[this->width*this->height*this->bytesPerPixel];    
-    
+        return;
+
+    unsigned char* newData = new unsigned char[this->width*this->height*this->bytesPerPixel];
+
     if(x1 > x2 && y1 > y2){
         int ii, jj;
         for(int i = 0; i < width; i++)
@@ -217,10 +222,10 @@ void Texture::crop(float x1, float y1, float x2, float y2){
                 newData[i*width*bytesPerPixel+j*bytesPerPixel+1] = imageData[ii*width*bytesPerPixel+jj*bytesPerPixel+1];
                 newData[i*width*bytesPerPixel+j*bytesPerPixel+2] = imageData[ii*width*bytesPerPixel+jj*bytesPerPixel+2];
                 if(this->bytesPerPixel == 4)
-                    newData[i*width*bytesPerPixel+j*bytesPerPixel+3] = imageData[ii*width*bytesPerPixel+jj*bytesPerPixel+3];            
+                    newData[i*width*bytesPerPixel+j*bytesPerPixel+3] = imageData[ii*width*bytesPerPixel+jj*bytesPerPixel+3];
             }
     }
-    
+
     if(x1 > x2 && y1 < y2){
         int ii, jj;
         for(int i = 0; i < width; i++)
@@ -231,7 +236,7 @@ void Texture::crop(float x1, float y1, float x2, float y2){
                 newData[i*width*bytesPerPixel+j*bytesPerPixel+1] = imageData[ii*width*bytesPerPixel+jj*bytesPerPixel+1];
                 newData[i*width*bytesPerPixel+j*bytesPerPixel+2] = imageData[ii*width*bytesPerPixel+jj*bytesPerPixel+2];
                 if(this->bytesPerPixel == 4)
-                    newData[i*width*bytesPerPixel+j*bytesPerPixel+3] = imageData[ii*width*bytesPerPixel+jj*bytesPerPixel+3];            
+                    newData[i*width*bytesPerPixel+j*bytesPerPixel+3] = imageData[ii*width*bytesPerPixel+jj*bytesPerPixel+3];
             }
         ii = this->height;
         this->height = this->width;
@@ -254,15 +259,15 @@ void Texture::crop(float x1, float y1, float x2, float y2){
         this->height = this->width;
         this->width = ii;
     }
-    
+
     delete[] this->imageData;
     this->imageData = newData;
-    
+
     this->update();
 }
 
 void Texture::sendToUndo(int id){
-    if(!editable) 
+    if(!editable)
         setEditable();
     Undo::PushTextureData(id, imageData, bytesPerPixel*width*height);
 }
@@ -275,24 +280,26 @@ void Texture::fillData(unsigned char* data){
 }
 
 void Texture::paint(Brush* brush, float x, float z){
-    if(!editable) 
+    saveMipmaps = brush->createMipmaps;
+    saveDds24 = brush->ddsOutput;
+    if(!editable)
         setEditable();
-    
+
     Texture* tex = brush->tex;
-    
+
     if(tex != NULL){
         if(!tex->loaded) tex = NULL;
         else if(!tex->editable)
             tex->setEditable();
     }
-    
-    int tx = x*width;
-    int tz = z*height;
-    
+
+    int tx = x*height;
+    int tz = z*width;
+
     int txi, tzj;
-    
+
     float talpha = 0;
-    
+
     int size = (brush->size*this->width)/512;
     if(size < 1)
         size = 1;
@@ -303,12 +310,8 @@ void Texture::paint(Brush* brush, float x, float z){
     const float rotationRadians = (float)rotationDegrees * 3.14159265358979323846f / 180.0f;
     const float rotationCos = std::cos(rotationRadians);
     const float rotationSin = std::sin(rotationRadians);
-    auto wrapCoordinate = [](int value, int limit) {
-        value %= limit;
-        return value < 0 ? value + limit : value;
-    };
     //size = (size/512);
-    
+
     for(int i = -size; i < size; i++)
         for(int j = -size; j < size; j++){
             txi = tx+i;
@@ -318,40 +321,43 @@ void Texture::paint(Brush* brush, float x, float z){
             if(tx+i < 0) continue;
             if(tz+j < 0) continue;
             //if(sqrt(i*i + j*j) > size) continue;
-            
+
             talpha = (brush->alpha)*brush->getAlpha(i, j, size);
             //talpha = (brush->alpha)*(1.0-(float)sqrt(i*i + j*j)/size);
             txi*=1;
             tzj*=1;
-            
+
             if(tex != NULL && brush->useTexture){
-                int sourceColumn = tzj;
-                int sourceRow = txi;
+                float sourceU = tzj;
+                float sourceV = txi;
                 if(rotationDegrees != 0){
-                    sourceColumn = qRound(rotationCos * tzj + rotationSin * txi);
-                    sourceRow = qRound(-rotationSin * tzj + rotationCos * txi);
+                    sourceU = rotationCos * tzj + rotationSin * txi;
+                    sourceV = -rotationSin * tzj + rotationCos * txi;
                 }
-                sourceColumn = wrapCoordinate(sourceColumn, tex->width);
-                sourceRow = wrapCoordinate(sourceRow, tex->height);
-                
-                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel] 
+                const int sourceColumn = TexturePaintMath::sourceCoordinate(
+                    sourceU, brush->texScalePercent, tex->width);
+                const int sourceRow = TexturePaintMath::sourceCoordinate(
+                    sourceV, brush->texScalePercent, tex->height);
+
+                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel]
                         = (1-talpha)*imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel] + (talpha)*tex->imageData[sourceRow*tex->width*tex->bytesPerPixel + sourceColumn*tex->bytesPerPixel];
-                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+1] 
+                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+1]
                         = (1-talpha)*imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+1] + (talpha)*tex->imageData[sourceRow*tex->width*tex->bytesPerPixel + sourceColumn*tex->bytesPerPixel+1];
-                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+2] 
+                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+2]
                         = (1-talpha)*imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+2] + (talpha)*tex->imageData[sourceRow*tex->width*tex->bytesPerPixel + sourceColumn*tex->bytesPerPixel+2];
             } else {
-                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel] 
+                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel]
                         = (1-talpha)*imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel] + (talpha)*(brush->color[0]);
-                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+1] 
+                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+1]
                         = (1-talpha)*imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+1] + (talpha)*(brush->color[1]);
-                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+2] 
+                imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+2]
                         = (1-talpha)*imageData[(tx+i)*width*bytesPerPixel + (tz + j)*bytesPerPixel+2] + (talpha)*(brush->color[2]);
             }
         }
 }
 
 void Texture::update(){
+    TightPixelRows unpack(GL_UNPACK_ALIGNMENT);
     //QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
     glBindTexture(GL_TEXTURE_2D, tex[0]);
     glTexImage2D(GL_TEXTURE_2D, 0, type, width, height, 0, type, GL_UNSIGNED_BYTE, imageData);
@@ -362,8 +368,15 @@ Texture::~Texture() {
 
 bool Texture::GLTextures(bool mipmaps) {
     if(!loaded) return false;
-    
-    if(Game::AASamples > 0 && Game::AARemoveBorder)
+    TightPixelRows unpack(GL_UNPACK_ALIGNMENT);
+
+    // This generated alpha texture repeats along a strand; trimming its left
+    // and right edges would cut a gap into the wire at every UV repetition.
+    const QString textureName=pathid.mid(qMax(pathid.lastIndexOf('/'),pathid.lastIndexOf('\\'))+1);
+    const bool repeatingBarbedWire=textureName.compare("apwirebarbedbrown_v2.dds",Qt::CaseInsensitive)==0
+        || textureName.compare("apwirebarbedbrown_v3.dds",Qt::CaseInsensitive)==0
+        || textureName.compare("apwirebarbedbrown_v4.dds",Qt::CaseInsensitive)==0;
+    if(Game::AASamples > 0 && Game::AARemoveBorder && !repeatingBarbedWire)
         if(type == GL_RGBA){
             for (int i = 0; i < height; i++)
                 imageData[i*width*bytesPerPixel + (width-1)*bytesPerPixel + 3] = 0;
@@ -377,11 +390,11 @@ bool Texture::GLTextures(bool mipmaps) {
 
     tex = new unsigned int[1];
     QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
-    
+
     glGenTextures(1, tex);
     glBindTexture(GL_TEXTURE_2D, tex[0]);
     glTexImage2D(GL_TEXTURE_2D, 0, type, width, height, 0, type, GL_UNSIGNED_BYTE, imageData);
-    
+
     //f->glTexStorage2D(GL_TEXTURE_2D, 4, GL_RGBA8, width, height);
     //f->glTexSubImage2D(GL_TEXTURE_2D, 0​, 0, 0, width​, height​, GL_BGRA, GL_UNSIGNED_BYTE, pixels);
     if(mipmaps){
@@ -411,15 +424,15 @@ void Texture::delVBO() {
     //gl.glDeleteTextures(1, tex, 0);
 }
 
-QString Texture::evaluatePathId() {   //// EFO fixing relative paths which have folders between Trainset and /../    
+QString Texture::evaluatePathId() {   //// EFO fixing relative paths which have folders between Trainset and /../
     int trainsetPos = pathid.indexOf("trainset");
     int parentDirPos = pathid.indexOf("/../");
-    if (trainsetPos != -1 && parentDirPos != -1 && trainsetPos < parentDirPos) {        
+    if (trainsetPos != -1 && parentDirPos != -1 && trainsetPos < parentDirPos) {
         if(Game::debugOutput) qDebug() << "Before APF:" << pathid;
         // Replace everything between "trainset" and "/../" with empty string
-        pathid = pathid.mid(0, trainsetPos+8) + pathid.mid(parentDirPos + 3);                
+        pathid = pathid.mid(0, trainsetPos+8) + pathid.mid(parentDirPos + 3);
         if(Game::debugOutput) qDebug() << "After AFP: " << pathid;
-        return pathid;        
+        return pathid;
     } else {
         // Pathid doesn't contain the specific pattern or "trainset" comes after "/../"
         return pathid;

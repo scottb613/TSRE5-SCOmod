@@ -34,6 +34,7 @@
 #include "TrackObj.h"
 #include "TrWatermarkObj.h"
 #include "RulerObj.h"
+#include "AutoPlaceRuler.h"
 #include "Path.h"
 #include "Terrain.h"
 #include "FileFunctions.h"
@@ -45,6 +46,7 @@
 #include "PickupObj.h"
 #include "ForestObj.h"
 #include "ForestBakeManifest.h"
+#include "SaveProgress.h"
 #include "PolyVegObject.h"
 #include "Coords.h"
 #include "CoordsMkr.h"
@@ -1460,6 +1462,34 @@ void Route::render(GLUU *gluu, float * playerT, float* playerW, float* target, f
         }
     }
 
+    if(autoPlaceRulerObj != NULL && autoPlaceRulerObj->loaded){
+        int offsetX = autoPlaceRulerObj->x - (int)playerT[0];
+        int offsetZ = autoPlaceRulerObj->y - (int)playerT[1];
+        float lodx = offsetX * 2048.0f
+                + autoPlaceRulerObj->position[0] - playerW[0];
+        float lodz = offsetZ * 2048.0f
+                + autoPlaceRulerObj->position[2] - playerW[2];
+        float lod = std::sqrt(lodx * lodx + lodz * lodz);
+        bool homeTileRendered = offsetX >= mintile && offsetX <= maxtile
+                && offsetZ >= mintile && offsetZ <= maxtile;
+        bool normalObjectRendered = homeTileRendered
+                && (lod < Game::objectLod || autoPlaceRulerObj->isInternalLodControl());
+        if(!normalObjectRendered){
+            int selectionColor = renderMode == gluu->RENDER_SELECTION
+                    ? (RulerObj::SpecialSelectionWindow << 20)
+                      | (autoPlaceRulerObj->specialSelectionKind()
+                         << RulerObj::SpecialSelectionKindShift)
+                    : 0;
+            gluu->mvPushMatrix();
+            Mat4::translate(gluu->mvMatrix, gluu->mvMatrix,
+                            2048.0f * offsetX, 0, 2048.0f * offsetZ);
+            autoPlaceRulerObj->render(gluu, lod, lodx, lodz,
+                                  playerW, target, fov,
+                                  selectionColor, renderMode);
+            gluu->mvPopMatrix();
+        }
+    }
+
     if (renderMode == gluu->RENDER_DEFAULT) {
         if(Game::viewTrackDbLines && trackDB != NULL)
             trackDB->renderAll(gluu, playerT, playerRot);
@@ -2096,7 +2126,8 @@ WorldObj* Route::placeObject(int x, int z, float* p, float* q, float elev, Ref::
         // Check after target snapping, before allocating an object/UID or undo entry.
         // Read adjacent world tiles as well so tile boundaries cannot hide a duplicate.
         WorldObj *existing = nullptr;
-        double best = 0.25; // 0.5 m horizontal tolerance, independent of wobble.
+        // AP ruler corners must not silently reuse an off-corner post.
+        double best = placementAutoTargetType==3 ? 0.0001 : 0.25;
         for(int dx = -1; dx <= 1; ++dx) for(int dz = -1; dz <= 1; ++dz) {
             Tile *nearTile = requestTile(x + dx, z + dz, false);
             if(!nearTile || (nearTile->loaded != 1 && nearTile->loaded != -2)) {
@@ -2458,6 +2489,53 @@ WorldObj* Route::autoPlaceObject(int x, int z, float* p, int mode) {
         apStatus = "Auto Place: range must be positive, or zero for unlimited.";
         return nullptr;
     }
+    if(placementAutoTargetType==3) {
+        RulerObj *ruler=findAutoPlaceRuler();
+        if(!ruler) { apStatus="Ruler (ap): create a ruler and add at least two points."; return nullptr; }
+        if(ref->selected->type!="static" && ref->selected->type!="gantry" && ref->selected->type!="collideobject") {
+            apStatus="Ruler (ap): select a scenery object such as a fence post."; return nullptr;
+        }
+        QVector<QVector3D> points;
+        for(int index=0;index<ruler->getPointCount();++index) points.append(ruler->getPointLocalPosition(index));
+        const auto plan=AutoPlaceRuler::plan(points,placementAutoLength,placementAutoPreserveCorners,apStatus);
+        if(plan.isEmpty()) return nullptr;
+        int completed=0;
+        for(const auto &station:plan) {
+            const auto &direction=station.direction;
+            float quaternion[4]; Quat::fill(quaternion);
+            Quat::rotateY(quaternion,quaternion,std::atan2(direction.x(),direction.z()));
+            // Fence posts stay upright; existing rotation offsets still apply.
+            float offset[3]; Vec3::copy(offset,placementAutoTranslationOffset);
+            Vec3::transformQuat(offset,offset,quaternion);
+            float rotation[4]; Quat::fill(rotation);
+            Quat::rotateY(rotation,rotation,placementAutoRotationOffset[1]*M_PI/180);
+            Quat::rotateX(rotation,rotation,placementAutoRotationOffset[0]*M_PI/180);
+            Quat::multiply(quaternion,quaternion,rotation);
+            float position[3]={station.point.x()+offset[0],station.point.y()+offset[1],station.point.z()+offset[2]};
+            int tileX=ruler->x, tileZ=ruler->y;
+            Game::check_coords(tileX,tileZ,position);
+            apCheckingDuplicates=true; apLastReused=false;
+            WorldObj *placed=placeObject(tileX,tileZ,position,quaternion,0,ref->selected);
+            apCheckingDuplicates=false;
+            if(!placed || !placed->loaded) continue;
+            ++completed;
+            if(apLastReused) ++apReused;
+            else {
+                if(placementAutoWobblePercent>0) applyPoleWobble(placed);
+                autoPlacementLastPlaced.push_back(placed);
+            }
+        }
+        if(completed==plan.size()) {
+            deleteObj(ruler);
+            apStatus=QString("Ruler (ap): %1 posts placed/reused; ruler cleared.").arg(completed);
+        } else {
+            const QString detail=apStatus;
+            apStatus=QString("Ruler (ap): %1 of %2 placed/reused. Ruler retained; correct the problem and Commit again.")
+                .arg(completed).arg(plan.size());
+            if(!detail.isEmpty()) apStatus+=' '+detail;
+        }
+        return nullptr;
+    }
     Game::check_coords(x, z, p);
     
     
@@ -2700,6 +2778,7 @@ void Route::replaceWorldObjPointer(WorldObj* o, WorldObj* n){
                         && replacementRuler->isGradeRuler()
                         ? replacementRuler : NULL;
             }
+            if(autoPlaceRulerObj == o) autoPlaceRulerObj=dynamic_cast<RulerObj*>(n);
             emit objectSelected((GameObj*)n);
             return;
         }
@@ -2860,6 +2939,7 @@ void Route::addToTDBIfNotExist(WorldObj* obj) {
 }
 
 RulerObj* Route::placeWaterRuler(int x, int z, float *p) {
+    if(autoPlaceRulerObj && autoPlaceRulerObj->loaded) deleteObj(autoPlaceRulerObj);
     if(p == NULL)
         return NULL;
     RulerObj *vegetationRuler = findVegetationRuler(true);
@@ -2973,6 +3053,7 @@ RulerObj* Route::findWaterRuler(bool loadWorldTiles) {
 }
 
 RulerObj* Route::placeVegetationRuler(int x, int z, float *p) {
+    if(autoPlaceRulerObj && autoPlaceRulerObj->loaded) deleteObj(autoPlaceRulerObj);
     if(p == NULL)
         return NULL;
     RulerObj *waterRuler = findWaterRuler(true);
@@ -3168,7 +3249,33 @@ RulerObj* Route::findGradeRuler(bool loadWorldTiles) {
     return NULL;
 }
 
+RulerObj* Route::findAutoPlaceRuler() {
+    if(autoPlaceRulerObj && autoPlaceRulerObj->loaded && autoPlaceRulerObj->isAutoPlaceRuler()) return autoPlaceRulerObj;
+    autoPlaceRulerObj=nullptr;
+    for(Tile *world:tile) if(world && world->loaded==1)
+        for(const auto &entry:world->obiekty) {
+            auto *ruler=dynamic_cast<RulerObj*>(entry.second);
+            if(ruler && ruler->loaded && ruler->isAutoPlaceRuler()) { autoPlaceRulerObj=ruler; return ruler; }
+        }
+    return nullptr;
+}
+RulerObj* Route::placeAutoPlaceRuler(int x,int z,float *p) {
+    if(!p) return nullptr;
+    Game::check_coords(x,z,p);
+    Tile *world=requestTile(x,z);
+    if(!world || world->loaded!=1) return nullptr;
+    WorldObj *base=WorldObj::createObj("ruler");
+    auto *ruler=dynamic_cast<RulerObj*>(base);
+    if(!ruler) { delete base; return nullptr; }
+    float rotation[4]; Quat::fill(rotation);
+    ruler->initPQ(p,rotation); ruler->setAutoPlaceRuler(true); ruler->load(x,z);
+    world->placeObject(ruler); Undo::PushWorldObjPlaced(ruler);
+    autoPlaceRulerObj=ruler;
+    return ruler;
+}
+
 void Route::deleteSpecialRulers() {
+    if(auto *ruler=findAutoPlaceRuler()) deleteObj(ruler);
     RulerObj *waterRuler = findWaterRuler(true);
     RulerObj *vegetationRuler = findVegetationRuler(true);
     RulerObj *gradeRuler = findGradeRuler(true);
@@ -3326,6 +3433,7 @@ void Route::deleteObj(WorldObj* obj) {
         vegetationRulerObj = NULL;
     if(obj == gradeRulerObj)
         gradeRulerObj = NULL;
+    if(obj == autoPlaceRulerObj) autoPlaceRulerObj = NULL;
     if(obj->typeID == obj->groupobject) {
         GroupObj *gobj = (GroupObj*)obj;
         for(int i = 0; i < gobj->objects.size(); i++ ){
@@ -3584,22 +3692,38 @@ void Route::save() {
     lastSaveResult = false;
     if (!Game::writeEnabled) return;
     qDebug() << __FILE__ << " " << __LINE__ << ":" << "save";
-    foreach (Tile* tTile, tile){
-        if (tTile == NULL) continue;
-        if (tTile->loaded == 1 && tTile->isModified()) {
-            if(!tTile->save()) {
-                emit sendMsg("saveError");
-                if(Game::gui)
-                    GuiFunct::showEditorStopped(NULL, QObject::tr("Route Save Failed"),
-                        QObject::tr("A world tile could not be saved. It remains modified. "
-                                    "The editor will remain open; retry the save after correcting the file access problem."));
-                return;
+    int worldCount = 0, worldDone = 0;
+    for(Tile *t : tile) if(t && t->loaded == 1 && t->isModified()) ++worldCount;
+    {
+        SaveProgress::Range worlds(0, 0.03);
+        foreach (Tile* tTile, tile){
+            if (tTile == NULL) continue;
+            if (tTile->loaded == 1 && tTile->isModified()) {
+                SaveProgress::Range world(double(worldDone)/qMax(1,worldCount),
+                    double(worldDone+1)/qMax(1,worldCount));
+                ++worldDone;
+                SaveProgress::report(QString("Saving world tile %1, %2...").arg(tTile->x).arg(-tTile->z));
+                if(!tTile->save()) {
+                    emit sendMsg("saveError");
+                    if(Game::gui)
+                        GuiFunct::showEditorStopped(NULL, QObject::tr("Route Save Failed"),
+                            QObject::tr("A world tile could not be saved. It remains modified. "
+                                        "The editor will remain open; retry the save after correcting the file access problem."));
+                    return;
+                }
+                tTile->setModified(false);
             }
-            tTile->setModified(false);
         }
     }
+    SaveProgress::Range remaining(0.03, 1);
     QString terrainSaveError;
-    if(Game::terrainLib == NULL || !Game::terrainLib->save(&terrainSaveError)){
+    SaveProgress::report("Saving terrain and painted TERRTEX...");
+    bool terrainSaved = false;
+    {
+        SaveProgress::Range terrainStage(0, 0.91);
+        terrainSaved = Game::terrainLib != NULL && Game::terrainLib->save(&terrainSaveError);
+    }
+    if(!terrainSaved){
         qWarning() << "Terrain save failed:" << terrainSaveError;
         emit sendMsg("saveError");
         if(Game::gui)
@@ -3611,8 +3735,16 @@ void Route::save() {
         return;
     }
 
+    SaveProgress::Range finalStages(0.91, 1);
+    SaveProgress::set(0);
     QString keySaveError;
-    if(!saveKeyRouteFiles(keySaveError)){
+    SaveProgress::report("Saving route databases and settings...");
+    bool keysSaved = false;
+    {
+        SaveProgress::Range keys(0, 0.4);
+        keysSaved = saveKeyRouteFiles(keySaveError);
+    }
+    if(!keysSaved){
         qWarning() << "Route key-file save failed:" << keySaveError;
         emit sendMsg("saveError");
         if(Game::gui){
@@ -3625,7 +3757,9 @@ void Route::save() {
         return;
     }
 
+    SaveProgress::set(0.4);
     ForestBakePruneResult bakePrune;
+    SaveProgress::report("Checking committed vegetation bake references...");
     QString bakePruneError;
     // Ordinary saves own only manifest-tracked bakes. A shared Shapes library
     // may contain matching filenames without any PolyVeg work on this route.
@@ -3646,6 +3780,8 @@ void Route::save() {
                  << bakePrune.removedAssets << "generated asset(s);"
                  << bakePrune.remainingBlocks << "block(s) remain";
 
+    SaveProgress::set(0.8);
+    SaveProgress::report("Saving activities and services...");
     ActLib::SaveAll();
     
     /// EFO this is a hack to trick the updated timestamp on the folder.  It could be used as a stub for 

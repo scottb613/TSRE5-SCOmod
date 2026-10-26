@@ -12,11 +12,14 @@
 #include "ReadFile.h"
 #include "FileBuffer.h"
 #include "Texture.h"
+#include "TerrtexMipmaps.h"
+#include "SaveProgress.h"
 #include <QDebug>
 #include <QOpenGLShaderProgram>
 #include <QString>
 #include <QBuffer>
 #include <QSaveFile>
+#include <QFileInfo>
 #include <limits>
 #include <memory>
 #include "Game.h"
@@ -61,10 +64,14 @@ void AceLib::run() {
     unsigned char* bufor = data->data;
     int typ = 0;
     int dane = bufor[20];
+    texture->saveMipmaps = (dane & 1) != 0;
+    texture->saveDds24 = false;
     unsigned char tempt;
     texture->compressed = bufor[32];
     texture->width = bufor[25] * 256 + bufor[24];
     texture->height = bufor[29] * 256 + bufor[28];
+    texture->sourceWidth = texture->width;
+    texture->sourceHeight = texture->height;
     if (bufor[36] == 3) {
         texture->bpp = 24;
         texture->typk = typ = 0;
@@ -175,7 +182,7 @@ void AceLib::run() {
                 for (iw = 0; iw<texture->width; iw = iw + 1) {
                     texture->imageData[texture->bytesPerPixel * texture->width * ih + iw * texture->bytesPerPixel + 2] = bufor[ptr++];
                 }
-                ptr += texture->height / 8;
+                ptr += (texture->width + 7) / 8;
                 for (iw = 0; iw<texture->width; iw = iw + 1) {
                     texture->imageData[texture->bytesPerPixel * texture->width * ih + iw * texture->bytesPerPixel + 3] = bufor[ptr++];
                 }
@@ -325,9 +332,10 @@ void AceLib::run() {
 
 bool AceLib::serialize(Texture *t, QByteArray &data, QString *error){
     data.clear();
+    if(error) error->clear();
     if(t == NULL || t->imageData == NULL || t->width <= 0 || t->height <= 0
             || t->width > 8192 || t->height > 8192
-            || t->bytesPerPixel < 3){
+            || (t->bytesPerPixel != 3 && t->bytesPerPixel != 4)){
         if(error)
             *error = "Texture has no valid editable image data.";
         return false;
@@ -337,6 +345,13 @@ bool AceLib::serialize(Texture *t, QByteArray &data, QString *error){
         if(error)
             *error = "Texture dimensions exceed the ACE encoder limit.";
         return false;
+    }
+
+    if(t->saveMipmaps) {
+        const QImage image(t->imageData, t->width, t->height,
+            t->width*t->bytesPerPixel, t->bytesPerPixel == 4
+                ? QImage::Format_RGBA8888 : QImage::Format_RGB888);
+        return TerrtexMipmaps::serializeAce(image, t->bytesPerPixel == 4, data, error);
     }
 
     QBuffer buffer(&data);
@@ -390,16 +405,17 @@ bool AceLib::serialize(Texture *t, QByteArray &data, QString *error){
         write << (qint32)offset + i*t->width*3*4;
     }
     //data
+    QByteArray encodedRow(t->width*3, '\0');
     for(int i = 0; i < t->height; i++){
-        for (int j = 0; j<t->width; j++) {
-            write << (qint8)t->imageData[t->bytesPerPixel*t->width*i + j*t->bytesPerPixel];
-        }
-        for (int j = 0; j<t->width; j++) {
-            write << (qint8)t->imageData[t->bytesPerPixel*t->width*i + j*t->bytesPerPixel+1];
-        }
-        for (int j = 0; j<t->width; j++) {
-            write << (qint8)t->imageData[t->bytesPerPixel*t->width*i + j*t->bytesPerPixel+2];
-        }
+        SaveProgress::set(double(i)/t->height);
+        if(i%32 == 0) SaveProgress::report(QString("Encoding TERRTEX %1: row %2 of %3")
+            .arg(QFileInfo(t->pathid).fileName()).arg(i+1).arg(t->height));
+        const unsigned char *pixels = t->imageData + t->bytesPerPixel*t->width*i;
+        char *encoded = encodedRow.data();
+        for(int c = 0; c < 3; ++c)
+            for(int j = 0; j < t->width; ++j)
+                encoded[c*t->width+j] = char(pixels[j*t->bytesPerPixel+c]);
+        write.writeRawData(encodedRow.constData(), int(encodedRow.size()));
     }
     
     const bool ok = write.status() == QDataStream::Ok;

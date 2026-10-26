@@ -8,8 +8,12 @@
  *  See LICENSE.md or https://www.gnu.org/licenses/gpl.html
  */
 
+#include "PolyVegPlantingArea.h"
+#include "PolyVegClearance.h"
 #include "RouteEditorGLWidget.h"
 #include "AutoPlaceInput.h"
+#include "AutoPlaceRange.h"
+#include "PolyVegPlantDiagnostics.h"
 #include "WireAttachmentOrder.h"
 #include <QMouseEvent>
 #include <QOpenGLShaderProgram>
@@ -19,6 +23,10 @@
 #include <QEventLoop>
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QDialogButtonBox>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QScreen>
 #include <QPainterPath>
 #include <QPainterPathStroker>
 #include <QJsonObject>
@@ -104,6 +112,7 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include "ForestBakeManifest.h"
+#include "SaveProgress.h"
 #include "PolyVegObject.h"
 #include "TrackItemObj.h"
 #include <QDir>
@@ -258,9 +267,9 @@ bool polyVegTerrainHeight(double planX, double planZ, float &height) {
 
 class PolyVegDatabaseClearance {
 public:
-    PolyVegDatabaseClearance(TDB *database, double clearanceMetres)
-        : database(database), clearanceSquared(
-              clearanceMetres*clearanceMetres) {}
+    PolyVegDatabaseClearance(TDB *database, double clearanceMetres, int corridorSourceNode = -1)
+        : database(database), clearanceSquared(clearanceMetres*clearanceMetres),
+          corridorSourceNode(corridorSourceNode) {}
 
     bool blocks(double planX, double terrainY, double planZ) {
         if(database == nullptr || !database->loaded || clearanceSquared <= 0.0)
@@ -275,30 +284,14 @@ public:
         if(nearbyIt == segments.constEnd())
             return false;
         const QVector<Segment> &nearby = nearbyIt.value();
-        for(const Segment &segment : nearby) {
-            const double vx = segment.bx-segment.ax;
-            const double vy = segment.by-segment.ay;
-            const double vz = segment.bz-segment.az;
-            const double lengthSquared = vx*vx+vy*vy+vz*vz;
-            double t = 0.0;
-            if(lengthSquared > 0.000001)
-                t = std::clamp(((planX-segment.ax)*vx
-                    +(terrainY-segment.ay)*vy+(planZ-segment.az)*vz)
-                    / lengthSquared, 0.0, 1.0);
-            const double dx = planX-(segment.ax+vx*t);
-            const double dy = terrainY-(segment.ay+vy*t);
-            const double dz = planZ-(segment.az+vz*t);
-            if(dx*dx+dy*dy+dz*dz < clearanceSquared)
+        for(const Segment &segment : nearby)
+            if(segment.blocks(planX, terrainY, planZ, clearanceSquared, corridorSourceNode))
                 return true;
-        }
         return false;
     }
 
 private:
-    struct Segment {
-        double ax, ay, az;
-        double bx, by, bz;
-    };
+    using Segment = PolyVegClearance::Segment;
 
     void loadTile(int tileX, int tileZ, quint64 key) {
         QVector<Segment> copied;
@@ -313,7 +306,7 @@ private:
                 tileX*2048.0+lineBuffer[index], lineBuffer[index+1],
                 tileZ*2048.0+lineBuffer[index+2],
                 tileX*2048.0+lineBuffer[index+6], lineBuffer[index+7],
-                tileZ*2048.0+lineBuffer[index+8]
+                tileZ*2048.0+lineBuffer[index+8], int(lineBuffer[index+3])
             });
         }
         segments.insert(key, copied);
@@ -321,6 +314,7 @@ private:
 
     TDB *database = nullptr;
     double clearanceSquared = 0.0;
+    int corridorSourceNode = -1;
     QHash<quint64, QVector<Segment>> segments;
 };
 
@@ -444,7 +438,10 @@ private:
 };
 
 bool polyVegTerrainSlopeAccepted(double planX, double planZ,
-                                 double maximumSlopeDegrees) {
+                                 double maximumSlopeDegrees,
+                                 bool *terrainUnavailable = nullptr) {
+    if(terrainUnavailable != nullptr)
+        *terrainUnavailable = false;
     if(maximumSlopeDegrees >= 90.0)
         return true;
     constexpr double sampleRadiusMetres = 8.0;
@@ -452,14 +449,44 @@ bool polyVegTerrainSlopeAccepted(double planX, double planZ,
     if(!polyVegTerrainHeight(planX-sampleRadiusMetres, planZ, west)
             || !polyVegTerrainHeight(planX+sampleRadiusMetres, planZ, east)
             || !polyVegTerrainHeight(planX, planZ-sampleRadiusMetres, north)
-            || !polyVegTerrainHeight(planX, planZ+sampleRadiusMetres, south))
+            || !polyVegTerrainHeight(planX, planZ+sampleRadiusMetres, south)) {
+        if(terrainUnavailable != nullptr)
+            *terrainUnavailable = true;
         return false;
+    }
     const double span = sampleRadiusMetres*2.0;
     const double gradientX = (east-west)/span;
     const double gradientZ = (south-north)/span;
     const double slopeDegrees = std::atan(std::hypot(gradientX, gradientZ))
         * 180.0/M_PI;
     return slopeDegrees <= maximumSlopeDegrees;
+}
+
+void showPolyVegZeroResultReport(QWidget *parent, const QString &title,
+                                const PolyVegPlantDiagnostics &diagnostics) {
+    QDialog dialog(parent);
+    dialog.setWindowTitle(Game::AppName);
+    GuiFunct::styleEditorDialog(&dialog);
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    QLabel *heading = new QLabel(title.toUpper(), &dialog);
+    GuiFunct::styleEditorTitle(heading);
+    layout->addWidget(heading);
+    QPlainTextEdit *details = new QPlainTextEdit(&dialog);
+    details->setReadOnly(true);
+    details->setPlainText(diagnostics.text());
+    layout->addWidget(details, 1);
+    QDialogButtonBox *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Close, &dialog);
+    QPushButton *copy = buttons->addButton("Copy Report", QDialogButtonBox::ActionRole);
+    QObject::connect(copy, &QPushButton::clicked, details, [details](){
+        QApplication::clipboard()->setText(details->toPlainText());
+    });
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    const QRect available = dialog.screen()->availableGeometry();
+    dialog.resize(qMin(680, available.width()*4/5),
+                  qMin(640, available.height()*4/5));
+    dialog.exec();
 }
 
 } // namespace
@@ -542,7 +569,7 @@ void RouteEditorGLWidget::cleanup() {
 }
 
 void RouteEditorGLWidget::timerEvent(QTimerEvent *) {
-    if(forestReplacementBusy) return;
+    if(forestReplacementBusy || routeSaveBusy) return;
     // The OpenGL widget and its timer persist at Main Load. During a restored
     // route load, progress processing can dispatch this timer after the Route
     // pointer is assigned but before loading and camera initialization finish.
@@ -683,6 +710,7 @@ void RouteEditorGLWidget::timerEvent(QTimerEvent *) {
 }
 
 bool RouteEditorGLWidget::initRoute(){
+    clearPolyVegCorridor();
     wireSpans = QJsonObject();
     wireUnsavedBakes.clear();
     polyVegUnsavedBakeShapes.clear();
@@ -1317,6 +1345,9 @@ void RouteEditorGLWidget::handleSelection() {
                 if(activeGradeRuler == NULL || !activeGradeRuler->loaded)
                     activeGradeRuler = route->findGradeRuler(false);
                 clickedRuler = activeGradeRuler;
+            } else if(rulerKind == RulerObj::AutoPlaceSelection){
+                activeAutoPlaceRuler=route->findAutoPlaceRuler();
+                clickedRuler=activeAutoPlaceRuler;
             }
             if(clickedRuler != NULL
                     && pointIndex < clickedRuler->getPointCount()){
@@ -1853,6 +1884,10 @@ void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
             break;
         /// EFO Added to
         case Qt::Key_Escape:
+            setPolyVegFullTileMode(false);
+            setPolyVegBakeTileMode(false);
+            setPolyVegClearBakeMode(false);
+            setPolyVegCorridorMode(false);
             resizeTool = false;
             translateTool = false;
             rotateTool = false;
@@ -2183,6 +2218,62 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
         camera->MouseDown(event);
     }
     if ((event->button()) == Qt::LeftButton) {
+        polyVegFullTileClickConsumed = false;
+        if(toolEnabled == "polyVegBakeTileTool") {
+            int tileX = int(camera->pozT[0]), tileZ = int(camera->pozT[1]);
+            float point[3];
+            Vec3::copy(point, aktPointerPos);
+            Game::check_coords(tileX, tileZ, point);
+            polyVegFullTileClickConsumed = true;
+            mouseClick = false;
+            setPolyVegBakeTileMode(false);
+            QTimer::singleShot(0, this, [this, tileX, tileZ]() {
+                const QPair<int, int> clickedTile(tileX, tileZ);
+                const bool baked = bakeVegetationTile(true, &clickedTile);
+                emit polyVegPanelStatus(baked ? "Bake Tile completed. Save to keep the bake."
+                                              : "Bake Tile finished without a new bake.");
+            });
+            return;
+        }
+        if(toolEnabled == "polyVegClearBakeTool") {
+            int tileX = int(camera->pozT[0]), tileZ = int(camera->pozT[1]);
+            float point[3];
+            Vec3::copy(point, aktPointerPos);
+            Game::check_coords(tileX, tileZ, point);
+            polyVegFullTileClickConsumed = true;
+            mouseClick = false;
+            setPolyVegClearBakeMode(false);
+            QTimer::singleShot(0, this, [this, tileX, tileZ]() { clearPolyVegBakeTile(tileX, tileZ); });
+            return;
+        }
+        if(toolEnabled == "polyVegCorridorTool") {
+            if(corridorBusy) return;
+            polyVegFullTileClickConsumed = true;
+            mouseClick = false;
+            const int tx = int(camera->pozT[0]), tz = int(camera->pozT[1]);
+            const float px = aktPointerPos[0], py = aktPointerPos[1], pz = aktPointerPos[2];
+            const int mode = AutoPlaceInput::mode(*event);
+            QTimer::singleShot(0, this, [this, tx, tz, px, py, pz, mode]() {
+                preparePolyVegCorridor(tx, tz, px, py, pz, mode);
+                if(!corridorBoundary.isEmpty()) plantPolyVegCorridor();
+            });
+            return;
+        }
+        if(toolEnabled == "polyVegFullTileTool") {
+            int tileX = static_cast<int>(camera->pozT[0]);
+            int tileZ = static_cast<int>(camera->pozT[1]);
+            float point[3];
+            Vec3::copy(point, aktPointerPos);
+            Game::check_coords(tileX, tileZ, point);
+            polyVegFullTileClickConsumed = true;
+            mouseClick = false;
+            setPolyVegFullTileMode(false);
+            // Leave the mouse event before opening progress/confirmation dialogs.
+            QTimer::singleShot(0, this, [this, tileX, tileZ](){
+                plantPolyVegRegion(true, true, tileX, tileZ);
+            });
+            return;
+        }
         Undo::StateBegin();
         mouseLPressed = true;
         lastMousePressTime = QDateTime::currentMSecsSinceEpoch();
@@ -2259,8 +2350,18 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
             }
         }
 
+        const bool rulerAutoPlacement = toolEnabled == "placeTool"
+            && route->ref->selected != nullptr
+            && route->ref->selected->type.compare("rulerap", Qt::CaseInsensitive) == 0;
+        if(rulerAutoPlacement) {
+            // Opening the panel selects Objects / Follow Ruler (ap) and arms
+            // its ordinary latched placement button. The AP block below then
+            // consumes this same click as the first terrain-snapped point.
+            emit autoPlaceRulerPlacementRequested();
+        }
+
         if (toolEnabled == "placeTool" && !rulerWaterPlacement
-                && !rulerVegetationPlacement && !rulerGradePlacement) {
+                && !rulerVegetationPlacement && !rulerGradePlacement && !rulerAutoPlacement) {
 
         //QString selectedFilename = selectedObj->objectName();
         //qDebug() << "placed objName: " << selectedFilename;
@@ -2403,6 +2504,28 @@ void RouteEditorGLWidget::mousePressEvent(QMouseEvent *event) {
                         showPlacementSuccess();
                 } else {
                     emit waterPanelStatus("Could not create the water ruler.");
+                }
+            }
+        }
+        if(toolEnabled=="autoPlaceRulerTool") {
+            int x=int(camera->pozT[0]), z=int(camera->pozT[1]);
+            float point[3]; Vec3::copy(point,aktPointerPos); Game::check_coords(x,z,point);
+            Terrain *terrain=Game::terrainLib ? Game::terrainLib->getTerrainByXY(x,z,true) : nullptr;
+            if(!terrain || !terrain->loaded) emit updStatus("Stat3","Ruler (ap): terrain unavailable at this point.");
+            else {
+                const float height=Game::terrainLib->getHeight(x,z,point[0],point[2],false);
+                if(std::isfinite(height) && height>-10000) point[1]=height;
+                activeAutoPlaceRuler=route->findAutoPlaceRuler();
+                if(!activeAutoPlaceRuler) activeAutoPlaceRuler=route->placeAutoPlaceRuler(x,z,point);
+                else {
+                    Undo::PushWorldObjData(activeAutoPlaceRuler);
+                    activeAutoPlaceRuler->appendAutoPlacePoint(x,z,point);
+                }
+                if(activeAutoPlaceRuler) {
+                    setSelectedObj(activeAutoPlaceRuler,false);
+                    activeAutoPlaceRuler->select(activeAutoPlaceRuler->getPointCount()-1);
+                    emit updStatus("Stat3",QString("Ruler (ap): %1 points. Choose Edit Points or Commit in Auto Place Objects.")
+                        .arg(activeAutoPlaceRuler->getPointCount()));
                 }
             }
         }
@@ -2657,6 +2780,12 @@ void RouteEditorGLWidget::wheelEvent(QWheelEvent *event) {
 }
 
 void RouteEditorGLWidget::mouseReleaseEvent(QMouseEvent* event) {
+    if(event->button() == Qt::LeftButton && polyVegFullTileClickConsumed) {
+        polyVegFullTileClickConsumed = false;
+        mouseLPressed = false;
+        mouseClick = false;
+        return;
+    }
     Game::currentShapeLib = currentShapeLib;
     if (!route->loaded) return;
     camera->MouseUp(event);
@@ -2790,6 +2919,9 @@ void RouteEditorGLWidget::enableTool(QString name) {
         emit resetGradeHelperRequested();
     }
     toolEnabled = name;
+    emit polyVegFullTileModeChanged(name == "polyVegFullTileTool");
+    emit polyVegClearBakeModeChanged(name == "polyVegClearBakeTool");
+    emit polyVegBakeTileModeChanged(name == "polyVegBakeTileTool");
     //if(toolEnabled == "placeTool" || toolEnabled == "selectTool" || toolEnabled == "autoPlaceSimpleTool"){
     resizeTool = false;
     translateTool = false;
@@ -2884,6 +3016,15 @@ void RouteEditorGLWidget::applyStatusPanelCommand(
         return;
     }
     if(name == "place"){
+        const bool autoPlaceRulerSelected = route != nullptr
+                && route->ref != nullptr && route->ref->selected != nullptr
+                && route->ref->selected->type.compare("rulerap", Qt::CaseInsensitive) == 0;
+        if(autoPlaceRulerSelected) {
+            if(allowToggleOff && toolEnabled=="autoPlaceRulerTool") enableTool("");
+            else emit autoPlaceRulerPlacementRequested();
+            showModeChange();
+            return;
+        }
         const bool waterRulerSelected = route != NULL
                 && route->ref != NULL
                 && route->ref->selected != NULL
@@ -3031,6 +3172,7 @@ void RouteEditorGLWidget::jumpTo(int X, int Z, float x, float y, float z) {
 
 /// EFO Object Selected
 void RouteEditorGLWidget::objectSelected(GameObj* obj){
+    setPolyVegFullTileMode(false);
     RulerObj *restoredRuler = obj != NULL
             ? dynamic_cast<RulerObj*>(obj) : NULL;
     const bool restoredSpecialRuler = restoredRuler != NULL
@@ -3049,13 +3191,17 @@ void RouteEditorGLWidget::objectSelected(GameObj* obj){
                 ? restoredRuler : NULL;
         activeGradeRuler = restoredRuler->isGradeRuler()
                 ? restoredRuler : NULL;
+        activeAutoPlaceRuler=restoredRuler->isAutoPlaceRuler() ? restoredRuler : NULL;
+        if(activeAutoPlaceRuler) route->findAutoPlaceRuler();
         const bool matchingPlacementMode =
                 (restoredRuler->isWaterRuler()
                     && toolEnabled == "waterRulerTool")
                 || (restoredRuler->isVegetationRuler()
                     && toolEnabled == "vegetationRulerTool")
                 || (restoredRuler->isGradeRuler()
-                    && toolEnabled == "gradeRulerTool");
+                    && toolEnabled == "gradeRulerTool")
+                || (restoredRuler->isAutoPlaceRuler()
+                    && toolEnabled == "autoPlaceRulerTool");
         if(!matchingPlacementMode)
             toolEnabled = "selectTool";
         restoredRuler->select();
@@ -3069,6 +3215,7 @@ void RouteEditorGLWidget::objectSelected(GameObj* obj){
 }
 
 void RouteEditorGLWidget::objectSelected(QVector<GameObj*> obj){
+    setPolyVegFullTileMode(false);
     if (selectedObj != NULL) {
         selectedObj->unselect();
         setSelectedObj(NULL);
@@ -3551,6 +3698,15 @@ void RouteEditorGLWidget::paintToolResetTile(){
 void RouteEditorGLWidget::plantNearestOsmForest() {
     if(route == NULL || camera == NULL || camera->pozT == NULL)
         return;
+    if(!polyVegUseOsm) {
+        int tileX = static_cast<int>(camera->pozT[0]);
+        int tileZ = static_cast<int>(camera->pozT[1]);
+        float point[3];
+        Vec3::copy(point, aktPointerPos);
+        Game::check_coords(tileX, tileZ, point);
+        plantPolyVegRegion(true, true, tileX, tileZ);
+        return;
+    }
 
     QProgressDialog progress("Loading PolyVeg planting data...", QString(),
                              0, 1000, this);
@@ -3594,11 +3750,23 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
     float pointerX = aktPointerPos[0];
     float pointerZ = aktPointerPos[2];
     Game::check_coords(pointerTileX, pointerTileZ, pointerX, pointerZ);
+    PolyVegPlantDiagnostics diagnostics;
+    diagnostics.tileX = pointerTileX;
+    diagnostics.tileZ = pointerTileZ;
+    diagnostics.boundaryDescription = "Mapped planting clipped to the pointer tile. "
+        "OSM exclusions already carved into cached polygons reduce boundary area.";
+    diagnostics.osmMode = "Mapped polygon coverage";
+    diagnostics.osmPolygons = 0;
+    const double diagnosticsMinX = pointerTileX*2048.0-1024.0;
+    const double diagnosticsMinZ = pointerTileZ*2048.0-1024.0;
     if(tileHasPolyVegBake(pointerTileX, pointerTileZ)) {
+        showPlacementGuardError();
+        emit polyVegPanelStatus("Already Planted: this tile contains a PolyVeg bake. Nothing added.");
         progress.close();
         GuiFunct::showEditorNotice(this, "Plant PolyVeg",
-            "The pointer tile is baked. Delete every PolyVeg - Bake object "
-            "on that tile before planting again.");
+            QString("An existing PolyVeg bake was detected on pointer tile %1, %2. "
+                    "Delete every PolyVeg - Bake object on that tile before planting again.")
+                .arg(pointerTileX).arg(pointerTileZ));
         return;
     }
     const double cameraX = pointerTileX*2048.0 + pointerX;
@@ -3612,6 +3780,9 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
     // considering the selected planting definition. A definition must never
     // make TSRE fall through a visible non-matching surface to one underneath.
     for(const ForestOsmPolygon &polygon : cacheResult.polygons) {
+        if(polygon.maximumX >= diagnosticsMinX && polygon.minimumX <= diagnosticsMinX+2048.0
+                && polygon.maximumZ >= diagnosticsMinZ && polygon.minimumZ <= diagnosticsMinZ+2048.0)
+            ++diagnostics.osmPolygons;
         if(cameraX < polygon.minimumX || cameraX > polygon.maximumX
                 || cameraZ < polygon.minimumZ || cameraZ > polygon.maximumZ
                 || !pointInBoundary(pointerPoint, polygon.boundary))
@@ -3628,8 +3799,11 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
     }
     if(selectedPolygon == NULL) {
         progress.close();
-        GuiFunct::showEditorNotice(this, "Plant PolyVeg",
-            "No cached PolyVeg polygon exists beneath the pointer.");
+        viewportFreeze.finish();
+        if(!polyVegDisablePlantReport) {
+            diagnostics.reason = "No cached PolyVeg polygon contains the pointer.";
+            showPolyVegZeroResultReport(this, "Plant PolyVeg", diagnostics);
+        }
         return;
     }
 
@@ -3718,10 +3892,23 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
     }
     if(plantingPieces.isEmpty()) {
         progress.close();
-        GuiFunct::showEditorNotice(this, "Plant PolyVeg",
-            "The selected PolyVeg surface has no plantable area inside the pointer tile.");
+        viewportFreeze.finish();
+        if(!polyVegDisablePlantReport) {
+            diagnostics.reason = "The selected PolyVeg surface has no usable area inside the pointer tile.";
+            showPolyVegZeroResultReport(this, "Plant PolyVeg", diagnostics);
+        }
         return;
     }
+
+    QPainterPath plantingArea;
+    for(const auto &piece : plantingPieces)
+        plantingArea = plantingArea.united(PolyVegPlantingArea::fromBoundary(piece));
+    if(rejectPolyVegPlantedArea(plantingArea)) {
+        progress.close();
+        viewportFreeze.finish();
+        return;
+    }
+    const QSharedPointer<const QPainterPath> plantingOwnership(new QPainterPath(plantingArea));
 
     ForestGenerationSettings settings;
     settings.densityPerSquareMetre = polyVegDensity > 0.0
@@ -3754,21 +3941,24 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
         Game::roadDB, recipe.defaultRoadClearanceMetres);
     PolyVegWaterClearance waterClearance(
         recipe.defaultWaterClearanceMetres);
-    int totalSlopeRejections = 0;
-    int totalTrackRejections = 0;
-    int totalRoadRejections = 0;
-    int totalWaterRejections = 0;
+    int &totalSlopeRejections = diagnostics.slope;
+    int &totalTrackRejections = diagnostics.track;
+    int &totalRoadRejections = diagnostics.road;
+    int &totalWaterRejections = diagnostics.water;
     settings.acceptsTerrain = [&recipe, &trackClearance, &roadClearance,
-            &waterClearance,
+            &waterClearance, &diagnostics,
             &totalSlopeRejections, &totalTrackRejections,
             &totalRoadRejections, &totalWaterRejections](double x, double z) {
-        if(!polyVegTerrainSlopeAccepted(x, z, recipe.maximumSlopeDegrees)) {
-            ++totalSlopeRejections;
+        bool terrainUnavailable = false;
+        if(!polyVegTerrainSlopeAccepted(x, z, recipe.maximumSlopeDegrees,
+                                       &terrainUnavailable)) {
+            if(terrainUnavailable) ++diagnostics.terrain;
+            else ++totalSlopeRejections;
             return false;
         }
         float terrainY = 0.0f;
         if(!polyVegTerrainHeight(x, z, terrainY)) {
-            ++totalSlopeRejections;
+            ++diagnostics.terrain;
             return false;
         }
         if(trackClearance.blocks(x, terrainY, z)) {
@@ -3820,6 +4010,7 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
         };
         const ForestGenerationResult pieceResult = ForestGenerator::generate(
             recipe, plantingPieces[pieceIndex], settings);
+        diagnostics.addGeneration(pieceResult);
         if(!pieceResult.errors.isEmpty()) {
             generationErrors.append(pieceResult.errors);
             ++skippedUnusablePieces;
@@ -3836,10 +4027,13 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
     settings.progress = {};
     if(generatedCandidates.isEmpty()) {
         progress.close();
-        GuiFunct::showEditorStopped(this, "Plant PolyVeg",
-            generationErrors.isEmpty()
-                ? "The PolyVeg polygon beneath the pointer produced no planting candidates."
-                : generationErrors.join("\n"));
+        viewportFreeze.finish();
+        if(!generationErrors.isEmpty())
+            GuiFunct::showEditorStopped(this, "Plant PolyVeg", generationErrors.join("\n"));
+        else if(!polyVegDisablePlantReport) {
+            diagnostics.tileBaked = tileHasPolyVegBake(pointerTileX, pointerTileZ);
+            showPolyVegZeroResultReport(this, "Plant PolyVeg", diagnostics);
+        }
         return;
     }
     const qint64 candidateGenerationMilliseconds =
@@ -3857,6 +4051,7 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
                 static_cast<int>(generatedCandidates.size()) - 1)));
         generatedCandidates = limited;
     }
+    diagnostics.limitSkipped = generatedBeforeLimit - generatedCandidates.size();
 
     QStringList limitations;
     if(pieceOperationLimitApplied || totalRequested > selectedMaximumTrees)
@@ -3973,6 +4168,7 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
             tileX, tileZ, position, rotation, 0.0f, &reference);
         if(placed == NULL) continue;
         placed->polyVegRaw = true;
+        placed->polyVegPlantingArea = plantingOwnership;
         placed->setUniformMatrixScale(static_cast<float>(candidate.uniformScale));
         ++placedCount;
     }
@@ -3984,11 +4180,17 @@ void RouteEditorGLWidget::plantNearestOsmForest() {
     QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
 
     if(placedCount == 0) {
-        GuiFunct::showEditorStopped(this, "Plant PolyVeg",
-            "No objects could be placed on loaded route terrain.");
+        if(!polyVegDisablePlantReport) {
+            diagnostics.tileBaked = tileHasPolyVegBake(pointerTileX, pointerTileZ);
+            diagnostics.bake = skippedBakedTiles;
+            diagnostics.placementTerrain = skippedTerrain;
+            diagnostics.placementFailed = generatedCandidates.size()
+                - skippedBakedTiles - skippedTerrain;
+            showPolyVegZeroResultReport(this, "Plant PolyVeg", diagnostics);
+        }
         return;
     }
-    emit sendMsg(QString("msg"), QString(
+    if(!polyVegDisablePlantReport) emit sendMsg(QString("msg"), QString(
         "PolyVeg planted %1 objects across %2 carved piece(s) from feature %3. "
         "Candidate generation: %4 s; placement: %5 s.")
         .arg(placedCount).arg(plantingPieces.size()).arg(selectedPolygon->featureId)
@@ -4039,6 +4241,7 @@ void RouteEditorGLWidget::setPolyVegSettings(QString recipeId,
                                              double density,
                                              int maximumTrees,
                                              quint64 seed,
+                                             bool useOsm,
                                              bool floodFill,
                                              bool disablePlantReport,
                                              bool rowsEnabled,
@@ -4049,7 +4252,8 @@ void RouteEditorGLWidget::setPolyVegSettings(QString recipeId,
     polyVegDensity = density;
     polyVegMaximumTrees = maximumTrees;
     polyVegSeed = seed;
-    polyVegFloodFill = floodFill;
+    polyVegUseOsm = useOsm;
+    polyVegFloodFill = useOsm && floodFill;
     polyVegDisablePlantReport = disablePlantReport;
     polyVegRowsEnabled = rowsEnabled;
     polyVegRowWidthMetres = rowWidthMetres;
@@ -4077,6 +4281,68 @@ bool RouteEditorGLWidget::tileHasPolyVegBake(int tileX, int tileZ) {
             return true;
     }
     return false;
+}
+
+void RouteEditorGLWidget::newAutoPlaceRuler() {
+    if(!route || !Game::writeEnabled) return;
+    makeCurrent();
+    if(auto *selected=dynamic_cast<RulerObj*>(selectedObj); selected && selected->isSpecialRuler()) setSelectedObj(nullptr);
+    // AP guides are session-only: do not scan every saved world file whenever
+    // the user starts another fence line. Retire the loaded helper guides only.
+    const QSet<RulerObj*> helpers{route->findAutoPlaceRuler(),route->findWaterRuler(false),
+        route->findVegetationRuler(false),route->findGradeRuler(false)};
+    for(RulerObj *helper:helpers) if(helper) route->deleteObj(helper);
+    activeAutoPlaceRuler=nullptr; activeWaterRuler=nullptr; activeVegetationRuler=nullptr; activeGradeRuler=nullptr;
+    setSpecialRulerPanelControlsActive(true);
+    enableTool("autoPlaceRulerTool");
+    emit updStatus("Stat3","Ruler (ap): click along the fence line to add points. Edit Points moves the existing handles.");
+}
+void RouteEditorGLWidget::addAutoPlaceRulerPoints() {
+    if(!route) return;
+    activeAutoPlaceRuler=route->findAutoPlaceRuler();
+    if(!activeAutoPlaceRuler) { newAutoPlaceRuler(); return; }
+    setSpecialRulerPanelControlsActive(true);
+    if(selectedObj && selectedObj!=activeAutoPlaceRuler) selectedObj->unselect();
+    setSelectedObj(activeAutoPlaceRuler,false);
+    activeAutoPlaceRuler->select(qMax(0,activeAutoPlaceRuler->getPointCount()-1));
+    enableTool("autoPlaceRulerTool");
+}
+void RouteEditorGLWidget::editAutoPlaceRulerPoints() {
+    if(!route) return;
+    activeAutoPlaceRuler=route->findAutoPlaceRuler();
+    if(!activeAutoPlaceRuler) { emit updStatus("Stat3","Ruler (ap): choose New Ruler first."); return; }
+    setSpecialRulerPanelControlsActive(true);
+    if(selectedObj && selectedObj!=activeAutoPlaceRuler) selectedObj->unselect();
+    enableTool("selectTool"); setSelectedObj(activeAutoPlaceRuler,false);
+    activeAutoPlaceRuler->select();
+    emit updStatus("Stat3","Ruler (ap): drag a point or use the existing point-edit controls.");
+}
+void RouteEditorGLWidget::clearAutoPlaceRuler() {
+    if(!route) return;
+    makeCurrent();
+    if(auto *ruler=route->findAutoPlaceRuler()) {
+        if(selectedObj==ruler) setSelectedObj(nullptr);
+        route->deleteObj(ruler);
+    }
+    activeAutoPlaceRuler=nullptr;
+    setSpecialRulerPanelControlsActive(false);
+    if(toolEnabled=="autoPlaceRulerTool") enableTool("selectTool");
+    update();
+}
+void RouteEditorGLWidget::commitAutoPlaceRuler() {
+    if(!route || !Game::writeEnabled || route->placementAutoTargetType!=3) return;
+    makeCurrent(); Undo::StateBegin();
+    setSelectedObj(nullptr);
+    float point[3]={0,0,0};
+    route->autoPlaceObject(0,0,point,0);
+    Undo::StateEnd();
+    activeAutoPlaceRuler=route->findAutoPlaceRuler();
+    if(!activeAutoPlaceRuler) setSpecialRulerPanelControlsActive(false);
+    enableTool("selectTool");
+    if(!activeAutoPlaceRuler && (route->autoPlacementCount()>0 || route->apReused>0)) showPlacementSuccess();
+    else showPlacementGuardError();
+    emit updStatus("Stat3",route->apStatus.isEmpty() ? "Ruler (ap): select a scenery object and create a ruler first." : route->apStatus);
+    update();
 }
 
 void RouteEditorGLWidget::placePolyVegRuler(
@@ -4175,23 +4441,196 @@ void RouteEditorGLWidget::removePolyVegRuler() {
         route->deleteObj(ruler);
     }
     activeVegetationRuler = NULL;
+    emit polyVegRulerCleared();
     if(toolEnabled == "vegetationRulerTool") enableTool("selectTool");
 }
 
+void RouteEditorGLWidget::setPolyVegFullTileMode(bool active) {
+    if(active) {
+        if(selectedObj != NULL)
+            selectedObj->unselect();
+        setSelectedObj(NULL);
+        setSpecialRulerPanelControlsActive(false);
+        enableTool("polyVegFullTileTool");
+        emit polyVegPanelStatus("Plant Full Tile: click terrain to plant one tile. Click the button again to cancel.");
+    } else if(toolEnabled == "polyVegFullTileTool") {
+        enableTool("selectTool");
+        emit polyVegPanelStatus("Ready.");
+    }
+}
+
+void RouteEditorGLWidget::clearPolyVegCorridor() {
+    corridorBoundary = QPainterPath();
+    corridorSamples.clear();
+    corridorSourceDatabase = nullptr;
+    corridorSourceNode = -1;
+    if(toolEnabled == "polyVegCorridorTool") enableTool("selectTool");
+    update();
+}
+
+void RouteEditorGLWidget::setPolyVegCorridorSettings(int target, int side, double range,
+        double setback, double width) {
+    if(corridorBusy) return;
+    if(target < 0 || target > 2 || side < 0 || side > 2 || !std::isfinite(range)
+            || !std::isfinite(setback) || !std::isfinite(width) || range < 0
+            || setback < 0 || setback > 1000 || width < 1 || width > 1000) return;
+    corridorTarget = target; corridorSide = side; corridorRange = range;
+    corridorSetback = setback; corridorWidth = width;
+    clearPolyVegCorridor();
+    emit polyVegPanelStatus("Plant: arm, then click track/road. Shift-click runs backward.");
+}
+
+void RouteEditorGLWidget::preparePolyVegCorridor(int tileX, int tileZ,
+        float x, float y, float z, int mode) {
+    if(corridorBusy || !route || !Game::writeEnabled || !Game::terrainLib || Game::serverClient) return;
+    QScopedValueRollback<bool> busy(corridorBusy, true);
+    corridorBoundary = QPainterPath();
+    corridorSamples.clear();
+    corridorSourceDatabase = nullptr;
+    corridorSourceNode = -1;
+    float point[3] {x, y, z};
+    Game::check_coords(tileX, tileZ, point);
+    const int normalizedX = tileX, normalizedZ = tileZ;
+    float originalPoint[3] {point[0], point[1], point[2]};
+    float sourceTile[2] {float(tileX), float(tileZ)};
+    float station[3] {};
+    TDB *database = corridorTarget == 1 ? Game::roadDB : Game::trackDB;
+    int found = database ? database->findNearestPositionOnTDB(sourceTile, point, nullptr, station) : -1;
+    if(corridorTarget == 2 && Game::roadDB) {
+        float roadTile[2] {float(normalizedX), float(normalizedZ)};
+        float roadPoint[3] {originalPoint[0], originalPoint[1], originalPoint[2]}, roadStation[3] {};
+        const int roadDistance = Game::roadDB->findNearestPositionOnTDB(roadTile, roadPoint, nullptr, roadStation);
+        if(roadDistance >= 0 && (found < 0 || roadDistance < found)) {
+            database = Game::roadDB; found = roadDistance;
+            std::copy(roadStation, roadStation+3, station);
+        }
+    }
+    if(found < 0) { emit polyVegPanelStatus("No track/road found beneath the pointer."); return; }
+    const int node = int(station[0]);
+    const double sectionLength = database->getVectorSectionLength(node);
+    const double pointer = station[1];
+    if(!std::isfinite(sectionLength) || !std::isfinite(pointer) || pointer < 0 || pointer > sectionLength) return;
+    const double start = mode == 2 ? pointer : AutoPlaceRange::startPosition(mode, pointer, corridorRange);
+    const double available = mode == 2 ? pointer : sectionLength-start;
+    const double length = corridorRange > 0 ? std::min(corridorRange, available) : available;
+    if(length < 0.1 || length > 100000) {
+        emit polyVegPanelStatus("Choose a corridor range between 0.1 m and 100 km within this section."); return;
+    }
+    const int steps = int(std::ceil(length/5.0));
+    for(int i = 0; i <= steps; ++i) {
+        const double along = length*i/steps;
+        const double position = start+(mode == 2 ? -along : along);
+        float draw[7] {};
+        if(!database->getDrawPositionOnTrNode(draw, node, float(position))) {
+            corridorSamples.clear();
+            emit polyVegPanelStatus("Cannot sample the complete track/road run."); return;
+        }
+        corridorSamples.append({draw[0]+2048.0*draw[5], draw[1], -draw[2]-2048.0*draw[6]});
+    }
+    corridorBoundary = PolyVegCorridor::boundary(corridorSamples, corridorSide, corridorSetback, corridorWidth);
+    if(corridorBoundary.isEmpty()) { emit polyVegPanelStatus("The corridor has no usable area."); return; }
+    corridorSourceDatabase = database;
+    corridorSourceNode = node;
+}
+
+void RouteEditorGLWidget::setPolyVegCorridorMode(bool active) {
+    if(active) {
+        if(!route || !Game::writeEnabled || !Game::terrainLib || Game::serverClient || corridorBusy) {
+            enableTool("selectTool");
+            emit polyVegPanelStatus("PolyVeg Corridor requires a local editable route with terrain.");
+            return;
+        }
+        clearPolyVegCorridor();
+        setSpecialRulerPanelControlsActive(false);
+        enableTool("polyVegCorridorTool");
+        emit polyVegPanelStatus("Plant: click track/road. Ctrl-click starts at pointer; Shift-click runs backward. Click Plant again or Escape to stop.");
+    } else if(toolEnabled == "polyVegCorridorTool") {
+        clearPolyVegCorridor();
+    }
+}
+
+void RouteEditorGLWidget::plantPolyVegCorridor() {
+    if(corridorBusy) return;
+    if(corridorBoundary.isEmpty()) return;
+    QScopedValueRollback<bool> busy(corridorBusy, true);
+    // Reuse the existing raw PolyVeg placement, ownership, Undo, and Save bake path.
+    plantPolyVegRegion(false, false, 0, 0, true);
+    corridorBoundary = QPainterPath();
+    corridorSamples.clear();
+    corridorSourceDatabase = nullptr;
+    corridorSourceNode = -1;
+    update();
+}
+
 void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
+    plantPolyVegRegion(overrideForestCoverage, false, 0, 0);
+}
+
+bool RouteEditorGLWidget::rejectPolyVegPlantedArea(const QPainterPath &area) {
+    if(!route || area.isEmpty()) return false;
+    const QRectF bounds = area.boundingRect();
+    const int minX = tileForPlanCoordinate(bounds.left());
+    const int maxX = tileForPlanCoordinate(bounds.right()-0.000001);
+    const int minZ = tileForPlanCoordinate(bounds.top());
+    const int maxZ = tileForPlanCoordinate(bounds.bottom()-0.000001);
+    for(int x = minX; x <= maxX; ++x) for(int z = minZ; z <= maxZ; ++z) {
+        const QPainterPath tileArea = area.intersected(ForestReplacementPlan::tileRectangle(x, z));
+        if(tileArea.isEmpty()) continue;
+        Tile *world = route->requestTile(x, z, false);
+        if(!world || world->loaded != 1) continue;
+        QSet<const QPainterPath*> checked;
+        for(const auto &entry : world->obiekty) {
+            WorldObj *object = entry.second;
+            if(!object || !object->loaded) continue;
+            bool conflict = PolyVegObject::isBakeShape(object->fileName);
+            if(object->polyVegRaw) {
+                if(object->polyVegPlantingArea) {
+                    const QPainterPath *owned = object->polyVegPlantingArea.data();
+                    if(checked.contains(owned)) continue;
+                    checked.insert(owned);
+                    conflict = PolyVegPlantingArea::overlaps(tileArea, *owned);
+                } else {
+                    conflict = tileArea.contains(QPointF(object->x*2048.0+object->position[0],
+                                                        object->y*2048.0+object->position[2]));
+                }
+            }
+            if(!conflict) continue;
+            const QString message = QString("Already Planted: this area overlaps existing PolyVeg on tile %1, %2. Nothing added. Remove the plants or Clear Bake before replanting.")
+                .arg(x).arg(-z);
+            showPlacementGuardError();
+            emit polyVegPanelStatus(message);
+            emit updStatus("Stat3", message);
+            return true;
+        }
+    }
+    return false;
+}
+
+void RouteEditorGLWidget::plantPolyVegRegion(
+        bool overrideForestCoverage, bool fullTile, int tileX, int tileZ, bool alignmentCorridor) {
     if(route == NULL) return;
-    RulerObj *ruler = route->findVegetationRuler(false);
+    if((fullTile || alignmentCorridor) && (!Game::writeEnabled || Game::terrainLib == NULL)) {
+        emit polyVegPanelStatus("Plant Full Tile requires an editable route with terrain.");
+        return;
+    }
+    if(fullTile && !Game::terrainLib->load(tileX, tileZ)) {
+        emit polyVegPanelStatus("Terrain unavailable on the clicked tile.");
+        return;
+    }
+    RulerObj *ruler = (fullTile || alignmentCorridor) ? NULL : route->findVegetationRuler(false);
     const bool areaMode = ruler != NULL && ruler->isVegetationArea();
+    const QString plantingTitle = alignmentCorridor ? "Plant PolyVeg Corridor" : fullTile ? "Plant Full Tile"
+        : (areaMode ? "Plant Area (polyveg)" : "Plant Ruler (polyveg)");
     const int minimumPoints = areaMode ? 3 : 2;
-    if(ruler == NULL || ruler->getPointCount() < minimumPoints) {
-        GuiFunct::showEditorNotice(this, "Plant Ruler (polyveg)",
+    if(!fullTile && !alignmentCorridor && (ruler == NULL || ruler->getPointCount() < minimumPoints)) {
+        GuiFunct::showEditorNotice(this, plantingTitle,
             areaMode
                 ? "An Area ruler requires at least three control points."
                 : "Place a Ruler (polyveg) with at least two control points first.");
         return;
     }
     if(areaMode && !ruler->hasValidVegetationArea()) {
-        GuiFunct::showEditorStopped(this, "Plant Area (polyveg)",
+        GuiFunct::showEditorStopped(this, plantingTitle,
             "The area cannot be planted because its boundary crosses or "
             "overlaps itself. Move the control points until the closed "
             "light-green outline forms one simple polygon.");
@@ -4215,7 +4654,8 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
     const QString routePath = Game::root + "/routes/" + Game::route;
     const ForestCatalogLoadResult catalogResult =
         ForestDefinitionLoader::loadRoute(routePath);
-    const ForestOsmCacheLoadResult cacheResult = overrideForestCoverage
+    const ForestOsmCacheLoadResult cacheResult = !polyVegUseOsm
+        ? ForestOsmCacheLoadResult{} : overrideForestCoverage
         ? ForestOsmCache::loadFile(routePath
             + "/osm_data/polyveg-exclusions.geojson")
         : ForestOsmCache::loadRoute(routePath);
@@ -4223,10 +4663,10 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
     QApplication::processEvents();
     if(!catalogResult.isValid() || !cacheResult.isValid()) {
         preparation.close();
-        GuiFunct::showEditorStopped(this, "Plant Ruler (polyveg)",
+        GuiFunct::showEditorStopped(this, plantingTitle,
             overrideForestCoverage
                 ? "polyveg.json and the SCO LIDEX PolyVeg exclusion cache are required "
-                  "for Ruler (polyveg) override planting."
+                  "for unrestricted or full-tile planting."
                 : "polyveg.json and the SCO LIDEX PolyVeg polygon cache are required so "
                   "ruler planting can use the same exclusions as polygon planting.");
         return;
@@ -4236,21 +4676,33 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         if(candidate.id == polyVegRecipeId) { recipe = &candidate; break; }
     if(recipe == NULL) {
         preparation.close();
-        GuiFunct::showEditorStopped(this, "Plant Ruler (polyveg)",
+        GuiFunct::showEditorStopped(this, plantingTitle,
             "The selected PolyVeg definition is unavailable.");
         return;
     }
 
     struct OffsetPoint { double x; double z; };
     QVector<OffsetPoint> points;
-    for(int index = 0; index < ruler->getPointCount(); ++index) {
+    if(alignmentCorridor) {
+        const QRectF bounds = corridorBoundary.boundingRect();
+        points = {{bounds.left(), bounds.top()}, {bounds.right(), bounds.top()},
+                  {bounds.right(), bounds.bottom()}, {bounds.left(), bounds.bottom()}};
+    } else if(fullTile) {
+        const double minX = tileX*2048.0-1024.0;
+        const double minZ = tileZ*2048.0-1024.0;
+        points = {{minX, minZ}, {minX+2048.0, minZ},
+                  {minX+2048.0, minZ+2048.0}, {minX, minZ+2048.0}};
+    } else for(int index = 0; index < ruler->getPointCount(); ++index) {
         float world[3] {0.0f, 0.0f, 0.0f};
         ruler->getPointWorldPosition(index, world);
         points.append({world[0], world[2]});
     }
-    const double halfWidth = ruler->getVegetationWidth()*0.5;
+    const double halfWidth = (fullTile || alignmentCorridor) ? 0.0 : ruler->getVegetationWidth()*0.5;
     ForestPlantingBoundary corridor;
-    if(areaMode) {
+    if(fullTile || alignmentCorridor) {
+        for(const OffsetPoint &point : points)
+            corridor.outer.append({point.x, point.z});
+    } else if(areaMode) {
         QPainterPath polygonPath;
         polygonPath.moveTo(points.first().x, points.first().z);
         for(int index = 1; index < points.size(); ++index)
@@ -4319,52 +4771,131 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         corridor.outer.append({right[index].x, right[index].z});
     }
 
-    const int rulerTileX = tileForPlanCoordinate(points.first().x);
-    const int rulerTileZ = tileForPlanCoordinate(points.first().z);
-    const QVector<ForestPlantingBoundary> clipped =
-        clipPolyVegBoundaryToTile(corridor, rulerTileX, rulerTileZ);
+    const int rulerTileX = fullTile ? tileX : tileForPlanCoordinate(points.first().x);
+    const int rulerTileZ = fullTile ? tileZ : tileForPlanCoordinate(points.first().z);
+    PolyVegPlantDiagnostics diagnostics;
+    diagnostics.tileX = rulerTileX;
+    diagnostics.tileZ = rulerTileZ;
+    diagnostics.boundaryDescription = alignmentCorridor
+        ? "Track/road corridor across its affected tiles; Cap applies to the whole operation."
+        : fullTile
+        ? "Full-tile planting uses only the selected tile."
+        : "Ruler/area planting is clipped to the FIRST control point's tile. "
+          "Portions on other tiles are not processed.";
+    diagnostics.osmMode = !polyVegUseOsm ? "Off (OSM checks bypassed)"
+        : overrideForestCoverage ? "Unrestricted with OSM exclusions"
+                                 : "OSM polygon coverage required";
+    const QVector<ForestPlantingBoundary> clipped = alignmentCorridor
+        ? QVector<ForestPlantingBoundary>{corridor}
+        : clipPolyVegBoundaryToTile(corridor, rulerTileX, rulerTileZ);
     if(clipped.isEmpty()) {
         preparation.close();
-        GuiFunct::showEditorStopped(this,
-            areaMode ? "Plant Area (polyveg)" : "Plant Ruler (polyveg)",
-            "The planting boundary has no usable area inside its first tile.");
+        generationViewportFreeze.finish();
+        if(!polyVegDisablePlantReport) {
+            diagnostics.tileBaked = tileHasPolyVegBake(rulerTileX, rulerTileZ);
+            diagnostics.reason = "The planting boundary has no usable area inside the tested tile.";
+            showPolyVegZeroResultReport(this, plantingTitle, diagnostics);
+        }
         return;
     }
     corridor = clipped.first();
+    const QPainterPath plantingArea = alignmentCorridor ? corridorBoundary
+        : PolyVegPlantingArea::fromBoundary(corridor);
+    if(rejectPolyVegPlantedArea(plantingArea)) {
+        preparation.close();
+        generationViewportFreeze.finish();
+        return;
+    }
+    const QSharedPointer<const QPainterPath> plantingOwnership(new QPainterPath(plantingArea));
     preparation.setValue(180);
     preparation.setLabelText("Generating PolyVeg candidates...");
     QApplication::processEvents();
 
     ForestGenerationSettings settings;
+    if(alignmentCorridor) {
+        const QPainterPath area = corridorBoundary;
+        const auto edges = area.toSubpathPolygons();
+        settings.usableAreaOverride = ForestReplacementPlan::area(area);
+        settings.samplingRectangles = ForestReplacementPlan::samplingRectangles(area);
+        if(settings.samplingRectangles.isEmpty()) {
+            preparation.close();
+            GuiFunct::showEditorStopped(this, plantingTitle, "The corridor has no usable planting area.");
+            return;
+        }
+        settings.containsPlantingPoint = [area](double x, double z) { return area.contains(QPointF(x, z)); };
+        settings.plantingEdgeDistance = [edges](double x, double z) {
+            return ForestReplacementPlan::edgeDistance(QPointF(x, z), edges);
+        };
+        // Existing raw vegetation participates in spacing, including repeated
+        // corridor runs and plants just beyond this run's boundary.
+        double maximumRadius = 0;
+        QHash<QString, double> assetRadii;
+        for(const auto &definition : catalogResult.catalog.polyVeg) for(const auto &asset : definition.vegetation) {
+            const QString shape = QString(asset.shape).replace('\\', '/').section('/', -1).toLower();
+            assetRadii[shape] = std::max(assetRadii.value(shape), asset.footprintRadiusMetres);
+            maximumRadius = std::max(maximumRadius, asset.footprintRadiusMetres*asset.uniformScale.maximum);
+        }
+        const QRectF occupiedBounds = area.boundingRect().adjusted(-maximumRadius*2-recipe->minimumSeparationMetres,
+            -maximumRadius*2-recipe->minimumSeparationMetres, maximumRadius*2+recipe->minimumSeparationMetres,
+            maximumRadius*2+recipe->minimumSeparationMetres);
+        for(auto *tile : route->tile) {
+            if(!tile || tile->loaded != 1) continue;
+            for(const auto &entry : tile->obiekty) {
+                WorldObj *object = entry.second;
+                if(!object || !object->loaded || !object->polyVegRaw) continue;
+                const double x = object->x*2048.0+object->position[0];
+                const double z = object->y*2048.0+object->position[2];
+                if(!occupiedBounds.contains(QPointF(x, z))) continue;
+                ForestCandidate existing;
+                existing.x = x; existing.z = z;
+                const QString shape = QString(object->fileName).replace('\\', '/').section('/', -1).toLower();
+                existing.scaledFootprintRadiusMetres = assetRadii.value(shape, maximumRadius)
+                    * std::abs(object->getUniformMatrixScale());
+                settings.occupiedCandidates.append(existing);
+            }
+        }
+    }
     settings.densityPerSquareMetre = polyVegDensity > 0.0
         ? polyVegDensity : recipe->defaultDensityPerSquareMetre;
     settings.maximumTrees = polyVegMaximumTrees > 0
         ? polyVegMaximumTrees : recipe->defaultMaximumTrees;
-    settings.rowsEnabled = polyVegRowsEnabled;
+    settings.rowsEnabled = !alignmentCorridor && polyVegRowsEnabled;
     settings.rowWidthMetres = polyVegRowWidthMetres;
     settings.rowSpacingMetres = polyVegRowSpacingMetres;
     settings.rowDirectionDegrees = polyVegRowDirectionDegrees;
     PolyVegDatabaseClearance trackClearance(
-        Game::trackDB, recipe->defaultTrackClearanceMetres);
+        Game::trackDB, recipe->defaultTrackClearanceMetres,
+        alignmentCorridor && corridorSourceDatabase == Game::trackDB ? corridorSourceNode : -1);
     PolyVegDatabaseClearance roadClearance(
-        Game::roadDB, recipe->defaultRoadClearanceMetres);
+        Game::roadDB, recipe->defaultRoadClearanceMetres,
+        alignmentCorridor && corridorSourceDatabase == Game::roadDB ? corridorSourceNode : -1);
     PolyVegWaterClearance waterClearance(
-        recipe->defaultWaterClearanceMetres);
-    int rejectedBySlope = 0;
-    int rejectedByTrack = 0;
-    int rejectedByRoad = 0;
-    int rejectedByWater = 0;
-    settings.acceptsTerrain = [recipe, &trackClearance, &roadClearance,
-            &waterClearance,
+        recipe->defaultWaterClearanceMetres, alignmentCorridor);
+    int &rejectedBySlope = diagnostics.slope;
+    int &rejectedByTrack = diagnostics.track;
+    int &rejectedByRoad = diagnostics.road;
+    int &rejectedByWater = diagnostics.water;
+    settings.acceptsTerrain = [recipe, fullTile, rulerTileX, rulerTileZ,
+            &trackClearance, &roadClearance,
+            &waterClearance, &diagnostics,
             &rejectedBySlope, &rejectedByTrack,
             &rejectedByRoad, &rejectedByWater](double x, double z) {
-        if(!polyVegTerrainSlopeAccepted(x, z, recipe->maximumSlopeDegrees)) {
-            ++rejectedBySlope;
+        // Upper tile edges belong to the neighbouring tile, including row candidates.
+        if(fullTile && (tileForPlanCoordinate(x) != rulerTileX
+                || tileForPlanCoordinate(z) != rulerTileZ)) {
+            ++diagnostics.tileEdge;
+            return false;
+        }
+        bool terrainUnavailable = false;
+        if(!polyVegTerrainSlopeAccepted(x, z, recipe->maximumSlopeDegrees,
+                                       &terrainUnavailable)) {
+            if(terrainUnavailable) ++diagnostics.terrain;
+            else ++rejectedBySlope;
             return false;
         }
         float terrainY = 0.0f;
         if(!polyVegTerrainHeight(x, z, terrainY)) {
-            ++rejectedBySlope;
+            ++diagnostics.terrain;
             return false;
         }
         if(trackClearance.blocks(x, terrainY, z)) {
@@ -4382,6 +4913,10 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         return true;
     };
     settings.seed = static_cast<std::uint64_t>(polyVegSeed);
+    settings.shouldCancel = [&preparation, alignmentCorridor]() {
+        return alignmentCorridor && preparation.wasCanceled();
+    };
+    if(alignmentCorridor) preparation.setCancelButtonText("Cancel");
     settings.progress = [&preparation](
             int attempts, int maximumAttempts, int accepted, int target) {
         const int generationProgress = maximumAttempts > 0
@@ -4394,22 +4929,27 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
     };
     ForestGenerationResult generated = ForestGenerator::generate(
         *recipe, corridor, settings);
+    diagnostics.addGeneration(generated);
+    if(alignmentCorridor && generated.cancelled) {
+        emit polyVegPanelStatus("Corridor planting cancelled; no plants added.");
+        return;
+    }
     settings.progress = {};
     if(!generated.isValid()) {
         preparation.close();
-        GuiFunct::showEditorStopped(this, "Plant Ruler (polyveg)",
+        GuiFunct::showEditorStopped(this, plantingTitle,
             generated.errors.join("\n"));
         return;
     }
 
     QVector<ForestCandidate> candidates;
-    int excludedByOsm = 0;
-    int excludedByBake = 0;
+    int &excludedByOsm = diagnostics.osm;
+    int &excludedByBake = diagnostics.bake;
     QVector<const ForestOsmPolygon*> tilePolygons;
-    const double tileMinimumX = rulerTileX*2048.0-1024.0;
-    const double tileMaximumX = tileMinimumX+2048.0;
-    const double tileMinimumZ = rulerTileZ*2048.0-1024.0;
-    const double tileMaximumZ = tileMinimumZ+2048.0;
+    const QRectF coverageBounds = alignmentCorridor ? corridorBoundary.boundingRect()
+        : QRectF(rulerTileX*2048.0-1024.0, rulerTileZ*2048.0-1024.0, 2048, 2048);
+    const double tileMinimumX = coverageBounds.left(), tileMaximumX = coverageBounds.right();
+    const double tileMinimumZ = coverageBounds.top(), tileMaximumZ = coverageBounds.bottom();
     for(const ForestOsmPolygon &polygon : cacheResult.polygons) {
         if(polygon.maximumX < tileMinimumX || polygon.minimumX > tileMaximumX
                 || polygon.maximumZ < tileMinimumZ
@@ -4417,6 +4957,7 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
             continue;
         tilePolygons.append(&polygon);
     }
+    diagnostics.osmPolygons = polyVegUseOsm ? tilePolygons.size() : -1;
     QHash<quint64, bool> rulerBakedTileStatus;
     auto rulerTileIsBaked = [this, &rulerBakedTileStatus](int tileX, int tileZ) {
         const quint64 key = polyVegTileKey(tileX, tileZ);
@@ -4449,8 +4990,8 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
                 break;
             }
         }
-        const bool permitted = overrideForestCoverage
-            ? !matchedCachePolygon : matchedCachePolygon;
+        const bool permitted = !polyVegUseOsm || (overrideForestCoverage
+            ? !matchedCachePolygon : matchedCachePolygon);
         if(!permitted) { ++excludedByOsm; continue; }
         if(rulerTileIsBaked(tileForPlanCoordinate(candidate.x),
                             tileForPlanCoordinate(candidate.z))) {
@@ -4459,52 +5000,24 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         }
         candidates.append(candidate);
     }
+    if(alignmentCorridor && preparation.wasCanceled()) {
+        emit polyVegPanelStatus("Corridor planting cancelled; no plants added.");
+        return;
+    }
     preparation.setValue(1000);
     preparation.close();
     generationViewportFreeze.finish();
     QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
     if(candidates.isEmpty()) {
-        GuiFunct::showEditorNotice(this, "Plant Ruler (polyveg)",
-            "No plantable positions remain after OSM, TDB/RDB/water "
-            "clearance, slope and baked-tile checks.");
+        if(alignmentCorridor) emit polyVegPanelStatus("Corridor: no plants accepted. Check OSM, clearances, terrain, spacing and baked tiles.");
+        if(!polyVegDisablePlantReport) {
+            diagnostics.tileBaked = tileHasPolyVegBake(rulerTileX, rulerTileZ);
+            showPolyVegZeroResultReport(this, plantingTitle, diagnostics);
+        }
         return;
     }
-    QString plantPrompt = QString(areaMode
-        ? "Plant %1 objects inside the closed area plus its %2 m exterior buffer?\n\n"
-        : "Plant %1 objects inside the %2 m ruler corridor?\n\n")
-        .arg(candidates.size()).arg(ruler->getVegetationWidth(), 0, 'f', 0);
-    plantPrompt += QString(
-        "OSM exclusions: %1\nBlocked by baked tiles: %2\n"
-        "Rejected above %3 degrees slope: %4\n"
-        "TDB clearance rejects (%5 m): %6\n"
-        "RDB clearance rejects (%7 m): %8\n"
-        "Water clearance rejects (%9 m): %10")
-        .arg(excludedByOsm).arg(excludedByBake)
-        .arg(recipe->maximumSlopeDegrees, 0, 'f', 1)
-        .arg(rejectedBySlope)
-        .arg(recipe->defaultTrackClearanceMetres, 0, 'f', 1)
-        .arg(rejectedByTrack)
-        .arg(recipe->defaultRoadClearanceMetres, 0, 'f', 1)
-        .arg(rejectedByRoad)
-        .arg(recipe->defaultWaterClearanceMetres, 0, 'f', 1)
-        .arg(rejectedByWater);
-    if(polyVegRowsEnabled) {
-        plantPrompt += QString("\nRows: %1 m wide, %2 m spacing at %3 degrees")
-            .arg(polyVegRowWidthMetres > 0.0
-                    ? polyVegRowWidthMetres
-                    : recipe->minimumSeparationMetres, 0, 'f', 0)
-            .arg(polyVegRowSpacingMetres > 0.0
-                    ? polyVegRowSpacingMetres
-                    : recipe->minimumSeparationMetres, 0, 'f', 0)
-            .arg(polyVegRowDirectionDegrees, 0, 'f', 0);
-    }
-    if(!polyVegDisablePlantReport
-            && !GuiFunct::confirmDestructiveAction(this,
-                areaMode ? "Plant Area (polyveg)" : "Plant Ruler (polyveg)",
-                plantPrompt))
-        return;
-
     int placed = 0;
+    int placedLeft = 0, placedRight = 0;
     int terrainSkips = 0;
     QVector<Ref::RefItem> rulerPlacementReferences;
     rulerPlacementReferences.reserve(recipe->vegetation.size());
@@ -4516,20 +5029,35 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         rulerPlacementReferences.append(reference);
     }
     PolyVegViewportFreeze placementViewportFreeze(this);
+    QScopedValueRollback<bool> preserveManualSnap(route->placementStickToTarget,
+        alignmentCorridor ? false : route->placementStickToTarget);
     Undo::StateBegin();
     for(const ForestCandidate &candidate : candidates) {
         int tileX = tileForPlanCoordinate(candidate.x);
         int tileZ = tileForPlanCoordinate(candidate.z);
         // Preserve the baked-tile hard boundary while reusing the result for
         // every candidate on that tile during this raw-object-only operation.
-        if(rulerTileIsBaked(tileX, tileZ)) continue;
+        if(rulerTileIsBaked(tileX, tileZ)) { ++excludedByBake; continue; }
         float position[3] {static_cast<float>(candidate.x-tileX*2048.0), 0.0f,
                            static_cast<float>(candidate.z-tileZ*2048.0)};
         Game::check_coords(tileX, tileZ, position);
-        if(!Game::terrainLib->load(tileX, tileZ)) { ++terrainSkips; continue; }
-        const float height = Game::terrainLib->getHeight(
-            tileX, tileZ, position[0], position[2], false);
-        if(!std::isfinite(height)) { ++terrainSkips; continue; }
+        // Float conversion can round an otherwise interior point onto a tile edge.
+        if(fullTile && (tileX != rulerTileX || tileZ != rulerTileZ)) {
+            ++diagnostics.placementTileEdge;
+            ++terrainSkips;
+            continue;
+        }
+        if(!Game::terrainLib->load(tileX, tileZ)) {
+            ++diagnostics.placementTerrain;
+            ++terrainSkips;
+            continue;
+        }
+        const float height = Game::terrainLib->getHeight(tileX, tileZ, position[0], position[2], false);
+        if(!std::isfinite(height)) {
+            ++diagnostics.placementTerrain;
+            ++terrainSkips;
+            continue;
+        }
         const ForestVegetationDefinition &vegetation =
             recipe->vegetation.at(candidate.vegetationIndex);
         position[1] = height-(vegetation.hasPlantingDepth
@@ -4541,23 +5069,40 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
             static_cast<float>(candidate.yawDegrees*M_PI/180.0));
         WorldObj *object = route->placeObject(
             tileX, tileZ, position, rotation, 0.0f, &reference);
-        if(object == NULL) continue;
+        if(object == NULL) { ++diagnostics.placementFailed; continue; }
         object->polyVegRaw = true;
+        object->polyVegPlantingArea = plantingOwnership;
         object->setUniformMatrixScale(static_cast<float>(candidate.uniformScale));
+        if(alignmentCorridor) {
+            if(PolyVegCorridor::sideOf(corridorSamples, candidate.x, candidate.z) == 1) ++placedLeft;
+            else ++placedRight;
+        }
         ++placed;
     }
+    if(placed > 0 && !fullTile && !alignmentCorridor)
+        removePolyVegRuler();
     Undo::StateEnd();
     placementViewportFreeze.finish();
+    if(alignmentCorridor) {
+        QString status = QString("Corridor: %1 Left, %2 Right added to pending bake list. Excluded: %3 Slope, %4 Terrain, %5 Track, %6 Road, %7 Water, %8 OSM; %9 placement skips.")
+            .arg(placedLeft).arg(placedRight).arg(rejectedBySlope).arg(diagnostics.terrain)
+            .arg(rejectedByTrack).arg(rejectedByRoad).arg(rejectedByWater).arg(excludedByOsm).arg(terrainSkips);
+        if(corridorSide == 0 && (placedLeft == 0 || placedRight == 0))
+            status += " Both Sides was requested; one side had no accepted plants after exclusions.";
+        emit polyVegPanelStatus(status);
+    }
     QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
     QTimer::singleShot(0, this,
         &RouteEditorGLWidget::refreshPolyVegTileCounts);
-    emit sendMsg("msg", QString("%1 planted %2 objects; %3 terrain skips.")
-        .arg(areaMode ? "Area (polyveg)" : "Ruler (polyveg)")
+    if(placed > 0 && !polyVegDisablePlantReport) emit sendMsg("msg", QString("%1 planted %2 objects; %3 terrain skips.")
+        .arg(fullTile ? "Full tile (polyveg)"
+                      : (areaMode ? "Area (polyveg)" : "Ruler (polyveg)"))
         .arg(placed).arg(terrainSkips));
     if(placed <= 0) {
-        GuiFunct::showEditorStopped(this,
-            areaMode ? "Plant Area (polyveg)" : "Plant Ruler (polyveg)",
-            "No objects could be placed on loaded route terrain.");
+        if(!polyVegDisablePlantReport) {
+            diagnostics.tileBaked = tileHasPolyVegBake(rulerTileX, rulerTileZ);
+            showPolyVegZeroResultReport(this, plantingTitle, diagnostics);
+        }
         return;
     }
     if(polyVegDisablePlantReport) {
@@ -4565,14 +5110,16 @@ void RouteEditorGLWidget::plantPolyVegRuler(bool overrideForestCoverage) {
         return;
     }
     GuiFunct::showEditorNotice(this,
-        areaMode ? "Plant Area (polyveg)" : "Plant Ruler (polyveg)",
+        plantingTitle,
         QString("Planted %1 vegetation objects.\n\nTerrain skips: %2\n"
                 "OSM exclusions: %3\nBlocked by baked tiles: %4\n"
-                "TDB rejects: %5\nRDB rejects: %6\nWater rejects: %7\n\n"
+                "TDB rejects: %5\nRDB rejects: %6\nWater rejects: %7\n"
+                "Slope/terrain rejects: %8\nUse OSM: %9\n\n"
                 "Save normally to keep the planting, or Undo to remove it.")
             .arg(placed).arg(terrainSkips).arg(excludedByOsm)
             .arg(excludedByBake).arg(rejectedByTrack).arg(rejectedByRoad)
-            .arg(rejectedByWater));
+            .arg(rejectedByWater).arg(rejectedBySlope + diagnostics.terrain)
+            .arg(polyVegUseOsm ? "On" : "Off"));
     queuePolyVegSuccessSound();
 }
 
@@ -4628,90 +5175,6 @@ QVector<QPair<int, int>> RouteEditorGLWidget::polyVegTiles(bool wantBaked) const
     return matches;
 }
 
-void RouteEditorGLWidget::jumpNextPolyVegTile(bool baked) {
-    QVector<QPair<int, int>> &tiles = baked
-        ? polyVegBakeJumpTiles : polyVegRawJumpTiles;
-    int &index = baked ? polyVegBakeJumpIndex : polyVegRawJumpIndex;
-    if(tiles.isEmpty()) {
-        tiles = polyVegTiles(baked);
-        if(tiles.isEmpty()) {
-            GuiFunct::showEditorNotice(this, "PolyVeg Planter",
-                baked ? "No loaded tiles contain PolyVeg - Bake."
-                      : "No loaded tiles contain unbaked PolyVeg - Raw.");
-            index = -1;
-            return;
-        }
-        const int originX = camera != NULL && camera->pozT != NULL
-            ? static_cast<int>(camera->pozT[0]) : 0;
-        const int originZ = camera != NULL && camera->pozT != NULL
-            ? static_cast<int>(camera->pozT[1]) : 0;
-        std::sort(tiles.begin(), tiles.end(), [originX, originZ](
-                const QPair<int, int> &a, const QPair<int, int> &b) {
-            const qint64 adx = a.first-originX;
-            const qint64 adz = a.second-originZ;
-            const qint64 bdx = b.first-originX;
-            const qint64 bdz = b.second-originZ;
-            const qint64 distanceA = adx*adx+adz*adz;
-            const qint64 distanceB = bdx*bdx+bdz*bdz;
-            if(distanceA != distanceB) return distanceA < distanceB;
-            return a.first == b.first ? a.second < b.second : a.first < b.first;
-        });
-        index = -1;
-    }
-    if(index + 1 >= tiles.size()) {
-        GuiFunct::showEditorNotice(this, "PolyVeg Planter",
-            QString("No farther PolyVeg - %1 tile remains. Double-click the "
-                    "button to restart from the current view.")
-                .arg(baked ? "Bake" : "Raw"));
-        return;
-    }
-    ++index;
-    const int tileX = tiles[index].first;
-    const int tileZ = tiles[index].second;
-    float height = Game::terrainLib->getHeight(tileX, tileZ, 0.0f, 0.0f, false);
-    if(!std::isfinite(height)) height = 0.0f;
-    if(!baked) {
-        jumpTo(tileX, tileZ, 0.0f, height + 75.0f, 0.0f);
-    } else if(camera != NULL) {
-        // The bake marker is rendered 300 m above the tile centre. Retain the
-        // operator's compass heading, stand off 100 m directly behind that
-        // heading, and level the view so the marker lands at screen centre.
-        const float heading = camera->getRotX();
-        const double markerX = tileX*2048.0;
-        const double markerZ = tileZ*2048.0;
-        const double cameraPlanX = markerX - std::sin(heading)*100.0;
-        const double cameraPlanZ = markerZ - std::cos(heading)*100.0;
-        int cameraTileX = tileForPlanCoordinate(cameraPlanX);
-        int cameraTileZ = tileForPlanCoordinate(cameraPlanZ);
-        float localX = static_cast<float>(cameraPlanX-cameraTileX*2048.0);
-        float localZ = static_cast<float>(cameraPlanZ-cameraTileZ*2048.0);
-        Game::check_coords(cameraTileX, cameraTileZ, localX, localZ);
-        Game::terrainLib->load(cameraTileX, cameraTileZ);
-        camera->setPozT(cameraTileX, cameraTileZ);
-        camera->setPos(localX, height + 300.0f, localZ);
-        camera->setPlayerRot(heading, 0.0f);
-    }
-    refreshPolyVegTileCounts();
-}
-
-void RouteEditorGLWidget::jumpNextPolyVegRawTile() {
-    jumpNextPolyVegTile(false);
-}
-
-void RouteEditorGLWidget::resetPolyVegRawJump() {
-    polyVegRawJumpTiles.clear();
-    polyVegRawJumpIndex = -1;
-}
-
-void RouteEditorGLWidget::jumpNextPolyVegBakeTile() {
-    jumpNextPolyVegTile(true);
-}
-
-void RouteEditorGLWidget::resetPolyVegBakeJump() {
-    polyVegBakeJumpTiles.clear();
-    polyVegBakeJumpIndex = -1;
-}
-
 void RouteEditorGLWidget::updateWireAvailability() {
     // Wire actions operate on a placed support, never merely the F1 source shape.
     bool placedSupport=false;
@@ -4756,6 +5219,7 @@ bool RouteEditorGLWidget::loadWireRegistry() {
             bool valid=s["key"].toString()==key && validVector(s["origin"])
                 && s["width"].toDouble()>0 && s["width"].toDouble()<=100
                 && s["sag"].toDouble()>=0 && s["sag"].toDouble()<=10
+                && AutoPlaceWire::validWireType(s["wireType"].toString("plain"))
                 && !s["wires"].toArray().isEmpty();
             for(const auto &w:s["wires"].toArray()) valid=valid && validVector(w.toObject()["a"]) && validVector(w.toObject()["b"]);
             if(!valid) {
@@ -4797,6 +5261,7 @@ void RouteEditorGLWidget::reconcileWireReservations() {
 }
 
 bool RouteEditorGLWidget::applyWireDeletions() {
+    if(!AutoPlaceWire::hasPendingCleanup(wireSpans, wireCleanupAll)) return true;
     // Keep deletion records until an explicit Commit replaces them. A registry
     // save may precede a world save, including when the editor is interrupted.
     QVector<WorldObj*> objects;
@@ -4932,9 +5397,9 @@ void RouteEditorGLWidget::deleteSelectedWires() {
                 span["node"].toInt(-1),span["road"].toBool()));
         }
     }
-    if(keys.isEmpty()) { emit updStatus("Stat3","No tracked node-to-node wires attached to this pole."); return; }
+    if(keys.isEmpty()) { emit updStatus("Stat3","No tracked wires attached to this pole."); return; }
     if(!GuiFunct::confirmDestructiveAction(this,"Delete Wires",
-            QString("Delete %1 wire spans in this pole's node-to-node run?\n\nPoles are preserved. This clears Undo history. Save afterward.").arg(keys.size()))) return;
+            QString("Delete %1 wire spans in this pole's connected run?\n\nPoles are preserved. This clears Undo history. Save afterward.").arg(keys.size()))) return;
     const auto previous=wireSpans;
     for(const QString &key:keys) {
         auto span=wireSpans[key].toObject();
@@ -4944,7 +5409,7 @@ void RouteEditorGLWidget::deleteSelectedWires() {
     const bool removed=applyWireDeletions();
     refreshRawWires();
     if(removed && cleanupWireAssets(false))
-        emit updStatus("Stat3","Node-to-node wires and unused assets removed. Poles retained; save the route.");
+        emit updStatus("Stat3","Connected wires and unused assets removed. Poles retained; save the route.");
 }
 
 bool RouteEditorGLWidget::persistWireRegistry() {
@@ -4961,6 +5426,7 @@ bool RouteEditorGLWidget::persistWireRegistry() {
 
 bool RouteEditorGLWidget::cleanupWireAssets(bool afterSave) {
     if(!wireRegistryReady || Game::serverClient) return true;
+    if(!AutoPlaceWire::hasPendingCleanup(wireSpans, wireCleanupAll)) return true;
     auto retained=wireSpans;
     QString error;
     QScopedValueRollback<bool> busy(wireBakeBusy,true);
@@ -4971,7 +5437,15 @@ bool RouteEditorGLWidget::cleanupWireAssets(bool afterSave) {
     progress.setAutoClose(false); progress.setAutoReset(false);
     const auto report=[&](const QString &phase,int done,int total) {
         if(done!=0 && done%16!=0) return;
-        progress.setLabelText(phase); progress.setRange(0,qMax(1,total)); progress.setValue(done);
+        if(routeSaveBusy) {
+            const bool textures = phase == "Checking shared wire textures...";
+            SaveProgress::set((textures ? 0.5 : 0.0)
+                + (textures ? 0.4 : 0.5)*done/qMax(1,total));
+            SaveProgress::report(QString("%1 %2 of %3")
+                .arg(phase).arg(done).arg(total));
+        } else {
+            progress.setLabelText(phase); progress.setRange(0,qMax(1,total)); progress.setValue(done);
+        }
         QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
         makeCurrent();
     };
@@ -4987,6 +5461,10 @@ bool RouteEditorGLWidget::cleanupWireAssets(bool afterSave) {
         return false;
     }
     const auto previous=wireSpans; const bool previousAll=wireCleanupAll;
+    if(routeSaveBusy) {
+        SaveProgress::set(0.9);
+        SaveProgress::report("Finishing wire registry cleanup...");
+    }
     wireSpans=retained; wireCleanupAll=false;
     bool written=true;
     if(wireSpans.isEmpty()) {
@@ -5025,7 +5503,7 @@ void RouteEditorGLWidget::refreshRawWires() {
             || qAbs(s["z"].toInt()-wirePreviewTileZ)>qMax(1,Game::tileLod)) continue;
         auto offset=AutoPlaceWire::vector(s["origin"])+QVector3D(2048.f*(s["x"].toInt()-wirePreviewTileX),0,
             2048.f*(s["z"].toInt()-wirePreviewTileZ));
-        for(const auto &v:AutoPlaceWire::mesh(s)) {
+        for(const auto &v:AutoPlaceWire::previewMesh(s)) {
             auto p=v.point+offset; vertices<<p.x()<<p.y()<<p.z();
         }
     }
@@ -5040,23 +5518,31 @@ bool RouteEditorGLWidget::bakeAllWires() {
     if(wireBakeBusy) return false;
     if(Game::serverClient) return true; // Local-route first pass only.
     if(!loadWireRegistry() || !applyWireDeletions()) return false;
-    if(wireSpans.isEmpty()) return true;
+    const QStringList pendingKeys = AutoPlaceWire::pendingBakeKeys(wireSpans);
+    if(pendingKeys.isEmpty()) return true;
     if(!Game::writeEnabled || !persistWireRegistry()) return false;
     QScopedValueRollback<bool> busy(wireBakeBusy,true);
-    QProgressDialog progress("Baking AP wires...",QString(),0,wireSpans.size(),this);
+    QProgressDialog progress("Baking AP wires...",QString(),0,pendingKeys.size(),this);
     GuiFunct::styleEditorDialog(&progress);
     progress.setWindowTitle("Bake All Wires"); progress.setWindowModality(Qt::WindowModal);
     progress.setMinimumDuration(600);
     const QString routePath=Game::root+"/routes/"+Game::route;
     QString error; int done=0, baked=0;
     makeCurrent();
-    for(const QString &key:wireSpans.keys()) {
-        progress.setValue(done++);
+    for(const QString &key:pendingKeys) {
+        if(routeSaveBusy) {
+            SaveProgress::set(double(done)/pendingKeys.size());
+            SaveProgress::report(QString("Baking wire span %1 of %2...")
+                .arg(done+1).arg(pendingKeys.size()));
+        } else {
+            progress.setValue(done);
+        }
+        ++done;
         // Exclude user input while pumping paint/progress; no nested edits during bake.
         QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
         makeCurrent();
         auto s=wireSpans[key].toObject();
-        if(s["deleted"].toBool() || !s["active"].toBool() || s["external"].toBool()) continue;
+        if(!AutoPlaceWire::isPending(s)) continue;
         Tile *tile=route->requestTile(s["x"].toInt(),s["z"].toInt(),false);
         if(!tile || tile->loaded!=1) { error="A wire world tile could not be loaded."; break; }
         const QString name=AutoPlaceWire::shapeName(key);
@@ -5102,13 +5588,18 @@ bool RouteEditorGLWidget::bakeAllWires() {
         s["baked"]=true; s["uid"]=double(placed->UiD); wireSpans[key]=s; ++baked;
         if(!persistWireRegistry()) { error="Cannot record wire ownership. Save stopped; retry preserves existing spans."; break; }
     }
-    progress.setValue(wireSpans.size()); progress.close();
+    if(!routeSaveBusy) progress.setValue(pendingKeys.size());
+    progress.close();
     refreshRawWires();
     if(!error.isEmpty()) {
         GuiFunct::showEditorStopped(this,"AP Wire Bake Stopped",error+"\n\nCompleted spans are retained; retry will not duplicate them.");
         return false;
     }
     if(!persistWireRegistry()) return false;
+    if(routeSaveBusy) {
+        SaveProgress::set(1);
+        SaveProgress::report("Wire baking complete.");
+    }
     if(baked) emit updStatus("Stat3",QString("Baked %1 AP wire spans. Save the route to retain their placements.").arg(baked));
     return true;
 }
@@ -5123,6 +5614,8 @@ bool RouteEditorGLWidget::selectedWireNode(WorldObj *&pole,TDB *&db,int &node,bo
     if(pole->loaded && pole->typeID==WorldObj::sstatic && pole->shapePointer)
         attached=!pole->shapePointer->wireAttachmentOrigins().isEmpty();
     if(!attached) { emit updStatus("Stat3","Select a pole with SNAP wire attachments."); return false; }
+    // AP guides are independent of both databases and disappear after placement.
+    if(route->placementAutoTargetType==3) return true;
     int best=201;
     for(int kind=0;kind<2;++kind) {
         if(route->placementAutoTargetType!=2 && route->placementAutoTargetType!=kind) continue;
@@ -5136,7 +5629,8 @@ bool RouteEditorGLWidget::selectedWireNode(WorldObj *&pole,TDB *&db,int &node,bo
     return true;
 }
 
-void RouteEditorGLWidget::rebuildWirePreview(float sagPercent, float widthMm, float maxSpan) {
+void RouteEditorGLWidget::rebuildWirePreview(float sagPercent, float widthMm, float maxSpan,
+        QString wireType, float barbSpacing) {
     if(wireBakeBusy || !loadWireRegistry() || !applyWireDeletions()) return;
     reconcileWireReservations();
     WorldObj *seed=nullptr; TDB *nodeDb=nullptr; int nodeId=-1; bool road=false;
@@ -5147,24 +5641,60 @@ void RouteEditorGLWidget::rebuildWirePreview(float sagPercent, float widthMm, fl
     wirePreview = nullptr;
     const QString shapeName=seed->fileName;
     wirePreviewTileX=seed->x; wirePreviewTileZ=seed->y;
-    // Load the whole vector node corridor before discovery, not a camera-sized subset.
-    float *line=nullptr; int lineSize=0;
-    nodeDb->getVectorSectionLine(line,lineSize,seed->x,seed->y,nodeId,true,25);
+    const bool rulerMode=route->placementAutoTargetType==3;
+    QSet<WorldObj*> rulerSupports;
     QSet<QPair<int,int>> corridor;
-    for(int i=0;line && i+2<lineSize;i+=6) {
-        int x=seed->x,z=seed->y; float point[3]={line[i],line[i+1],line[i+2]};
-        Game::check_coords(x,z,point);
-        for(int dx=-1;dx<=1;++dx) for(int dz=-1;dz<=1;++dz) corridor.insert({x+dx,z+dz});
-    }
-    delete[] line;
-    if(corridor.isEmpty() || corridor.size()>256) { emit updStatus("Stat3","Wire node section is unavailable or too large (256-tile limit)."); return; }
-    for(const auto &coords:corridor) {
-        Tile *tile=route->requestTile(coords.first,coords.second,false);
-        if(tile && tile->loaded!=1 && tile->loaded!=-2) {
-            emit updStatus("Stat3","A node corridor tile could not be loaded; wire Commit stopped."); return;
+    if(rulerMode) {
+        // Walk the existing physical supports, not the now-cleared AP guide.
+        // This also supports posts placed before ruler wire discovery existed.
+        QVector<WorldObj*> frontier{seed};
+        rulerSupports.insert(seed);
+        for(int next=0;next<frontier.size();++next) {
+            WorldObj *support=frontier[next];
+            int minX=support->x,minZ=support->y,maxX=minX,maxZ=minZ;
+            float low[3]={support->position[0]-maxSpan,0,support->position[2]-maxSpan};
+            float high[3]={support->position[0]+maxSpan,0,support->position[2]+maxSpan};
+            Game::check_coords(minX,minZ,low); Game::check_coords(maxX,maxZ,high);
+            for(int x=minX;x<=maxX;++x) for(int z=minZ;z<=maxZ;++z) {
+                corridor.insert({x,z});
+                if(corridor.size()>256) { emit updStatus("Stat3","Ruler wire run exceeds the 256-tile limit; Commit stopped."); return; }
+                Tile *tile=route->requestTile(x,z,false);
+                if(!tile || tile->loaded==-2) continue;
+                if(tile->loaded!=1) { emit updStatus("Stat3","A ruler wire tile could not be loaded; Commit stopped."); return; }
+                for(const auto &entry:tile->obiekty) {
+                    WorldObj *object=entry.second;
+                    if(!object || !object->loaded || object->typeID!=WorldObj::sstatic
+                            || rulerSupports.contains(object)
+                            || !AutoPlaceWire::matchesSupportPrefix(object->fileName,shapeName)
+                            || !object->shapePointer || object->shapePointer->wireAttachmentOrigins().isEmpty()) continue;
+                    const double dx=2048.0*double(x-support->x)+object->position[0]-support->position[0];
+                    const double dz=2048.0*double(z-support->y)+object->position[2]-support->position[2];
+                    const double distance=std::hypot(dx,dz);
+                    if(distance<1 || distance>maxSpan) continue;
+                    rulerSupports.insert(object); frontier.append(object);
+                    if(frontier.size()>512) { emit updStatus("Stat3","Ruler wire run exceeds the 512-pole limit; Commit stopped."); return; }
+                }
+            }
+        }
+    } else {
+        // Load the whole vector node corridor before discovery, not a camera-sized subset.
+        float *line=nullptr; int lineSize=0;
+        nodeDb->getVectorSectionLine(line,lineSize,seed->x,seed->y,nodeId,true,25);
+        for(int i=0;line && i+2<lineSize;i+=6) {
+            int x=seed->x,z=seed->y; float point[3]={line[i],line[i+1],line[i+2]};
+            Game::check_coords(x,z,point);
+            for(int dx=-1;dx<=1;++dx) for(int dz=-1;dz<=1;++dz) corridor.insert({x+dx,z+dz});
+        }
+        delete[] line;
+        if(corridor.isEmpty() || corridor.size()>256) { emit updStatus("Stat3","Wire node section is unavailable or too large (256-tile limit)."); return; }
+        for(const auto &coords:corridor) {
+            Tile *tile=route->requestTile(coords.first,coords.second,false);
+            if(tile && tile->loaded!=1 && tile->loaded!=-2) {
+                emit updStatus("Stat3","A node corridor tile could not be loaded; wire Commit stopped."); return;
+            }
         }
     }
-    wireSection=QString("%1:%2:%3").arg(road?"road":"track").arg(nodeId).arg(shapeName.toLower());
+    wireSection=QString("%1:%2:%3").arg(rulerMode?"ruler":(road?"road":"track")).arg(nodeId).arg(shapeName.toLower());
     struct Pole {
         QVector3D base;
         QMap<int, QVector3D> local;
@@ -5179,6 +5709,7 @@ void RouteEditorGLWidget::rebuildWirePreview(float sagPercent, float widthMm, fl
         for(const auto &entry : tile->obiekty) {
             WorldObj *object = entry.second;
             if(!object || !object->loaded || object->typeID != WorldObj::sstatic
+                    || (rulerMode && !rulerSupports.contains(object))
                     || !AutoPlaceWire::matchesSupportPrefix(object->fileName, shapeName)
                     || !object->shapePointer) continue;
             // The track node bounds tile loading, not wire connectivity. A pole
@@ -5235,7 +5766,7 @@ void RouteEditorGLWidget::rebuildWirePreview(float sagPercent, float widthMm, fl
     for(int p = 0; p < poles.size(); ++p) component.append(p);
     int seedIndex=-1;
     for(int p=0;p<poles.size();++p) if(poles[p].tileX==seed->x && poles[p].tileZ==seed->y && poles[p].uid==seed->UiD) seedIndex=p;
-    if(seedIndex<0) { emit updStatus("Stat3","Selected pole could not be resolved in the node section."); return; }
+    if(seedIndex<0) { emit updStatus("Stat3","Selected pole could not be resolved in the wire run."); return; }
     QVector<Edge> runEdges;
     for(const Edge &edge:edges) {
         if(degree[edge.a]>=2 || degree[edge.b]>=2 || component[edge.a]==component[edge.b]) continue;
@@ -5289,7 +5820,7 @@ void RouteEditorGLWidget::rebuildWirePreview(float sagPercent, float widthMm, fl
                 {"node",nodeId},{"road",road},
                 {"x",first.tileX},{"z",first.tileZ},{"origin",AutoPlaceWire::json(origin)},
                 {"poleA",first.identity},{"poleB",second.identity},{"sag",sagPercent},
-                {"width",widthMm},{"wires",connections}};
+                {"width",widthMm},{"wireType",wireType},{"barbSpacing",barbSpacing},{"wires",connections}};
             // Reserve legacy telephone-wire test fixtures without claiming ownership.
             for(Tile *t : route->tile) {
                 if(!t || t->loaded!=1 || t->x!=first.tileX || t->z!=first.tileZ) continue;
@@ -5499,10 +6030,6 @@ void RouteEditorGLWidget::pushPolyVegBakeMarkers() {
     }
 }
 
-void RouteEditorGLWidget::bakeVegetationCurrentTile() {
-    bakeVegetationTile(false);
-}
-
 void RouteEditorGLWidget::bakeVegetationPointerTile() {
     bakeVegetationTile(true);
 }
@@ -5538,14 +6065,17 @@ static void allowPolyVegBakePaint(QWidget *viewport, int milliseconds) {
     QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
 }
 
-bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
+bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile, const QPair<int, int> *clickedTile) {
     if(route == NULL || camera == NULL || camera->pozT == NULL || !Game::writeEnabled
             || Game::serverClient)
         return false;
 
     int tileX = static_cast<int>(camera->pozT[0]);
     int tileZ = static_cast<int>(camera->pozT[1]);
-    if(polyVegBatchBake) {
+    if(clickedTile) {
+        tileX = clickedTile->first;
+        tileZ = clickedTile->second;
+    } else if(polyVegBatchBake) {
         tileX = polyVegBatchTileX;
         tileZ = polyVegBatchTileZ;
     } else if(usePointerTile) {
@@ -5595,7 +6125,7 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
         instances.append(instance);
     }
     if(instances.isEmpty()) {
-        if(!polyVegBatchBake) GuiFunct::showEditorNotice(this, "Bake PolyVeg Tile",
+        if(!polyVegBatchBake && !polyVegDisablePlantReport) GuiFunct::showEditorNotice(this, "Bake PolyVeg Tile",
             usePointerTile
                 ? "The pointer tile contains no generated unbaked PolyVeg objects."
                 : "The current tile contains no generated unbaked PolyVeg objects.");
@@ -5604,17 +6134,6 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     const int sourceObjectCount = sourceObjects.size();
 
     const QString shapesPath = routePath + "/shapes";
-    const QString confirmation = QString(
-        "Bake configured vegetation on the pointer tile into 4x4 patch blocks?\n\n"
-        "Tile: %1, %2\nSource objects: %3\n\n"
-        "Only generated blue PolyVeg instances will be replaced. "
-        "Bake clears Undo history and purges this tile's source objects from "
-        "memory. Delete the bake and replant to retry.")
-        .arg(tileX).arg(tileZ).arg(sourceObjects.size());
-    if(!polyVegBatchBake
-            && !GuiFunct::confirmDestructiveAction(this, "Bake Vegetation", confirmation))
-        return false;
-
     QDialog singleBakeDialog(this);
     QLabel singleBakeStatus(
         QString("Bake 1 of 1\nTile %1, %2").arg(tileX).arg(tileZ),
@@ -5627,8 +6146,17 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     }
     PolyVegViewportFreeze bakeViewportFreeze(this);
 
+    const auto bakeProgress = [&](int done, int total) {
+        if(routeSaveBusy) {
+            SaveProgress::set(0.55*done/qMax(1,total));
+            SaveProgress::report(QString("Baking PolyVeg: %1 of %2 objects...")
+                .arg(done).arg(total));
+        }
+        return !forestReplacementBakeProgress
+            || forestReplacementBakeProgress(done, total);
+    };
     const ForestPatchBakeResult baked = ForestPatchBaker::bake(
-        instances, 4, forestReplacementBakeProgress);
+        instances, 4, bakeProgress);
     if(!baked.isValid() || baked.patches.isEmpty()) {
         if(!polyVegBatchBake)
             singleBakeDialog.close();
@@ -5670,9 +6198,20 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
 
     for(int index = 0; index < baked.patches.size(); ++index) {
         const QString shapePath = shapesPath + '/' + outputNames[index];
-        const std::function<bool()> continueWriting = forestReplacementBakeProgress
+        if(routeSaveBusy) {
+            SaveProgress::set(0.55 + 0.30*index/baked.patches.size());
+            SaveProgress::report(QString("Writing PolyVeg block %1 of %2...")
+                .arg(index+1).arg(baked.patches.size()));
+        }
+        const std::function<bool()> continueWriting = (routeSaveBusy || forestReplacementBakeProgress)
             ? std::function<bool()>([&]() {
-                return forestReplacementBakeProgress(index, baked.patches.size());
+                if(routeSaveBusy) {
+                    SaveProgress::set(0.55 + 0.30*index/baked.patches.size());
+                    SaveProgress::report(QString("Writing PolyVeg block %1 of %2...")
+                        .arg(index+1).arg(baked.patches.size()));
+                }
+                return !forestReplacementBakeProgress
+                    || forestReplacementBakeProgress(index, baked.patches.size());
               }) : std::function<bool()>();
         if(!ForestShapeTextIO::writePatch(shapePath, baked.patches[index], error, continueWriting)
                 || !ForestShapeTextIO::writeDescriptor(shapePath, error)) {
@@ -5698,6 +6237,11 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     placedBakeObjects.reserve(baked.patches.size());
     for(int index = 0; index < baked.patches.size(); ++index) {
         const ForestBakedPatch &patch = baked.patches[index];
+        if(routeSaveBusy) {
+            SaveProgress::set(0.85 + 0.10*index/baked.patches.size());
+            SaveProgress::report(QString("Placing PolyVeg block %1 of %2...")
+                .arg(index+1).arg(baked.patches.size()));
+        }
         const float worldFilePositionZ = static_cast<float>(
             patch.originZ - tileZ*2048.0);
         float position[3] {
@@ -5736,6 +6280,11 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
     bool manifestPublished = true;
     for(int index = 0; index < baked.patches.size(); ++index) {
         const ForestBakedPatch &patch = baked.patches[index];
+        if(routeSaveBusy) {
+            SaveProgress::set(0.95 + 0.04*index/baked.patches.size());
+            SaveProgress::report(QString("Recording PolyVeg block %1 of %2...")
+                .arg(index+1).arg(baked.patches.size()));
+        }
         const float worldFilePositionZ = static_cast<float>(
             patch.originZ - tileZ*2048.0);
         ForestBakeManifestEntry entry;
@@ -5797,12 +6346,14 @@ bool RouteEditorGLWidget::bakeVegetationTile(bool usePointerTile) {
             &RouteEditorGLWidget::refreshPolyVegTileCounts);
         allowPolyVegBakePaint(this, 250);
         singleBakeDialog.close();
-        GuiFunct::showEditorNotice(this, "Bake PolyVeg Tile",
-            QString("Baked %1 vegetation objects into %2 short-name 4x4 block(s).\n\n"
-                    "The source objects were purged from memory and Bake cannot "
-                    "be undone. Save normally to keep it; delete the bake and "
-                    "replant to retry.")
-                .arg(sourceObjectCount).arg(placedBlocks));
+        if(!polyVegDisablePlantReport) {
+            GuiFunct::showEditorNotice(this, "Bake PolyVeg Tile",
+                QString("Baked %1 vegetation objects into %2 short-name 4x4 block(s).\n\n"
+                        "The source objects were purged from memory and Bake cannot "
+                        "be undone. Save normally to keep it; delete the bake and "
+                        "replant to retry.")
+                    .arg(sourceObjectCount).arg(placedBlocks));
+        }
         queuePolyVegSuccessSound();
     }
     return true;
@@ -6073,6 +6624,10 @@ void RouteEditorGLWidget::replaceRouteForests() {
         return;
     }
     if(!failure.isEmpty() || conflicts > 0 || tileAreas.isEmpty()) {
+        if(conflicts > 0) {
+            showPlacementGuardError();
+            emit polyVegPanelStatus("Already Planted: forest replacement overlaps existing PolyVeg. Nothing added.");
+        }
         GuiFunct::showEditorStopped(this, title, !failure.isEmpty() ? failure
             : conflicts > 0 ? QString("Survey found %1 affected tile(s) with existing PolyVeg or conflicting bake assets.\n\n"
                 "Replacement stopped to preserve that vegetation. Resolve those tiles before retrying.")
@@ -6451,6 +7006,72 @@ void RouteEditorGLWidget::bakeAllVegetation() {
             .arg(successfulTiles).arg(tiles.size()));
     if(successfulTiles == tiles.size())
         queuePolyVegSuccessSound();
+}
+
+void RouteEditorGLWidget::setPolyVegBakeTileMode(bool active) {
+    if(active) {
+        if(!route || !Game::writeEnabled || Game::serverClient) {
+            emit polyVegBakeTileModeChanged(false);
+            emit polyVegPanelStatus("Bake Tile requires a local editable route.");
+            return;
+        }
+        clearPolyVegCorridor();
+        setSpecialRulerPanelControlsActive(false);
+        enableTool("polyVegBakeTileTool");
+        emit polyVegPanelStatus("Bake Tile: click the tile to bake once. Click the button again to cancel.");
+    } else if(toolEnabled == "polyVegBakeTileTool") {
+        enableTool("selectTool");
+        emit polyVegPanelStatus("Ready.");
+    }
+}
+
+void RouteEditorGLWidget::setPolyVegClearBakeMode(bool active) {
+    if(active) {
+        if(!route || !Game::writeEnabled || Game::serverClient) {
+            emit polyVegClearBakeModeChanged(false);
+            emit polyVegPanelStatus("Clear Bake requires a local editable route.");
+            return;
+        }
+        clearPolyVegCorridor();
+        setSpecialRulerPanelControlsActive(false);
+        enableTool("polyVegClearBakeTool");
+        emit polyVegPanelStatus("Clear Bake: click a tile once. Save commits JSON/asset cleanup.");
+    } else if(toolEnabled == "polyVegClearBakeTool") {
+        enableTool("selectTool");
+        emit polyVegPanelStatus("Ready.");
+    }
+}
+
+void RouteEditorGLWidget::clearPolyVegBakeTile(int tileX, int tileZ) {
+    if(!route || !Game::writeEnabled || Game::serverClient || forestReplacementBusy || corridorBusy) return;
+    Tile *tile = route->requestTile(tileX, tileZ, false);
+    if(!tile || tile->loaded != 1) {
+        emit polyVegPanelStatus("Clear Bake: world tile could not be loaded; nothing changed.");
+        return;
+    }
+    QVector<WorldObj*> bakes;
+    for(const auto &entry : tile->obiekty) {
+        WorldObj *object = entry.second;
+        if(object && object->loaded && object->typeID == WorldObj::sstatic
+                && PolyVegObject::isBakeShape(object->fileName)) bakes.append(object);
+    }
+    if(!bakes.isEmpty()) {
+        if(selectedObj) selectedObj->unselect();
+        if(groupObj) { groupObj->unselect(); groupObj->objects.clear(); }
+        setSelectedObj(nullptr);
+        lastSelectedObj = nullptr;
+        Undo::StateBegin();
+        for(WorldObj *object : bakes) route->deleteObj(object);
+        Undo::StateEnd();
+    }
+    // Save writes world deletions first, then prunes unreferenced manifest
+    // blocks/assets. Keep metadata/assets until then so Undo/discard stay safe.
+    refreshPolyVegTileCounts();
+    update();
+    QTimer::singleShot(0, this, &RouteEditorGLWidget::refreshPolyVegTileCounts);
+    emit polyVegPanelStatus(QString("Clear Bake: removed %1 bake(s) from tile %2, %3. Save commits JSON/asset cleanup; Undo restores deleted bakes.")
+        .arg(bakes.size()).arg(tileX).arg(-tileZ));
+    queuePolyVegSuccessSound();
 }
 
 void RouteEditorGLWidget::deleteAllPolyVegBakes() {
@@ -8556,7 +9177,12 @@ bool RouteEditorGLWidget::bakePendingVegetation() {
     QScopedValueRollback<bool> batch(polyVegBatchBake, true);
     polyVegBatchSourceCount = 0;
     polyVegBatchBlockCount = 0;
+    int completedTiles = 0;
     for(const auto &tile : tiles) {
+        SaveProgress::Range tileProgress(double(completedTiles)/tiles.size(),
+            double(completedTiles+1)/tiles.size());
+        SaveProgress::report(QString("Baking PolyVeg tile %1 of %2...")
+            .arg(completedTiles+1).arg(tiles.size()));
         polyVegBatchTileX = tile.first;
         polyVegBatchTileZ = tile.second;
         makeCurrent();
@@ -8566,31 +9192,89 @@ bool RouteEditorGLWidget::bakePendingVegetation() {
                 "Completed bakes and remaining raw objects are retained; retry or discard on exit.");
             return false;
         }
+        ++completedTiles;
+        SaveProgress::set(1);
+        SaveProgress::report(QString("Baked PolyVeg tile %1 of %2.")
+            .arg(completedTiles).arg(tiles.size()));
     }
     refreshPolyVegTileCounts();
     return polyVegTiles(false).isEmpty();
 }
 
 bool RouteEditorGLWidget::saveRoute() {
+    if(routeSaveBusy) return false;
     if(route == NULL || !Game::writeEnabled){
         emit updStatus(QString("stat0"), QString("SAVE FAILED"));
         return false;
     }
 
+    QScopedValueRollback<bool> saving(routeSaveBusy, true);
+    PolyVegViewportFreeze saveViewportFreeze(this);
+    QProgressDialog saveProgress("Preparing route save...", QString(), 0, 1000, this);
+    SaveProgress::Range wholeSave(0, 1);
+    SaveProgress::set(0);
+    int shownProgress = 0;
+    GuiFunct::styleEditorDialog(&saveProgress);
+    QLabel *saveLabel = new QLabel("Preparing route save...");
+    GuiFunct::styleEditorTitle(saveLabel);
+    saveLabel->setWordWrap(true);
+    saveProgress.setLabel(saveLabel);
+    saveProgress.setMinimumWidth(440);
+    saveProgress.setWindowTitle("Saving Route");
+    saveProgress.setWindowModality(Qt::ApplicationModal);
+    saveProgress.setWindowFlag(Qt::WindowCloseButtonHint, false);
+    saveProgress.setMinimumDuration(0);
+    saveProgress.setAutoClose(false);
+    saveProgress.setAutoReset(false);
+    saveProgress.show();
+    QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    QElapsedTimer paintElapsed; paintElapsed.start();
+    SaveProgress::Scope reporting([&](const QString &message){
+        if(paintElapsed.elapsed() < 50) return;
+        shownProgress = qMax(shownProgress, qMin(999, int(SaveProgress::fraction()*1000)));
+        saveProgress.setValue(shownProgress);
+        saveProgress.setLabelText(QString("%1% complete: %2").arg(shownProgress/10).arg(message));
+        if(!saveProgress.isVisible()) saveProgress.show();
+        QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+        makeCurrent();
+        paintElapsed.restart();
+    });
+    makeCurrent();
     // A save attempt writes modified world tiles before terrain, route-key,
     // activity, and cleanup stages can report failure. From this point onward
     // rolling generated bake files back could leave an already-written world
     // file referring to a deleted shape. Discard after a save attempt instead
     // scans saved references and removes only this session's unreferenced bakes.
-    if(!bakePendingVegetation() || !bakeAllWires()) return false;
+    SaveProgress::report("Preparing generated vegetation and wires...");
+    // Give pending bake work a visible share of this save; absent bake types
+    // consume no share. These are work stages, not estimates of elapsed time.
+    if(!Game::serverClient && !loadWireRegistry()) return false;
+    const double vegetationEnd = polyVegTiles(false).isEmpty() ? 0.0 : 0.20;
+    const double bakingEnd = vegetationEnd
+        + (AutoPlaceWire::pendingBakeKeys(wireSpans).isEmpty() ? 0.0 : 0.20);
+    {
+        SaveProgress::Range stage(0, vegetationEnd);
+        if(!bakePendingVegetation()) return false;
+    }
+    {
+        SaveProgress::Range stage(vegetationEnd, bakingEnd);
+        if(!bakeAllWires()) return false;
+    }
     polyVegBakeSession.commit();
     polyVegWorldSaveAttempted = !polyVegUnsavedBakeShapes.isEmpty();
-    route->save();
+    {
+        SaveProgress::Range stage(bakingEnd, 0.97);
+        route->save();
+    }
     if(!route->lastSaveSucceeded()){
         emit updStatus(QString("stat0"), QString("SAVE FAILED"));
         return false;
     }
-    if(!cleanupWireAssets()) return false;
+    SaveProgress::report("Finishing generated wire cleanup...");
+    {
+        SaveProgress::Range stage(0.97, 1);
+        if(!cleanupWireAssets()) return false;
+    }
     wireUnsavedBakes.clear();
     polyVegUnsavedBakeShapes.clear();
     polyVegWorldSaveAttempted = false;
@@ -8602,12 +9286,20 @@ bool RouteEditorGLWidget::saveRoute() {
     else
         qDebug() << "Save completed with no pending editor items";
 
+    SaveProgress::set(1);
+    saveProgress.setValue(1000);
+    saveProgress.setLabelText("100% complete: Route saved.");
     timeSaved = timeNow;
     emit updStatus(QString("stat0"), QString("Saved"));
     return true;
 }
 
 void RouteEditorGLWidget::msg(QString text) {
+    if(text=="apRulerNew") { newAutoPlaceRuler(); return; }
+    if(text=="apRulerAdd") { addAutoPlaceRulerPoints(); return; }
+    if(text=="apRulerEdit") { editAutoPlaceRulerPoints(); return; }
+    if(text=="apRulerClear") { clearAutoPlaceRuler(); return; }
+    if(text=="apRulerCommit") { commitAutoPlaceRuler(); return; }
     if(text == "deleteSelectedWires") { deleteSelectedWires(); return; }
     if(text == "bakeAllWires") { bakeAllWires(); return; }
     if(text == "wireAvailability") {
@@ -8698,16 +9390,20 @@ void RouteEditorGLWidget::msg(QString text, float val) {
 void RouteEditorGLWidget::msg(QString text, QString val) {
     if(text == "wirePreview") {
         const QStringList values = val.split(',');
-        if(values.size() == 3) {
+        if(values.size() == 3 || values.size() == 5) {
             bool okSag = false, okWidth = false, okSpan = false;
             const float sag = values[0].toFloat(&okSag);
             const float width = values[1].toFloat(&okWidth);
             const float span = values[2].toFloat(&okSpan);
+            bool okSpacing=true;
+            const QString wireType=values.size()==5 ? values[3] : QString("plain");
+            const float barbSpacing=values.size()==5 ? values[4].toFloat(&okSpacing) : 0.25f;
             if(okSag && okWidth && okSpan && std::isfinite(sag)
                     && std::isfinite(width) && std::isfinite(span)
                     && sag >= 0 && sag <= 10 && width >= 1 && width <= 100
-                    && span >= 1 && span <= 200) {
-                rebuildWirePreview(sag, width, span);
+                    && span >= 1 && span <= 200 && AutoPlaceWire::validWireType(wireType)
+                    && okSpacing && std::isfinite(barbSpacing) && barbSpacing>=0.10f && barbSpacing<=1.0f) {
+                rebuildWirePreview(sag, width, span, wireType, barbSpacing);
             }
         }
         return;

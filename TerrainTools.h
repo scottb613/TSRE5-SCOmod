@@ -48,6 +48,7 @@ public slots:
     void updateTexPrev();
     void setBrushTextureId(int val);
     void applyPaintPreset();
+    void compressRouteTerrtex();
     void savePaintPreset();
     void removePaintPreset();
     void clearRecentTextureHistory();
@@ -62,6 +63,8 @@ public slots:
     void setTextureBrushSize(QString val);
     void setTextureBrushAlpha(int val);
     void setTextureBrushAlpha(QString val);
+    void setTextureBrushScale(int val);
+    void setTextureBrushScale(QString val);
     void setTextureBrushRotation(int val);
     void setTextureBrushRotation(QString val);
     void setFheight(QString val);
@@ -92,6 +95,7 @@ public slots:
 
     
 signals:
+    void refreshProductionTerrtex();
     void enableTool(QString name);
     void setPaintBrush(Brush* brush);
     void mirrorSeasonAccepted();
@@ -114,7 +118,7 @@ private:
     QJsonArray readPaintPresets();
     bool writePaintPresets(const QJsonArray &presets);
     QString currentTexturePresetPath();
-    void applyTexturePresetPath(QString texturePath);
+    bool applyTexturePresetPath(QString texturePath);
     void setBrushShapeIndex(int brushIndex);
     //QVector<QImage
     
@@ -127,7 +131,6 @@ private:
     QVector<ClickableLabel*> texPreviewLabels;
     QSignalMapper texPreviewSignals;
     QComboBox* presetCombo;
-    QPushButton* presetApply;
     QPushButton* presetSave;
     QPushButton* presetRemove;
     QPushButton* clearRecentTextures;
@@ -154,9 +157,13 @@ private:
     QSlider *textureSizeSlider;
     QSlider *textureIntensitySlider;
     QSlider *textureRotationSlider;
+    QSlider *textureScaleSlider;
+    QCheckBox *createTextureMipmaps;
+    QCheckBox *ddsTextureOutput;
     QLineEdit *textureSizeValue;
     QLineEdit *textureIntensityValue;
     QLineEdit *textureRotationValue;
+    QLineEdit *textureScaleValue;
     QLineEdit *fheight;
     QDoubleValidator *heightValidator;
     QComboBox* hType;

@@ -14,6 +14,8 @@
 #include "ReadFile.h"
 #include "ShapeLib.h"
 #include "SFile.h"
+#include "GltfPreview.h"
+#include "GltfPlacementMath.h"
 #include <QDebug>
 #include <QFile>
 #include <QTextStream>
@@ -884,6 +886,54 @@ void Eng::drawBorder3d(){
     borderObj3d->render();
 };
 
+// Rolling-stock references keep their authored names. glTF resources belong to
+// the active ShapeLib/context, while legacy shapes retain their existing IDs.
+int Eng::loadLegacyShape(const QString &name, const QString &texturePath) {
+    if(GltfModel::accepts(name))
+        return -1;
+    return Game::currentShapeLib->addShape(path + "/" + name, texturePath);
+}
+
+void Eng::renderShape(EngShape &model, int selectionColor) {
+    const long long shapeLibId = reinterpret_cast<long long>(Game::currentShapeLib);
+    if(!GltfModel::accepts(model.name)) {
+        const int id = model.id.value(shapeLibId, -1);
+        if(id >= 0)
+            Game::currentShapeLib->shape[id]->render(selectionColor, 0);
+        return;
+    }
+    QString error;
+    const auto preview = Game::currentShapeLib->getGltfShape(
+        path + "/" + model.name, error);
+    if(preview && !preview->model.primitives.empty()) {
+        GLUU *gluu = GLUU::get();
+        const QMatrix4x4 world = GltfPlacementMath::rollingStockMatrix(gluu->mvMatrix);
+        QMatrix4x4 projection;
+        std::copy(gluu->pMatrix, gluu->pMatrix + 16, projection.data());
+        if(preview->draw(projection * world, error, selectionColor,
+                         world.determinant() < 0)) {
+            model.previewErrors.remove(shapeLibId);
+            return;
+        }
+    }
+    if(!error.isEmpty() && model.previewErrors.value(shapeLibId) != error) {
+        qWarning().noquote() << "Rolling-stock glTF preview:" << model.name << error;
+        model.previewErrors.insert(shapeLibId, error);
+    }
+}
+
+void Eng::reloadShape(EngShape &model) {
+    const long long shapeLibId = reinterpret_cast<long long>(Game::currentShapeLib);
+    if(GltfModel::accepts(model.name)) {
+        Game::currentShapeLib->reloadShapeIfCached(path + "/" + model.name);
+        model.previewErrors.remove(shapeLibId);
+    } else {
+        const int id = model.id.value(shapeLibId, -1);
+        if(id >= 0)
+            Game::currentShapeLib->shape[id]->reload();
+    }
+}
+
 void Eng::render(int selectionColor) {
     render(0, 0, selectionColor);
 }
@@ -904,7 +954,7 @@ void Eng::render(int aktwx, int aktwz, int selectionColor) {
     long long int shapeLibId = reinterpret_cast<long long int>(Game::currentShapeLib);
     if(!shape.id.keys().contains(shapeLibId)){
         if(shape.name.length() > 1)
-            shape.id[shapeLibId] = Game::currentShapeLib->addShape(path +"/"+ shape.name, path);
+            shape.id[shapeLibId] = loadLegacyShape(shape.name, path);
         else 
             shape.id[shapeLibId] = -1;
     }
@@ -922,11 +972,11 @@ for(int i = 0; i < freightanimShape.size(); i++){   /// EFO heres where I might 
                 
                 if(freightanimShape[i].altpath.length() > 5)
                 {
-                freightanimShape[i].id[shapeLibId] = Game::currentShapeLib->addShape(path +"/"+ freightanimShape[i].name, altroot +"/"+ freightanimShape[i].altpath);
+                freightanimShape[i].id[shapeLibId] = loadLegacyShape(freightanimShape[i].name, altroot +"/"+ freightanimShape[i].altpath);
                 }
                 else
                 {
-                freightanimShape[i].id[shapeLibId] = Game::currentShapeLib->addShape(path +"/"+ freightanimShape[i].name, path);
+                freightanimShape[i].id[shapeLibId] = loadLegacyShape(freightanimShape[i].name, path);
                 }
              if(Game::debugOutput) qDebug() << __FILE__ << __LINE__<<  " Defining FreightAnim: " << freightanimShape[i].name << " / PATH = " << path << " / ALTPATH= " << altroot + freightanimShape[i].altpath;   
             }
@@ -956,15 +1006,15 @@ for(int i = 0; i < freightanimShape.size(); i++){   /// EFO heres where I might 
      
      gl.glColor3f(1.0f, 1.0f, 1.0f);  */
      //gluu.mvPushMatrix();
-    if(shape.id[shapeLibId] >= 0) 
-        Game::currentShapeLib->shape[shape.id[shapeLibId]]->render(selectionColor, 0);
+    if(GltfModel::accepts(shape.name) || shape.id[shapeLibId] >= 0)
+        renderShape(shape, selectionColor);
 
     for(int i = 0; i < freightanimShape.size(); i++){
-        if(freightanimShape[i].id[shapeLibId] >= 0) {
+        if(GltfModel::accepts(freightanimShape[i].name) || freightanimShape[i].id[shapeLibId] >= 0) {
             gluu->mvPushMatrix();
             Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, -freightanimShape[i].x, freightanimShape[i].y, -freightanimShape[i].z);
             gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
-            Game::currentShapeLib->shape[freightanimShape[i].id[shapeLibId]]->render(selectionColor, 0);
+            renderShape(freightanimShape[i], selectionColor);
             gluu->mvPopMatrix();
         }
     }
@@ -976,15 +1026,9 @@ for(int i = 0; i < freightanimShape.size(); i++){   /// EFO heres where I might 
 }
 
 void Eng::reload(){
-    long long int shapeLibId = reinterpret_cast<long long int>(Game::currentShapeLib);
-    if(shape.id[shapeLibId] >= 0) 
-        Game::currentShapeLib->shape[shape.id[shapeLibId]]->reload();
-    
-    for(int i = 0; i < freightanimShape.size(); i++){
-        if(freightanimShape[i].id[shapeLibId] >= 0) {
-            Game::currentShapeLib->shape[freightanimShape[i].id[shapeLibId]]->reload();
-        }
-    }
+    reloadShape(shape);
+    for(EngShape &model : freightanimShape)
+        reloadShape(model);
 }
 
 float *Eng::getCurrentPositionOnTrack(){
@@ -1036,7 +1080,7 @@ void Eng::renderOnTrack(GLUU* gluu, float* playerT, int selectionColor) {
     long long int shapeLibId = reinterpret_cast<long long int>(Game::currentShapeLib);
     if(!shape.id.keys().contains(shapeLibId)){
         if(shape.name.length() > 1)
-            shape.id[shapeLibId] = Game::currentShapeLib->addShape(path +"/"+ shape.name, path);
+            shape.id[shapeLibId] = loadLegacyShape(shape.name, path);
         else 
             shape.id[shapeLibId] = -1;
     }
@@ -1044,7 +1088,7 @@ void Eng::renderOnTrack(GLUU* gluu, float* playerT, int selectionColor) {
     for(int i = 0; i < freightanimShape.size(); i++){
         if(!freightanimShape[i].id.keys().contains(shapeLibId)){
             if(freightanimShape[i].name.length() > 1){
-                freightanimShape[i].id[shapeLibId] = Game::currentShapeLib->addShape(path +"/"+ freightanimShape[i].name, path);
+                freightanimShape[i].id[shapeLibId] = loadLegacyShape(freightanimShape[i].name, path);
                          if(Game::debugOutput) qDebug() << __FILE__ << __LINE__ << " Defining FreightAnim: " << freightanimShape[i].name << " / PATH = " << path << " / ALTPATH= " << freightanimShape[i].altpath;   
             }
             else 
@@ -1110,16 +1154,16 @@ void Eng::renderOnTrack(GLUU* gluu, float* playerT, int selectionColor) {
     Mat4::rotateY(gluu->mvMatrix, gluu->mvMatrix, flip*M_PI /*+ M_PI*/);
     gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
 
-    if(shape.id[shapeLibId] >= 0) 
-        Game::currentShapeLib->shape[shape.id[shapeLibId]]->render(selectionColor, 0);
+    if(GltfModel::accepts(shape.name) || shape.id[shapeLibId] >= 0)
+        renderShape(shape, selectionColor);
     
     
     for(int i = 0; i < freightanimShape.size(); i++){
-        if(freightanimShape[i].id[shapeLibId] >= 0) {
+        if(GltfModel::accepts(freightanimShape[i].name) || freightanimShape[i].id[shapeLibId] >= 0) {
             gluu->mvPushMatrix();
             Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, freightanimShape[i].x, freightanimShape[i].y, -freightanimShape[i].z);
             gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
-            Game::currentShapeLib->shape[freightanimShape[i].id[shapeLibId]]->render(selectionColor, 0);
+            renderShape(freightanimShape[i], selectionColor);
             gluu->mvPopMatrix();
         }
     }
@@ -1164,12 +1208,12 @@ void Eng::fillContentHierarchyInfo(QVector<ContentHierarchyInfo*>& list, int par
     parent = list.size()-1;
 
     long long int shapeLibId = reinterpret_cast<long long int>(Game::currentShapeLib);
-    if(shape.id[shapeLibId] >= 0) 
-        Game::currentShapeLib->shape[shape.id[shapeLibId]]->fillContentHierarchyInfo(list, list.size()-1);
+    if(shape.id.value(shapeLibId, -1) >= 0)
+        Game::currentShapeLib->shape[shape.id.value(shapeLibId, -1)]->fillContentHierarchyInfo(list, list.size()-1);
 
     for(int i = 0; i < freightanimShape.size(); i++){
-        if(freightanimShape[i].id[shapeLibId] >= 0) {
-            Game::currentShapeLib->shape[freightanimShape[i].id[shapeLibId]]->fillContentHierarchyInfo(list, parent);
+        if(freightanimShape[i].id.value(shapeLibId, -1) >= 0) {
+            Game::currentShapeLib->shape[freightanimShape[i].id.value(shapeLibId, -1)]->fillContentHierarchyInfo(list, parent);
         }
     }
 }

@@ -1,4 +1,4 @@
-TSRE GenX v0.17 - ROUTE EDITOR - MENU SHORTCUTS
+TSRE GenX v0.19 - ROUTE EDITOR - MENU SHORTCUTS
 Shift+Ctrl+S  Save route
 Alt+F4        Exit/close route editor
 Ctrl+Z        Undo
@@ -96,3 +96,6 @@ Delete        Delete selected consist item
 F             Flip selected consist item
 Right         Move selected consist item right
 Left          Move selected consist item left
+
+Ruler (ap): choose in F1 > TSRE Tools; placement opens F5 Auto Place Objects.
+New Ruler (ap) latches while placing points; a second button click clears the guide.

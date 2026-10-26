@@ -18,6 +18,13 @@
 #include "ShapeLib.h"
 #include "Terrain.h"
 #include "TerrainGridMath.h"
+#include "TexturePaintMath.h"
+#include "TerrtexProduction.h"
+#include "AceLib.h"
+#include "AceFormatValidator.h"
+#include "ReadFile.h"
+#include "Undo.h"
+#include <memory>
 #include "ForestObj.h"
 #include "TFile.h"
 #include "TerrainLib.h"
@@ -30,6 +37,7 @@
 #include <QFileSystemModel>
 #include <QDirIterator>
 #include <QSignalBlocker>
+#include <QSettings>
 #include <QSortFilterProxyModel>
 
 class SelectAllOnEntryLineEdit : public QLineEdit {
@@ -521,17 +529,16 @@ TerrainTools::TerrainTools(QString name)
     textureVbox->addWidget(presetLabel);
 
     presetCombo = new QComboBox;
-    presetApply = new QPushButton("Apply", this);
+    presetCombo->setPlaceholderText("Select preset...");
     presetSave = new QPushButton("Save", this);
     presetRemove = new QPushButton("Remove", this);
 
     QGridLayout *vlistPreset = new QGridLayout;
     vlistPreset->setSpacing(2);
     vlistPreset->setContentsMargins(3,0,1,0);
-    vlistPreset->addWidget(presetCombo,0,0,1,3);
-    vlistPreset->addWidget(presetApply,1,0);
-    vlistPreset->addWidget(presetSave,1,1);
-    vlistPreset->addWidget(presetRemove,1,2);
+    vlistPreset->addWidget(presetCombo,0,0,1,2);
+    vlistPreset->addWidget(presetSave,1,0);
+    vlistPreset->addWidget(presetRemove,1,1);
     QFrame *presetCard = new QFrame(this);
     GuiFunct::styleEditorPanelCard(presetCard);
     vlistPreset->setContentsMargins(
@@ -624,6 +631,17 @@ TerrainTools::TerrainTools(QString name)
     textureIntensitySlider = new QSlider(Qt::Horizontal);
     textureIntensitySlider->setRange(1, 99);
     textureIntensitySlider->setValue(paintBrush->alpha * 100);
+    textureScaleSlider = new QSlider(Qt::Horizontal);
+    textureScaleSlider->setRange(25, 400);
+    textureScaleSlider->setValue(paintBrush->texScalePercent);
+    textureScaleValue = GuiFunct::newQLineEdit(valueFieldWidth, 3);
+    textureScaleValue->setValidator(new QIntValidator(25, 400, this));
+    const QString textureScaleTip =
+        "Texture scale in percent: 100 preserves the original appearance; "
+        "50 gives smaller details and more repeats; 200 gives larger details. "
+        "Applies to new painting only.";
+    textureScaleSlider->setToolTip(textureScaleTip);
+    textureScaleValue->setToolTip(textureScaleTip);
     textureRotationSlider = new QSlider(Qt::Horizontal);
     textureRotationSlider->setRange(0, 360);
     textureRotationSlider->setValue(paintBrush->texRotationDegrees);
@@ -654,9 +672,56 @@ TerrainTools::TerrainTools(QString name)
     textureBrushLayout->addWidget(GuiFunct::newQLabel("Intensity:", textureLabelWidth), row, 0);
     textureBrushLayout->addWidget(textureIntensityValue, row, 1);
     textureBrushLayout->addWidget(textureIntensitySlider, row++, 2);
+    textureBrushLayout->addWidget(GuiFunct::newQLabel("Scale %:", textureLabelWidth), row, 0);
+    textureBrushLayout->addWidget(textureScaleValue, row, 1);
+    textureBrushLayout->addWidget(textureScaleSlider, row++, 2);
     textureBrushLayout->addWidget(GuiFunct::newQLabel("Rotation:", textureLabelWidth), row, 0);
     textureBrushLayout->addWidget(textureRotationValue, row, 1);
     textureBrushLayout->addWidget(textureRotationSlider, row++, 2);
+    createTextureMipmaps = new QCheckBox("Mipmaps");
+    createTextureMipmaps->setToolTip(
+        "Save painted TERRTEX with a full uncompressed mip chain. "
+        "Uses linear-light Lanczos filtering with seamless edge wrapping. "
+        "Includes seasonal mirror painting. Requires square power-of-two textures.");
+    QSettings paintOptions(Game::appDataDir() + "/terrain-paint-options.ini", QSettings::IniFormat);
+    paintBrush->createMipmaps = paintOptions.value("createMipmaps", false).toBool();
+    createTextureMipmaps->setChecked(paintBrush->createMipmaps);
+    QObject::connect(createTextureMipmaps, &QCheckBox::toggled, this, [this](bool enabled){
+        paintBrush->createMipmaps = enabled;
+        QSettings options(Game::appDataDir() + "/terrain-paint-options.ini", QSettings::IniFormat);
+        options.setValue("createMipmaps", enabled);
+        emit setPaintBrush(paintBrush);
+    });
+    ddsTextureOutput = new QCheckBox("DDS");
+    ddsTextureOutput->setToolTip(
+        "Save touched TERRTEX as native uncompressed 24-bit RGB DDS. "
+        "Off saves ACE. Preserves resolution; Mipmaps is a separate choice. "
+        "Format changes also convert existing seasonal variants of the touched patch.");
+    paintBrush->ddsOutput = paintOptions.value("ddsOutput", false).toBool();
+    ddsTextureOutput->setChecked(paintBrush->ddsOutput);
+    QObject::connect(ddsTextureOutput, &QCheckBox::toggled, this, [this](bool enabled){
+        paintBrush->ddsOutput = enabled;
+        QSettings options(Game::appDataDir() + "/terrain-paint-options.ini", QSettings::IniFormat);
+        options.setValue("ddsOutput", enabled);
+        emit setPaintBrush(paintBrush);
+    });
+    QLabel *textureOutputLabel = new QLabel(QString(QChar(0x2022)) + " Output");
+    GuiFunct::styleEditorSubtitle(textureOutputLabel);
+    QFrame *textureOutputCard = new QFrame(terrainTexturePanel);
+    GuiFunct::styleEditorPanelCard(textureOutputCard);
+    QGridLayout *textureOutputOptions = new QGridLayout(textureOutputCard);
+    textureOutputOptions->setContentsMargins(
+        cardHorizontalPadding, cardVerticalPadding,
+        cardHorizontalPadding, cardVerticalPadding);
+    textureOutputOptions->setSpacing(4);
+    textureOutputOptions->addWidget(createTextureMipmaps, 0, 0);
+    textureOutputOptions->addWidget(ddsTextureOutput, 0, 1);
+    const int outputColumnMinimum = qMax(
+        createTextureMipmaps->sizeHint().width(), ddsTextureOutput->sizeHint().width());
+    for(int column = 0; column < 2; ++column) {
+        textureOutputOptions->setColumnMinimumWidth(column, outputColumnMinimum);
+        textureOutputOptions->setColumnStretch(column, 1);
+    }
     textureBrushLayout->setColumnStretch(2, 1);
     QFrame *textureBrushCard = new QFrame(terrainTexturePanel);
     GuiFunct::styleEditorPanelCard(textureBrushCard);
@@ -664,12 +729,12 @@ TerrainTools::TerrainTools(QString name)
         cardHorizontalPadding, cardVerticalPadding,
         cardHorizontalPadding, cardVerticalPadding);
     textureBrushCard->setLayout(textureBrushLayout);
-    textureVbox->addWidget(textureBrushCard);
     textureVbox->removeWidget(textureBrushLabel);
-    textureVbox->removeWidget(textureBrushCard);
     const int presetSectionIndex = textureVbox->indexOf(presetLabel);
     textureVbox->insertWidget(presetSectionIndex, textureBrushLabel);
     textureVbox->insertWidget(presetSectionIndex + 1, textureBrushCard);
+    textureVbox->insertWidget(presetSectionIndex + 2, textureOutputLabel);
+    textureVbox->insertWidget(presetSectionIndex + 3, textureOutputCard);
     
     // enbankment
     sEsize = new QSlider(Qt::Horizontal);
@@ -785,7 +850,7 @@ TerrainTools::TerrainTools(QString name)
     }
     const QList<QPushButton*> actionButtons = {
         loadTerrainTexTool, mirrorSeason, clearRecentTextures,
-        presetApply, presetSave, presetRemove,
+        presetSave, presetRemove,
         setPinPoint, resetDefaults, terrainUtilitiesButton
     };
     for(QPushButton *button : actionButtons)
@@ -861,8 +926,9 @@ TerrainTools::TerrainTools(QString name)
     QObject::connect(setPinPoint, SIGNAL(released()),
                       this, SLOT(setPinPointBrush()));
 
-    QObject::connect(presetApply, SIGNAL(released()),
-                      this, SLOT(applyPaintPreset()));
+    // Apply only explicit user choices, including reselecting the current preset.
+    QObject::connect(presetCombo, &QComboBox::activated,
+                      this, &TerrainTools::applyPaintPreset);
 
     QObject::connect(presetSave, SIGNAL(released()),
                       this, SLOT(savePaintPreset()));
@@ -903,6 +969,13 @@ TerrainTools::TerrainTools(QString name)
                       this, SLOT(setTextureBrushSize(int)));
     QObject::connect(textureIntensitySlider, SIGNAL(valueChanged(int)),
                       this, SLOT(setTextureBrushAlpha(int)));
+    QObject::connect(textureScaleSlider, SIGNAL(valueChanged(int)),
+                      this, SLOT(setTextureBrushScale(int)));
+    QObject::connect(textureScaleValue, SIGNAL(textEdited(QString)),
+                      this, SLOT(setTextureBrushScale(QString)));
+    QObject::connect(textureScaleValue, &QLineEdit::editingFinished, this, [this](){
+        textureScaleValue->setText(QString::number(paintBrush->texScalePercent));
+    });
     QObject::connect(textureRotationSlider, SIGNAL(valueChanged(int)),
                       this, SLOT(setTextureBrushRotation(int)));
     QObject::connect(textureSizeValue, SIGNAL(textEdited(QString)),
@@ -998,6 +1071,7 @@ TerrainTools::TerrainTools(QString name)
     sEradius->setValue(meshBrush->eRadius);
     setTextureBrushSize(paintBrush->size);
     setTextureBrushAlpha(paintBrush->alpha * 100);
+    setTextureBrushScale(paintBrush->texScalePercent);
     setTextureBrushRotation(paintBrush->texRotationDegrees);
     refreshPaintPresets();
     
@@ -1390,6 +1464,22 @@ void TerrainTools::setTextureBrushRotation(QString val){
     textureRotationSlider->setValue(qBound(0, val.toInt(0, 10), 360));
 }
 
+void TerrainTools::setTextureBrushScale(QString val){
+    bool valid = false;
+    const int percent = val.toInt(&valid);
+    if(valid && percent >= 25 && percent <= 400)
+        setTextureBrushScale(percent);
+}
+
+void TerrainTools::setTextureBrushScale(int val){
+    val = TexturePaintMath::scalePercent(val);
+    const QSignalBlocker blocker(textureScaleSlider);
+    textureScaleSlider->setValue(val);
+    textureScaleValue->setText(QString::number(val));
+    paintBrush->texScalePercent = val;
+    emit setPaintBrush(paintBrush);
+}
+
 void TerrainTools::setTextureBrushRotation(int val){
     val = qBound(0, val, 360);
     textureRotationValue->setText(QString::number(val, 10));
@@ -1693,8 +1783,7 @@ void TerrainTools::refreshPaintPresets()
     }
 
     int idx = presetCombo->findText(selected);
-    if (idx >= 0)
-        presetCombo->setCurrentIndex(idx);
+    presetCombo->setCurrentIndex(idx);
     presetCombo->blockSignals(false);
 }
 
@@ -1711,11 +1800,11 @@ QString TerrainTools::currentTexturePresetPath()
     return QFileInfo(path).fileName();
 }
 
-void TerrainTools::applyTexturePresetPath(QString texturePath)
+bool TerrainTools::applyTexturePresetPath(QString texturePath)
 {
     texturePath = texturePath.trimmed();
     if (texturePath.isEmpty())
-        return;
+        return false;
 
     QString path = texturePath;
     if (QFileInfo(path).isRelative()) {
@@ -1725,23 +1814,30 @@ void TerrainTools::applyTexturePresetPath(QString texturePath)
 
     if (!QFile::exists(path)) {
         QMessageBox::warning(this, "Paint Preset", "Preset texture was not found:\n" + texturePath);
-        return;
+        return false;
     }
 
-    int texId = TexLib::addTex(path);
-    if (texId < 0 || TexLib::mtex.find(texId) == TexLib::mtex.end() || TexLib::mtex[texId] == NULL) {
+    // Reuse cached paint data; decode a new preset texture synchronously so
+    // the preview and brush are ready before applying the preset settings.
+    int texId = TexLib::getTex(path);
+    if (texId < 0)
+        texId = TexLib::addTex(path, true);
+    const auto textureIt = TexLib::mtex.find(texId);
+    if (texId < 0 || textureIt == TexLib::mtex.end()
+            || !textureReadyForPreview(textureIt->second)) {
         QMessageBox::warning(this, "Paint Preset", "Preset texture could not be loaded:\n" + texturePath);
-        return;
+        return false;
     }
 
     paintBrush->texId = texId;
-    paintBrush->tex = TexLib::mtex[texId];
+    paintBrush->tex = textureIt->second;
     paintBrush->useTexture = true;
 
     texLastItems.push_back(qMakePair(paintBrush->texId, paintBrush->tex));
     if (texLastItems.size() > 7)
         texLastItems.removeFirst();
     updateTexPrev();
+    return true;
 }
 
 void TerrainTools::applyPaintPreset()
@@ -1753,10 +1849,11 @@ void TerrainTools::applyPaintPreset()
     QJsonArray presets = readPaintPresets();
     for (int i = 0; i < presets.size(); i++) {
         QJsonObject preset = presets[i].toObject();
-        if (preset["name"].toString() != selected)
+        if (preset["name"].toString().trimmed() != selected)
             continue;
 
-        applyTexturePresetPath(preset["texture"].toString());
+        if (!applyTexturePresetPath(preset["texture"].toString()))
+            return;
 
         int size = preset["size"].toInt(paintBrush->size);
         if (size < 1) size = 1;
@@ -1770,6 +1867,11 @@ void TerrainTools::applyPaintPreset()
         setTextureBrushAlpha(intensity);
         textureIntensitySlider->setValue(intensity);
 
+        // Presets written before Scale existed retain the original appearance.
+        setTextureBrushScale(TexturePaintMath::presetScalePercent(preset));
+        // Mipmaps are an independent panel preference, never a paint preset.
+        // Ignore legacy "mipmaps" fields so applying a preset cannot change it.
+
         if (preset.contains("brush"))
             setBrushShapeIndex(preset["brush"].toInt(currentBrushShape));
 
@@ -1782,6 +1884,7 @@ void TerrainTools::applyPaintPreset()
         }
 
         emit setPaintBrush(paintBrush);
+        emit enableTool("paintToolTexture");
         return;
     }
 }
@@ -1832,6 +1935,7 @@ void TerrainTools::savePaintPreset()
     preset["size"] = paintBrush->size;
     preset["intensity"] = (int)(paintBrush->alpha * 100.0f + 0.5f);
     preset["brush"] = currentBrushShape;
+    preset["scale"] = paintBrush->texScalePercent;
     preset["rotation"] = paintBrush->texRotationDegrees;
     updated.append(preset);
 
@@ -2179,6 +2283,9 @@ void TerrainTools::resetDefaultValues()
     setTextureRotation(0);
     setTextureBrushSize(Game::terrainTools[4]);
     setTextureBrushAlpha(Game::terrainTools[5]);
+    setTextureBrushScale(100);
+    createTextureMipmaps->setChecked(false);
+    ddsTextureOutput->setChecked(false);
     setTextureBrushRotation(0);
     sSize->setValue(meshBrush->size);
     sIntensity->setValue(meshBrush->alpha*100);
@@ -2191,6 +2298,175 @@ void TerrainTools::resetDefaultValues()
     preloadTextures();
     refreshPaintPresets();
 
+}
+
+// Only for freshly read, unshared descriptors in the production scan. The
+// legacy TFile destructor is empty; changing its general ownership is separate.
+class ProductionTerrainFile final : public TFile {
+public:
+    ProductionTerrainFile() { flags=NULL; patchsetNpatches=0; }
+    ProductionTerrainFile(const ProductionTerrainFile &)=delete;
+    ProductionTerrainFile &operator=(const ProductionTerrainFile &)=delete;
+    ~ProductionTerrainFile() override {
+        QSet<QString*> strings{sampleFbuffer,sampleYbuffer,sampleEbuffer,sampleNbuffer};
+        const auto remember=[&](const auto &table) {
+            for(const auto &entry:table) {
+                strings.insert(entry.second.name);
+                for(QString *name:entry.second.tex) strings.insert(name);
+            }
+        };
+        remember(materials); remember(amaterials);
+        for(QString *value:strings) delete value;
+        delete[] tdata; delete[] errorBias; delete[] flags; delete[] sampleASbuffer;
+        delete errthresholdScale; delete alwaysselectMaxdist;
+        delete nsamples; delete sampleRotation; delete sampleSize;
+    }
+};
+
+void TerrainTools::compressRouteTerrtex()
+{
+    if(!Game::writeEnabled || !Game::currentRoute || Game::serverClient) return;
+    QVector<QString> unsaved;
+    Game::currentRoute->getUnsavedInfo(unsaved);
+    if(!unsaved.isEmpty()) {
+        GuiFunct::showEditorStopped(this,"Compress TERRTEX",
+            "Save all route changes before running the final production conversion.");
+        return;
+    }
+    const QString journal=Game::routeAppDataDir()+"/terrtex-dxt1-production.json";
+    {
+        QFile marker(journal);
+        if(marker.open(QIODevice::ReadOnly)
+                && QJsonDocument::fromJson(marker.readAll()).object()["complete"].toBool()) {
+            GuiFunct::showEditorStopped(this,"Compress TERRTEX",
+                "This route has already completed production DXT1 conversion. "
+                "DXT1 introduces loss and should only be run once.");
+            return;
+        }
+    }
+    if(!GuiFunct::confirmDestructiveAction(this,"Compress TERRTEX — DXT1",
+        "DXT1 introduces permanent image quality loss and should only be run once, "
+        "as the final step before your production upload.\n\n"
+        "This converts all TERRTEX ACE and DDS textures, including seasons, to opaque DXT1 DDS. "
+        "Alpha is discarded. Dimensions and the presence of mipmaps are preserved. "
+        "Terrain references are updated and ACE originals are deleted. "
+        "No TERRTEX originals or backups are retained. This cannot be undone.\n\n"
+        "An interrupted conversion can be resumed. Continue?")) return;
+
+    QProgressDialog progress("Scanning TERRTEX...",QString(),0,1000,this);
+    GuiFunct::styleEditorDialog(&progress);
+    progress.setWindowTitle("Compress TERRTEX — DXT1");
+    progress.setWindowModality(Qt::ApplicationModal);
+    progress.setWindowFlag(Qt::WindowCloseButtonHint,false);
+    progress.setAutoClose(false); progress.setAutoReset(false); progress.setMinimumDuration(0);
+    progress.setMinimumWidth(480); progress.show();
+    SaveProgress::Range whole(0,1);
+    int shown=0;
+    QElapsedTimer paint; paint.start();
+    SaveProgress::Scope reporting([&](const QString &message){
+        if(paint.elapsed()<50) return;
+        shown=qMax(shown,qMin(999,int(SaveProgress::fraction()*1000)));
+        progress.setValue(shown);
+        progress.setLabelText(QString("%1% complete: %2").arg(shown/10).arg(message));
+        QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+        paint.restart();
+    });
+    const auto decodeAce=[](const QString &path,QImage &image,bool &mipmaps,QString &error) {
+        QFile input(path);
+        if(!input.open(QIODevice::ReadOnly)) { error="Cannot read ACE: "+path; return false; }
+        std::unique_ptr<FileBuffer> buffer(ReadFile::read(&input));
+        AceFormatLayout layout;
+        if(!buffer || !AceFormatValidator::inspect(buffer->data,buffer->length,layout,&error)) {
+            error=path+": "+error; return false;
+        }
+        // Validate before entering the legacy decoder, including compressed ACE.
+        buffer.reset(); input.close();
+        Texture texture(path); AceLib reader; reader.texture=&texture; reader.run();
+        std::unique_ptr<unsigned char[]> pixels(texture.imageData);
+        if(!texture.loaded || texture.error || texture.missing || !pixels
+                || (texture.bytesPerPixel!=3 && texture.bytesPerPixel!=4)) {
+            error="ACE decode failed: "+path; return false;
+        }
+        mipmaps=texture.saveMipmaps;
+        image=QImage(pixels.get(),texture.width,texture.height,texture.width*texture.bytesPerPixel,
+            texture.bytesPerPixel==3 ? QImage::Format_RGB888 : QImage::Format_RGBA8888).copy();
+        if(image.isNull()) { error="Cannot allocate ACE image: "+path; return false; }
+        return true;
+    };
+    const QString routeRoot=Game::root+"/routes/"+Game::route;
+    const auto references=[&](const QMap<QString,QString> &names,QString &error) {
+        QFileInfoList tiles;
+        for(const QString &folder:{QString("tiles"),QString("lo_tiles")})
+            tiles.append(QDir(routeRoot+'/'+folder).entryInfoList({"*.t"},QDir::Files,QDir::Name));
+        if(tiles.isEmpty()) { error="No detailed or distant terrain descriptors were found."; return false; }
+        for(int i=0;i<tiles.size();++i) {
+            SaveProgress::set(double(i)/tiles.size());
+            SaveProgress::report(QString("Updating terrain references %1 of %2...").arg(i+1).arg(tiles.size()));
+            const auto &file=tiles[i];
+            if(file.isSymLink()) { error="Refusing a linked terrain descriptor."; return false; }
+            ProductionTerrainFile descriptor;
+            if(!descriptor.readT(file.absoluteFilePath())
+                    || !descriptor.tdata || !descriptor.nsamples || descriptor.patchsetNpatches<=0) {
+                error="Cannot read terrain descriptor: "+file.fileName(); return false;
+            }
+            const auto validMaterials=[&](const auto &table) {
+                if(descriptor.materialsCount<1 || table.size()!=std::size_t(descriptor.materialsCount)) return false;
+                for(int id=0;id<descriptor.materialsCount;++id) {
+                    const auto found=table.find(id);
+                    if(found==table.end()) return false;
+                    const auto &material=found->second;
+                    if(!material.name || material.count153<0 || material.count153>2
+                            || material.count155<0 || material.count155>2) return false;
+                    for(int channel=0;channel<material.count153;++channel)
+                        if(!material.tex[channel]) return false;
+                }
+                return true;
+            };
+            if(!validMaterials(descriptor.materials) || !validMaterials(descriptor.amaterials)) {
+                error="Unsupported terrain material table: "+file.fileName(); return false;
+            }
+            bool changed=false;
+            const auto remap=[&](auto &materials) {
+                for(auto &material:materials) for(QString *name:material.second.tex) {
+                    if(!name) continue;
+                    QString normalized=*name; normalized.replace('\\','/');
+                    normalized=QDir::cleanPath(normalized).toLower();
+                    const auto found=names.constFind(normalized);
+                    if(found!=names.constEnd()) { *name=found.value(); changed=true; }
+                    else if(normalized.endsWith(".ace") && names.contains(QFileInfo(normalized).fileName())) {
+                        error="Unsupported TERRTEX reference in "+file.fileName()+": "+*name; return false;
+                    }
+                }
+                return true;
+            };
+            if(!remap(descriptor.materials) || !remap(descriptor.amaterials)) return false;
+            if(changed && !descriptor.saveAtomic(file.absoluteFilePath())) {
+                error="Cannot publish terrain descriptor: "+file.fileName(); return false;
+            }
+        }
+        return true;
+    };
+    TerrtexProduction::Result result; QString error;
+    const bool success=TerrtexProduction::run(routeRoot+"/terrtex",journal,decodeAce,references,result,error);
+    Undo::Clear();
+    emit refreshProductionTerrtex();
+    if(!success) {
+        progress.close();
+        GuiFunct::showEditorStopped(this,"TERRTEX Conversion Stopped",
+            error+"\n\nCompleted conversions remain in place. No originals were backed up. "
+            "Retry this action to resume an interrupted conversion.");
+        return;
+    }
+    SaveProgress::set(1); progress.setValue(1000);
+    progress.setLabelText("100% complete: Production TERRTEX conversion finished.");
+    progress.close();
+    GuiFunct::showEditorNotice(this,"TERRTEX Production Conversion Complete",
+        QString("Converted %1 texture(s); %2 already converted or resumed.\n"
+                "Final TERRTEX size: %3 MiB; space saved: %4 MiB.\n\n"
+                "DXT1 introduces loss and should only be run once. "
+                "No TERRTEX originals or backups were retained.")
+            .arg(result.converted).arg(result.skipped).arg(result.after/1048576.0,0,'f',1)
+            .arg((result.before-result.after)/1048576.0,0,'f',1));
 }
 
 void TerrainTools::resetRouteTerrtexPaint()
@@ -2229,11 +2505,15 @@ void TerrainTools::resetRouteTerrtexPaint()
         QMessageBox::warning(this, "Reset Route Terrtex Paint", "No terrain tile files were found.");
         return;
     }
+    const QString distantTexture = QFile::exists(terrtexPath + "/terrainDM.dds")
+        ? "terrainDM.dds" : QFile::exists(terrtexPath + "/terrainDM.ace")
+        ? "terrainDM.ace" : "terrain.ace";
 
-    QString warning = "This will reset every detailed and distant terrain tile patch in the current route "
-            "to terrain.ace, collapse each tile's material table, delete every generated per-tile file "
-            "files from all terrtex seasons, and permanently delete every saved map in terrain_maps.\n\n"
+    QString warning = "This will reset detailed terrain patches to terrain.ace and distant-mountain "
+            "patches to %1, collapse each tile's material table, delete generated per-tile "
+            "files from all TERRTEX seasons, and permanently delete every saved map in terrain_maps.\n\n"
             "This cannot be undone from TSRE. Continue?";
+    warning = warning.arg(distantTexture);
     if (!GuiFunct::confirmDestructiveAction(
             this, "Reset Route TERRTEX Paint", warning))
         return;
@@ -2290,6 +2570,10 @@ void TerrainTools::resetRouteTerrtexPaint()
         }
 
         const int removed = tfile.resetMaterialsToDefault();
+        if(tileInfo.absolutePath().compare(lowTileDir.absolutePath(),Qt::CaseInsensitive)==0) {
+            *tfile.materials[0].tex[0] = distantTexture;
+            *tfile.amaterials[0].tex[0] = distantTexture;
+        }
 
         if (!tfile.saveAtomic(tileInfo.absoluteFilePath())) {
             tilesSaveFailed++;

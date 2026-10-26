@@ -55,8 +55,8 @@ The compact F3 panel is divided into work groups:
    textures, and the Brush control.
 4. **Hide Terrtex Textures** — filters generated tile swatches from the Load
    window.
-5. **Presets** — Apply, Save, and Remove route-local paint presets.
-6. **Brush Settings** — Color, brush shape, Size, Intensity, and Rotation.
+5. **Presets** — select to load immediately, Save, and Remove route-local presets.
+6. **Brush Settings** — Color, brush shape, Size, Intensity, Scale, and Rotation.
 
 The groups use the same dark panel hierarchy and orange active-button treatment
 as the rest of GenX. Controls that are active are visually latched, so the
@@ -253,6 +253,88 @@ Use lower intensity for gradual transitions and repeated feathering. Use higher
 intensity for decisive texture replacement. Several light passes are usually
 easier to control than one heavy pass.
 
+### Scale
+
+Scale controls the size of the texture details independently of brush coverage.
+The controls are ordered Size, Intensity, Scale, Rotation. Scale is a percentage
+from 25 to 400; 100 preserves the previous painting appearance and is the default.
+50 paints smaller details with more repeats; 200 paints larger details with fewer
+repeats. Enlarging a texture can make its pixels more visible.
+
+Scale affects new texture painting, including Auto Paint and seasonal mirror
+painting. Existing painted pixels are unchanged until repainted. Color painting
+does not use Scale. Reset Defaults restores 100. Paint presets save Scale;
+presets created before this control existed load at 100.
+Inspect patch boundaries with the chosen Scale and Rotation before broad painting.
+
+### Mipmaps and DDS output
+
+The **Output** section below Brush Settings places **Mipmaps** and **DDS** in
+two equal-width columns. They are
+independent panel preferences, remembered between sessions and unaffected by
+paint presets. Both start off; Reset Defaults restores both off.
+
+Enable **DDS** before painting for native uncompressed **24-bit RGB DDS** output.
+Leave DDS off for ACE output. Neither choice resizes the texture: an existing
+2048 x 2048 patch stays 2048 x 2048. DDS RGB24 is for opaque terrain; a texture
+with transparency stops Save rather than silently losing alpha.
+
+Enable **Mipmaps** before painting to save each subsequently painted
+texture with a complete mip chain down to 1 x 1. The full-resolution pixels and
+dimensions stay unchanged. All levels are uncompressed; filtering uses
+linear-light Lanczos-3, premultiplied alpha, and wrapped texture edges.
+This also applies to Auto Paint, color painting, and seasonal mirror painting.
+
+Paint presets never save or change either checkbox; older presets' mipmap fields
+are ignored. The choices are captured when a
+texture is painted; changing it does not
+retroactively process untouched files. Repaint a texture with the desired
+choice to change how that texture is saved. Mips are written into the selected
+ACE or DDS file;
+the editor's existing renderer filtering is unchanged.
+
+ACE mipmaps require square power-of-two textures (2-8192 pixels). Unsupported
+dimensions stop Save with a clear error; no automatic resizing is performed.
+Uncompressed mip chains use about one third more image data than level 0 alone.
+
+Only modified patches are written. When a touched patch changes output format,
+its terrain reference and existing seasonal variants are converted together in
+the same terrain save transaction. Unrelated patches are not converted. DDS
+output uses an `_dds24.dds` basename and switching back to ACE uses `_ace.ace`
+so Open Rails cannot substitute a stale DDS for the selected ACE output. Old
+files are retained conservatively; a DDS save does not write an ACE duplicate.
+
+The Reset Route TERRTEX Paint tool resets detailed `tiles` to `terrain.ace` and
+distant-mountain `lo_tiles` to `terrainDM.dds` when present, otherwise
+`terrainDM.ace` when present, otherwise `terrain.ace`. Detailed terrain always
+uses `terrain.ace`. The confirmation shows the selected distant texture.
+
+### Final production DXT1 compression
+
+Finish editing and Save the route. Select terrain, open **Hacks...**, then
+choose **Compress TERRTEX — DXT1**. The action processes the complete route's
+TERRTEX tree, including seasonal ACE and DDS files, and updates detailed/distant
+terrain references. It preserves dimensions and the presence of mipmaps, writes
+opaque DXT1 DDS, and removes ACE originals after references have been published.
+
+**DXT1 introduces permanent quality loss, discards alpha and should run once.**
+This final-upload action retains no TERRTEX originals or backups and has no Undo.
+Use a separate production upload copy and retain your editable route separately.
+It is independent of the ordinary ACE/RGB24 DDS paint-output switches.
+
+The progress bar covers texture conversion, reference updates and final
+verification/removal. Small interruption checkpoints allow retrying a stopped
+conversion without recompressing verified outputs. Completed conversions remain
+in place after a failure; read the error and retry to resume. A completed-run
+marker prevents an accidental repeat in the same editor route context. Inspect
+the result in GenX and Open Rails before uploading the route.
+
+Ordinary Save likewise reports pending PolyVeg/wire baking, texture encoding,
+file publication and cleanup as one operation. Its percentage describes work
+stages, not predicted elapsed time, and reaches 100% only after success. Large
+save payloads use temporary disk staging; the editable texture cache still uses
+memory, and complete route backups remain necessary.
+
 ### Brush shape
 
 The brush-shape mask controls the falloff pattern of manual and automatic
@@ -282,6 +364,7 @@ A preset stores:
 - texture filename;
 - brush size;
 - brush intensity;
+- texture scale percentage;
 - brush shape;
 - texture rotation.
 
@@ -300,7 +383,7 @@ workflows separate without adding editor-only files to a distributable route.
 ### Apply a preset
 
 1. Select it from the preset list.
-2. Click `Apply`.
+2. The texture and brush settings load immediately; there is no Apply button.
 3. Confirm the large texture preview, brush shape, and settings before painting.
 
 If the stored texture cannot be found or decoded, GenX warns instead of
@@ -605,3 +688,18 @@ directly and therefore will not run over an unsaved editing session.
 ## v0.17 texture-set and save update
 
 F2 adds an explicit **Snow** texture set alongside Summer, Spring, Autumn, Winter and Night. Eligible terrain and shape snow alternatives fall back to base textures when absent. Save pending terrain painting before changing texture sets. Repeated patches sharing a texture destination are staged once when their bytes agree; conflicting bytes stop Save rather than silently replacing a different result. Reopen to verify both main and paired seasonal textures.
+
+### Save progress and original resolution
+
+The save window shows overall completion from 0 to 100 percent across the save.
+It counts modified terrain tiles and painted main/mirror textures, advances
+through mip generation and encoding, then backup and file publication. The bar
+reaches 100 percent only after the save and cleanup succeed; it measures work
+completion, not an estimated time remaining.
+
+Painting and ACE/DDS output retain each source texture's original dimensions,
+including when a patch transform is baked for painting. Main and snow sources
+can have different resolutions and keep those respective resolutions. A save
+that detects an in-memory reduction below the loaded source dimensions stops
+instead of overwriting the original at lower resolution. Previously reduced
+files cannot regain their original detail through mip generation.

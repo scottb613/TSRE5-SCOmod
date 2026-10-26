@@ -12,6 +12,7 @@
 #include "WorldObj.h"
 #include "TrackObj.h"
 #include "SignalObj.h"
+#include "PolyVegObject.h"
 #include <math.h>
 #include "GLMatrix.h"
 #include "ParserX.h"
@@ -350,12 +351,12 @@ public:
             "The Hacks position is saved between sessions. Click to return to default placement.");
 
         QLabel *warning = new QLabel(
-            "Specialized repair and route-cleanup tools. Make a full backup first.");
+            "Tools for the current selection. Route actions affect the entire route.");
         warning->setWordWrap(true);
         warning->setStyleSheet("QLabel { color: #c7c7c7; padding: 1px 3px; }");
         layout->addWidget(warning);
 
-        addPopupSubtitle(QString::fromUtf8("• Selected Track"));
+        trackTitle = addPopupSubtitle(QString::fromUtf8("• Selected Track"));
 
         fixJNodePosn = new QPushButton("Repair Junction");
         removeTdbVector = new QPushButton("Remove Vector");
@@ -370,7 +371,7 @@ public:
         fixElevation->setToolTip(
             "Repairs the selected TrackDB vector's stored section elevations (sElev).");
 
-        QFrame *trackCard = new QFrame;
+        trackCard = new QFrame;
         GuiFunct::styleEditorPanelCard(trackCard);
         QGridLayout *trackActions = new QGridLayout(trackCard);
         trackActions->setSpacing(2);
@@ -385,9 +386,9 @@ public:
         trackActions->addWidget(removeTdbTree, 1, 1);
         layout->addWidget(trackCard);
 
-        addPopupSubtitle(QString::fromUtf8("• Selected Signal"));
+        signalTitle = addPopupSubtitle(QString::fromUtf8("• Selected Signal"));
 
-        QFrame *signalCard = new QFrame;
+        signalCard = new QFrame;
         GuiFunct::styleEditorPanelCard(signalCard);
         QVBoxLayout *signalActions = new QVBoxLayout(signalCard);
         signalActions->setSpacing(2);
@@ -400,21 +401,21 @@ public:
         signalActions->addWidget(fixSignalFlags);
         layout->addWidget(signalCard);
 
-        addPopupSubtitle(QString::fromUtf8("• Route Cleanup"));
+        cleanupTitle = addPopupSubtitle(QString::fromUtf8("• Route Actions"));
 
-        QFrame *cleanupCard = new QFrame;
+        cleanupCard = new QFrame;
         GuiFunct::styleEditorPanelCard(cleanupCard);
         QVBoxLayout *cleanupLayout = new QVBoxLayout(cleanupCard);
         cleanupLayout->setSpacing(2);
         cleanupLayout->setContentsMargins(4, 3, 4, 3);
 
         QLabel *routeHelp = new QLabel(
-            "Full-route cleanup tools load every world tile before making changes.");
+            "These actions operate on the full route.");
         routeHelp->setWordWrap(true);
         routeHelp->setStyleSheet("QLabel { color: #c7c7c7; padding: 0px 3px 2px 3px; }");
         cleanupLayout->addWidget(routeHelp);
 
-        QPushButton *removeInteractives = new QPushButton("Remove All Interactives");
+        removeInteractives = new QPushButton("Remove All Interactives");
         removeInteractives->setToolTip(
             "Loads every world tile, then removes all TrackDB/RoadDB-linked interactive "
             "world objects. Track and road geometry are not removed.");
@@ -428,27 +429,37 @@ public:
         GuiFunct::styleEditorActionButton(deleteInstances);
         cleanupLayout->addWidget(deleteInstances);
 
-        QPushButton *resetTerrtex = new QPushButton("Reset All TERRTEX");
+        resetTerrtex = new QPushButton("Reset All TERRTEX");
         resetTerrtex->setToolTip(
             "Resets every route terrain patch to terrain.ace and removes "
             "matching per-tile TERRTEX paint files.");
         GuiFunct::styleEditorActionButton(resetTerrtex);
         cleanupLayout->addWidget(resetTerrtex);
 
-        QPushButton *waterTilesOff = new QPushButton("Water Tiles Off");
+        compressTerrtex = new QPushButton("Compress TERRTEX — DXT1");
+        compressTerrtex->setToolTip("Final full-route production conversion, including seasonal ACE and DDS. DXT1 introduces loss and should only be run once. No TERRTEX backups or originals are retained.");
+        GuiFunct::styleEditorActionButton(compressTerrtex);
+        cleanupLayout->addWidget(compressTerrtex);
+        QObject::connect(compressTerrtex, &QPushButton::clicked, owner, [this](){
+            this->owner->userButtonPressed();
+            emit this->owner->compressRouteTerrtexRequested();
+            this->owner->requestMainFocus();
+        });
+
+        waterTilesOff = new QPushButton("Water Tiles Off");
         waterTilesOff->setToolTip(
             "Turns off every water patch in every terrain tile across the route.");
         GuiFunct::styleEditorActionButton(waterTilesOff);
         cleanupLayout->addWidget(waterTilesOff);
 
-        QPushButton *deletePolyVegBakes =
+        deletePolyVegBakes =
             new QPushButton("Delete All PolyVeg Bakes");
         deletePolyVegBakes->setToolTip(
             "Loads every world tile and deletes every PolyVeg bake object. "
             "The deletion remains Undo-friendly until the route is saved.");
         GuiFunct::styleEditorActionButton(deletePolyVegBakes);
         cleanupLayout->addWidget(deletePolyVegBakes);
-        QPushButton *replaceForests = new QPushButton("Replace All Forest Regions");
+        replaceForests = new QPushButton("Replace All Forest Regions");
         replaceForests->setToolTip(
             "Surveys all route Forest regions, merges overlapping footprints, then "
             "replaces them with the selected F6 PolyVeg schema, baking one tile at a time.");
@@ -459,7 +470,7 @@ public:
             emit this->owner->replaceRouteForestsRequested();
             this->owner->requestMainFocus();
         });
-        QPushButton *deleteWireBakes = new QPushButton("Delete All Wire Bakes");
+        deleteWireBakes = new QPushButton("Delete All Wire Bakes");
         deleteWireBakes->setToolTip("Deletes all tracked AP wire bakes across the route and turns off every wire preview.");
         GuiFunct::styleEditorActionButton(deleteWireBakes);
         cleanupLayout->addWidget(deleteWireBakes);
@@ -548,12 +559,32 @@ protected:
 private:
     void syncSelection(){
         const bool trackSelected = owner->hasSelectedTrackForHacks();
-        fixJNodePosn->setEnabled(trackSelected);
-        removeTdbVector->setEnabled(trackSelected);
-        removeTdbTree->setEnabled(trackSelected);
-        fixElevation->setEnabled(trackSelected);
-        deleteInstances->setEnabled(owner->hasSelectedStaticForHacks());
-        fixSignalFlags->setEnabled(owner->hasSelectedSignalForHacks());
+        const bool signalSelected = owner->hasSelectedSignalForHacks();
+        const bool terrainSelected = owner->hacksContextType == GameObj::terrainobj;
+        const WorldObj *object = owner->hacksSelection;
+        const bool vegetationSelected = object && object->loaded
+            && (object->type=="forest" || object->polyVegRaw || PolyVegObject::isBakeShape(object->fileName));
+        const bool wireSelected = object && object->loaded
+            && (object->fileName.startsWith("APW_",Qt::CaseInsensitive)
+                || object->fileName.startsWith("SCO_TelephoneWire_OR_Test",Qt::CaseInsensitive));
+        trackCard->setVisible(trackSelected);
+        signalCard->setVisible(signalSelected);
+        deleteInstances->setVisible(owner->hasSelectedStaticForHacks());
+        removeInteractives->setVisible(trackSelected || signalSelected);
+        resetTerrtex->setVisible(terrainSelected);
+        compressTerrtex->setVisible(terrainSelected);
+        waterTilesOff->setVisible(terrainSelected);
+        deletePolyVegBakes->setVisible(vegetationSelected);
+        replaceForests->setVisible(vegetationSelected);
+        deleteWireBakes->setVisible(trackSelected || wireSelected);
+        const bool routeActions = terrainSelected || trackSelected || signalSelected
+            || owner->hasSelectedStaticForHacks() || vegetationSelected || wireSelected;
+        cleanupCard->setVisible(routeActions);
+        const bool multipleSections = int(trackSelected)+int(signalSelected)+int(routeActions)>1;
+        trackTitle->setVisible(trackSelected && multipleSections);
+        signalTitle->setVisible(signalSelected && multipleSections);
+        cleanupTitle->setVisible(routeActions && multipleSections);
+        finalizePopup();
     }
 
     void popupPinChanged(bool pinned) override {
@@ -591,6 +622,10 @@ private:
     }
 
     PropertiesTrackObj *owner;
+    QLabel *trackTitle = NULL, *signalTitle = NULL, *cleanupTitle = NULL;
+    QFrame *trackCard = NULL, *signalCard = NULL, *cleanupCard = NULL;
+    QPushButton *removeInteractives = NULL, *resetTerrtex = NULL, *compressTerrtex = NULL;
+    QPushButton *waterTilesOff = NULL, *deletePolyVegBakes = NULL, *replaceForests = NULL, *deleteWireBakes = NULL;
     QPushButton *fixJNodePosn = NULL;
     QPushButton *removeTdbVector = NULL;
     QPushButton *removeTdbTree = NULL;
@@ -1042,6 +1077,7 @@ void PropertiesTrackObj::toggleHacksForSelection(
 }
 
 void PropertiesTrackObj::setHacksSelection(GameObj *obj){
+    hacksContextType = obj ? obj->typeObj : GameObj::none;
     hacksSelection =
         obj != NULL && obj->typeObj == GameObj::worldobj
             ? static_cast<WorldObj*>(obj)

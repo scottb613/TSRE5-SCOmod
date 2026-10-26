@@ -623,7 +623,7 @@ void SFile::loadSd() {
 }
 
 QString SFile::resolveTexturePath(QString textureName) const {
-    return Terrain::resolveTexturePath(baseTexPath, Terrain::textureSubdirCandidatesForFlags(esdAlternativeTexture, Game::season), textureName);
+    return Terrain::resolveTexturePath(baseTexPath, Terrain::textureSubdirCandidatesForFlags(esdAlternativeTexture, Game::season), textureName, true);
 }
 
 void SFile::getSize() {

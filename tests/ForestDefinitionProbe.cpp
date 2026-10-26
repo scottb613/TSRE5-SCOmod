@@ -6,6 +6,7 @@
 
 #include "ForestDefinition.h"
 #include "ForestGenerator.h"
+#include "PolyVegPlantDiagnostics.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -14,6 +15,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QSet>
 #include <QTemporaryDir>
 
@@ -221,6 +223,53 @@ int main(int argc, char **argv) {
             "Generator did not fill the feasible target population.");
         passed &= check(sameCandidates(first.candidates, repeated.candidates),
             "Same recipe, polygon, settings, and seed were not deterministic.");
+
+        // A local terrain rejection must be distinguishable from an OSM or
+        // baked-tile failure, even when no candidates reach those later checks.
+        PolyVegPlantDiagnostics blockedDiagnostics;
+        blockedDiagnostics.tileX = -42;
+        blockedDiagnostics.tileZ = 17;
+        blockedDiagnostics.osmMode = "Off (OSM checks bypassed)";
+        ForestGenerationSettings blockedSettings = settings;
+        blockedSettings.acceptsTerrain = [&blockedDiagnostics](double, double) {
+            ++blockedDiagnostics.terrain;
+            return false;
+        };
+        const ForestGenerationResult blocked = ForestGenerator::generate(
+            recipe, boundary, blockedSettings);
+        blockedDiagnostics.addGeneration(blocked);
+        passed &= check(blocked.isValid() && blocked.candidates.isEmpty()
+                && blocked.targetCount > 0 && blockedDiagnostics.terrain > 0
+                && blockedDiagnostics.terrain == blocked.rejectedTerrain
+                && blockedDiagnostics.generated == 0
+                && blockedDiagnostics.bake == 0 && blockedDiagnostics.osm == 0,
+            "Local terrain rejections were conflated with bake or OSM rejection.");
+        const QString blockedReport = blockedDiagnostics.text();
+        passed &= check(blockedReport.contains("Tile tested: -42, 17")
+                && blockedReport.contains("Existing bake detected on tested tile: No")
+                && blockedReport.contains("OSM polygons overlapping tile bounds: Not evaluated")
+                && !blockedReport.contains("zero target")
+                && !blockedReport.contains(QRegularExpression("%[0-9]+")),
+            "Zero-result report omitted the tested tile/stage or implied a bake.");
+
+        ForestGenerationSettings zeroSettings = settings;
+        zeroSettings.densityPerSquareMetre = 0.000001;
+        const ForestGenerationResult zero = ForestGenerator::generate(
+            recipe, boundary, zeroSettings);
+        PolyVegPlantDiagnostics zeroDiagnostics;
+        zeroDiagnostics.addGeneration(zero);
+        passed &= check(zero.isValid() && zero.targetCount == 0
+                && zeroDiagnostics.text().contains("zero target"),
+            "A zero density-area target was not identified in the report.");
+
+        PolyVegPlantDiagnostics osmDiagnostics;
+        osmDiagnostics.addGeneration(first);
+        osmDiagnostics.addGeneration(repeated);
+        osmDiagnostics.osm = first.candidates.size() + repeated.candidates.size();
+        passed &= check(osmDiagnostics.generated == osmDiagnostics.osm
+                && osmDiagnostics.attempts == first.attempts + repeated.attempts
+                && osmDiagnostics.bake == 0 && !osmDiagnostics.tileBaked,
+            "Carved-piece generation totals or OSM/bake separation were lost.");
 
         ForestGenerationSettings differentSeed = settings;
         differentSeed.seed++;

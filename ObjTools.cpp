@@ -10,6 +10,7 @@
 
 #include "TSectionDAT.h"
 #include "ObjTools.h"
+#include <QSignalBlocker>
 #include "Route.h"
 #include "Game.h"
 #include "SigCfg.h"
@@ -21,6 +22,7 @@
 #include "TRitem.h"
 #include "GuiFunct.h"
 #include "GltfModel.h"
+#include "EditorCollapsibleSection.h"
 #include <algorithm>
 #include <QCollator>
 #include <QMapIterator>
@@ -39,7 +41,7 @@ public:
         rootLayout->setContentsMargins(scaledUiSize(6), scaledUiSize(6),
                                        scaledUiSize(6), scaledUiSize(6));
         rootLayout->setSpacing(scaledUiSize(5));
-        QLabel *heading = new QLabel("AUTO PLACE", this);
+        QLabel *heading = new QLabel("Auto Place", this);
         GuiFunct::styleEditorTitle(heading);
         rootLayout->addWidget(heading);
     }
@@ -229,8 +231,7 @@ ObjTools::ObjTools(QString name)
         layout->addWidget(field);
         return cell;
     };
-    vlist3->addWidget(choiceCell("Target:", &autoPlacementTarget), 0, 0);
-    vlist3->addWidget(choiceCell("Rot:", &autoPlacementRotType), 0, 1);
+    vlist3->addWidget(choiceCell("Rotation:", &autoPlacementRotType), 0, 0, 1, 2);
     vlist3->setColumnStretch(0, 1);
     vlist3->setColumnStretch(1, 1);
     auto axesCell = [this](const QString &title, QLineEdit *x, QLineEdit *y, QLineEdit *z) {
@@ -239,17 +240,13 @@ ObjTools::ObjTools(QString name)
         QGridLayout *layout = new QGridLayout(cell);
         layout->setContentsMargins(scaledUiSize(6), scaledUiSize(5), scaledUiSize(6), scaledUiSize(5));
         layout->setSpacing(scaledUiSize(3));
-        layout->addWidget(new QLabel(title), 0, 0, 1, 6);
-        int column = 0;
+        layout->addWidget(new QLabel(title), 0, 0, 1, 2);
+        int row = 1;
         for(QLineEdit *field : {x, y, z}) {
-            const QString axis = QString("%1:").arg(QChar('X' + column / 2));
-            layout->addWidget(new QLabel(axis), 1, column);
-            ++column;
-            field->setMinimumWidth(0);
-            field->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-            layout->addWidget(field, 1, column);
-            layout->setColumnStretch(column++, 1);
+            layout->addWidget(new QLabel(QString("%1:").arg(QChar('X' + row - 1))), row, 0);
+            layout->addWidget(field, row++, 1);
         }
+        layout->setColumnStretch(0, 1);
         return cell;
     };
     vlist3->addWidget(axesCell("Offset (m)", &autoPlacementPosX, &autoPlacementPosY, &autoPlacementPosZ), 1, 0, 1, 2);
@@ -266,6 +263,7 @@ ObjTools::ObjTools(QString name)
     autoPlacementTarget.addItem("Tracks");
     autoPlacementTarget.addItem("Roads");
     autoPlacementTarget.addItem("Tracks & Roads");
+    autoPlacementTarget.addItem("Ruler (ap)");
     QObject::connect(&autoPlacementPosX, SIGNAL(textEdited(QString)), this, SLOT(autoPlacementOffsetEnabled(QString)));
     autoPlacementPosX.setText("0");
     QObject::connect(&autoPlacementPosY, SIGNAL(textEdited(QString)), this, SLOT(autoPlacementOffsetEnabled(QString)));
@@ -307,6 +305,40 @@ ObjTools::ObjTools(QString name)
 
     autoPlacementWindow = new AutoPlacementWindow(this);
     QVBoxLayout *autoPlaceLayout = autoPlacementWindow->contentLayout();
+    autoPlacementModes = new QButtonGroup(this);
+    autoPlacementModes->setExclusive(true);
+    auto *modeGrid = new QGridLayout;
+    modeGrid->setContentsMargins(0, 0, 0, 0);
+    modeGrid->setSpacing(0);
+    const QString modeNames[] = {"Objects", "PolyVeg Corridor", "Wires"};
+    for(int mode = 0; mode < 3; ++mode) {
+        autoPlacementLabels[mode] = new QLabel(modeNames[mode], autoPlacementWindow);
+        autoPlacementLabels[mode]->setAlignment(Qt::AlignCenter);
+        autoPlacementLabels[mode]->setWordWrap(true);
+        autoPlacementChoices[mode] = new QCheckBox(autoPlacementWindow);
+        autoPlacementChoices[mode]->setAccessibleName(modeNames[mode]);
+        autoPlacementModes->addButton(autoPlacementChoices[mode], mode);
+        for(int row = 0; row < 2; ++row) {
+            auto *cell = new QFrame(autoPlacementWindow);
+            GuiFunct::styleEditorPanelCard(cell);
+            auto *cellLayout = new QVBoxLayout(cell);
+            cellLayout->setContentsMargins(scaledUiSize(3), scaledUiSize(2), scaledUiSize(3), scaledUiSize(2));
+            QWidget *content = row == 0 ? static_cast<QWidget*>(autoPlacementLabels[mode])
+                                       : static_cast<QWidget*>(autoPlacementChoices[mode]);
+            cellLayout->addWidget(content, 0, Qt::AlignHCenter);
+            modeGrid->addWidget(cell, row, mode);
+        }
+        modeGrid->setColumnStretch(mode, 1);
+        if(mode == 0) autoPlacementChoices[mode]->setChecked(true);
+        autoPlacementLabels[mode]->setEnabled(mode == 0);
+    }
+    autoPlaceLayout->addLayout(modeGrid);
+    auto *pages = new QStackedWidget(autoPlacementWindow);
+    autoPlaceLayout->addWidget(pages);
+    auto *objectsPage = new QWidget(pages);
+    auto *objectsLayout = new QVBoxLayout(objectsPage);
+    objectsLayout->setContentsMargins(0, 0, 0, 0);
+    pages->addWidget(objectsPage);
     QLineEdit *selectedObject = new QLineEdit(autoPlacementWindow);
     selectedObject->setReadOnly(true);
     selectedObject->setPlaceholderText("Choose in F1 or select with E");
@@ -314,8 +346,8 @@ ObjTools::ObjTools(QString name)
     GuiFunct::styleEditorPanelCard(selectedCard);
     QFormLayout *selectedLayout = new QFormLayout(selectedCard);
     selectedLayout->setContentsMargins(scaledUiSize(6), scaledUiSize(5), scaledUiSize(6), scaledUiSize(5));
-    selectedLayout->addRow("Selected object:", selectedObject);
-    autoPlaceLayout->addWidget(selectedCard);
+    selectedLayout->addRow("Selected Object:", selectedObject);
+    objectsLayout->addWidget(selectedCard);
     // Read the actual placement source, including selections made outside F1.
     // Do not call getShapeName(): it can advance a random shape selection.
     QTimer *selectionTimer = new QTimer(this);
@@ -335,8 +367,8 @@ ObjTools::ObjTools(QString name)
     selectionTimer->start(200);
     QLabel *objectHeading = new QLabel(QString(QChar(0x2022)) + " Objects", autoPlacementWindow);
     GuiFunct::styleEditorSubtitle(objectHeading);
-    autoPlaceLayout->addWidget(objectHeading);
-    autoPlaceLayout->addWidget(&advancedPlacementWidget);
+    objectsLayout->addWidget(objectHeading);
+    objectsLayout->addWidget(new EditorCollapsibleSection("Alignment And Offsets", &advancedPlacementWidget, objectsPage));
 
     QFrame *placementCard = new QFrame(autoPlacementWindow);
     GuiFunct::styleEditorPanelCard(placementCard);
@@ -352,31 +384,23 @@ ObjTools::ObjTools(QString name)
     connect(wobble, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
         emit sendMsg("poleWobblePercent", value);
     });
-    QGridLayout *objectValues = new QGridLayout;
+    QFormLayout *objectValues = new QFormLayout;
+    objectValues->setFormAlignment(Qt::AlignRight | Qt::AlignTop);
     objectValues->setContentsMargins(0, 0, 0, 0);
-    objectValues->addWidget(new QLabel("Spacing (m)"), 0, 0);
     autoPlacementRange = new QDoubleSpinBox(placementCard);
     autoPlacementRange->setRange(0, 1000000000);
     autoPlacementRange->setDecimals(1);
-    autoPlacementRange->setSuffix(" m");
-    autoPlacementRange->setSpecialValueText(QString(QChar(0x221E)));
+    autoPlacementRange->setSpecialValueText("Whole Section");
     autoPlacementRange->setSingleStep(50);
-    autoPlacementRange->setToolTip("A finite range places forward from the pointer along the selected track/road. Zero displays infinity: place the whole section. Ctrl-click starts at the pointer even with infinity; Shift-click places backward from it. All runs stop at the section boundary. Spacing stays unchanged; no extra object is squeezed in at the end.");
+    autoPlacementRange->setToolTip("Zero: whole node-to-node section. Finite range starts at the pointer. Ctrl-click starts at pointer; Shift-click runs backward. Stops at section boundary.");
     connect(autoPlacementRange, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double value) {
         if(route) route->placementAutoRange = value;
     });
-    objectValues->addWidget(new QLabel("Range"), 0, 1);
-    objectValues->addWidget(new QLabel("Wobble"), 0, 2);
-    objectValues->addWidget(&autoPlacementLength, 1, 0);
-    objectValues->addWidget(autoPlacementRange, 1, 1);
-    objectValues->addWidget(wobble, 1, 2);
-    for(QWidget *field : {static_cast<QWidget*>(&autoPlacementLength), static_cast<QWidget*>(autoPlacementRange), static_cast<QWidget*>(wobble)}) {
-        field->setMinimumWidth(0);
-        field->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-    }
-    objectValues->setColumnStretch(0, 1);
-    objectValues->setColumnStretch(1, 1);
-    objectValues->setColumnStretch(2, 1);
+    objectValues->addRow("Follow:", &autoPlacementTarget);
+    objectValues->addRow("Spacing (m):", &autoPlacementLength);
+    objectValues->addRow("Range (m):", autoPlacementRange);
+    objectValues->addRow("Wobble (%):", wobble);
+    wobble->setSuffix(QString());
     placementLayout->addLayout(objectValues, 0, 0, 1, 3);
     QVBoxLayout *placementChecks = new QVBoxLayout;
     placementChecks->setContentsMargins(0, 0, 0, 0);
@@ -390,6 +414,51 @@ ObjTools::ObjTools(QString name)
     });
     placementChecks->addWidget(checkboxCell(followTerrain, placementCard));
     placementLayout->addLayout(placementChecks, 1, 0, 1, 3);
+    auto *apRulerControls=new QWidget(placementCard);
+    auto *apRulerLayout=new QGridLayout(apRulerControls);
+    apRulerLayout->setContentsMargins(0,0,0,0);
+    apRulerLayout->setSpacing(scaledUiSize(3));
+    auto *apRulerTitle=new QLabel(QString(QChar(0x2022))+" Ruler (ap)",apRulerControls);
+    GuiFunct::styleEditorSubtitle(apRulerTitle);
+    apRulerTitle->setContentsMargins(0,scaledUiSize(6),0,scaledUiSize(3));
+    apRulerLayout->addWidget(apRulerTitle,0,0,1,2);
+    const QList<QPair<QString,QString>> apActions={
+        {"New Ruler (ap)","apRulerNew"},{"Add Points","apRulerAdd"},
+        {"Edit Points","apRulerEdit"},{"Clear Ruler","apRulerClear"}};
+    for(int i=0;i<apActions.size();++i) {
+        auto *button=new QPushButton(apActions[i].first,apRulerControls);
+        GuiFunct::styleEditorActionButton(button);
+        const QString action=apActions[i].second;
+        if(action=="apRulerNew") {
+            button->setCheckable(true);
+            buttonTools["autoPlaceRulerTool"]=button;
+            connect(button,&QPushButton::toggled,this,[this](bool checked){
+                if(checked) emit sendMsg("apRulerNew");
+                else emit sendMsg("apRulerClear");
+                emit requestMainFocus();
+            });
+            button->setToolTip("Start placing a new AP ruler. Click again to clear the ruler and leave placement mode.");
+        } else {
+            connect(button,&QPushButton::clicked,this,[this,action](){ emit sendMsg(action); emit requestMainFocus(); });
+        }
+        apRulerLayout->addWidget(button,1+i/2,i%2);
+    }
+    auto *preserveCorners=new QCheckBox("Preserve Corners",apRulerControls);
+    preserveCorners->setToolTip("Force a post at every 45-90 degree change in direction and restart spacing there. Both endpoints always receive posts. Off: normal spacing continues through ruler bends.");
+    connect(preserveCorners,&QCheckBox::toggled,this,[this](bool checked){
+        if(route) route->placementAutoPreserveCorners=checked;
+    });
+    apRulerLayout->addWidget(preserveCorners,3,0,1,2);
+    auto *apHelp=new QLabel("Cyan guide. Commit places objects and resets the ruler.",apRulerControls);
+    apHelp->setWordWrap(true); apRulerLayout->addWidget(apHelp,4,0,1,2);
+    placementLayout->addWidget(apRulerControls,4,0,1,3);
+    apRulerControls->hide();
+    connect(&autoPlacementTarget,qOverload<int>(&QComboBox::currentIndexChanged),this,
+        [this,apRulerControls](int index){
+            apRulerControls->setVisible(index==3);
+            if(autoPlacementRange) autoPlacementRange->setEnabled(index!=3);
+            if(route) route->placementAutoTargetType=index;
+        });
     buttonTools["autoPlaceSimpleTool"]->setText("Commit");
     resetRotationButton->setText("Reset Rot");
     resetRotationButton->setToolTip("Reset placement rotation.");
@@ -400,12 +469,21 @@ ObjTools::ObjTools(QString name)
     placementLayout->addWidget(autoPlacementDeleteLast, 2, 1);
     placementLayout->addWidget(resetRotationButton, 2, 2);
     for(int column = 0; column < 3; ++column) placementLayout->setColumnStretch(column, 1);
-    autoPlaceLayout->addWidget(placementCard);
+    objectsLayout->addWidget(placementCard);
+    objectsLayout->addStretch(1);
 
     wireSection = new QWidget(autoPlacementWindow);
     QVBoxLayout *wireSectionLayout = new QVBoxLayout(wireSection);
     wireSectionLayout->setContentsMargins(0, 0, 0, 0);
     wireSectionLayout->setSpacing(scaledUiSize(4));
+    auto *wireObject = new QLineEdit(wireSection);
+    wireObject->setReadOnly(true);
+    wireObject->setPlaceholderText("Select a placed pole with E");
+    wireSectionLayout->addWidget(wireObject);
+    connect(selectedObject, &QLineEdit::textChanged, wireObject, [wireObject](const QString &text) {
+        wireObject->setText(text);
+        wireObject->setToolTip(text);
+    });
     QLabel *wireTitle = new QLabel(QString(QChar(0x2022)) + " Wires", wireSection);
     GuiFunct::styleEditorSubtitle(wireTitle);
     wireTitle->setToolTip("Available when the selected static shape has numbered SNAP_1, SNAP_2, ... attachment points.");
@@ -432,21 +510,47 @@ ObjTools::ObjTools(QString name)
     QDoubleSpinBox *sag = wireValue(0, 10, 1.5, " %");
     QDoubleSpinBox *width = wireValue(1, 100, 12, " mm");
     QDoubleSpinBox *span = wireValue(1, 200, 75, " m");
+    auto *wireType = new QComboBox(wireSettingsCard);
+    wireType->addItem("Plain (current)","plain");
+    wireType->addItem("Barbed","barbed");
+    wireType->setToolTip("Plain uses the current sagging wire. Barbed uses straight crossed alpha strips with the brown steel wire and barbs drawn in a repeating texture. Blue raw previews are centre-line guides; Bake/Save shows the textured strips. Delete existing bakes before changing type.");
     width->setDecimals(1);
     span->setDecimals(1);
     sag->setToolTip("Midpoint sag as a percentage of horizontal span length.");
-    width->setToolTip("Diameter of triangular wire geometry in millimetres.");
+    width->setToolTip("Wire thickness in millimetres. Barbed scales the wire-and-barb silhouette together; repeat spacing stays fixed.");
     span->setToolTip("Maximum distance between connected poles in metres.");
-    wireLayout->addWidget(new QLabel("Sag"), 0, 0);
-    wireLayout->addWidget(new QLabel("Width"), 0, 1);
-    wireLayout->addWidget(new QLabel("Max Span"), 0, 2);
-    wireLayout->addWidget(sag, 1, 0);
-    wireLayout->addWidget(width, 1, 1);
-    wireLayout->addWidget(span, 1, 2);
-    for(int column = 0; column < 3; ++column) wireLayout->setColumnStretch(column, 1);
+    auto *wireValues = new QFormLayout;
+    wireValues->setFormAlignment(Qt::AlignLeft | Qt::AlignTop);
+    wireValues->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    wireValues->setHorizontalSpacing(scaledUiSize(16));
+    wireValues->setVerticalSpacing(scaledUiSize(5));
+    wireValues->setRowWrapPolicy(QFormLayout::DontWrapRows);
+    sag->setSuffix(QString()); width->setSuffix(QString()); span->setSuffix(QString());
+    wireValues->addRow("Type:",wireType);
+    wireValues->addRow("Sag (%):", sag);
+    wireValues->addRow("Width (mm):", width);
+    wireValues->addRow("Max Span (m):", span);
+    const int wireLabelWidth=wireSettingsCard->fontMetrics().horizontalAdvance("Max Span (m):")+scaledUiSize(6);
+    for(QWidget *field:QList<QWidget*>{wireType,sag,width,span}) {
+        QWidget *label=wireValues->labelForField(field);
+        if(label) label->setMinimumWidth(wireLabelWidth);
+    }
+    QWidget *sagLabel=wireValues->labelForField(sag);
+    connect(wireType,qOverload<int>(&QComboBox::currentIndexChanged),this,
+        [this,wireType,sag,width,sagLabel,previousBarbed=false,plainWidth=12.0,barbedWidth=3.0](int) mutable {
+            const bool barbed=wireType->currentData().toString()=="barbed";
+            if(previousBarbed) barbedWidth=width->value(); else plainWidth=width->value();
+            width->setValue(barbed?barbedWidth:plainWidth);
+            previousBarbed=barbed;
+            sag->setVisible(!barbed);
+            if(sagLabel) sagLabel->setVisible(!barbed);
+            wireSettingsCard->updateGeometry();
+            autoPlacementWindow->updateGeometry();
+        });
+    wireLayout->addLayout(wireValues, 0, 0, 1, 3);
     QPushButton *preview = new QPushButton("Commit", wireSettingsCard);
     QPushButton *clearPreview = new QPushButton("Preview Off", wireSettingsCard);
-    preview->setToolTip("Select a placed pole with E, then commit its connected wire run between track/road nodes. Blue raw wires bake on Save. Existing spans are not duplicated.");
+    preview->setToolTip("Select a placed SNAP pole with E, then commit its connected wire run. Follow Ruler (ap) finds nearby supports within Max Span without a track or road. Blue raw wires bake on Save. Existing spans are not duplicated.");
     clearPreview->setToolTip("Turn off the last previewed section. Retain its raw definitions but exclude it from baking.");
     GuiFunct::styleEditorActionButton(preview);
     GuiFunct::styleEditorActionButton(clearPreview);
@@ -460,15 +564,17 @@ ObjTools::ObjTools(QString name)
     QHBoxLayout *wireActions = new QHBoxLayout;
     QPushButton *deleteWires = new QPushButton("Delete Wires", wireSettingsCard);
     GuiFunct::styleEditorActionButton(deleteWires);
-    deleteWires->setToolTip("Select one pole with E. Remove its connected node-to-node wire run; preserve every pole.");
+    deleteWires->setToolTip("Select one pole with E. Remove its connected wire run; preserve every pole.");
     wireActions->addWidget(bakeWires,1);
     wireActions->addWidget(deleteWires,1);
     wireLayout->addLayout(wireActions, 3, 0, 1, 3);
     connect(deleteWires, &QPushButton::clicked, this, [this]() { emit sendMsg("deleteSelectedWires"); });
     connect(bakeWires, &QPushButton::clicked, this, [this]() { emit sendMsg("bakeAllWires"); });
-    connect(preview, &QPushButton::clicked, this, [this, sag, width, span]() {
-        emit sendMsg("wirePreview", QString("%1,%2,%3")
-            .arg(sag->value()).arg(width->value()).arg(span->value()));
+    connect(preview, &QPushButton::clicked, this, [this, sag, width, span, wireType]() {
+        const bool barbed=wireType->currentData().toString()=="barbed";
+        emit sendMsg("wirePreview", QString("%1,%2,%3,%4,0.25")
+            .arg(barbed?0.0:sag->value()).arg(width->value()).arg(span->value())
+            .arg(wireType->currentData().toString()));
         emit requestMainFocus();
     });
     connect(clearPreview, &QPushButton::clicked, this, [this]() {
@@ -476,7 +582,106 @@ ObjTools::ObjTools(QString name)
     });
     wireSectionLayout->addWidget(wireSettingsCard);
     wireSection->setEnabled(false);
-    autoPlaceLayout->addWidget(wireSection);
+    auto *corridorPage = new QWidget(pages);
+    auto *corridorLayout = new QVBoxLayout(corridorPage);
+    corridorLayout->setContentsMargins(0, 0, 0, 0);
+    polyVegRecipeContainer = new QWidget(corridorPage);
+    auto *recipeLayout = new QVBoxLayout(polyVegRecipeContainer);
+    recipeLayout->setContentsMargins(0, 0, 0, 0);
+    corridorLayout->addWidget(polyVegRecipeContainer);
+    auto *corridorForm = new QFormLayout;
+    corridorForm->setFormAlignment(Qt::AlignRight | Qt::AlignTop);
+    auto *target = new QComboBox(corridorPage);
+    target->addItems({"Tracks", "Roads", "Tracks & Roads"});
+    auto *side = new QComboBox(corridorPage);
+    side->addItems({"Both Sides", "Left", "Right"});
+    auto corridorNumber = [corridorPage](double maximum, double value) {
+        auto *field = new QDoubleSpinBox(corridorPage);
+        field->setRange(0, maximum);
+        field->setDecimals(1);
+        field->setValue(value);
+        return field;
+    };
+    auto *length = corridorNumber(100000, 500);
+    length->setSpecialValueText("Whole Section");
+    length->setToolTip(autoPlacementRange->toolTip());
+    auto *setback = corridorNumber(1000, 10);
+    auto *depth = corridorNumber(1000, 40);
+    depth->setMinimum(1);
+    setback->setToolTip("Distance from selected track/road centreline to inner planting edge.");
+    depth->setToolTip("Planting depth outward from the setback, per side. Both + setback 10 + width 40 plants 10–50 m on each side.");
+    side->setToolTip("Left/right relative to the planting direction. Shift-click reverses direction. "
+        "Both Sides plants on each side; terrain, slope, water, OSM and clearance exclusions still apply.");
+    corridorForm->addRow("Follow:", target);
+    corridorForm->addRow("Range (m):", length);
+    corridorForm->addRow("Side:", side);
+    corridorForm->addRow("Setback (m):", setback);
+    corridorForm->addRow("Width Per Side (m):", depth);
+    corridorLayout->addLayout(corridorForm);
+    plantCorridor = new QPushButton("Plant", corridorPage);
+    plantCorridor->setCheckable(true);
+    plantCorridor->setToolTip("Arm, then click track/road to plant. Remains armed for more clicks, like AP Objects. Ctrl-click starts at pointer; Shift-click runs backward. Click Plant again or press Escape to cancel.");
+    auto *undoCorridor = new QPushButton("Undo Last", corridorPage);
+    undoCorridor->setToolTip("Undo the latest editor operation, as Ctrl+Z. Planting is one operation. Bake clears Undo history.");
+    auto *actions = new QHBoxLayout;
+    for(auto *button : {plantCorridor, undoCorridor}) {
+        GuiFunct::styleEditorActionButton(button);
+        actions->addWidget(button);
+    }
+    corridorLayout->addLayout(actions);
+    auto *bakeCorridor = new QPushButton("Bake Area", corridorPage);
+    GuiFunct::styleEditorActionButton(bakeCorridor);
+    bakeCorridor->setToolTip("Bake loaded pending PolyVeg inside camera Tile LOD. Save also bakes corridor plants.");
+    corridorLayout->addWidget(bakeCorridor);
+    corridorStatus = new QLabel("Plant: arm, then click track/road to place a corridor.", corridorPage);
+    corridorStatus->setWordWrap(true);
+    corridorLayout->addWidget(corridorStatus);
+    corridorCounts = new QLabel("Pending: 0 Raw | 0 Blocks | 0 Baked Tiles", corridorPage);
+    corridorCounts->setWordWrap(true);
+    corridorLayout->addWidget(corridorCounts);
+    corridorLayout->addStretch(1);
+    pages->addWidget(corridorPage);
+    pages->addWidget(wireSection);
+    auto configureCorridor = [this, target, side, length, setback, depth]() {
+        emit polyVegCorridorSettingsChanged(target->currentIndex(), side->currentIndex(),
+            length->value(), setback->value(), depth->value());
+    };
+    connect(plantCorridor, &QPushButton::toggled, this, [this, configureCorridor](bool active) {
+        if(active) configureCorridor();
+        emit plantPolyVegCorridorRequested(active);
+        if(active) emit requestMainFocus();
+    });
+    connect(undoCorridor, &QPushButton::clicked, this, &ObjTools::undoPolyVegCorridorRequested);
+    connect(bakeCorridor, &QPushButton::clicked, this, &ObjTools::bakePolyVegCorridorRequested);
+    for(auto *field : {length, setback, depth})
+        connect(field, qOverload<double>(&QDoubleSpinBox::valueChanged), this, configureCorridor);
+    for(auto *field : {target, side})
+        connect(field, qOverload<int>(&QComboBox::currentIndexChanged), this, configureCorridor);
+    connect(autoPlacementModes, &QButtonGroup::idToggled, this, [this, pages](int mode, bool checked) {
+        if(!checked) return;
+        for(int i = 0; i < 3; ++i) autoPlacementLabels[i]->setEnabled(i == mode);
+        if(buttonTools["autoPlaceSimpleTool"]->isChecked()) buttonTools["autoPlaceSimpleTool"]->setChecked(false);
+        emit enableTool("selectTool");
+        for(int i = 0; i < pages->count(); ++i)
+            pages->widget(i)->setSizePolicy(QSizePolicy::Preferred, i == mode ? QSizePolicy::Preferred : QSizePolicy::Ignored);
+        pages->setCurrentIndex(mode);
+        emit polyVegRecipeHostRequested(mode == 1);
+    });
+    for(int i = 1; i < pages->count(); ++i)
+        pages->widget(i)->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
+    // Use one field width for every numeric input on F5, allowing its longest
+    // existing value including sign/decimals and the spin-button frame.
+    const QString maximumOffset = QString::number(Game::maxAutoPlacement) + ".000000";
+    const int numberWidth = qMax(autoPlacementWindow->fontMetrics().horizontalAdvance("Whole Section"),
+        autoPlacementWindow->fontMetrics().horizontalAdvance("-" + maximumOffset)) + scaledUiSize(28);
+    const int rangeWidth = autoPlacementWindow->fontMetrics().horizontalAdvance("1000000000.0") + scaledUiSize(28);
+    const int fieldWidth = qMax(numberWidth, rangeWidth);
+    polyVegRecipeContainer->setProperty("numericFieldWidth", fieldWidth);
+    for(auto *field : {&autoPlacementTarget, target, side, wireType}) field->setFixedWidth(fieldWidth);
+    for(auto *field : autoPlacementWindow->findChildren<QAbstractSpinBox*>()) field->setFixedWidth(fieldWidth);
+    for(QLineEdit *field : {&autoPlacementLength, &autoPlacementPosX, &autoPlacementPosY,
+            &autoPlacementPosZ, &autoPlacementRotX, &autoPlacementRotY, &autoPlacementRotZ})
+        field->setFixedWidth(fieldWidth);
     autoPlacementWindow->finishLayout();
 
     QLabel *label2 = new QLabel(QString(QChar(0x2022)) + " Recent Items");
@@ -581,6 +786,13 @@ ObjTools::ObjTools(QString name)
 }
 
 ObjTools::~ObjTools() {
+}
+
+QWidget *ObjTools::polyVegRecipeHost() const { return polyVegRecipeContainer; }
+bool ObjTools::polyVegCorridorSelected() const { return autoPlacementModes->checkedId() == 1; }
+void ObjTools::setPolyVegCorridorStatus(const QString &text) { corridorStatus->setText(text); }
+void ObjTools::setPolyVegCorridorCounts(int raw, int blocks, int tiles) {
+    corridorCounts->setText(QString("Pending: %1 Raw | %2 Blocks | %3 Baked Tiles").arg(raw).arg(blocks).arg(tiles));
 }
 
 QWidget *ObjTools::autoPlacementPanel() const {
@@ -840,6 +1052,14 @@ void ObjTools::routeLoaded(Route* a){
     gradeRulerItem.clas = "tsre tools";
     gradeRulerItem.type = "rulergrade";
     route->ref->refItems[tsreToolsKey].push_back(gradeRulerItem);
+
+    Ref::RefItem apRulerItem;
+    apRulerItem.filename.push_back("");
+    apRulerItem.description = "Ruler (ap)";
+    apRulerItem.clas = "tsre tools";
+    // Workflow launcher, intercepted before ordinary world-object placement.
+    apRulerItem.type = "rulerap";
+    route->ref->refItems[tsreToolsKey].push_back(apRulerItem);
     
     refOther.addItem("ALL");
     refOther.addItem("Signals");
@@ -1084,10 +1304,25 @@ void ObjTools::placeToolEnabled(bool val){
 }
 
 void ObjTools::autoPlacementButtonEnabled(bool val){
+    if(val && route && route->placementAutoTargetType==3) {
+        const QSignalBlocker blocker(buttonTools["autoPlaceSimpleTool"]);
+        buttonTools["autoPlaceSimpleTool"]->setChecked(false);
+        emit sendMsg("apRulerCommit");
+        emit requestMainFocus();
+        return;
+    }
     if(val)
         emit enableTool("autoPlaceSimpleTool");
     else
         emit enableTool("");
+}
+
+void ObjTools::activateAutoPlaceRuler(){
+    if(!route) return;
+    autoPlacementChoices[0]->setChecked(true);
+    autoPlacementTarget.setCurrentIndex(3);
+    emit sendMsg("apRulerNew");
+    emit requestMainFocus();
 }
 
 void ObjTools::autoPlacementPanelVisibilityChanged(bool visible){
@@ -1188,6 +1423,8 @@ void ObjTools::msg(QString text, float val){
 
 void ObjTools::msg(QString text, QString val){
     if(text == "toolEnabled"){
+        const QSignalBlocker blocker(plantCorridor);
+        plantCorridor->setChecked(val == "polyVegCorridorTool");
         QMapIterator<QString, QPushButton*> i(buttonTools);
         while (i.hasNext()) {
             i.next();

@@ -22,6 +22,8 @@ struct DdsImage {
     int width = 0;
     int height = 0;
     QByteArray rgba;
+    bool opaqueRgb24 = false;
+    bool opaqueDxt1 = false;
 };
 
 class DdsDecoder {

@@ -59,6 +59,7 @@ public:
     double placementAutoRange = 0; // Zero means no user limit; still bounded by the section.
     int placementAutoWobblePercent = 0;
     bool placementAutoFollowTerrain = false;
+    bool placementAutoPreserveCorners = false;
     bool applyPoleWobble(WorldObj *object);
     int autoPlacementCount() const { return int(autoPlacementLastPlaced.size()); }
     int apReused = 0;
@@ -161,6 +162,8 @@ public:
     RulerObj* placeVegetationRuler(int x, int z, float *p);
     RulerObj* findVegetationRuler(bool loadWorldTiles);
     RulerObj* placeGradeRuler(int x, int z, float *p);
+    RulerObj* placeAutoPlaceRuler(int x,int z,float *p);
+    RulerObj* findAutoPlaceRuler();
     RulerObj* findGradeRuler(bool loadWorldTiles);
     void deleteSpecialRulers();
     WorldObj* autoPlaceObject(int x, int z, float* p, int mode);
@@ -233,6 +236,7 @@ protected:
     RulerObj *waterRulerObj = NULL;
     RulerObj *vegetationRulerObj = NULL;
     RulerObj *gradeRulerObj = NULL;
+    RulerObj *autoPlaceRulerObj = NULL;
     Activity* currentActivity = NULL;
     int loadingProgress = 0;
 };

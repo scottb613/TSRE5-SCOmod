@@ -1,17 +1,33 @@
 # TSRE GenX Route Editor
 
-TSRE GenX is a Windows route editor for Microsoft Train Simulator and Open
-Rails routes. It carries the established TSRE editor forward with Qt 6 and
-CMake builds, expanded terrain and map workflows, Dynamic Track, PolyVeg,
-route diagnostics, Activity Builder work, and a consistent GenX interface.
+TSRE GenX is a 64-bit Windows route editor for Microsoft Train Simulator and
+Open Rails routes. It carries the established editor forward with Qt 6/CMake,
+expanded terrain and map workflows, Dynamic Track, PolyVeg, Activity Builder,
+Consist Builder and a consistent GenX interface.
 
-GenX is an actively developed editor, not a demonstration port. Back up a
-route before major terrain, water, track, or vegetation work and evaluate new
-workflows on a copy first.
+> **Current version: v0.19.** Both clean Release compiler lanes passed 32/32 tests on 26 October 2026, and the operator accepted the final manual checks. Published v0.18 remains the immutable previous-release baseline.
 
-> **Current version: v0.18.** Forest-to-PolyVeg replacement, lightweight glTF/GLB model support, independent PolyVeg visibility and wire workflow improvements. Both clean Release compiler lanes passed all 28 tests and the operator accepted remaining manual checks on 6 October 2026. v0.17 remains the immutable prior-release baseline.
+## Major Updates Since v0.18
 
-## v0.18 Highlights
+- Immediate texture-preset loading, brush scale, preserved TERRTEX resolution,
+  optional saved mipmaps, native RGB24 DDS output and seasonal DDS/Snow lookup.
+- Overall Save progress including baking and texture work, disk-staged large
+  save payloads and a selection-sensitive HACKS popup.
+- Final full-route opaque DXT1 production compression for ACE/DDS TERRTEX.
+  **Lossy, run once, no retained TERRTEX originals or backups.**
+- Cyan editable Ruler (ap), F1/F5 access, spacing/corner preservation, smooth
+  ordinary post headings, latched placement and automatic guide reset.
+- Straight brown-steel Barbed wire alongside Plain, adjustable silhouette width,
+  shorter/thicker blunt barbs and ruler-run SNAP discovery independent of tracks.
+- Compact PolyVeg controls, optional OSM for local planting, click-to-plant full
+  tiles, F5 corridors and detailed copyable zero-result reports.
+- glTF/GLB consist/freight previews, standard 4K textures, simplified transparency,
+  corrected direction/handedness and Unicode path-name/cloning support.
+
+See [v0.19 release notes](RELEASE-NOTES-v0.19.md) for the full changes and grouped
+feature summary, and [the test matrix](TEST-MATRIX-v0.19.md) for verification status.
+
+## Published v0.18 Highlights
 
 - Route-wide Forest replacement with coverage checks, exclusions and rollback.
 - Shape Viewer and Static/Pickup glTF/GLB base-colour previews and placement.
@@ -113,98 +129,80 @@ locally only for forensic comparison. Use v0.15 instead.
 
 ## Installation
 
-### Source
+Download **`tsre-scomod-v0.19.zip`** and its `.sha256` companion from the v0.19
+release. GitHub's automatic source archives are not runnable
+Windows packages. The package uses the verified MinGW Release build.
 
-1. Use the `v0.18` tag for the exact release source, or
-   `tsre-scomod-wip` for continuing development.
-2. Install the Qt 6.11.1 and vcpkg prerequisites described by the checked-in
-   CMake presets.
-3. Keep machine-specific paths in `CMakeUserPresets.json`.
-4. Configure and build the MinGW Release baseline with:
+1. Verify the ZIP against its SHA-256 companion.
+2. Extract the **complete archive** to a permanent writable folder.
+3. Run **`AddShortcutDesktop.cmd`** in the extracted folder.
+4. Launch through the generated **TSRE GenX** shortcut. Move the shortcut only
+   after creating it and leave the extracted application folder intact.
+5. Keep the executable, compiler-matched runtime libraries, plugins, assets and
+   documents together. Do not copy only a new executable into an older runtime.
 
-   ```powershell
-   .\scripts\Invoke-CMake.ps1 --preset windows-release-local
-   .\scripts\Invoke-CMake.ps1 --build --preset windows-release-local --clean-first
-   ctest --test-dir .\build\windows-release-local --output-on-failure
-   ```
+Back up routes before terrain conforming, water processing, route-wide saves,
+Forest replacement or PolyVeg baking. Test substantial work on a copy first.
+Production DXT1 compression retains no TERRTEX originals/backups: run it on a
+separate final upload copy and keep the editable route separately.
 
-Do not copy only `TSRE5.exe` into an older runtime. The executable, Qt runtime,
-plugins, and packaged assets must remain compiler-matched.
+The optional `SCOsnapPole-TSRE-example-v0.17.zip` installs into a route separately
+from the application. See the [SNAP Pole and Wire guide](SNAP-POLE-WIRE-USER-GUIDE.md).
 
-### Packaged Binary
+### Source builds
 
-Download `tsre-scomod-v0.18.zip` and its matching `.sha256` companion from the v0.18 release. GitHub source archives are not
-runnable Windows packages. Verify the checksum, extract the complete ZIP to a
-permanent writable folder, and run **AddShortcutDesktop.cmd**. Launch using the
-generated **TSRE GenX** shortcut. Move the shortcut only after creating it and
-leave the extracted application folder intact; its runtime, plugins and assets
-must remain together.
+Use the immutable v0.19 release tag, or `tsre-scomod-wip` for development.
+Keep machine-specific paths in `CMakeUserPresets.json`. With matched Qt/vcpkg
+prerequisites configured, the MinGW Release baseline uses:
 
-Back up routes before terrain conforming, water processing, route-wide saves or
-PolyVeg baking. Test substantial changes on a copy first.
+```powershell
+.\scripts\Invoke-CMake.ps1 --preset windows-release-local
+.\scripts\Invoke-CMake.ps1 --build --preset windows-release-local --clean-first
+ctest --test-dir .\build\windows-release-local --output-on-failure
+```
 
-The optional `SCOsnapPole-TSRE-example-v0.17.zip` installs into a route, separately
-from the application. See [SNAP Pole and Wire User Guide](SNAP-POLE-WIRE-USER-GUIDE.md).
+The independent MSVC Release lane uses `windows-msvc-release-local` and CTest
+with `-C Release`. Never mix MinGW/MSVC executables, libraries or plugins.
 
 ## Requirements and Limitations
 
-- 64-bit Windows 10 version 1809 or later, or Windows 11.
-- Qt 6.11.1 for source builds. The MinGW 13.1 build is the parity/release
-  baseline; MSVC v143 is the independent verification lane.
-- Existing Microsoft Train Simulator or Open Rails route content for editing.
-- PolyVeg consumes the route-local geodata derivatives produced by SCO LIDEX.
-- GenX remains experimental. Maintain route backups, especially before terrain
-  conforming, water processing, route-wide saves, or PolyVeg bakes.
-- Windows 7 and Qt 5/qmake builds are not supported.
+- 64-bit Windows 10 version 1809 or later, or Windows 11; Windows 7 unsupported.
+- Qt 6.11.1/MinGW 13.1 is the source-build parity/release baseline. MSVC v143
+  provides independent verification. Qt5/qmake builds are unsupported.
+- Existing MSTS/Open Rails route content; SCO LIDEX derivatives for mapped PolyVeg.
+- glTF rendering is a bounded base-colour/rest-pose preview. Open Rails supplies
+  final PBR shading and animation; intersecting transparency is not triangle-sorted.
+- Wire discovery uses bounded nearest-span connections and requires review near
+  adjacent identical fences, branches and junctions.
+- The editor remains experimental. Complete route backups remain necessary.
 
 ## Verification
 
-Both operator-run clean v0.18 Release builds passed all 28 registered tests on 6 October 2026: MinGW in 4.82 s and MSVC in 5.00 s. The operator accepted the remaining manual checks. See [TEST-MATRIX-v0.18.md](TEST-MATRIX-v0.18.md) for executable hashes and coverage limits. These results do not claim exhaustive simulator compatibility or full PBR/animation support.
+Both operator-run clean v0.19 Release builds passed 32/32 registered tests on
+26 October 2026: MinGW in 5.90 s and MSVC in 6.08 s. The operator accepted the
+final manual checks. The package uses the matched MinGW runtime.
+[TEST-MATRIX-v0.19.md](TEST-MATRIX-v0.19.md) distinguishes automated, manual and
+pending evidence. Final executable hashes are recorded in the matrix; the ZIP has a SHA-256 companion.
 
-## Documentation
+## Source and Documentation
 
-This source folder contains the public editor source and synchronized release
-documents:
+The maintained public branch is `tsre-scomod-wip`; the reviewed immutable v0.19
+tag identifies the final reviewed source. Verify the binary ZIP using its matching
+SHA-256 companion. Public documents are frozen with a per-file manifest at release.
 
-- [`RELEASE-NOTES-v0.18.md`](RELEASE-NOTES-v0.18.md) — latest changes and grouped feature summary.
-- [`TEST-MATRIX-v0.18.md`](TEST-MATRIX-v0.18.md) — current verification record.
-- [`SNAP-POLE-WIRE-USER-GUIDE.md`](SNAP-POLE-WIRE-USER-GUIDE.md) — pole installation, placement, wire lifecycle and model conventions.
-- [`POLYVEG-USER-GUIDE.md`](POLYVEG-USER-GUIDE.md) — complete PolyVeg schema,
-  planting, ruler, bake, cleanup, and troubleshooting cheat sheet.
-- [`WATER-RULER-USER-GUIDE.md`](WATER-RULER-USER-GUIDE.md) — Water Ruler
-  placement, water processing, terrain adjustment, Undo, save, and
-  troubleshooting procedure.
-- [`SEASONAL-MIRROR-PAINTING-USER-GUIDE.md`](SEASONAL-MIRROR-PAINTING-USER-GUIDE.md)
-  — paired main/snow TERRTEX preparation, painting, preview, save, and
-  troubleshooting procedure.
-- [`TERRAIN-IMPROVEMENTS-USER-GUIDE.md`](TERRAIN-IMPROVEMENTS-USER-GUIDE.md)
-  — improved F2 terrain brushes, conforming, waterbed work, terrain keys,
-  native 4 m/8 m behavior, Auto Paint, cleanup, and save procedure.
-- [`HD-4M-TERRAIN-MESH-USER-GUIDE.md`](HD-4M-TERRAIN-MESH-USER-GUIDE.md)
-  — complete route conversion to the experimental 4 m terrain mesh with SCO
-  LIDEX, TSRE GenX validation, Open Rails Unstable setup, rollback, and
-  troubleshooting.
-- [`DYNAMIC-TRACK-AUTO-FLEX-USER-GUIDE.md`](DYNAMIC-TRACK-AUTO-FLEX-USER-GUIDE.md)
-  — beginner-to-advanced Dynamic Track and NextGen S-C-S-C-S Auto-Flex
-  connection procedure, traditional S-C-S comparison, TrackDB safety, Open
-  Rails validation, recovery, and troubleshooting.
-- [`GRADE-HELPER-USER-GUIDE.md`](GRADE-HELPER-USER-GUIDE.md) — Grade Ruler,
-  direct grade editing, Lock Grade, piece-by-piece Grade Helper transitions,
-  orange/cyan/red Grade Symbols, save/reopen validation, Open Rails testing,
-  and troubleshooting.
-- [`PATH-EDITOR-AND-FULL-MAP-USER-GUIDE.md`](PATH-EDITOR-AND-FULL-MAP-USER-GUIDE.md)
-  — F10 full-screen TrackDB map navigation and the complete standalone PAT
-  workflow: flowing-water routing, live switches, endpoints, reverses, waits,
-  advanced ORTS points, passing sidings, validation, repair, and safe save.
-- [`TERRTEX-TEXTURES-USER-GUIDE.md`](TERRTEX-TEXTURES-USER-GUIDE.md) — F3
-  Terrain Texture panel, validated source loading, previews and Recent/Brush
-  controls, presets, rotation, manual paint, Track/Road/Water Auto Paint,
-  tile selection, reset boundaries, save/reload validation, and troubleshooting.
-- [`scoKeyList.txt`](scoKeyList.txt) — Route Editor shortcuts.
-- [`scoUiStyle.txt`](scoUiStyle.txt) — canonical interface rules.
-- [`scoWorkList.txt`](scoWorkList.txt) — grouped feature summary.
-- [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt) — third-party licenses
-  and acknowledgments.
+- [Release notes](RELEASE-NOTES-v0.19.md), [test matrix](TEST-MATRIX-v0.19.md) and
+  [grouped feature summary](scoWorkList.txt).
+- [TERRTEX textures](TERRTEX-TEXTURES-USER-GUIDE.md),
+  [seasonal painting](SEASONAL-MIRROR-PAINTING-USER-GUIDE.md),
+  [terrain tools](TERRAIN-IMPROVEMENTS-USER-GUIDE.md) and
+  [4 m terrain](HD-4M-TERRAIN-MESH-USER-GUIDE.md).
+- [PolyVeg](POLYVEG-USER-GUIDE.md), [Water Tools](WATER-RULER-USER-GUIDE.md) and
+  [SNAP poles/wires and Ruler (ap)](SNAP-POLE-WIRE-USER-GUIDE.md).
+- [Dynamic Track](DYNAMIC-TRACK-AUTO-FLEX-USER-GUIDE.md),
+  [Grade Helper](GRADE-HELPER-USER-GUIDE.md) and
+  [Path Editor/Full Map](PATH-EDITOR-AND-FULL-MAP-USER-GUIDE.md).
+- `scoKeyList.txt`, `scoUiStyle.txt`, `scoFileEdit.txt` and
+  `THIRD-PARTY-NOTICES.txt` supply shortcuts, UI rules, code ledger and notices.
 
 ## Acknowledgments
 

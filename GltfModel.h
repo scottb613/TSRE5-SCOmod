@@ -24,6 +24,7 @@ struct GltfPrimitive {
     int magFilter = 9729;
     bool doubleSided = false;
     bool masked = false;
+    bool blended = false;
     float alphaCutoff = 0.5f;
 };
 

@@ -9,6 +9,7 @@
  */
 
 #include "ActLib.h"
+#include "SaveProgress.h"
 #include "Activity.h"
 #include "Service.h"
 #include "Traffic.h"
@@ -309,6 +310,7 @@ void ActLib::GetUnsavedInfo(QVector<QString>& items){
 void ActLib::SaveAll(){
     Activity * e;
     for (int i = 0; i < ActLib::jestact; i++){
+        SaveProgress::report(QString("Saving activities: %1 of %2").arg(i+1).arg(ActLib::jestact));
         e = ActLib::Act[i];
         if(e == NULL) continue;
         if(e->loaded != 1) continue;
@@ -318,6 +320,7 @@ void ActLib::SaveAll(){
     }
     Service * s;
     for (int i = 0; i < ActLib::jestservice; i++){
+        SaveProgress::report(QString("Saving services: %1 of %2").arg(i+1).arg(ActLib::jestservice));
         s = ActLib::Services[i];
         if(s == NULL) continue;
         if(s->loaded != 1) continue;
@@ -327,6 +330,7 @@ void ActLib::SaveAll(){
     }
     Traffic * t;
     for (int i = 0; i < ActLib::jesttraffic; i++){
+        SaveProgress::report(QString("Saving traffic: %1 of %2").arg(i+1).arg(ActLib::jesttraffic));
         t = ActLib::Traffics[i];
         if(t == NULL) continue;
         if(t->loaded != 1) continue;

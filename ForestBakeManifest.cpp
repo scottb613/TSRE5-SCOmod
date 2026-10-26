@@ -5,6 +5,7 @@
 // Licensed under GNU GPL v3 or later. See LICENSE.md.
 
 #include "ForestBakeManifest.h"
+#include "SaveProgress.h"
 
 #include <QFile>
 #include <QDir>
@@ -334,8 +335,18 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
             manifestShapes.insert(shape.toLower());
     }
     if(shapeScope) manifestShapes.intersect(*shapeScope);
-    if(manifestShapes.isEmpty())
+    if(manifestShapes.isEmpty()) {
+        // Clearing the final tile may leave an already-empty registry from an
+        // earlier interrupted cleanup. No block ownership remains to preserve.
+        if(entries.isEmpty() && QFileInfo::exists(manifestPath)) {
+            if(!QFile::remove(manifestPath)) {
+                error = "Unable to remove empty forest bake manifest: " + manifestPath;
+                return false;
+            }
+            result.removedManifest = true;
+        }
         return true;
+    }
 
     struct GeneratedNameEncoding {
         QString name;
@@ -358,6 +369,7 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
     const QStringList worldFiles = worldDirectory.entryList(
         QStringList() << "*.w", QDir::Files, QDir::Name);
     for(const QString &worldName : worldFiles) {
+        SaveProgress::report(QString("Checking vegetation bake references: %1").arg(worldName));
         QFile worldFile(worldDirectory.filePath(worldName));
         if(!worldFile.open(QIODevice::ReadOnly)) {
             error = "Unable to scan saved world file: " + worldFile.fileName();

@@ -10,6 +10,7 @@
  */
 
 #include "ActivityTrackViewer.h"
+#include "ActivityPathId.h"
 
 #include "Game.h"
 #include "GuiFunct.h"
@@ -912,8 +913,7 @@ void ActivityTrackViewer::editPathMetadata(){
         QString base = fileName->text().trimmed();
         if(base.endsWith(".pat", Qt::CaseInsensitive))
             base.chop(4);
-        const QString cleanedBase =
-            QString(base).replace(QRegularExpression("[^A-Za-z0-9_-]+"), "_");
+        const QString cleanedBase = cleanActivityPathId(base);
         const QString name = pathName->text().trimmed();
         const QString start = pathStart->text().trimmed();
         const QString end = pathEnd->text().trimmed();
@@ -925,7 +925,7 @@ void ActivityTrackViewer::editPathMetadata(){
         }
         if(base != cleanedBase){
             QMessageBox::warning(&dialog, tr("Invalid file name"),
-                                 tr("Use only letters, numbers, underscores, and hyphens in the path filename."));
+                                 tr("Use only letters (including accented letters), numbers, underscores, and hyphens in the path filename."));
             fileName->setText(cleanedBase);
             continue;
         }

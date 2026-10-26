@@ -1,4 +1,4 @@
-# SNAP Pole and Wire User Guide — TSRE GenX v0.17
+# SNAP Pole and Wire User Guide — TSRE GenX v0.19
 
 Build telephone-wire runs from placed support models with numbered SNAP attachment
 nodes. TSRE creates blue raw wires for inspection, then bakes route-local scenery
@@ -52,15 +52,22 @@ bake if its support positions or wire dimensions need to change.
 
 | Control | Behavior |
 |---|---|
-| Sag | Midpoint drop as a percentage of horizontal span length. At 1.5%, a 50 m span drops 0.75 m at its midpoint. |
-| Width | Diameter of the triangular wire geometry in millimetres. |
+| Type | Plain retains sagging geometry. Barbed uses straight crossed alpha strips with brown steel wire and short, thicker blunt barbs drawn on the texture. |
+| Sag | Plain only: midpoint drop as a percentage of horizontal span length. At 1.5%, a 50 m span drops 0.75 m at its midpoint. |
+| Width | Plain wire diameter, or Barbed silhouette scale, in millimetres. Barbed defaults to 3 mm and keeps fixed repeat spacing. Styles retain their entered widths independently. |
 | Max Span | Maximum eligible distance between neighboring supports. |
 | Commit | Discovers the selected support's connected run and records active raw spans. |
 | Preview Off | Hides/deactivates the last previewed section but retains its raw definitions; inactive spans are excluded from baking. It is not Delete. |
 | Bake All Wires | Bakes all active raw wire sections, including other committed sections. Save afterward. |
 | Delete Wires | Removes the tracked connected run attached to the selected pole, after confirmation. Keeps the poles; clears Undo history. Save afterward. |
 
-Discovery uses nearby track/road corridor loading and bounded candidates. Eligible
+With Follow set to Ruler (ap), Commit discovers connected compatible SNAP poles
+within Max Span without requiring a track, road or surviving ruler. E-select one
+of the placed poles, choose the wire type and Commit. This works with existing
+ruler-placed poles too. Discovery stops at 512 poles or 256 world tiles. Set Max
+Span close to the intended post spacing, especially near other fence lines.
+
+Other Follow modes use track/road corridor loading and bounded candidates. Eligible
 connections may cross track-node boundaries, but disconnected runs, spans beyond
 Max Span, branches and closed cycles are not general-purpose wiring solutions.
 The nearest-span logic cannot infer your intended route among adjacent identical
@@ -71,6 +78,30 @@ parallel pole lines. Inspect the result and the deletion confirmation scope.
 Manual placement and F5 placement can both supply wire supports. Select your pole
 reference, choose the appropriate track/road **Target**, and set offsets,
 rotation, **Spacing**, **Range** and **Wobble** in the Objects controls.
+
+Alternatively, choose Follow **Ruler (ap)**, draw/edit the cyan guide and Commit
+the objects. Ordinary posts rotate halfway between their incoming and outgoing
+placed spans for smooth meets. Preserved corner posts keep their corner
+orientation. End posts follow their sole adjacent span. Rotation offsets and
+Wobble still apply. The guide clears after successful placement; keep Follow on
+Ruler (ap) when committing the wires. Rotation applies to newly placed posts;
+already placed poles are not rotated by a wire Commit.
+
+F1 **TSRE Tools > Ruler (ap)** also launches this workflow and opens Auto Place
+on Objects with Follow Ruler (ap). The cyan guide posts are half the height of
+the other special rulers; handles remain above each post for picking/editing.
+**New Ruler (ap)** stays latched while adding points. Click it again to clear
+the ruler and leave placement mode. Switching tools unlatches the button while
+preserving the guide; **Add Points** resumes it. **Preserve Corners** forces
+posts at 45–90 degree turns and restarts spacing there. Both endpoints receive
+posts. Successful object Commit clears the guide; partial placement retains it
+for a duplicate-safe retry. The helper is session-only and is not saved to `.w`.
+
+Barbed raw previews are visible straight blue centre lines. Bake/Save displays
+the alpha artwork, with four blunt constant-width ends per 0.25 m repeat; those
+ends are half the earlier length and twice their earlier thickness. Width scales
+the strand/barbs together without adding geometry or sag. Delete an old bake,
+Save and recommit to adopt new artwork; referenced older materials are preserved.
 
 - A finite Range starts at the pointer for a normal forward placement. **Ctrl**
   also starts at the pointer; **Shift** works backward. Infinity retains the

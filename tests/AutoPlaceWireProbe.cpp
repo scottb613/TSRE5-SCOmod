@@ -1,4 +1,5 @@
 #include "AutoPlaceWire.h"
+#include "AutoPlaceRuler.h"
 #include "WireAssetScan.h"
 #include <QCoreApplication>
 #include <QTemporaryDir>
@@ -11,10 +12,52 @@
 #include <QtEndian>
 #include <iostream>
 #include <cstdlib>
+#include <cmath>
 
 int main(int argc,char **argv) {
     QCoreApplication app(argc,argv);
     auto require=[](bool ok,const char *message) { if(!ok) { std::cerr<<message<<'\n'; std::exit(1); } };
+    {
+        QString error;
+        const QVector<QVector3D> line{{0,0,0},{12,6,0}};
+        const auto straight=AutoPlaceRuler::plan(line,5,false,error);
+        require(error.isEmpty() && straight.size()==4,"AP ruler must place both endpoints and ordinary spacing");
+        require(straight[1].point==QVector3D(5,2.5,0) && straight[2].point==QVector3D(10,5,0)
+            && straight.back().point==QVector3D(12,6,0),"AP ruler spacing must use horizontal length and interpolate height");
+        const QVector<QVector3D> bend{{0,0,0},{7,0,0},{7,0,9}};
+        const auto ordinary=AutoPlaceRuler::plan(bend,5,false,error);
+        require(ordinary.size()==5 && ordinary[2].point==QVector3D(7,0,3),"normal spacing must carry through an unpreserved bend");
+        require(ordinary[1].direction.x()>ordinary[1].direction.z() && ordinary[1].direction.z()>0
+            && ordinary[2].direction.z()>ordinary[2].direction.x() && ordinary[2].direction.x()>0,
+            "ordinary posts on both sides of a bend must turn toward their neighboring spans");
+        const auto centred=AutoPlaceRuler::plan({{0,0,0},{10,0,0},{10,0,10}},5,false,error);
+        require((centred[2].direction-QVector3D(float(std::sqrt(0.5)),0,float(std::sqrt(0.5)))).length()<1.e-5f,
+            "ordinary post exactly on a direction change must bisect the meeting spans");
+        require(centred.front().direction==QVector3D(1,0,0) && centred.back().direction==QVector3D(0,0,1),
+            "end posts must face their sole adjacent span");
+        const auto preserved=AutoPlaceRuler::plan(bend,5,true,error);
+        require(preserved.size()==5 && preserved[2].corner && preserved[2].point==QVector3D(7,0,0)
+            && preserved[3].point==QVector3D(7,0,5),"preserve corners must force the corner and restart spacing there");
+        require(preserved[2].direction.x()>0.7f && preserved[2].direction.z()>0.7f,
+            "corner post must use the angle bisector");
+        const auto cornerCount=[&](const QVector<QVector3D> &points) {
+            const auto plan=AutoPlaceRuler::plan(points,4,true,error);
+            int count=0; for(const auto &station:plan) if(station.corner) ++count;
+            return count;
+        };
+        require(cornerCount({{0,0,0},{10,0,0},{20,0,10}})==1,"45-degree turn must preserve its corner");
+        require(cornerCount({{0,0,0},{10,0,0},{20,0,5}})==0,"shallow turn must retain ordinary spacing");
+        require(cornerCount({{0,0,0},{10,0,0},{5,0,10}})==0,"turn beyond 90 degrees must not force a corner");
+        const auto nearEnd=AutoPlaceRuler::plan({{0,0,0},{10.2f,0,0}},5,false,error);
+        require(nearEnd.size()==3 && nearEnd.back().point.x()==10.2f,"exact endpoint must replace a nearly coincident regular station");
+        const auto crossedTile=AutoPlaceRuler::plan({{1020,0,0},{1030,0,0}},5,false,error);
+        require(crossedTile.size()==3 && crossedTile[1].point.x()==1025,"AP ruler must retain continuous positions across a tile edge");
+        require(AutoPlaceRuler::plan({{0,0,0},{0,2,0}},5,true,error).isEmpty() && !error.isEmpty(),
+            "vertical/duplicate guide must not create duplicate posts");
+        require(AutoPlaceRuler::plan(line,0,true,error).isEmpty() && !error.isEmpty(),"invalid AP ruler spacing must be rejected");
+        require(AutoPlaceRuler::plan({{0,0,0},{100000,0,0}},1,true,error).isEmpty()
+            && !error.isEmpty(),"oversized AP ruler batches must be refused before placement");
+    }
     require(AutoPlaceWire::matchesSupportPrefix("SCOsnapPole.s", "SCOsnapPole.s"),
         "selected pole excluded");
     require(AutoPlaceWire::matchesSupportPrefix("SCOsnapPole_U.s", "SCOsnapPole.s"),
@@ -40,6 +83,28 @@ int main(int argc,char **argv) {
     require(AutoPlaceWire::isRaw(hiddenPreview) && !AutoPlaceWire::isPending(hiddenPreview),
         "hidden raw wire must remain a discard target without being a blue preview");
     require(!AutoPlaceWire::isRaw(QJsonObject()), "missing registry record is not raw work");
+    const QJsonObject savedBake{{"baked",true},{"active",true},{"uid",42}};
+    QJsonObject deletedBake = savedBake; deletedBake["deleted"] = true;
+    const QJsonObject states{{"saved",savedBake},{"hidden",hiddenPreview},
+        {"external",QJsonObject{{"external",true},{"active",true}}},
+        {"deleted",deletedBake},{"raw",rawPreview}};
+    require(AutoPlaceWire::pendingBakeKeys(states) == QStringList{"raw"},
+        "bake pass must select only active raw spans");
+    QJsonObject afterBake = states; afterBake["raw"] = savedBake;
+    require(AutoPlaceWire::pendingBakeKeys(afterBake).isEmpty(),
+        "bake followed by terrain-only save must not schedule another bake");
+    const auto reloadedBakes = QJsonDocument::fromJson(
+        QJsonDocument(afterBake).toJson()).object();
+    require(AutoPlaceWire::pendingBakeKeys(reloadedBakes).isEmpty(),
+        "saved/reloaded bakes must not schedule another bake");
+    afterBake["newRaw"] = rawPreview;
+    require(AutoPlaceWire::pendingBakeKeys(afterBake) == QStringList{"newRaw"},
+        "new work and failed-bake retry must exclude completed spans");
+    require(!AutoPlaceWire::hasPendingCleanup(QJsonObject{{"saved",savedBake}},false),
+        "unchanged saved wires must not start cleanup");
+    require(AutoPlaceWire::hasPendingCleanup(states,false)
+        && AutoPlaceWire::hasPendingCleanup({},true),
+        "pending deletion and global cleanup must remain retryable");
     for(const QString &state : {QString("baked"),QString("external"),QString("deleted")}) {
         QJsonObject protectedRecord = rawPreview; protectedRecord[state] = true;
         require(!AutoPlaceWire::isRaw(protectedRecord) && !AutoPlaceWire::isPending(protectedRecord),
@@ -71,6 +136,11 @@ int main(int argc,char **argv) {
     require(AutoPlaceWire::connectedSpans(graph,"0,0,2",7,false)==QSet<QString>{"ab","bc"},
         "selected run crossed a node, database, deletion, ownership or disconnected boundary");
     require(AutoPlaceWire::connectedSpans(graph,"0,0,42",7,false).isEmpty(),"unrelated pole selected wires");
+    graph["rulerA"]=connection(20,21,-1); graph["rulerB"]=connection(21,22,-1);
+    graph["otherRuler"]=connection(30,31,-1);
+    graph["trackBesideRuler"]=connection(22,23,7);
+    require(AutoPlaceWire::connectedSpans(graph,"0,0,21",-1,false)==QSet<QString>{"rulerA","rulerB"},
+        "ruler wire deletion must follow its connected supports without entering unrelated runs or tracks");
     QJsonArray wires;
     for(int i=0;i<16;++i) wires.append(QJsonObject{{"a",QJsonArray{double(i)*0.2,8.,0.}},
         {"b",QJsonArray{double(i)*0.2,8.,50.}}});
@@ -112,6 +182,116 @@ int main(int argc,char **argv) {
     dds.close();
     require(AutoPlaceWire::writeShape(dir.path(),span,error),qPrintable(error));
     require(AutoPlaceWire::writeRegistry(dir.path()+"/wires.json",{{"version",1},{"spans",QJsonObject{{span["key"].toString(),span}}}},error),"registry write");
+    auto explicitPlain=span; explicitPlain["wireType"]="plain";
+    const auto plainMesh=AutoPlaceWire::mesh(explicitPlain);
+    require(plainMesh.size()==near.size(),"explicit plain style changed legacy geometry size");
+    for(int i=0;i<near.size();++i)
+        require(plainMesh[i].point==near[i].point && plainMesh[i].normal==near[i].normal
+            && plainMesh[i].uv==near[i].uv,"missing type must preserve legacy plain geometry exactly");
+    auto barbed=span;
+    barbed["key"]="barbed-wire-style"; barbed["wireType"]="barbed";
+    barbed["width"]=3.0; barbed["barbSpacing"]=0.25;
+    barbed["wires"]=QJsonArray{wires.first()};
+    const auto barbedNear=AutoPlaceWire::mesh(barbed), barbedFar=AutoPlaceWire::mesh(barbed,true);
+    require(barbedNear.size()==24 && barbedFar.size()==24,"barbed wire must be two double-sided alpha strips, eight triangles per span");
+    auto obsoleteSettings=barbed;
+    obsoleteSettings["sag"]=10.; obsoleteSettings["barbSpacing"]=1.;
+    const auto unchanged=AutoPlaceWire::mesh(obsoleteSettings);
+    bool sidePlane=false, upPlane=false, varyingUv=false;
+    for(int i=0;i<barbedNear.size();++i) {
+        const auto &v=barbedNear[i];
+        require(v.point==unchanged[i].point && v.normal==unchanged[i].normal && v.uv==unchanged[i].uv,
+            "obsolete sag/spacing fields must not affect textured barbed wire");
+        require(v.point.z()==0 || v.point.z()==50,"straight barbed strip must not contain sag samples");
+        require(std::isfinite(v.point.x()) && std::isfinite(v.point.y()) && std::isfinite(v.point.z())
+            && std::isfinite(v.uv.x()) && std::isfinite(v.uv.y()),"alpha strip has nonfinite geometry or UVs");
+        sidePlane |= qAbs(v.point.x())>0.02f;
+        upPlane |= qAbs(v.point.y()-8)>0.02f;
+        varyingUv |= v.uv!=barbedNear.first().uv;
+    }
+    require(sidePlane && upPlane && varyingUv,"barbed wire requires perpendicular strips and repeated artwork UVs");
+    auto thickerSettings=barbed, thinnerSettings=barbed;
+    thickerSettings["width"]=6.0; thinnerSettings["width"]=1.0;
+    const auto thicker=AutoPlaceWire::mesh(thickerSettings), thinner=AutoPlaceWire::mesh(thinnerSettings);
+    require(thicker.size()==barbedNear.size() && thinner.size()==barbedNear.size(),
+        "barbed width must not change the geometry budget");
+    for(int i=0;i<barbedNear.size();++i) {
+        const QVector3D centre(0,8,barbedNear[i].point.z());
+        const auto offset=barbedNear[i].point-centre;
+        require(((thicker[i].point-centre)-offset*2).length()<1.e-5f
+            && ((thinner[i].point-centre)-offset/3).length()<1.e-5f,
+            "barbed thickness must scale the silhouette around its unchanged centre line");
+        require(thicker[i].uv==barbedNear[i].uv && thinner[i].uv==barbedNear[i].uv,
+            "barbed thickness must preserve repeat spacing and endpoint UVs");
+    }
+    for(int i=0;i<barbedNear.size();i+=3) {
+        const auto normal=QVector3D::crossProduct(barbedNear[i+1].point-barbedNear[i].point,
+            barbedNear[i+2].point-barbedNear[i].point).normalized();
+        require(QVector3D::dotProduct(normal,barbedNear[i].normal)>0.999f,"crossed alpha strip normal/winding disagreement");
+    }
+    const auto guide=AutoPlaceWire::previewMesh(barbed);
+    require(guide.size()==62*3,"raw barbed definitions require a visible plain blue centre-line guide");
+    auto longBarbed=barbed;
+    longBarbed["wires"]=QJsonArray{QJsonObject{{"a",QJsonArray{0.,0.,0.}},{"b",QJsonArray{0.,0.,200.}}}};
+    require(AutoPlaceWire::mesh(longBarbed).size()==24,"barbed geometry must stay constant for long spans");
+    require(AutoPlaceWire::writeShape(dir.path(),barbed,error),qPrintable(error));
+    QFile brown(dir.path()+"/TEXTURES/APWireBarbedBrown_v4.dds");
+    require(brown.open(QIODevice::ReadOnly),"barbed alpha texture missing");
+    const QByteArray brownBytes=brown.readAll(); brown.close();
+    require(brownBytes.size()==128+43691*4 && brownBytes.left(4)=="DDS "
+        && qFromLittleEndian<quint32>(brownBytes.constData()+12)==128
+        && qFromLittleEndian<quint32>(brownBytes.constData()+16)==256
+        && qFromLittleEndian<quint32>(brownBytes.constData()+28)==9
+        && qFromLittleEndian<quint32>(brownBytes.constData()+88)==32
+        && qFromLittleEndian<quint32>(brownBytes.constData()+104)==0xff000000u,
+        "barbed artwork requires a full RGBA mip chain");
+    QSet<quint32> steelColors;
+    bool transparent=false, opaque=false, upperBarbs=false, lowerBarbs=false;
+    int top=128,bottom=-1;
+    for(int y=0;y<128;++y) for(int x=0;x<256;++x) {
+        const int at=128+4*(y*256+x);
+        const int b=uchar(brownBytes[at]), g=uchar(brownBytes[at+1]), r=uchar(brownBytes[at+2]), a=uchar(brownBytes[at+3]);
+        transparent |= a==0; opaque |= a==255;
+        upperBarbs |= a>128 && y<48; lowerBarbs |= a>128 && y>80;
+        if(a>128) { top=qMin(top,y); bottom=qMax(bottom,y); }
+        if(a>200) {
+            require(r>=g && g>=b && r<130,"visible artwork must be native brown metal rather than bright orange rust");
+            steelColors.insert(quint32(r<<16|g<<8|b));
+        }
+    }
+    require(transparent && opaque && upperBarbs && lowerBarbs && steelColors.size()>32,
+        "alpha artwork must contain transparent gaps, a visible wire, short barbs and varied brown metal");
+    require(top>=34 && top<=37 && bottom>=90 && bottom<=93,
+        "barb artwork must use half-length ends with doubled thickness");
+    int narrowest=256,widest=0;
+    for(int y:{42,47,52}) {
+        int coverage=0;
+        for(int x=0;x<128;++x) if(uchar(brownBytes[128+4*(y*256+x)+3])>128) ++coverage;
+        narrowest=qMin(narrowest,coverage); widest=qMax(widest,coverage);
+    }
+    require(narrowest>=7 && widest<=10 && widest-narrowest<=2,
+        "barb wire must keep its doubled diameter through to the cut end");
+    int strandWidth=0;
+    for(int y=0;y<128;++y) if(uchar(brownBytes[128+4*(y*256)+3])>128) ++strandWidth;
+    require(strandWidth>=5 && strandWidth<=7,"main strand must retain its original thickness");
+    const int centre=128+4*(64*256);
+    require(uchar(brownBytes[centre+3])==255 && uchar(brownBytes[centre+255*4+3])==255,
+        "wire artwork must meet seamlessly at both repeat edges");
+    QFile barbedShape(dir.path()+"/SHAPES/"+AutoPlaceWire::shapeName(barbed["key"].toString()));
+    require(barbedShape.open(QIODevice::ReadOnly),"barbed shape missing");
+    const auto barbedRaw=barbedShape.readAll(); barbedShape.close();
+    const auto barbedText=QString::fromUtf16(reinterpret_cast<const char16_t*>(barbedRaw.constData()+2),(barbedRaw.size()-2)/2);
+    require(barbedText.contains("APWireBarbedBrown_v4.dds") && barbedText.contains("BlendATexDiff")
+        && barbedText.contains("vtx_state ( 00000000 0 -9")
+        && barbedText.contains("tex_idxs ( 1 0 ) 0 0 1 0 1")
+        && barbedText.contains(QString("uv_points ( %1").arg(barbedNear.size()+barbedFar.size())),
+        "barbed bake must serialize alpha shader/state, repeated artwork and per-vertex UVs");
+    require(AutoPlaceWire::writeShape(dir.path(),barbed,error),"barbed retry must reuse immutable alpha texture");
+    require(AutoPlaceWire::writeRegistry(dir.path()+"/barbed.json",{{"version",1},{"spans",QJsonObject{{"barbed",barbed}}}},error),
+        "barbed registry write");
+    QFile barbedRegistry(dir.path()+"/barbed.json"); require(barbedRegistry.open(QIODevice::ReadOnly),"barbed registry read");
+    const auto loadedBarbed=QJsonDocument::fromJson(barbedRegistry.readAll()).object()["spans"].toObject()["barbed"].toObject();
+    require(AutoPlaceWire::isBarbed(loadedBarbed),"barbed type must survive registry reload");
     QJsonObject maximumSpans;
     for(int i=0;i<AutoPlaceWire::MaximumSpanCount;++i)
         maximumSpans.insert(QString::number(i), QJsonObject{{"key",QString::number(i)}});
@@ -172,16 +352,28 @@ int main(int argc,char **argv) {
         && !QFile::exists(cleanup.path()+"/SHAPES/"+first+"d")
         && QFile::exists(cleanup.path()+"/SHAPES/"+second),"scoped cleanup crossed run boundary");
     // A surviving shape using the shared texture must protect it even during reset.
-    put("/SHAPES/Pole.s","shape ( APWireCharcoal_v1.dds )");
+    put("/TEXTURES/APWireBrownSteel_v1.dds","shared brown steel texture");
+    put("/TEXTURES/APWireBarbedBrown_v2.dds","legacy tapered barbed texture");
+    put("/TEXTURES/APWireBarbedBrown_v3.dds","shared barbed alpha texture");
+    put("/TEXTURES/APWireBarbedBrown_v4.dds","short thick barbed texture");
+    put("/SHAPES/Pole.s","shape ( APWireCharcoal_v1.dds APWireBrownSteel_v1.dds APWireBarbedBrown_v2.dds APWireBarbedBrown_v3.dds APWireBarbedBrown_v4.dds )");
     require(AutoPlaceWire::pruneAssets(cleanup.path(),cleanupSpans,true,error),"global cleanup failed");
     require(!QFile::exists(cleanup.path()+"/SHAPES/"+second)
         && !QFile::exists(cleanup.path()+"/SHAPES/SCO_TelephoneWire_OR_Test.s")
         && !QFile::exists(cleanup.path()+"/TEXTURES/SCO_TelephoneWire_OR_Test.dds")
         && QFile::exists(cleanup.path()+"/TEXTURES/APWireCharcoal_v1.dds")
+        && QFile::exists(cleanup.path()+"/TEXTURES/APWireBrownSteel_v1.dds")
+        && QFile::exists(cleanup.path()+"/TEXTURES/APWireBarbedBrown_v2.dds")
+        && QFile::exists(cleanup.path()+"/TEXTURES/APWireBarbedBrown_v3.dds")
+        && QFile::exists(cleanup.path()+"/TEXTURES/APWireBarbedBrown_v4.dds")
         && QFile::exists(cleanup.path()+"/SHAPES/Pole.s"),"global cleanup lost shared assets or left legacy files");
     put("/SHAPES/Pole.s","pole");
     require(AutoPlaceWire::pruneAssets(cleanup.path(),cleanupSpans,true,error)
-        && !QFile::exists(cleanup.path()+"/TEXTURES/APWireCharcoal_v1.dds"),"unused shared texture retained");
+        && !QFile::exists(cleanup.path()+"/TEXTURES/APWireCharcoal_v1.dds")
+        && !QFile::exists(cleanup.path()+"/TEXTURES/APWireBrownSteel_v1.dds")
+        && !QFile::exists(cleanup.path()+"/TEXTURES/APWireBarbedBrown_v2.dds")
+        && !QFile::exists(cleanup.path()+"/TEXTURES/APWireBarbedBrown_v3.dds")
+        && !QFile::exists(cleanup.path()+"/TEXTURES/APWireBarbedBrown_v4.dds"),"unused shared texture retained");
     require(!AutoPlaceWire::isWireShape("../APW_000000000000000000000000.s")
         && !AutoPlaceWire::isWireShape("APW_user_shape.s"),"unsafe cleanup name accepted");
     // Discard only this session's bakes, protecting even a partial save.

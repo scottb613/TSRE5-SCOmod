@@ -55,7 +55,7 @@ public:
     static QStringList textureSubdirCandidatesForFlags(int flags, QString season);
     static QString routeTerrtexPath(QString seasonSubdir = "");
     static QString routeTexturesPath(QString seasonSubdir = "");
-    static QString resolveTexturePath(QString basePath, QStringList seasonSubdirs, QString textureName);
+    static QString resolveTexturePath(QString basePath, QStringList seasonSubdirs, QString textureName, bool shapeTexture = false);
     static QString resolveTexturePath(QString basePath, QString seasonSubdir, QString textureName);
     static QString getTileName(int x, int y);
     static QString getTileNameExperimental(int x, int y);
@@ -71,6 +71,7 @@ public:
     void fillTerrainDataY(Terrain* adjacent);
     void fillTerrainDataXY(Terrain* adjacent);
     bool save(QString *error = NULL);
+    int pendingSaveWork() const;
     void refresh();
     bool isModified();
     void setModified(bool value = true);
@@ -249,7 +250,7 @@ protected:
     static QString pairedTerrtexSubdir();
     static QString terrainPlaceholderPath(QString seasonSubdir);
     static int loadTextureForPainting(QString path);
-    void ensurePairedSeasonPlaceholder(QString textureName);
+    void ensurePairedSeasonPlaceholder(QString textureName, int patchIdx, Brush *brush);
     void paintPairedSeasonTexture(Brush* brush, QString textureName, int patchIdx, float x, float z);
     void reloadLines();
     

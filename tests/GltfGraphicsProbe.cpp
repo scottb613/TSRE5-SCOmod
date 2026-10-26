@@ -9,6 +9,7 @@
 #include <QTemporaryDir>
 #include <QSurfaceFormat>
 #include <array>
+#include <cmath>
 #include <iostream>
 
 namespace {
@@ -16,11 +17,13 @@ int failures = 0;
 void check(bool success, const char *message) {
     if(!success) { ++failures; std::cerr << "FAIL: " << message << '\n'; }
 }
-constexpr std::array<GLenum, 13> stateNames{{GL_CURRENT_PROGRAM, GL_ARRAY_BUFFER_BINDING,
+constexpr std::array<GLenum, 20> stateNames{{GL_CURRENT_PROGRAM, GL_ARRAY_BUFFER_BINDING,
     GL_VERTEX_ARRAY_BINDING, GL_ACTIVE_TEXTURE, GL_TEXTURE_BINDING_2D,
     GL_FRONT_FACE, GL_CULL_FACE_MODE, GL_UNPACK_ALIGNMENT, GL_UNPACK_ROW_LENGTH,
     GL_UNPACK_SKIP_ROWS, GL_UNPACK_SKIP_PIXELS, GL_PIXEL_UNPACK_BUFFER_BINDING,
-    GL_FRAMEBUFFER_BINDING}};
+    GL_FRAMEBUFFER_BINDING, GL_BLEND_SRC_RGB, GL_BLEND_DST_RGB,
+    GL_BLEND_SRC_ALPHA, GL_BLEND_DST_ALPHA, GL_BLEND_EQUATION_RGB,
+    GL_BLEND_EQUATION_ALPHA, GL_DEPTH_WRITEMASK}};
 constexpr std::array<GLenum, 4> capabilities{{GL_CULL_FACE, GL_BLEND, GL_DITHER, GL_FRAMEBUFFER_SRGB}};
 struct SavedState {
     std::array<GLint, stateNames.size()> values{};
@@ -96,6 +99,9 @@ void run(QSurfaceFormat::OpenGLContextProfile profile) {
     f->glPixelStorei(GL_UNPACK_SKIP_ROWS, 2);
     f->glPixelStorei(GL_UNPACK_SKIP_PIXELS, 3);
     f->glEnable(GL_BLEND);
+    f->glBlendFuncSeparate(GL_DST_ALPHA, GL_ONE_MINUS_DST_ALPHA,
+                          GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    f->glBlendEquationSeparate(GL_FUNC_REVERSE_SUBTRACT, GL_MAX);
     f->glEnable(GL_CULL_FACE);
     f->glEnable(GL_DITHER);
     f->glEnable(GL_FRAMEBUFFER_SRGB);
@@ -136,6 +142,42 @@ void run(QSurfaceFormat::OpenGLContextProfile profile) {
     invalidTexture.release();
     check(invalidTexture.draw(identity, error), "explicit cleanup permits GPU retry");
     invalidTexture.release();
+
+    // Unsorted primitive input must render opaque first, then transparent
+    // far/near surfaces. Transparent colour must not overwrite the depth buffer.
+    GltfPreview transparent;
+    const auto makePreviewSurface = [&quad](float z, QVector4D colour, bool blended) {
+        GltfPrimitive result = quad;
+        result.image = QImage();
+        result.masked = false;
+        result.blended = blended;
+        result.baseColor = colour;
+        for(size_t vertex = 0; vertex < result.vertices.size(); vertex += 5)
+            result.vertices[vertex + 2] = z;
+        return result;
+    };
+    transparent.model.primitives = {
+        makePreviewSurface(0.0f, QVector4D(1, 0, 0, .5f), true),
+        makePreviewSurface(0.8f, QVector4D(0, 0, 1, 1), false),
+        makePreviewSurface(0.4f, QVector4D(0, 1, 0, .5f), true),
+        makePreviewSurface(-.4f, QVector4D(1, 1, 0, 0), true)};
+    f->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    check(transparent.draw(identity, error), "draw opaque body and sorted transparent surfaces");
+    check(SavedState(f) == before, "restore blend factors/equations and depth-write state");
+    const QColor blendedPixel = target.toImage().pixelColor(32, 32);
+    check(std::abs(blendedPixel.red() - 128) <= 2
+            && std::abs(blendedPixel.green() - 64) <= 2
+            && std::abs(blendedPixel.blue() - 64) <= 2,
+            "transparent layers use alpha and back-to-front ordering");
+    float depth = 0;
+    f->glReadPixels(32, 32, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &depth);
+    check(std::abs(depth - .9f) < .01f, "transparent surfaces preserve opaque-body depth");
+    f->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    check(transparent.draw(identity, error, 0x345670), "pick partially transparent surfaces");
+    check(target.toImage().pixelColor(32, 32) == QColor(0x34, 0x56, 0x70),
+            "transparent picking retains exact bytes and ignores zero alpha");
+    check(SavedState(f) == before, "restore state after transparent picking");
+    transparent.release();
 
     QOpenGLContext other;
     other.setFormat(context.format());

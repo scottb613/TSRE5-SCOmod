@@ -9,6 +9,7 @@
  */
 
 #include "ActivityTools.h"
+#include "ActivityPathId.h"
 #include "Route.h"
 #include "Game.h"
 #include "ActLib.h"
@@ -936,7 +937,7 @@ void ActivityTools::actPathsCloneEnabled(){
         QString base = fileName->text().trimmed();
         if(base.endsWith(".pat", Qt::CaseInsensitive))
             base.chop(4);
-        base.replace(QRegularExpression("[^A-Za-z0-9_-]+"), "_");
+        base = cleanActivityPathId(base);
         const QString label = displayName->text().trimmed();
         const QString destination = pathDir.filePath(base + ".pat");
         if(base.isEmpty() || label.isEmpty()){

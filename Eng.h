@@ -34,6 +34,7 @@ public:
         float y = 0;
         float z = 0;
         QHash<long long int, int> id;// = -2;
+        QHash<long long int, QString> previewErrors;
     };
     
     QVector<Coupling> coupling;
@@ -101,6 +102,9 @@ private:
     Ruch *ruch1 = NULL;
     Ruch *ruch2 = NULL;
     void addToFileList(QString val);
+    int loadLegacyShape(const QString &name, const QString &texturePath);
+    void renderShape(EngShape &model, int selectionColor);
+    void reloadShape(EngShape &model);
     
 };
 

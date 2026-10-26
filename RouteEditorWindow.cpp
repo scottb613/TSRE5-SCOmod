@@ -26,6 +26,7 @@
 #include "Game.h"
 #include "MapWindow.h"
 #include "TerrainLib.h"
+#include "Texture.h"
 #include "AceLib.h"
 #include <QDebug>
 #include "GuiFunct.h"
@@ -81,6 +82,7 @@
 #include "TexLib.h"
 #include "PropertiesHazard.h"
 #include "PolyVegHelper.h"
+#include "Undo.h"
 #include "PolyVegSchemaEditor.h"
 #include "TerrainWaterWindow2.h"
 
@@ -175,10 +177,34 @@ RouteEditorWindow::RouteEditorWindow() {
     waterHelper = new TerrainWaterWindow2(this);
     polyVegHelper = new PolyVegHelper(this);
     polyVegSchemaEditor = new PolyVegSchemaEditor(this);
+    QObject::connect(objTools, &ObjTools::polyVegCorridorSettingsChanged,
+                     glWidget, &RouteEditorGLWidget::setPolyVegCorridorSettings);
+    QObject::connect(objTools, &ObjTools::plantPolyVegCorridorRequested,
+                     glWidget, &RouteEditorGLWidget::setPolyVegCorridorMode);
+    QObject::connect(objTools, &ObjTools::undoPolyVegCorridorRequested, this, [this]() {
+        glWidget->clearPolyVegCorridor();
+        Undo::UndoLast();
+        glWidget->refreshPolyVegTileCounts();
+    });
+    QObject::connect(objTools, &ObjTools::bakePolyVegCorridorRequested,
+                     glWidget, &RouteEditorGLWidget::bakeAllVegetation);
+    QObject::connect(objTools, &ObjTools::polyVegRecipeHostRequested, this, [this](bool corridor) {
+        const bool active = corridor && autoPlacementDock && autoPlacementDock->isVisible();
+        if(active) polyVegHelper->openForCurrentRoute();
+        polyVegHelper->setRecipeHost(active ? objTools->polyVegRecipeHost() : nullptr);
+        glWidget->setPolyVegHelperVisible(active || (polyVegDock && polyVegDock->isVisible()));
+        if(!active) glWidget->clearPolyVegCorridor();
+    });
+    QObject::connect(glWidget, &RouteEditorGLWidget::polyVegPanelStatus,
+                     objTools, &ObjTools::setPolyVegCorridorStatus);
+    QObject::connect(glWidget, &RouteEditorGLWidget::polyVegTileCounts,
+                     objTools, &ObjTools::setPolyVegCorridorCounts);
     QObject::connect(polyVegHelper, &PolyVegHelper::settingsChanged,
                      glWidget, &RouteEditorGLWidget::setPolyVegSettings);
     QObject::connect(polyVegHelper, &PolyVegHelper::bakeRequested,
-                     glWidget, &RouteEditorGLWidget::bakeVegetationCurrentTile);
+                     glWidget, &RouteEditorGLWidget::setPolyVegBakeTileMode);
+    QObject::connect(glWidget, &RouteEditorGLWidget::polyVegBakeTileModeChanged,
+                     polyVegHelper, &PolyVegHelper::setBakeTileActive);
     QObject::connect(polyVegHelper, &PolyVegHelper::bakeAllRequested,
                      glWidget, &RouteEditorGLWidget::bakeAllVegetation);
     QObject::connect(polyVegHelper, &PolyVegHelper::countsRequested,
@@ -195,18 +221,20 @@ RouteEditorWindow::RouteEditorWindow() {
                      glWidget, &RouteEditorGLWidget::setPolyVegRulerArea);
     QObject::connect(polyVegHelper, &PolyVegHelper::rulerWidthChanged,
                      glWidget, &RouteEditorGLWidget::setPolyVegRulerWidth);
+    QObject::connect(polyVegHelper, &PolyVegHelper::clearBakeRequested,
+                     glWidget, &RouteEditorGLWidget::setPolyVegClearBakeMode);
+    QObject::connect(glWidget, &RouteEditorGLWidget::polyVegClearBakeModeChanged,
+                     polyVegHelper, &PolyVegHelper::setClearBakeActive);
+    QObject::connect(polyVegHelper, &PolyVegHelper::fullTilePlantingRequested,
+                     glWidget, &RouteEditorGLWidget::setPolyVegFullTileMode);
+    QObject::connect(glWidget, &RouteEditorGLWidget::polyVegFullTileModeChanged,
+                     polyVegHelper, &PolyVegHelper::setFullTilePlantingActive);
     QObject::connect(polyVegHelper, &PolyVegHelper::plantRulerRequested,
                      glWidget, &RouteEditorGLWidget::plantPolyVegRuler);
-    QObject::connect(polyVegHelper, &PolyVegHelper::jumpRawRequested,
-                     glWidget, &RouteEditorGLWidget::jumpNextPolyVegRawTile);
-    QObject::connect(polyVegHelper, &PolyVegHelper::resetRawJumpRequested,
-                     glWidget, &RouteEditorGLWidget::resetPolyVegRawJump);
-    QObject::connect(polyVegHelper, &PolyVegHelper::jumpBakeRequested,
-                     glWidget, &RouteEditorGLWidget::jumpNextPolyVegBakeTile);
-    QObject::connect(polyVegHelper, &PolyVegHelper::resetBakeJumpRequested,
-                     glWidget, &RouteEditorGLWidget::resetPolyVegBakeJump);
     QObject::connect(glWidget, &RouteEditorGLWidget::polyVegHelperRequested,
                      this, [this](){ showPolyVegHelper(true); });
+    QObject::connect(glWidget, &RouteEditorGLWidget::polyVegRulerCleared,
+                     polyVegHelper, &PolyVegHelper::clearRulerTools);
     QObject::connect(glWidget, &RouteEditorGLWidget::polyVegTileCounts,
                      polyVegHelper, &PolyVegHelper::setTileCounts);
     QObject::connect(glWidget, &RouteEditorGLWidget::polyVegPanelStatus,
@@ -266,6 +294,12 @@ RouteEditorWindow::RouteEditorWindow() {
                      this, [this](){
         showPolyVegHelper(true);
         polyVegHelper->activateRuler();
+    });
+    QObject::connect(glWidget, &RouteEditorGLWidget::autoPlaceRulerPlacementRequested,
+                     this, [this](){
+        if(autoPlacementAction) autoPlacementAction->setChecked(true);
+        if(autoPlacementDock) autoPlacementDock->raise();
+        objTools->activateAutoPlaceRuler();
     });
     
     shapeViewWindow = new ShapeViewWindow(this);
@@ -405,6 +439,23 @@ RouteEditorWindow::RouteEditorWindow() {
                          trackProperties, &PropertiesTrackObj::toggleHacksForSelection);
     }
     if(trackProperties != NULL){
+        QObject::connect(terrainTools, &TerrainTools::refreshProductionTerrtex,
+                         glWidget, [editor = glWidget](){
+            editor->makeCurrent();
+            QStringList cached;
+            const QString prefix=QDir::cleanPath(Game::root+"/routes/"+Game::route+"/terrtex")+'/';
+            for(const auto &entry:TexLib::mtex) if(entry.second) {
+                const QString path=QDir::cleanPath(entry.second->pathid);
+                if(path.startsWith(prefix,Qt::CaseInsensitive) && path.endsWith(".dds",Qt::CaseInsensitive))
+                    cached.append(path);
+            }
+            for(const QString &path:cached) TexLib::addTex(path,true);
+            if(Game::terrainLib) Game::terrainLib->reloadLoaded();
+            editor->update();
+        });
+        QObject::connect(trackProperties,
+                         &PropertiesTrackObj::compressRouteTerrtexRequested,
+                         terrainTools, &TerrainTools::compressRouteTerrtex);
         QObject::connect(trackProperties,
                          &PropertiesTrackObj::resetRouteTerrtexRequested,
                          terrainTools, &TerrainTools::resetRouteTerrtexPaint);
@@ -478,6 +529,11 @@ RouteEditorWindow::RouteEditorWindow() {
             autoPlacementAction->setChecked(visible);
         }
         objTools->autoPlacementPanelVisibilityChanged(visible);
+        const bool corridor = visible && objTools->polyVegCorridorSelected();
+        if(corridor) polyVegHelper->openForCurrentRoute();
+        polyVegHelper->setRecipeHost(corridor ? objTools->polyVegRecipeHost() : nullptr);
+        glWidget->setPolyVegHelperVisible(corridor || (polyVegDock && polyVegDock->isVisible()));
+        if(!visible) glWidget->clearPolyVegCorridor();
     });
 
     polyVegDock = new QDockWidget(tr("POLYVEG PLANTER"), this);
@@ -506,6 +562,7 @@ RouteEditorWindow::RouteEditorWindow() {
         if(visible){
             if(autoPlacementDock != NULL && autoPlacementDock->isVisible())
                 autoPlacementDock->hide();
+            polyVegHelper->setRecipeHost();
             if(waterHelperDock != NULL && waterHelperDock->isVisible())
                 waterHelperDock->hide();
             if(box != NULL)

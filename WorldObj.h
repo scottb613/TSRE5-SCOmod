@@ -18,6 +18,8 @@
 #include "OglObj.h"
 #include "Ref.h"
 #include <QHash>
+#include <QSharedPointer>
+#include <QPainterPath>
 
 class SFile;
 class TrackItemObj;
@@ -92,6 +94,9 @@ public:
     bool modified = false;
     // Session ownership, never inferred from an asset name or serialized to MSTS.
     bool polyVegRaw = false;
+    // Shared operation footprint follows raw objects through Undo. Save bakes
+    // raw objects first; baked-tile protection then owns duplicate prevention.
+    QSharedPointer<const QPainterPath> polyVegPlantingArea;
     Vector3f selectionColor;
     OglObj box;
     OglObj* snapableEndPoint = NULL;

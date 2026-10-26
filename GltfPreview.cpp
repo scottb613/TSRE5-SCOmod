@@ -13,6 +13,7 @@
 #include <QOpenGLVertexArrayObject>
 #include <QPointer>
 #include <algorithm>
+#include <cmath>
 #include <vector>
 #include <map>
 #include <tuple>
@@ -22,6 +23,7 @@ struct GltfPreview::Resources {
         QOpenGLBuffer buffer;
         QOpenGLVertexArrayObject array;
         std::shared_ptr<QOpenGLTexture> texture;
+        QVector3D centre;
     };
     QOpenGLShaderProgram shader;
     QPointer<QOpenGLContext> owner;
@@ -47,6 +49,13 @@ public:
         f->glGetIntegerv(GL_UNPACK_SKIP_ROWS, &unpackSkipRows);
         f->glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &unpackSkipPixels);
         f->glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &unpackBuffer);
+        f->glGetIntegerv(GL_BLEND_SRC_RGB, &blendSrcRgb);
+        f->glGetIntegerv(GL_BLEND_DST_RGB, &blendDstRgb);
+        f->glGetIntegerv(GL_BLEND_SRC_ALPHA, &blendSrcAlpha);
+        f->glGetIntegerv(GL_BLEND_DST_ALPHA, &blendDstAlpha);
+        f->glGetIntegerv(GL_BLEND_EQUATION_RGB, &blendEquationRgb);
+        f->glGetIntegerv(GL_BLEND_EQUATION_ALPHA, &blendEquationAlpha);
+        f->glGetBooleanv(GL_DEPTH_WRITEMASK, &depthWrite);
         cull = f->glIsEnabled(GL_CULL_FACE);
         blend = f->glIsEnabled(GL_BLEND);
         dither = f->glIsEnabled(GL_DITHER);
@@ -67,6 +76,10 @@ public:
         f->glPixelStorei(GL_UNPACK_SKIP_PIXELS, unpackSkipPixels);
         f->glBindBuffer(GL_PIXEL_UNPACK_BUFFER, GLuint(unpackBuffer));
         cull ? f->glEnable(GL_CULL_FACE) : f->glDisable(GL_CULL_FACE);
+        f->glBlendFuncSeparate(GLenum(blendSrcRgb), GLenum(blendDstRgb),
+                              GLenum(blendSrcAlpha), GLenum(blendDstAlpha));
+        f->glBlendEquationSeparate(GLenum(blendEquationRgb), GLenum(blendEquationAlpha));
+        f->glDepthMask(depthWrite);
         blend ? f->glEnable(GL_BLEND) : f->glDisable(GL_BLEND);
         dither ? f->glEnable(GL_DITHER) : f->glDisable(GL_DITHER);
         srgb ? f->glEnable(GL_FRAMEBUFFER_SRGB) : f->glDisable(GL_FRAMEBUFFER_SRGB);
@@ -75,7 +88,9 @@ private:
     QOpenGLExtraFunctions *f;
     GLint program, buffer, array, activeTexture, texture, sampler, frontFace, cullMode, unpackAlignment;
     GLint unpackRowLength, unpackSkipRows, unpackSkipPixels, unpackBuffer;
-    GLboolean cull, blend, dither, srgb;
+    GLint blendSrcRgb, blendDstRgb, blendSrcAlpha, blendDstAlpha;
+    GLint blendEquationRgb, blendEquationAlpha;
+    GLboolean depthWrite, cull, blend, dither, srgb;
 };
 }
 
@@ -137,14 +152,15 @@ bool GltfPreview::draw(const QMatrix4x4 &matrix, QString &error,
                 ? "in vec2 texcoord; out vec4 result;\n"
                 : "varying vec2 texcoord;\n")
                 + "uniform sampler2D baseTexture; uniform bool textured; uniform vec4 factor;\n"
-                  "uniform bool masked; uniform float cutoff;\n"
+                  "uniform bool masked; uniform bool blended; uniform float cutoff;\n"
                   "uniform bool picking; uniform vec3 pickingColor;\n"
                   "vec3 toLinear(vec3 c){return mix(c/12.92,pow((c+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),c));}\n"
                   "vec3 toSrgb(vec3 c){return mix(12.92*c,1.055*pow(max(c,vec3(0)),vec3(1.0/2.4))-0.055,step(vec3(0.0031308),c));}\n"
                   "void main(){ vec4 c=vec4(1); if(textured) c="
                 + (modern ? "texture" : "texture2D")
                 + "(baseTexture,texcoord); c.rgb=toLinear(c.rgb)*factor.rgb; c.a*=factor.a;\n"
-                  "if(masked && c.a<cutoff) discard; c=picking ? vec4(pickingColor,1) : vec4(toSrgb(c.rgb),1);\n"
+                  "if((masked && c.a<cutoff) || (blended && c.a<=0.001)) discard; "
+                  "c=picking ? vec4(pickingColor,1) : vec4(toSrgb(c.rgb),blended ? c.a : 1.0);\n"
                 + (modern ? "result=c;" : "gl_FragColor=c;") + "}\n";
         auto &shader = resources->shader;
         if(!shader.addShaderFromSourceCode(QOpenGLShader::Vertex, vertex)
@@ -163,6 +179,17 @@ bool GltfPreview::draw(const QMatrix4x4 &matrix, QString &error,
             auto mesh = std::make_unique<Resources::Mesh>();
             resources->meshes.push_back(std::move(mesh));
             auto &gpu = *resources->meshes.back();
+            // Cache a primitive centre once, rather than walking its vertices each frame.
+            if(!primitive.vertices.empty()) {
+                QVector3D minimum(primitive.vertices[0], primitive.vertices[1], primitive.vertices[2]);
+                QVector3D maximum = minimum;
+                for(size_t vertex = 0; vertex + 4 < primitive.vertices.size(); vertex += 5)
+                    for(int axis = 0; axis < 3; ++axis) {
+                        minimum[axis] = std::min(minimum[axis], primitive.vertices[vertex + axis]);
+                        maximum[axis] = std::max(maximum[axis], primitive.vertices[vertex + axis]);
+                    }
+                gpu.centre = (minimum + maximum) * 0.5f;
+            }
             if(!gpu.array.create() || !gpu.buffer.create()) {
                 return fail("Cannot allocate glTF preview geometry.");
             }
@@ -236,13 +263,38 @@ bool GltfPreview::draw(const QMatrix4x4 &matrix, QString &error,
     if(selectionColor != 0) f->glDisable(GL_DITHER);
     f->glFrontFace(mirroredInstance ? GL_CW : GL_CCW);
     f->glCullFace(GL_BACK);
-    for(size_t i = 0; i < model.primitives.size(); ++i) {
+    // Opaque/cutout surfaces establish depth first. Transparent primitives are
+    // drawn back to front without depth writes. This remains an editor preview:
+    // intersecting transparent surfaces are not sorted at triangle granularity.
+    std::vector<size_t> order(model.primitives.size());
+    std::vector<float> depths(model.primitives.size());
+    for(size_t i = 0; i < order.size(); ++i) {
+        order[i] = i;
+        const float depth = matrix.map(resources->meshes[i]->centre).z();
+        depths[i] = std::isfinite(depth) ? depth : 0.0f;
+    }
+    if(selectionColor == 0)
+        std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+            if(model.primitives[a].blended != model.primitives[b].blended)
+                return !model.primitives[a].blended;
+            return model.primitives[a].blended && depths[a] > depths[b];
+        });
+    for(size_t i : order) {
         const auto &primitive = model.primitives[i];
         const auto &mesh = resources->meshes[i];
         primitive.doubleSided ? f->glDisable(GL_CULL_FACE) : f->glEnable(GL_CULL_FACE);
         shader.setUniformValue("factor", primitive.baseColor);
         shader.setUniformValue("textured", bool(mesh->texture));
         shader.setUniformValue("masked", primitive.masked);
+        shader.setUniformValue("blended", primitive.blended);
+        const bool blendSurface = primitive.blended && selectionColor == 0;
+        if(blendSurface) {
+            f->glEnable(GL_BLEND);
+            f->glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+            f->glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
+                                  GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        } else f->glDisable(GL_BLEND);
+        f->glDepthMask(blendSurface ? GL_FALSE : GL_TRUE);
         shader.setUniformValue("cutoff", primitive.alphaCutoff);
         f->glBindTexture(GL_TEXTURE_2D, mesh->texture ? mesh->texture->textureId() : 0);
         mesh->array.bind();

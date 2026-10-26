@@ -29,6 +29,8 @@ public:
     int imageSize;
     int bytesPerPixel;
     int compressed;
+    int sourceWidth = 0;
+    int sourceHeight = 0;
     int width;
     int height;
     int texID;
@@ -41,6 +43,8 @@ public:
     int ref = 0;
     bool glLoaded = false;
     bool editable = false;
+    bool saveMipmaps = false;
+    bool saveDds24 = false;
     bool missing = false;
     bool error = false;
 
