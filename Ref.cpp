@@ -97,6 +97,19 @@ void Ref::loadUtf16Data(FileBuffer* data, QString path){
                 ParserX::SkipToken(data);
                 continue;
             }
+            if(sh=="tsrestaticflags" || sh=="tsrestaticdetaillevel" || sh=="tsrecollideflags" || sh=="tsrecollidefunction") {
+                const QString value=ParserX::GetStringInside(data).trimmed();
+                bool ok=false;
+                if(sh=="tsrestaticflags") { const auto flags=value.toUInt(&ok); if(ok) item.staticFlags=flags; }
+                else {
+                    const int number=value.toInt(&ok);
+                    if(ok && sh=="tsrestaticdetaillevel") item.copyDetailLevel=number;
+                    if(ok && sh=="tsrecollideflags") item.copyCollideFlags=number;
+                    if(ok && sh=="tsrecollidefunction") item.copyCollideFunction=number;
+                }
+                item.hasCopySettings=item.hasCopySettings || ok;
+                ParserX::SkipToken(data); continue;
+            }
             if (sh == ("randomrotx")) {
                 float b = ParserX::GetNumberInside(data);
                 float e = ParserX::GetNumberInside(data);
@@ -179,6 +192,12 @@ void Ref::saveToStream(QTextStream* out){
                 *out << "description ( " << ParserX::AddComIfReq(items[i].description) << " )\n";
             if(items[i].selectionMethod.length() > 0)
                 *out << "selectionmethod ( " << items[i].selectionMethod << " )\n";
+            if(items[i].hasCopySettings) {
+                *out << "TSREStaticFlags ( \"" << items[i].staticFlags << "\" )\n";
+                *out << "TSREStaticDetailLevel ( \"" << items[i].copyDetailLevel << "\" )\n";
+                *out << "TSRECollideFlags ( \"" << items[i].copyCollideFlags << "\" )\n";
+                *out << "TSRECollideFunction ( \"" << items[i].copyCollideFunction << "\" )\n";
+            }
             if(items[i].randomTransformation != NULL){
                 *out << "randomrotx ( " << QString::number(items[i].randomTransformation->rbX) << " " << QString::number(items[i].randomTransformation->reX) << " )\n";
                 *out << "randomroty ( " << QString::number(items[i].randomTransformation->rbY) << " " << QString::number(items[i].randomTransformation->reY) << " )\n";

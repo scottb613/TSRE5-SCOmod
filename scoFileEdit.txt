@@ -1258,3 +1258,11 @@ v0.8 Eric 8.006m compatibility and route health reporting
 
 - TSRE5-Trainsim.Com-Fork-master/SettingsDialog.cpp
   - Corrected the legacy `listfiles` label and guidance: it now identifies the cleanup inventory required by Objects To Remove instead of promising obsolete exit-time report files.
+
+
+v0.20 — Route Distribution and Object Copy
+- RouteDistro / RouteDistroDialog / TerrainTextureRewrite: dependency review, protected data, family consolidation, selected deletion, reports and total progress.
+- StaticCopy / StaticCopyDialog: route and working-folder destinations, original resource transfer, persistent choices, automatic settings and verified REF-last publication.
+- Ref / Tile: copied flags/detail/collision metadata persistence and placement.
+- RouteEditorWindow / RouteEditorGLWidget: Route commands and separate conditional Copy To context section; redundant standalone Select Tool removed.
+- QtCore probes: malformed Unicode, fields, dependencies, rollback and shared operation locks.

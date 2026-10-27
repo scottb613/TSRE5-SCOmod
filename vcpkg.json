@@ -1,6 +1,6 @@
 {
   "name": "tsrevc",
-  "version-string": "0.19.0",
+  "version-string": "0.20.0",
   "description": "TSRE GenX Qt6 route editor",
   "dependencies": [
     "freeglut"

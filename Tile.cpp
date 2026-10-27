@@ -768,6 +768,12 @@ WorldObj* Tile::placeObject(float* p, float* q, Ref::RefItem* itemData, float* t
     nowy->set("ref_value", itemData->value);
     if(itemData->staticFlags != 0)
         nowy->set("staticflags", itemData->staticFlags);
+    if(itemData->hasCopySettings && (nowy->type=="static" || nowy->type=="collideobject" || nowy->type=="gantry")) {
+        nowy->staticFlags=itemData->staticFlags;
+        nowy->staticDetailLevel=itemData->copyDetailLevel;
+        nowy->collideFlags=itemData->copyCollideFlags;
+        nowy->collideFunction=itemData->copyCollideFunction;
+    }
 
     //Quat::rotateY(q, q, M_PI/2);
     nowy->set("x", x);

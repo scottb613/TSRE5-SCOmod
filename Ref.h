@@ -39,6 +39,8 @@ public:
         bool placed;
         long long int value = 0;
         unsigned int staticFlags = 0;
+        bool hasCopySettings = false;
+        int copyDetailLevel = -1, copyCollideFlags = 0, copyCollideFunction = 0;
         
         RandomTransformation* randomTransformation = NULL;
         

@@ -55,6 +55,7 @@ public slots:
     void save();
     void openRouteFolder();
     void createRouteHealthReport();
+    void cleanRouteForDistro();
     void showRoute();
     void show();
     void createPaths();

@@ -137,5 +137,14 @@ int main(){
         return 12;
     }
 
+    auto copiedSettings=makeBuffer(QStringLiteral("TSREStaticFlags ( \"4294967295\" )\nTSREStaticDetailLevel ( \"-1\" )\nTSRECollideFlags ( \"-2147483648\" )"));
+    if(!expectToken(&copiedSettings,"TSREStaticFlags") || ParserX::GetStringInside(&copiedSettings).toUInt()!=4294967295u)
+        return 13;
+    ParserX::SkipToken(&copiedSettings);
+    if(!expectToken(&copiedSettings,"TSREStaticDetailLevel") || ParserX::GetStringInside(&copiedSettings).toInt()!=-1)
+        return 14;
+    ParserX::SkipToken(&copiedSettings);
+    if(!expectToken(&copiedSettings,"TSRECollideFlags") || ParserX::GetStringInside(&copiedSettings).toInt()!=(-2147483647-1))
+        return 15;
     return 0;
 }

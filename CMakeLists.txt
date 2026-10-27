@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
     TSREvc
-    VERSION 0.19.0
+    VERSION 0.20.0
     DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )
@@ -140,6 +140,22 @@ if(BUILD_TESTING)
         "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
         "$<TARGET_FILE:tsre_auto_place_wire_probe>")
     add_executable(tsre_rejected_world_file_probe tests/RejectedWorldFileTest.cpp)
+    add_executable(tsre_static_copy_probe
+        tests/StaticCopyProbe.cpp StaticCopy.cpp RouteDistro.cpp)
+    target_include_directories(tsre_static_copy_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_static_copy_probe PRIVATE Qt6::Core)
+    add_test(NAME tsre_static_copy_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        "$<TARGET_FILE:tsre_static_copy_probe>")
+    add_executable(tsre_route_distro_probe
+        tests/RouteDistroProbe.cpp RouteDistro.cpp)
+    target_include_directories(tsre_route_distro_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_route_distro_probe PRIVATE Qt6::Core)
+    add_test(NAME tsre_route_distro_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        "$<TARGET_FILE:tsre_route_distro_probe>")
     target_include_directories(tsre_rejected_world_file_probe PRIVATE "${TSRE_SOURCE_DIR}")
     target_link_libraries(tsre_rejected_world_file_probe PRIVATE Qt6::Core)
     add_test(NAME tsre_rejected_world_file_probe

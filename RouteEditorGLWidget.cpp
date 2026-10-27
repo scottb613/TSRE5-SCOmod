@@ -11,6 +11,9 @@
 #include "PolyVegPlantingArea.h"
 #include "PolyVegClearance.h"
 #include "RouteEditorGLWidget.h"
+#include "StaticCopyDialog.h"
+#include "StaticObj.h"
+#include <QPointer>
 #include "AutoPlaceInput.h"
 #include "AutoPlaceRange.h"
 #include "PolyVegPlantDiagnostics.h"
@@ -499,6 +502,7 @@ m_yRot(0),
 m_zRot(0) {
 
     this->installEventFilter(this);
+    StaticCopyUi::restoreDestination(copyToDestination,copyToWorkingFolder);
 
     waterMessageLabel = new QLabel(this);
     waterMessageLabel->setAlignment(Qt::AlignCenter);
@@ -8669,6 +8673,12 @@ bool ortsMovingTableEntry(WorldObj *obj, OrtsTurntableConfig::Entry &entry) {
 
 }
 
+void RouteEditorGLWidget::chooseCopyToDestination() {
+    if(!Game::currentRoute || !Game::writeEnabled || Game::serverClient) return;
+    StaticCopyUi::chooseDestination(this,Game::root+"/routes/"+Game::route,copyToDestination,copyToWorkingFolder);
+    focusEditor();
+}
+
 void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
     const bool trackSelected = selectedObj != NULL
             && selectedObj->typeObj == GameObj::worldobj
@@ -8697,10 +8707,6 @@ void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
     if(defaultMenuActions["find3x3"] == NULL){
         defaultMenuActions["find3x3"] = new QAction(tr("&Select Similar 3x3"), this);
         QObject::connect(defaultMenuActions["find3x3"], SIGNAL(triggered()), this, SLOT(editFind3x3()));
-    }
-    if(defaultMenuActions["select"] == NULL){
-        defaultMenuActions["select"] = new QAction(tr("&Select Tool"), this);
-        QObject::connect(defaultMenuActions["select"], SIGNAL(triggered()), this, SLOT(editSelect()));
     }
     if(defaultMenuActions["setTerrToObj"] == NULL){
         defaultMenuActions["setTerrToObj"] = new QAction(tr("&Set Terrain to Object"));
@@ -9097,9 +9103,19 @@ void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
     defaultMenuActions["copyInfo"]->setEnabled(selectedObj != NULL);
     menu.addAction(defaultMenuActions["copyInfo"]);
     menu.addAction(defaultMenuActions["paste"]);
-    menu.addSeparator();
-    menu.addAction(defaultMenuActions["select"]);
-
+    auto *staticSelection=qobject_cast<StaticObj*>(selectedObj);
+    const QFileInfo copyDestinationInfo(copyToDestination);
+    if(staticSelection && !staticSelection->polyVegRaw && !copyToDestination.isEmpty()
+            && Game::writeEnabled && !Game::serverClient && copyDestinationInfo.isDir() && copyDestinationInfo.isWritable()
+            && !copyDestinationInfo.isSymLink() && !copyDestinationInfo.isJunction()) {
+        menu.addSeparator();
+        menu.addSection(tr("Copy To"));
+        const QPointer<StaticObj> object(staticSelection);
+        auto *copyTo=menu.addAction(tr("Copy To..."));
+        connect(copyTo,&QAction::triggered,this,[this,object](){
+            if(object) StaticCopyUi::copyObject(this,object.data(),route,copyToDestination,copyToWorkingFolder);
+        });
+    }
     menu.exec(mapToGlobal(point));
 }
 

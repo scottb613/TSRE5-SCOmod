@@ -5,9 +5,69 @@ Open Rails routes. It carries the established editor forward with Qt 6/CMake,
 expanded terrain and map workflows, Dynamic Track, PolyVeg, Activity Builder,
 Consist Builder and a consistent GenX interface.
 
-> **Current version: v0.19.** Both clean Release compiler lanes passed 32/32 tests on 26 October 2026, and the operator accepted the final manual checks. Published v0.18 remains the immutable previous-release baseline.
+> **Published version: v0.20.** Both clean Release compiler lanes passed 34/34 tests on 27 October 2026; the operator authorized the official cap after desktop testing. See [release notes](RELEASE-NOTES-v0.20.md), [test matrix](TEST-MATRIX-v0.20.md), [Pack for Distro](ROUTE-CLEAN-FOR-DISTRO-USER-GUIDE.md) and [Copy To](STATIC-OBJECT-COPY-TO-USER-GUIDE.md).
 
-## Major Updates Since v0.18
+## Major Updates Since v0.19
+
+### Pack for Distro
+
+- **Route > Pack for Distro...** scans the full saved route and shows exact
+  removal candidates, categories and sizes before deleting selected items.
+  All three scan options default on; deletion candidates start unchecked.
+- Protects placed shapes, SD files, textures, seasonal/night variants, ACE/DDS
+  fallbacks, glTF resources and retained editor catalogs. Missing-content warnings
+  allow unrelated cleanup; uncertain dependency data protects affected assets.
+- Optional `_e.raw` and `_n.raw` buffer removal preserves elevation `_y.raw`,
+  flags `_f.raw`, other RAW data and RAW backups. Separate categories identify
+  unused models/textures, backups, artwork, temporary files and editing caches.
+- The default-on editing-data option includes `osm_data` and saved `terrain_maps`
+  tiles/overlays. **Editing maps / overlays** has its own selectable category.
+  Runtime/catalog references, uncertain dependencies and RAW data remain protected.
+- Optional consolidation compares complete byte-identical TERRTEX families,
+  including every seasonal/format variant. Verified terrain-reference updates
+  precede removal; images are not recompressed. Unsupported inputs retain assets.
+- Category selection, numeric size sorting, grouped warnings and UTF-8 reports
+  make the review easier. Reports retain actual partial outcomes and measured
+  whole-route before/after sizes, including descriptor-size changes.
+- Total cleanup progress includes revalidation, file checks, reference updates,
+  deletion, measurement and loaded-terrain refresh. **Delete Selected is permanent:
+  no ZIP, backup or Undo is created.** Use the intended saved production copy.
+
+### Static Object Copy To
+
+- **Route > Copy To...** selects a validated receiving route or an ordinary
+  **Working Folder**. Both folder choices and the mode persist between sessions;
+  revalidation is silent unless there is an error.
+- Selected Static Objects offer **Copy To...** in their own right-click section,
+  outside Edit. Route copies ask only **Name** and **Category**. Name starts with
+  the selected shape filename without path/extension and remains editable.
+- Copies original models, SD companions, referenced seasonal/night textures,
+  ACE/DDS counterparts and external glTF/GLB images/buffers. REF alternatives,
+  alignment/random placement settings, static flags, detail and collision settings
+  are retained automatically for route catalog entries.
+- Identical destination resources are reused; conflicting or missing resources
+  stop copying. Staging and verification precede the final atomic REF update.
+  Existing REF bytes/encoding are preserved; new catalogs use UTF-16LE.
+- Working mode directly exports the selected model/resources into a new object
+  folder for editing, with no REF form or REF update. Repeated exports receive
+  numbered folders. Relative SHAPES/TEXTURES layouts remain intact.
+- Copy To has no progress bars; completion/errors report the result. Failures
+  roll back newly copied resources while retaining preexisting or externally
+  changed files. Placement coordinates, orientation and scale are not cloned.
+
+### Reliability and Interface
+
+- Explicit Unicode validation rejects truncated text and isolated surrogate
+  characters without rejecting valid supplementary characters. Descriptor/REF
+  fields ignore lookalike text in comments or quoted descriptions.
+- Bounded dependency reads and shared destination locks protect copying and
+  cleanup. Report extensions are resolved before overwrite confirmation.
+- Removes the redundant standalone Select Tool from right-click menus; **E**,
+  control-panel selection and the main Edit command remain available.
+- Both operator-run clean Release builds passed **34/34 registered tests**.
+  The operator authorized the official cap after updating the desktop test copy.
+
+## Previous v0.19 Highlights
 
 - Immediate texture-preset loading, brush scale, preserved TERRTEX resolution,
   optional saved mipmaps, native RGB24 DDS output and seasonal DDS/Snow lookup.
@@ -129,7 +189,7 @@ locally only for forensic comparison. Use v0.15 instead.
 
 ## Installation
 
-Download **`tsre-scomod-v0.19.zip`** and its `.sha256` companion from the v0.19
+Download **`tsre-scomod-v0.20.zip`** and its `.sha256` companion from the v0.20
 release. GitHub's automatic source archives are not runnable
 Windows packages. The package uses the verified MinGW Release build.
 
@@ -151,7 +211,7 @@ from the application. See the [SNAP Pole and Wire guide](SNAP-POLE-WIRE-USER-GUI
 
 ### Source builds
 
-Use the immutable v0.19 release tag, or `tsre-scomod-wip` for development.
+Use the immutable v0.20 release tag, or `tsre-scomod-wip` for development.
 Keep machine-specific paths in `CMakeUserPresets.json`. With matched Qt/vcpkg
 prerequisites configured, the MinGW Release baseline uses:
 

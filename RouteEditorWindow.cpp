@@ -65,6 +65,7 @@
 #include "Ref.h"
 #include "StatusWindow.h"
 #include "SettingsDialog.h"
+#include "RouteDistroDialog.h"
 #include "ErrorMessagesWindow.h"
 #include "ClientUsersWindow.h"
 #include "ErrorMessagesLib.h"
@@ -648,6 +649,10 @@ RouteEditorWindow::RouteEditorWindow() {
             tr("Save and immediately display missing-content and route-usage information."));
     QObject::connect(routeHealthReportAction, SIGNAL(triggered()),
                      this, SLOT(createRouteHealthReport()));
+    auto *cleanForDistroAction=new QAction(tr("Pack for &Distro..."),this);
+    QObject::connect(cleanForDistroAction,&QAction::triggered,this,&RouteEditorWindow::cleanRouteForDistro);
+    auto *copyToAction=new QAction(tr("Copy &To..."),this);
+    QObject::connect(copyToAction,&QAction::triggered,glWidget,&RouteEditorGLWidget::chooseCopyToDestination);
 
     createPathsAction = new QAction(tr("&Create Debug Paths"), this);
     QObject::connect(createPathsAction, SIGNAL(triggered()), this, SLOT(createPaths()));
@@ -679,6 +684,8 @@ RouteEditorWindow::RouteEditorWindow() {
         routeMenu->addAction(saveAction);
         routeMenu->addAction(openRouteFolderAction);
         routeMenu->addAction(routeHealthReportAction);
+        routeMenu->addAction(cleanForDistroAction);
+        routeMenu->addAction(copyToAction);
         routeMenu->addSeparator();
         routeMenu->addAction(reloadRefAction);
         routeMenu->addAction(reloadMkrAction);   
@@ -1496,6 +1503,27 @@ void RouteEditorWindow::openRouteFolder(){
     }
 
     QDesktopServices::openUrl(QUrl::fromLocalFile(routeFolder.absolutePath()));
+}
+
+void RouteEditorWindow::cleanRouteForDistro(){
+    const auto allowed=[this](){
+        if(!Game::currentRoute || !Game::writeEnabled || Game::serverClient) return false;
+        QVector<QString> unsaved; Game::currentRoute->getUnsavedInfo(unsaved);
+        if(!unsaved.isEmpty()) {
+            GuiFunct::showEditorStopped(this,"Pack for Distro","Save all route changes before scanning or cleaning the distribution folder.");
+            return false;
+        }
+        return true;
+    };
+    if(!allowed()) return;
+    RouteDistroDialog dialog(Game::root+"/routes/"+Game::route,Game::root,this,allowed,[this](){
+        glWidget->makeCurrent();
+        Undo::Clear();
+        if(Game::terrainLib) Game::terrainLib->reloadLoaded();
+        glWidget->update();
+    });
+    dialog.exec();
+    glWidget->focusEditor();
 }
 
 void RouteEditorWindow::createRouteHealthReport(){

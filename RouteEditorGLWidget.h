@@ -74,8 +74,11 @@ public:
     bool discardUnsavedPolyVegBakeFiles(QString &error);
     bool discardUnsavedWireBakeFiles(QString &error);
     bool saveRoute();
+    QString copyToDestination;
+    bool copyToWorkingFolder=false;
 
 public slots:
+    void chooseCopyToDestination();
     void cleanup();
     void enableTool(QString name);
     void toggleRouteMapOverlays();
