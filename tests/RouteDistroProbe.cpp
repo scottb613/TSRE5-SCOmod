@@ -77,6 +77,28 @@ static QByteArray terrainWith(const QStringList &names) {
 int main(int argc,char **argv) {
     QCoreApplication app(argc,argv);
     {
+        QTemporaryDir dir; require(dir.isValid(), "footer fixture"); base(dir.path());
+        const QString world = "SIMISA@@@@@@@@@@JINX0w0t______\n"
+            "Tr_Worldfile ( Static ( FileName ( Fence.s ) ) )\n"
+            "Comment (Legacy utility - Version: 1.2 (build 3), Filetype='World')\n";
+        QStringEncoder utf16(QStringEncoder::Utf16LE);
+        put(dir.path(), "WORLD/tile.w", QByteArray::fromHex("fffe") + utf16(world));
+        const auto report = RouteDistro::scan(dir.path(), dir.path());
+        require(report.complete && candidate(report, "SHAPES/Unused.s")
+                && !candidate(report, "SHAPES/Fence.s")
+                && !candidate(report, "TEXTURES/Brown metal.ace"),
+                "valid world footer blocked orphan inference or lost dependencies");
+        const auto result = RouteDistro::clean(report, {"SHAPES/Unused.s"});
+        require(result.errors.isEmpty() && !QFile::exists(dir.filePath("SHAPES/Unused.s"))
+                && QFile::exists(dir.filePath("SHAPES/Fence.s")),
+                "footer-world cleanup removed required shape or failed selected cleanup");
+        put(dir.path(), "SHAPES/Unused.s", "shape ( )");
+        put(dir.path(), "WORLD/tile.w", (world + "Comment ( unfinished").toUtf8());
+        const auto malformed = RouteDistro::scan(dir.path(), dir.path());
+        require(malformed.complete && !candidate(malformed, "SHAPES/Unused.s"),
+                "incomplete footer did not protect potentially referenced assets");
+    }
+    {
         QTemporaryDir dir; require(dir.isValid(),"fixture"); base(dir.path());
         auto report=RouteDistro::scan(dir.path(),dir.path());
         if(!report.complete) std::cerr<<report.problems.join('\n').toStdString()<<'\n';

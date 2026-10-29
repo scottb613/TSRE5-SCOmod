@@ -4,6 +4,22 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.21 tile autopaint and format compatibility
+
+- RouteEditorGLWidget.cpp/.h, RouteEditorWindow.cpp, CursorTerrainPick.h:
+  non-repeating Alt+1/2/3 window shortcuts, F3 visibility gate, command-time
+  pointer/terrain-ray tile targeting and visible result feedback.
+- SettingsDialog.cpp: F12 shortcut assignments and Texture Panel requirement.
+- AceFormatValidator.cpp: exact expanded-length acceptance of the compressed
+  wrapper representation retained by ReadFile; reader implementation unchanged.
+- WorldCleanupValidation.h: balanced trailing legacy Comment blocks; unknown,
+  incomplete and malformed tails still prevent destructive cleanup.
+- tests/TerrainTrackMathTest.cpp, tests/AutoPlaceWireProbe.cpp,
+  tests/RouteDistroProbe.cpp, tests/AceFormatValidatorProbe.cpp and
+  tests/ReadFileSafetyProbe.cpp: targeting, compatibility and retention regressions.
+- CMakeLists.txt: reader-to-ACE-validator probe linkage; Game.cpp,
+  TSRE5_resource.rc and vcpkg.json: v0.21 identity and working-pack paths.
+
 v0.19 terrain, placement and production workflows
 
 - Texture.cpp/.h, TexturePaintMath.h, Brush.h, TerrainTools.cpp/.h: paint scale, immediate presets, output controls, alignment, source dimensions and production action.

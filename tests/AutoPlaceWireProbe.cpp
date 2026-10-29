@@ -388,6 +388,13 @@ int main(int argc,char **argv) {
         "Tr_Worldfile ( Static ( )", "Tr_Worldfile ( ) )",
         "Tr_Worldfile ( FileName ( \"unterminated ) )",
         "Tr_Worldfile ( ) trailing", "Tr_WorldfileExtra ( )",
+        "Tr_Worldfile ( ) Comment ( unfinished",
+        "Tr_Worldfile ( ) Comment ( \"unfinished )",
+        "Tr_Worldfile ( ) Comment ( complete ) trailing",
+        "Tr_Worldfile ( ) Commentary ( not a comment token )",
+        "Tr_Worldfile ( ) Comment ( complete ) Static ( )",
+        "Tr_Worldfile ( ) Comment ( complete ) Tr_Worldfile ( )",
+        "Tr_Worldfile ( ) Comment ( complete ) )",
         "SIMISA@@@@@@@@@@JINX0w0t______\nNotAWorld ( )",
         QByteArray("Tr_Worldfile ( \0 )", 18),
         QByteArray::fromHex("fffe5400ff")
@@ -412,11 +419,14 @@ int main(int argc,char **argv) {
             "malformed world cleanup removed shared texture");
     };
     for(const auto &invalid : invalidWorlds) rejectWorld(invalid);
+    rejectWorld(QByteArray("Tr_Worldfile ( ) Comment ( complete )") + QByteArray(1, '\0'));
     rejectWorld(QByteArray("Tr_Worldfile ( )") + QByteArray::fromHex("e2"));
     // Accept complete worlds in supported text encodings, with quoted
     // parentheses/escaped quotes and balanced comment blocks.
     const QString validText = "SIMISA@@@@@@@@@@JINX0w0t______\nTr_Worldfile ( "
-        "Comment ( \"quoted ) ( and \\\"quote\\\"\" ) Static ( FileName ( " + first + " ) ) )";
+        "Comment ( \"quoted ) ( and \\\"quote\\\"\" ) Static ( FileName ( " + first + " ) ) )"
+        "\nComment (Legacy utility - Version: 1.2 (build 3), Filetype='World')"
+        "\ncOmMeNt ( \"quoted ) ( and \\\"quote\\\"\" )\n";
     QStringEncoder le(QStringEncoder::Utf16LE), be(QStringEncoder::Utf16BE);
     QList<QByteArray> validWorlds{validText.toUtf8(),
         QByteArray::fromHex("efbbbf") + validText.toUtf8(),
@@ -549,6 +559,22 @@ int main(int argc,char **argv) {
     require(!AutoPlaceWire::pruneAssets(cleanup.path(),keptSpans,true,error)
         && keptSpans.contains("first") && QFile::exists(cleanup.path()+"/SHAPES/"+first),
         "genuinely deleted but still referenced bake lost protection");
+    // Optional local evidence is read-only and never becomes a public fixture.
+    const QString sampleDirectory = qEnvironmentVariable("TSRE_TEST_WORLD_DIR");
+    if(!sampleDirectory.isEmpty()) {
+        const QDir samples(sampleDirectory);
+        const QStringList worldFiles = samples.entryList({"*.w"}, QDir::Files);
+        require(!worldFiles.isEmpty(), "local world evidence folder is empty");
+        for(const QString &name : worldFiles) {
+            QFile file(samples.filePath(name));
+            require(file.open(QIODevice::ReadOnly), "local world evidence unreadable");
+            QString text;
+            QByteArray binary;
+            require(WireAssetScan::decodedWorldFile(file.readAll(), text, binary),
+                    "local world failed cleanup validation");
+        }
+        std::cout << "Local world cleanup validation passed: " << worldFiles.size() << " files\n";
+    }
     std::cout<<"AP wire geometry, LOD, DDS, reservations, discard and scoped asset cleanup passed\n";
     return 0;
 }

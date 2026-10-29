@@ -5,6 +5,7 @@
 // Licensed under GNU GPL v3 or later. See LICENSE.md.
 
 #include "../TerrainTrackMath.h"
+#include "../CursorTerrainPick.h"
 
 #include <cassert>
 #include <cmath>
@@ -93,6 +94,45 @@ int main() {
     assert(almostEqual(TerrainTrackMath::distanceBetweenTilePositionsXZ(
         10, 20, 30.0f, -1018.0f,
         10, 19, 30.0f, 1022.0f), 8.0f));
+
+    // Explicit checks remain active in Release builds (unlike assert).
+    CursorTerrainPick::Point hit;
+    auto flat = [](double, double, double &h) { h = 0.0; return true; };
+    bool pickOk = CursorTerrainPick::trace({100, 100, 50}, {1, -1, 0}, 300, flat, hit)
+        && std::abs(hit.x - 200.0) < 0.001 && std::abs(hit.y) < 0.001;
+    pickOk &= !CursorTerrainPick::trace({0, 100, 0}, {0, 1, 0}, 200, flat, hit);
+    pickOk &= !CursorTerrainPick::trace({0, 100, 0}, {0, -1, 0}, 50, flat, hit);
+    auto missing = [](double, double, double &) { return false; };
+    pickOk &= !CursorTerrainPick::trace({0, 100, 0}, {0, -1, 0}, 200, missing, hit);
+    auto slope = [](double x, double, double &h) { h = x * 0.5; return true; };
+    pickOk &= CursorTerrainPick::trace({0, 100, 0}, {1, -1, 0}, 300, slope, hit)
+        && std::abs(hit.x - 100.0 / 1.5) < 0.001;
+    pickOk &= CursorTerrainPick::trace({1010, 30, 0}, {1, -1, 0}, 100, flat, hit)
+        && hit.x > 1024.0; // Adjacent tile, not camera tile.
+    auto gap = [](double x, double, double &h) {
+        h = 0.0;
+        return x < 9.0 || x > 11.0;
+    };
+    pickOk &= !CursorTerrainPick::trace({0, 10, 0}, {1, -1, 0}, 30, gap, hit);
+    pickOk &= !CursorTerrainPick::trace({0, 100, 0}, {0, 0, 0}, 200, flat, hit);
+    int targetTile;
+    float targetLocal;
+    pickOk &= CursorTerrainPick::normalizeAxis(10, 6500.0, targetTile, targetLocal)
+        && targetTile == 13 && std::abs(targetLocal - 356.0f) < 0.001f;
+    pickOk &= CursorTerrainPick::normalizeAxis(10, -6500.0, targetTile, targetLocal)
+        && targetTile == 7 && std::abs(targetLocal + 356.0f) < 0.001f;
+    pickOk &= CursorTerrainPick::normalizeAxis(10, 1024.0, targetTile, targetLocal)
+        && targetTile == 11 && targetLocal == -1024.0f;
+    pickOk &= CursorTerrainPick::normalizeAxis(10, -1024.0, targetTile, targetLocal)
+        && targetTile == 10 && targetLocal == -1024.0f;
+    // Visible off-axis ground beyond a nominal 2000m radial distance.
+    pickOk &= !CursorTerrainPick::trace({0, 100, 0}, {24, -1, 0}, 2000, flat, hit);
+    pickOk &= CursorTerrainPick::trace({0, 100, 0}, {24, -1, 0}, 2600, flat, hit)
+        && std::abs(hit.x - 2400.0) < 0.001;
+    if(!pickOk) {
+        std::cerr << "Cursor terrain ray regression failed\n";
+        return 1;
+    }
 
     std::cout << "TerrainTrackMathTest passed\n";
     return 0;

@@ -19,6 +19,7 @@
 #include "PolyVegPlantDiagnostics.h"
 #include "WireAttachmentOrder.h"
 #include <QMouseEvent>
+#include <QCursor>
 #include <QOpenGLShaderProgram>
 #include <QCoreApplication>
 #include <QDateTime>
@@ -100,6 +101,7 @@
 #include "ObjTools.h"
 #include "RouteMergeDialog.h"
 #include "TerrainTools.h" // Include the dialog header
+#include "CursorTerrainPick.h"
 #include "TRitem.h"
 #include "TrackObj.h"
 #include "DynTrackObj.h"
@@ -1109,6 +1111,7 @@ void RouteEditorGLWidget::paintGL2() {
     Mat4::multiply(gluu->pMatrix, gluu->pMatrix, camera->getMatrix());
     gluu->setMatrixUniforms();
     Game::terrainLib->render(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode);
+
     //glClear(GL_DEPTH_BUFFER_BIT);
     // Render World
     Mat4::perspective(gluu->pMatrix, Game::cameraFov * M_PI / 180, float(this->width()) / this->height(), 0.2f, Game::objectLod);
@@ -1788,6 +1791,14 @@ void RouteEditorGLWidget::resizeGL(int w, int h) {
 void RouteEditorGLWidget::keyPressEvent(QKeyEvent * event) {
     Game::currentShapeLib = currentShapeLib;
     if (!route->loaded) return;
+
+    // Window shortcuts own dispatch. Consume any remaining chord/repeat here
+    // so numeric object movement cannot become a fallback paint action.
+    if(event->modifiers() == Qt::AltModifier
+            && event->key() >= Qt::Key_1 && event->key() <= Qt::Key_3){
+        event->accept();
+        return;
+    }
 
     if(event->key() == Qt::Key_M
             && event->modifiers() == Qt::ShiftModifier){
@@ -3626,46 +3637,123 @@ void RouteEditorGLWidget::paintToolTDBVector(){
     route->setTerrainTextureToTrack((int) camera->pozT[0], (int) camera->pozT[1], aktPointerPos, defaultPaintBrush, 1);
 }
 
+void RouteEditorGLWidget::autopaintTileShortcut(int kind) {
+    if(!texturePanel || !texturePanel->isVisible() || !route || !route->loaded)
+        return;
+    const QPoint cursor = mapFromGlobal(QCursor::pos());
+    if(!rect().contains(cursor)) {
+        emit tileAutopaintStatus("Autopaint: move the cursor over the route viewport.");
+        return;
+    }
+    mousex = cursor.x() * Game::PixelRatio;
+    mousey = cursor.y() * Game::PixelRatio;
+    emit tileAutopaintStatus("Autopaint: resolving the tile under the cursor...");
+    switch(kind) {
+        case 1: paintToolTileTrack(); break;
+        case 2: paintToolTileRoad(); break;
+        case 3: paintToolWaterEdges(); break;
+    }
+}
+
+bool RouteEditorGLWidget::resolveTileAutopaintTarget(int &tileX, int &tileZ) {
+    if(!texturePanel || !texturePanel->isVisible() || !route || !route->loaded)
+        return false;
+
+    auto reject = [this](const QString &reason) {
+        emit tileAutopaintStatus(reason);
+        return false;
+    };
+    int viewport[4] = {0, 0, int(width() * Game::PixelRatio),
+                            int(height() * Game::PixelRatio)};
+    if(viewport[2] <= 0 || viewport[3] <= 0 || mousex < 0 || mousey < 0
+            || mousex >= viewport[2] || mousey >= viewport[3])
+        return reject("Autopaint: point inside the route viewport.");
+
+    // Build the current cursor ray from camera matrices on the CPU.
+    // No framebuffer read, repaint, brush-depth cache or object hit is involved.
+    float model[16], projection[16], nearPoint[3], farPoint[3];
+    Mat4::identity(model);
+    Mat4::perspective(projection, Game::cameraFov * M_PI / 180,
+                      float(width()) / height(), 0.2f, Game::objectLod);
+    Mat4::multiply(projection, projection, camera->getMatrix());
+    const float y = float(viewport[3] - mousey - 1);
+    if(!GLH::glhUnProjectf(float(mousex), y, 0.0f,
+                          model, projection, viewport, nearPoint)
+            || !GLH::glhUnProjectf(float(mousex), y, 1.0f,
+                                  model, projection, viewport, farPoint))
+        return reject("Autopaint: could not resolve the cursor ray.");
+
+    const int cameraTileX = int(camera->pozT[0]);
+    const int cameraTileZ = int(camera->pozT[1]);
+    auto sampleHeight = [&](double x, double z, double &height) {
+        if(!std::isfinite(x) || !std::isfinite(z))
+            return false;
+        int tx, tz;
+        float px, pz;
+        if(!CursorTerrainPick::normalizeAxis(cameraTileX, x, tx, px)
+                || !CursorTerrainPick::normalizeAxis(cameraTileZ, z, tz, pz))
+            return false;
+        Terrain *terrain = Game::terrainLib->getTerrainByXY(tx, tz, false);
+        if(!terrain || !terrain->loaded || terrain->lowTile)
+            return false;
+        height = terrain->getHeight(tx, tz, px, pz, false);
+        return std::isfinite(height);
+    };
+    const CursorTerrainPick::Point ray = {
+        double(farPoint[0]) - nearPoint[0], double(farPoint[1]) - nearPoint[1],
+        double(farPoint[2]) - nearPoint[2]};
+    // A far clip plane is not a sphere around the camera. Off-axis rays need
+    // their full near-to-far segment to reach all visible detailed terrain.
+    const double rayLength = std::sqrt(ray.x * ray.x + ray.y * ray.y + ray.z * ray.z);
+    CursorTerrainPick::Point hit;
+    if(!CursorTerrainPick::trace(
+            {nearPoint[0], nearPoint[1], nearPoint[2]}, ray,
+            std::min(rayLength, 65536.0), sampleHeight, hit))
+        return reject("Autopaint: no loaded terrain under the cursor.");
+
+    float x, z;
+    if(!CursorTerrainPick::normalizeAxis(cameraTileX, hit.x, tileX, x)
+            || !CursorTerrainPick::normalizeAxis(cameraTileZ, hit.z, tileZ, z))
+        return reject("Autopaint: terrain tile coordinates are out of range.");
+    Undo::StateBeginIfNotExist();
+    makeCurrent();
+    return true;
+}
+
 void RouteEditorGLWidget::paintToolTileTrack(){
-    int tileX = (int) camera->pozT[0];
-    int tileZ = (int) camera->pozT[1];
-    float posx = aktPointerPos[0];
-    float posz = aktPointerPos[2];
-    Game::check_coords(tileX, tileZ, posx, posz);
+    int tileX, tileZ;
+    if(!resolveTileAutopaintTarget(tileX, tileZ))
+        return;
 
     int sections = route->setTerrainTextureToTileTrack(tileX, tileZ, defaultPaintBrush);
     if(sections > 0)
-        emit sendMsg(QString("msg"), QString("Autopainted track on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(sections) + QString(" sections."));
+        emit tileAutopaintStatus(QString("Autopainted track on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(sections) + QString(" sections."));
     else
-        emit sendMsg(QString("msg"), QString("No track sections found on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("."));
+        emit tileAutopaintStatus(QString("No track sections found on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("."));
 }
 
 void RouteEditorGLWidget::paintToolTileRoad(){
-    int tileX = (int) camera->pozT[0];
-    int tileZ = (int) camera->pozT[1];
-    float posx = aktPointerPos[0];
-    float posz = aktPointerPos[2];
-    Game::check_coords(tileX, tileZ, posx, posz);
+    int tileX, tileZ;
+    if(!resolveTileAutopaintTarget(tileX, tileZ))
+        return;
 
     int sections = route->setTerrainTextureToTileRoad(tileX, tileZ, defaultPaintBrush);
     if(sections > 0)
-        emit sendMsg(QString("msg"), QString("Autopainted roads on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(sections) + QString(" sections."));
+        emit tileAutopaintStatus(QString("Autopainted roads on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(sections) + QString(" sections."));
     else
-        emit sendMsg(QString("msg"), QString("No road sections found on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("."));
+        emit tileAutopaintStatus(QString("No road sections found on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("."));
 }
 
 void RouteEditorGLWidget::paintToolWaterEdges(){
-    int tileX = (int) camera->pozT[0];
-    int tileZ = (int) camera->pozT[1];
-    float posx = aktPointerPos[0];
-    float posz = aktPointerPos[2];
-    Game::check_coords(tileX, tileZ, posx, posz);
+    int tileX, tileZ;
+    if(!resolveTileAutopaintTarget(tileX, tileZ))
+        return;
 
     int paintedEdges = Game::terrainLib->paintWaterEdges(defaultPaintBrush, tileX, tileZ);
     if(paintedEdges > 0)
-        emit sendMsg(QString("msg"), QString("Autopainted water edges on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(paintedEdges));
+        emit tileAutopaintStatus(QString("Autopainted water edges on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(paintedEdges));
     else
-        emit sendMsg(QString("msg"), QString("No water edges found on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("."));
+        emit tileAutopaintStatus(QString("No water edges found on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString("."));
 }
 
 void RouteEditorGLWidget::paintToolResetTile(){
@@ -9043,15 +9131,15 @@ void RouteEditorGLWidget::showContextMenu(const QPoint & point) {
                 QObject::connect(defaultMenuActions["paintToolTDBVector"], SIGNAL(triggered()), this, SLOT(paintToolTDBVector()));
             }
             if(defaultMenuActions["paintToolTileTrack"] == NULL){
-                defaultMenuActions["paintToolTileTrack"] = new QAction(tr("&Track on Tile"), this);
+                defaultMenuActions["paintToolTileTrack"] = new QAction(tr("&Track on Tile\tAlt+1"), this);
                 QObject::connect(defaultMenuActions["paintToolTileTrack"], SIGNAL(triggered()), this, SLOT(paintToolTileTrack()));
             }
             if(defaultMenuActions["paintToolTileRoad"] == NULL){
-                defaultMenuActions["paintToolTileRoad"] = new QAction(tr("&Roads on Tile"), this);
+                defaultMenuActions["paintToolTileRoad"] = new QAction(tr("&Roads on Tile\tAlt+2"), this);
                 QObject::connect(defaultMenuActions["paintToolTileRoad"], SIGNAL(triggered()), this, SLOT(paintToolTileRoad()));
             }
             if(defaultMenuActions["paintToolWaterEdges"] == NULL){
-                defaultMenuActions["paintToolWaterEdges"] = new QAction(tr("&Water on Tile"), this);
+                defaultMenuActions["paintToolWaterEdges"] = new QAction(tr("&Water on Tile\tAlt+3"), this);
                 QObject::connect(defaultMenuActions["paintToolWaterEdges"], SIGNAL(triggered()), this, SLOT(paintToolWaterEdges()));
             }
             if(defaultMenuActions["paintToolResetTile"] == NULL){

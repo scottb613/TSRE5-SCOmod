@@ -8,6 +8,7 @@
 
 #include <QByteArray>
 #include <QDebug>
+#include <QtEndian>
 #include <algorithm>
 
 namespace {
@@ -29,10 +30,7 @@ QByteArray makeAce(int width, int height, int channel, int compression,
 void useCompressedWrapper(QByteArray &data){
     const QByteArray prefix("SIMISA@F", 8);
     std::copy(prefix.cbegin(), prefix.cend(), data.begin());
-    data[8] = char(0x78);
-    data[9] = char(0x56);
-    data[10] = char(0x34);
-    data[11] = char(0x12);
+    qToLittleEndian<quint32>(quint32(data.size() - 16), data.data() + 8);
     data[12] = '@';
     data[13] = '@';
     data[14] = '@';
@@ -63,6 +61,32 @@ int main(){
         reinterpret_cast<const unsigned char*>(validCompressedWrapper.constData()),
         validCompressedWrapper.size(), layout, &error),
         "valid SIMISA@F compressed-wrapper ACE rejected");
+    QByteArray readerWrapper = validCompressedWrapper;
+    qToBigEndian<quint32>(quint32(readerWrapper.size() - 16), readerWrapper.data() + 12);
+    ok &= expect(AceFormatValidator::inspect(
+        reinterpret_cast<const unsigned char*>(readerWrapper.constData()),
+        readerWrapper.size(), layout, &error),
+        "ReadFile expanded compressed-wrapper ACE rejected");
+    QByteArray badExpandedLength = readerWrapper;
+    qToLittleEndian<quint32>(quint32(readerWrapper.size()), badExpandedLength.data() + 8);
+    ok &= expect(!AceFormatValidator::inspect(
+        reinterpret_cast<const unsigned char*>(badExpandedLength.constData()),
+        badExpandedLength.size(), layout, &error), "incorrect expanded length accepted");
+    QByteArray badPreservedLength = validCompressedWrapper;
+    qToLittleEndian<quint32>(1, badPreservedLength.data() + 8);
+    ok &= expect(!AceFormatValidator::inspect(
+        reinterpret_cast<const unsigned char*>(badPreservedLength.constData()),
+        badPreservedLength.size(), layout, &error), "incorrect preserved wrapper length accepted");
+    QByteArray badReaderSuffix = readerWrapper;
+    badReaderSuffix[15] ^= 1;
+    ok &= expect(!AceFormatValidator::inspect(
+        reinterpret_cast<const unsigned char*>(badReaderSuffix.constData()),
+        badReaderSuffix.size(), layout, &error), "incorrect reader wrapper suffix accepted");
+    QByteArray truncatedExpanded = readerWrapper;
+    truncatedExpanded.chop(1);
+    ok &= expect(!AceFormatValidator::inspect(
+        reinterpret_cast<const unsigned char*>(truncatedExpanded.constData()),
+        truncatedExpanded.size(), layout, &error), "truncated expanded wrapper accepted");
     QByteArray poisonedOffsets = validRgb;
     for(int index = 216; index < 232; ++index)
         poisonedOffsets[index] = char(0xff);

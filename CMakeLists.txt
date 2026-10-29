@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
     TSREvc
-    VERSION 0.20.0
+    VERSION 0.21.0
     DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )
@@ -413,6 +413,8 @@ if(BUILD_TESTING)
         ReadFile.cpp
         ReadFile.h
         FileBuffer.h
+        AceFormatValidator.cpp
+        AceFormatValidator.h
     )
     target_include_directories(
         tsre_read_file_safety_probe

@@ -10,6 +10,7 @@
 
 #include <QtWidgets>
 #include <QStatusBar>
+#include <QShortcut>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QFile>
@@ -175,6 +176,24 @@ RouteEditorWindow::RouteEditorWindow() {
     activityBuilderWindow = new ActivityBuilderWindow(activityTools, this);
     //naviBox = new NaviBox();
     glWidget = new RouteEditorGLWidget(this);
+    glWidget->setTexturePanel(terrainTextureTools);
+    // These are editor-window shortcuts, independent of the focused panel.
+    auto addTileAutopaintShortcut = [this](const QString &key, int kind) {
+        QShortcut *shortcut = new QShortcut(QKeySequence(key), this);
+        shortcut->setContext(Qt::WindowShortcut);
+        shortcut->setAutoRepeat(false);
+        QObject::connect(shortcut, &QShortcut::activated, glWidget, [this, kind]() {
+            glWidget->autopaintTileShortcut(kind);
+        });
+    };
+    addTileAutopaintShortcut("Alt+1", 1);
+    addTileAutopaintShortcut("Alt+2", 2);
+    addTileAutopaintShortcut("Alt+3", 3);
+    QObject::connect(glWidget, &RouteEditorGLWidget::tileAutopaintStatus,
+                     this, [this](const QString &text) {
+        statusBar()->showMessage(text, 8000);
+        qInfo().noquote() << text;
+    });
     waterHelper = new TerrainWaterWindow2(this);
     polyVegHelper = new PolyVegHelper(this);
     polyVegSchemaEditor = new PolyVegSchemaEditor(this);

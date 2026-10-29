@@ -21,6 +21,7 @@
 #include <QJsonObject>
 #include <QSet>
 #include <QPair>
+#include <QPointer>
 #include "ForestBakeManifest.h"
 #include "PolyVegCorridor.h"
 #include "CameraFree.h"
@@ -67,6 +68,7 @@ public:
     QSize minimumSizeHint() const Q_DECL_OVERRIDE;
     QSize sizeHint() const Q_DECL_OVERRIDE;
     
+    void setTexturePanel(QWidget *panel) { texturePanel = panel; }
     bool initRoute();
     void cameraInit();
     QJsonObject getSessionCameraState() const;
@@ -78,6 +80,7 @@ public:
     bool copyToWorkingFolder=false;
 
 public slots:
+    void autopaintTileShortcut(int kind);
     void chooseCopyToDestination();
     void cleanup();
     void enableTool(QString name);
@@ -209,6 +212,7 @@ public slots:
     void removeWaterRuler();
      
 signals:
+    void tileAutopaintStatus(QString text);
     void showWindow();
     void routeLoaded(Route * a);
     void itemSelected(Ref::RefItem* pointer);
@@ -270,6 +274,9 @@ protected:
     void drawPointer();
     void pushRenderPointer();
 private:
+    QPointer<QWidget> texturePanel;
+    bool resolveTileAutopaintTarget(int &tileX, int &tileZ);
+
     bool rejectPolyVegPlantedArea(const QPainterPath &area);
     void plantPolyVegRegion(bool overrideForestCoverage, bool fullTile,
                            int tileX, int tileZ, bool alignmentCorridor = false);

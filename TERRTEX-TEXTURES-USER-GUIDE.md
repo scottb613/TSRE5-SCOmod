@@ -703,3 +703,17 @@ can have different resolutions and keep those respective resolutions. A save
 that detects an in-memory reduction below the loaded source dimensions stops
 instead of overwriting the original at lower resolution. Previously reduced
 files cannot regain their original detail through mip generation.
+
+
+## Whole-tile Autopaint Shortcuts (v0.21)
+
+Open the Texture Panel with F3 and choose the source texture and brush settings.
+Hover over the visible loaded terrain tile to paint, then press Alt+1 for track,
+Alt+2 for roads or Alt+3 for water edges. Aim at the tile ground; precise aiming
+at track, roads or water is unnecessary. These commands operate on the whole
+target tile with the existing Auto Paint algorithms.
+
+The Texture Panel must remain open and the pointer must be inside the route
+viewport. Panel keyboard focus does not block the shortcuts; holding a key does
+not repeat the operation. The status bar reports painted counts or a missing
+target. Sky or unloaded terrain does not supply a tile. F12 lists the keys.

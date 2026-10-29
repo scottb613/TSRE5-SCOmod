@@ -8,6 +8,7 @@
 
 #include <limits>
 #include <cstring>
+#include <QtEndian>
 
 namespace {
 constexpr int MaximumDimension = 8192;
@@ -43,11 +44,17 @@ bool AceFormatValidator::inspect(const unsigned char *data, qsizetype length,
     };
     const bool uncompressed = std::memcmp(
         data, uncompressedSignature, sizeof(uncompressedSignature)) == 0;
-    // ReadFile decompresses SIMISA@F files but deliberately retains their
-    // 16-byte wrapper: prefix, four-byte decoded length, then "@@@@".
+    // ReadFile retains the SIMISA@F wrapper, but uses bytes 12..15 for
+    // qUncompress's big-endian length. Accept that expanded representation
+    // as well as a preserved wrapper, only with the exact decoded length.
+    const quint32 expandedLength = qFromLittleEndian<quint32>(data + 8);
+    const bool preservedSuffix = std::memcmp(
+        data + 12, wrapperSuffix, sizeof(wrapperSuffix)) == 0;
+    const bool readerSuffix = qFromBigEndian<quint32>(data + 12) == expandedLength;
     const bool compressedWrapper = std::memcmp(
         data, compressedPrefix, sizeof(compressedPrefix)) == 0
-        && std::memcmp(data + 12, wrapperSuffix, sizeof(wrapperSuffix)) == 0;
+        && expandedLength == quint64(length - 16)
+        && (preservedSuffix || readerSuffix);
     if(!uncompressed && !compressedWrapper)
         return reject("ACE signature is invalid.");
 

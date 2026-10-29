@@ -6,10 +6,12 @@
 
 #include "FileBuffer.h"
 #include "ReadFile.h"
+#include "AceFormatValidator.h"
 
 #include <QByteArray>
 #include <QDebug>
 #include <QTemporaryFile>
+#include <QtEndian>
 
 #include <memory>
 
@@ -127,5 +129,34 @@ int main(){
         return 9;
     }
 
+    // Exercise the actual reader-to-validator boundary, not a fabricated
+    // expanded wrapper. qCompress covers the ordinary zlib-wrapped ACE input.
+    QByteArray ace(280, '\0');
+    ace.replace(0, 16, QByteArray("SIMISA@@@@@@@@@@", 16));
+    qToLittleEndian<quint32>(4, ace.data() + 24);
+    qToLittleEndian<quint32>(4, ace.data() + 28);
+    ace[36] = 3;
+    QByteArray compressedAce = makeAsciiCompressed(ace.mid(16));
+    compressedAce.replace(0, 8, QByteArray("SIMISA@F", 8));
+    const auto aceResult = readBytes(compressedAce);
+    AceFormatLayout layout;
+    QString error;
+    if(!aceResult || !AceFormatValidator::inspect(aceResult->data,
+            aceResult->length, layout, &error) || layout.width != 4 || layout.height != 4) {
+        qCritical() << "Compressed ACE reader/validator integration failed" << error;
+        return 10;
+    }
+    // Optional local evidence is read only, and is never embedded in fixtures.
+    const QString samplePath = qEnvironmentVariable("TSRE_TEST_ACE_FILE");
+    if(!samplePath.isEmpty()) {
+        QFile sample(samplePath);
+        if(!sample.open(QIODevice::ReadOnly)) return 11;
+        const std::unique_ptr<FileBuffer> actual(ReadFile::read(&sample));
+        if(!actual || !AceFormatValidator::inspect(actual->data, actual->length, layout, &error)) {
+            qCritical() << "Local ACE reader/validator failed" << error;
+            return 12;
+        }
+        qInfo() << "Local ACE reader/validator passed:" << layout.width << layout.height;
+    }
     return 0;
 }

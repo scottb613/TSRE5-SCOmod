@@ -24,23 +24,36 @@ inline bool completeTextWorld(QStringView text) {
         return false;
     pos += rootLength;
     skipSpace();
-    if(pos == text.size() || text[pos++] != QChar('(')) return false;
-    qsizetype depth = 1;
-    bool quoted = false, escaped = false;
-    while(pos < text.size()) {
-        const QChar ch = text[pos++];
-        if(ch.isNull() || (ch.unicode() < 32 && !ch.isSpace())) return false;
-        if(quoted) {
-            if(escaped) escaped = false;
-            else if(ch == QChar('\\')) escaped = true;
-            else if(ch == QChar('"')) quoted = false;
-        } else if(ch == QChar('"')) quoted = true;
-        else if(ch == QChar('(')) ++depth;
-        else if(ch == QChar(')') && --depth == 0) {
-            skipSpace();
-            return pos == text.size();
+    auto readBlock = [&]() {
+        if(pos == text.size() || text[pos++] != QChar('(')) return false;
+        qsizetype depth = 1;
+        bool quoted = false, escaped = false;
+        while(pos < text.size()) {
+            const QChar ch = text[pos++];
+            if(ch.isNull() || (ch.unicode() < 32 && !ch.isSpace())) return false;
+            if(quoted) {
+                if(escaped) escaped = false;
+                else if(ch == QChar('\\')) escaped = true;
+                else if(ch == QChar('"')) quoted = false;
+            } else if(ch == QChar('"')) quoted = true;
+            else if(ch == QChar('(')) ++depth;
+            else if(ch == QChar(')') && --depth == 0) return true;
         }
+        return false;
+    };
+    if(!readBlock()) return false;
+    skipSpace();
+    // Legacy tools may append Comment blocks outside Tr_Worldfile. Permit
+    // complete comments only: another world, object or arbitrary tail is unsafe.
+    while(pos < text.size()) {
+        constexpr qsizetype commentLength = 7;
+        if(text.mid(pos, commentLength).compare(u"Comment", Qt::CaseInsensitive) != 0)
+            return false;
+        pos += commentLength;
+        skipSpace();
+        if(!readBlock()) return false;
+        skipSpace();
     }
-    return false;
+    return true;
 }
 }
