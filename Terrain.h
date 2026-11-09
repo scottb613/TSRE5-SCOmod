@@ -12,6 +12,7 @@
 #define	TERRAIN_H
 #include <QString>
 #include <QStringList>
+#include <functional>
 #include "GLUU.h"
 #include "TFile.h"
 #include "Vector3f.h"
@@ -22,6 +23,7 @@ class Brush;
 class TerrainInfo;
 class FileBuffer;
 class QDataStream;
+class RouteSaveTransaction;
 
 class Terrain : public GameObj {
     Q_OBJECT
@@ -70,7 +72,9 @@ public:
     void fillTerrainDataX(Terrain* adjacent);
     void fillTerrainDataY(Terrain* adjacent);
     void fillTerrainDataXY(Terrain* adjacent);
-    bool save(QString *error = NULL);
+    bool save(QString *error = NULL,
+              const std::function<bool(RouteSaveTransaction &, QString *)> &prepare = {});
+    bool reloadSavedPaint(QString &error);
     int pendingSaveWork() const;
     void refresh();
     bool isModified();
@@ -176,6 +180,8 @@ public slots:
     void menuSelectObjects();
     
 protected:
+    // Optional isolated batch window; ordinary painting scans the whole tile.
+    int batchPaintPatch = -1;
     static QString TileDir[2];
     
     unsigned char **fData;
@@ -246,7 +252,7 @@ protected:
     float getScaleTexX(int idx);
     float getScaleTex(int idx);
     void convertTexToDefaultCoords(int idx);
-    void paintTextureOnTile(Brush* brush, int y, int u, float x, float z);
+    virtual void paintTextureOnTile(Brush* brush, int y, int u, float x, float z);
     static QString pairedTerrtexSubdir();
     static QString terrainPlaceholderPath(QString seasonSubdir);
     static int loadTextureForPainting(QString path);

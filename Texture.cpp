@@ -19,6 +19,7 @@
 #include "GLUU.h"
 #include "Game.h"
 #include <cmath>
+#include <utility>
 
 namespace {
 class TightPixelRows {
@@ -34,6 +35,15 @@ public:
 }
 
 Texture::Texture() {
+}
+
+int Texture::uploadBatchDepth = 0;
+QSet<Texture *> Texture::pendingUploads;
+
+TextureUploadBatch::~TextureUploadBatch() {
+    if(--Texture::uploadBatchDepth != 0) return;
+    const auto textures = std::exchange(Texture::pendingUploads, {});
+    for(Texture *texture : textures) texture->update();
 }
 
 Texture::Texture(QString pathid) {
@@ -95,7 +105,8 @@ Texture::Texture(const Texture* orig) {
     tex = new unsigned int[1];
     glGenTextures(1, tex);
     glBindTexture(GL_TEXTURE_2D, tex[0]);
-    glTexImage2D(GL_TEXTURE_2D, 0, type, width, height, 0, type, GL_UNSIGNED_BYTE, imageData);
+    if(uploadBatchDepth) pendingUploads.insert(this);
+    else glTexImage2D(GL_TEXTURE_2D, 0, type, width, height, 0, type, GL_UNSIGNED_BYTE, imageData);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glLoaded = true;
@@ -357,6 +368,9 @@ void Texture::paint(Brush* brush, float x, float z){
 }
 
 void Texture::update(){
+    // CPU-only route-paint images have no GPU allocation to refresh.
+    if(!glLoaded || tex == NULL) return;
+    if(uploadBatchDepth) { pendingUploads.insert(this); return; }
     TightPixelRows unpack(GL_UNPACK_ALIGNMENT);
     //QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
     glBindTexture(GL_TEXTURE_2D, tex[0]);
@@ -364,6 +378,7 @@ void Texture::update(){
 }
 
 Texture::~Texture() {
+    pendingUploads.remove(this);
 }
 
 bool Texture::GLTextures(bool mipmaps) {

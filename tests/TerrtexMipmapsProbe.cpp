@@ -34,6 +34,18 @@ int main() {
     {
         QImage original(2048,2048,QImage::Format_RGB888);
         original.fill(QColor(45,90,135));
+        QImage reduced,unchanged;
+        check(TerrtexMipmaps::reduceForOutput(original,1024,reduced),"2048 to 1024 output reduction");
+        check(reduced.size()==QSize(1024,1024),"reduced output dimensions");
+        check(reduced.pixelColor(500,500)==QColor(45,90,135),"constant color survives linear-light output reduction");
+        check(TerrtexMipmaps::reduceForOutput(reduced,2048,unchanged)
+            && unchanged.size()==reduced.size(),"output resolution must never upscale");
+        check(TerrtexMipmaps::reduceForOutput(original,0,unchanged)
+            && unchanged.size()==original.size(),"default preserves native dimensions");
+        QImage rectangular(2048,1024,QImage::Format_RGB888); rectangular.fill(Qt::red);
+        check(TerrtexMipmaps::reduceForOutput(rectangular,1024,reduced)
+            && reduced.size()==QSize(1024,512),"output reduction preserves aspect ratio");
+        check(!TerrtexMipmaps::reduceForOutput(QImage(),1024,unchanged),"null output input rejected");
         QByteArray encoded;
         check(TerrtexMipmaps::serializeAce(original,false,encoded),"2048 ACE mip save");
         if(encoded.size()>=32) {

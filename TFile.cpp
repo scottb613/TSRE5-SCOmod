@@ -15,6 +15,7 @@
 #include "ReadFile.h"
 #include <QDataStream>
 #include <QVector>
+#include <QSet>
 #include "Game.h"
 #include "TerrainGridMath.h"
 
@@ -27,6 +28,25 @@ TFile::TFile(const TFile& orig) {
 }
 
 TFile::~TFile() {
+    if(!batchOwned) return;
+    QSet<QString *> strings;
+    for(auto *map : {&materials, &amaterials})
+        for(auto &entry : *map) {
+            if(entry.second.name) strings.insert(entry.second.name);
+            for(QString *value : entry.second.tex) if(value) strings.insert(value);
+        }
+    for(QString *value : {sampleFbuffer, sampleYbuffer, sampleEbuffer, sampleNbuffer})
+        if(value) strings.insert(value);
+    for(QString *value : strings) delete value;
+    delete[] sampleASbuffer;
+    delete[] tdata;
+    delete[] errorBias;
+    delete[] flags;
+    delete errthresholdScale;
+    delete alwaysselectMaxdist;
+    delete nsamples;
+    delete sampleRotation;
+    delete sampleSize;
 }
 
 void TFile::initNew(QString name, int samples, int sampleS, int patches){

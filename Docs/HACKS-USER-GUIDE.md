@@ -1,6 +1,6 @@
 # HACKS User Guide
 
-Applies to TSRE GenX v0.20. HACKS contains advanced recovery, replacement and
+Applies to TSRE GenX v0.22. HACKS contains advanced recovery, replacement and
 route-wide operations for route builders and modders. Some change the current
 selection; others alter the entire route or write directly to disk. Select an
 action for a specific task rather than treating this window as a cleanup list.
@@ -22,7 +22,7 @@ pinned between sessions.
 | --- | --- |
 | Supported standard track object | Repair Junction, Repair Elevation, Remove Vector, Remove Branch, Remove All Interactives, Delete All Wire Bakes |
 | Signal | Fix Signal Flags, Remove All Interactives |
-| Terrain | Reset All TERRTEX, Compress TERRTEX — DXT1, Water Tiles Off |
+| Terrain | Auto Paint All TERRTEX..., Reset All TERRTEX, Process All TERRTEX..., Water Tiles Off |
 | Static scenery | Delete Instances |
 | Forest region or recognized PolyVeg object/bake | Delete All PolyVeg Bakes, Replace All Forest Regions; qualifying static objects also offer Delete Instances |
 | Recognized generated AP/legacy test wire object | Delete All Wire Bakes; qualifying static objects also offer Delete Instances |
@@ -152,25 +152,34 @@ Use this only when intentionally discarding route terrain painting. To remove
 saved maps while retaining painted terrain, use **Route > Pack for Distro...**.
 For a local painting experiment, use the narrower tile-paint controls.
 
-### Compress TERRTEX — DXT1
+### Process All TERRTEX
 
-Final production conversion for the entire route's TERRTEX, including seasonal
-ACE and DDS files. Save all route changes first, select terrain, open HACKS,
-read the confirmation and allow the complete operation to finish.
+Save all route changes, select terrain and open **Process All TERRTEX...**.
+The dialog independently selects **Keep existing / ACE / DDS** output format,
+**Compress uncompressed textures**, and **Keep / Remove / Add missing mipmaps**.
+There is no size option; source dimensions are always retained.
 
-- Converts supported textures to **opaque DXT1 DDS** and discards alpha.
-- Preserves base dimensions and whether the source has mipmaps.
-- Updates detailed/distant terrain references and deletes converted ACE originals.
-- **Introduces permanent image-quality loss. Run it only once, after editing.**
-- **Retains no TERRTEX originals or backups and clears Undo history.**
+- Covers main and seasonal ACE/DDS textures throughout TERRTEX.
+- Compression converts only uncompressed pixels to opaque DXT1 in the selected
+  container (lossy; alpha discarded). Existing compressed blocks are not recompressed.
+- Mipmap-only processing never recompresses an existing compressed base.
+  Removing mips retains the base; adding mips retains all existing authored
+  levels and generates only the missing levels. Complete chains stay unchanged.
+- Keep existing format allows mipmap-only work. ACE/DDS conversion works in
+  either direction, updates terrain references and removes superseded converted
+  originals only after all replacements and references verify.
+- Reports compressed, mip-added/removed, unchanged/resumed and failure counts.
+  Completed runs can be repeated; an interrupted run resumes its locked settings
+  and verifies output hashes instead of compressing completed work again.
+- Per-file atomic publication/checkpoints remain; no original texture backups,
+  whole-route rollback or Undo. Retain an editable production-copy backup.
 
-Run it on the final production copy while retaining an editable original
-elsewhere. Review the completion/error message and inspect distant terrain and
-seasons in Open Rails. An interrupted conversion keeps completed work and can
-be resumed with the same action; it is not rolled back to the original images.
-A completed-conversion record blocks repeated conversion for that route in the
-local setup. Do not treat a fresh local setup as evidence that copied textures
-have never been compressed.
+Supported DDS storage is RGB24/RGBA32 and DXT1-5; unsupported profiles stop with
+an error. ACE mip generation requires square power-of-two images and does not
+support indexed palettes. Existing compressed base blocks are byte-identical;
+container headers/offsets may change. Review the result in GenX and Open Rails.
+An unfinished old-version compression run must be finished in that version
+before starting this new operation.
 
 ### Water Tiles Off
 
@@ -283,3 +292,48 @@ publication step. Choose those operations only when their changes are intended.
 - [TERRTEX Textures User Guide](https://github.com/scottb613/TSRE5-SCOmod/discussions/10)
 - [SNAP Pole and Wire User Guide](https://github.com/scottb613/TSRE5-SCOmod/discussions/11)
 - [Published v0.20 source](https://github.com/scottb613/TSRE5-SCOmod/tree/v0.20)
+
+## Paint Entire Route (v0.22)
+
+Save the route first. Select terrain, open HACKS, and choose Auto Paint All TERRTEX...
+At least one saved Texture Panel paint preset is required. Configure up to ten
+rows with a preset dropdown, one Track/Roads/Water edges target and a Mirror
+Main/Snow checkbox. Clear both preset and target to leave a row unused.
+
+Repeated targets provide successive layers. Rows execute in the listed order
+for each affected patch; rows whose feature is absent are skipped. Tiles with
+no applicable feature are skipped. Existing water-patch flags identify water.
+Route autopaint saves native-size uncompressed ACE without mipmaps. There are
+no format or size controls, including when an older recipe is reopened. Use
+Process All TERRTEX afterward for final format, compression and mipmaps; it also
+retains source dimensions.
+This is ordinary paint output, separate from the lossy DXT1 production converter.
+
+Commit validates every configured preset, source image, brush mask and requested
+Snow pair before painting. The recipe is retained with the route's editor data.
+The viewport pauses while processing and is restored afterward. Camera, current
+brush/preset and season selection are preserved.
+
+Memory is bounded by streaming one patch's layers at a time into a tile save
+transaction. Decoded sources have a 128 MiB cache; individual images have a
+64 MiB batch limit. Working images and encoding buffers require additional RAM.
+Every completed tile saves before proceeding; this route operation clears Undo.
+Cancel finishes the current tile, then stops. A failed tile transaction rolls
+back; earlier completed tiles remain saved. Rerunning starts from the beginning.
+
+Fresh compatible patch filenames protect shared TERRTEX inputs and skipped
+tiles; existing seasonal variants are carried to the new filename. Old inputs
+remain available and may later be reviewed with Pack for Distro. Supported
+detailed tiles are 2048 m with native 4 m/8 m grids; other index levels stop
+before painting. Use a route copy and retain a complete backup.
+
+Normal Alt+1/2/3 whole-tile painting continues to support Undo and manual Save.
+Its GPU uploads are coalesced, but unsaved pixels and Undo data still occupy RAM.
+
+
+### Mirror validation
+
+Water uses the existing water-edge paint operation. Checked Mirror rows require
+valid Main/Snow sources: Ready confirms the pair; Unavailable blocks Commit
+until fixed or explicitly unchecked. Sources revalidate at Commit and preflight.
+This control-removal revision awaits operator compilation and visual verification.

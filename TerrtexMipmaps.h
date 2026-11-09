@@ -5,6 +5,7 @@
 #include <QVector>
 
 namespace TerrtexMipmaps {
+bool reduceForOutput(const QImage &base,int maximumDimension,QImage &output,QString *error = nullptr);
 bool generate(const QImage &base, QVector<QImage> &levels, QString *error = nullptr);
 bool generateDds(const QImage &base, QVector<QImage> &levels, QString *error = nullptr);
 bool serializeAce(const QImage &base, bool alpha, QByteArray &data, QString *error = nullptr);

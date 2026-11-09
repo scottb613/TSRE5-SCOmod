@@ -32,12 +32,14 @@ public:
     };
     bool loaded = false;
     bool used = false;
+    // Only isolated batch-owned descriptors opt into full allocation cleanup.
+    bool batchOwned = false;
     float* tdata = NULL;
     float* errorBias = NULL;
     //mat* materials;
     std::unordered_map<int, Mat> materials;
     std::unordered_map<int, Mat> amaterials;
-    int* flags;
+    int* flags = NULL;
     float WSW = 0;
     float WSE = 0;
     float WNE = 0;

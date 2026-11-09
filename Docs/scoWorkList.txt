@@ -1,29 +1,40 @@
-TSRE GenX v0.21 Feature Summary
+TSRE GenX v0.22 Feature Summary
 
-## New in v0.21
+## New in v0.22
 
-- Development opened 28 October 2026 from capped v0.20. Application, Windows
-  resources, build manifests and working-pack paths identify v0.21.
-- **Compressed ACE compatibility:** accepts the validated expanded header left
-  by the file reader, preventing valid compressed textures being rejected
-  before production DDS conversion. Expanded-length checks remain mandatory.
-- **Cleanup compatibility:** accepts complete legacy Comment footers after world
-  blocks, avoiding blanket retention of otherwise unused shapes/textures.
-  Incomplete worlds, malformed comments and unknown trailing data remain blocked.
-- **Tile autopaint keys:** Alt+1 paints track, Alt+2 roads and Alt+3 water
-  edges on the tile under the pointer using the current brush. F12 lists the
-  assignments; the Texture Panel (F3) must be open and held keys do not repeat.
-  Terrain-height ray picking chooses the tile without aiming at objects;
-  visible status feedback reports results or missing targets. Editor-window
-  shortcuts work while a panel has focus; the cursor must be over the viewport.
-- Verification starts fresh; previous results, manual acceptance and pending
-  tests do not carry forward.
+- **Final TERRTEX processing:** removed format/mipmap switches
+  from F3 and route autopaint; both save native-size uncompressed ACE without mips. Process All
+  TERRTEX independently selects Keep/ACE/DDS, compression of uncompressed pixels,
+  and Keep/Remove/Add missing mips. Both conversion directions update detailed/
+  distant/seasonal references and remove superseded originals after verification.
+  There is no size option in either tool. Existing compressed blocks are retained;
+  resume checks original hashes before changing references and locks all choices.
 
-## Complete GenX Feature Summary Through v0.20
+- **Route-paint sequence controls:** wider preset fields,
+  centered Mirror controls and Water target. Format/size controls are removed;
+  legacy recipe output fields are ignored. Checked Mirror pairs validate before
+  Commit and painting; final format/compression/mips belong to Process All TERRTEX.
 
-Significant improvements from the GenX release line are grouped below by
-workflow. This describes current capabilities rather than release history;
-new v0.21 additions belong in the section above.
+- Development opened 29 October 2026 from capped v0.21. Application, Windows
+  resources, manifests and working-runtime paths identify v0.22.
+- **Paint Entire Route:** terrain HACKS opens a ten-row sequence
+  of existing preset dropdowns, Track/Roads/Water targets and per-row Main/Snow
+  mirroring. Empty rows and absent targets are skipped; repeated targets apply
+  their layers in order. Native-size uncompressed ACE is saved without mipmaps;
+  there are no format/size choices. Process All TERRTEX controls final output.
+  Presets and mirror sources validate before painting. Completed tiles save
+  transactionally, with patch disk staging, a bounded source cache and viewport
+  suspension. Cancel stops between tiles and retains completed saves.
+- **Normal whole-tile uploads:** Track/Roads/Water tile actions
+  upload each changed GPU texture once after the brush stamps. Undo and manual
+  Save are retained; unsaved pixels and Undo data still require memory.
+- Both clean Release lanes pass all 39 registered tests (including corpus supplements);
+  the operator accepted the refreshed MSVC runtime and manual TERRTEX workflow.
+
+## Complete GenX Feature Summary Through v0.21
+
+Significant editor improvements are grouped below by workflow. New v0.22
+changes belong above; this section describes the established capabilities.
 
 ### Terrain shaping and high-definition grids
 
@@ -44,6 +55,16 @@ new v0.21 additions belong in the section above.
 
 ### Terrain painting, seasonal textures and output
 
+- **Pointer-tile autopaint:** with F3 open, hover over visible loaded terrain:
+  Alt+1 paints track, Alt+2 roads and Alt+3 water edges across that tile using
+  the current brush. Terrain-height ray picking crosses tile boundaries without
+  precise object aiming. Window shortcuts work across panel focus; held keys do
+  not repeat. F12/menu hints list the keys; the status bar reports results or
+  missing targets. The pointer must be inside the route viewport.
+- **Compressed ACE compatibility:** accepts the file reader's expanded compressed
+  wrapper with exact length checks, avoiding erroneous signature rejection
+  before DDS production conversion while retaining image/allocation limits.
+
 - **Painting coverage:** whole-tile patch selection, automatic track/road
   painting and elevation-following Water Edge painting reduce repetitive work.
   Shorelines use feathered transitions rather than coarse patch outlines.
@@ -59,16 +80,18 @@ new v0.21 additions belong in the section above.
 - **Mirror Season:** paired default/snow painting validates matching sources,
   shows the active side and disables invalid mirroring. Original dimensions,
   including larger TERRTEX, are retained during painting.
-- **ACE/DDS and mipmaps:** independent output switches govern newly painted
-  patches. Native opaque RGB24 DDS complements ACE; saved mipmaps use
-  linear-light, alpha-aware filtering with repeating texture edges.
+- **Painting and final output:** manual painting saves uncompressed ACE without
+  mips. Process All TERRTEX selects final Keep/ACE/DDS format, independent DXT1
+  compression of uncompressed inputs and Keep/Remove/Add missing mipmaps.
 - **Texture/cache corrections:** rectangular cropping, RGB row alignment,
   reload identity and shared-destination staging are corrected. Repeated
   ACE-to-DDS references reuse decoded data rather than multiplying cache entries.
 - **Reset and production tools:** confirmed tile/route resets restore canonical
   detailed/distant materials and remove matching generated assets. Route-wide
-  seasonal TERRTEX compression produces opaque DXT1 with progress/checkpoints:
-  it is lossy, removes alpha, should run once and retains no original backup.
+  seasonal **Process All TERRTEX** converts ACE/DDS in either direction, updates
+  terrain references and removes verified superseded inputs. Existing compressed
+  blocks/authored levels are retained; atomic writes/checkpoints support resume.
+  First-time DXT1 compression is lossy/opaque; no original backups or Undo remain.
 
 ### Water tools and special rulers
 
@@ -189,6 +212,11 @@ new v0.21 additions belong in the section above.
 
 ### Route diagnostics, distribution and object copying
 
+- **Legacy world footers:** route/generated-asset cleanup recognizes complete
+  Comment blocks after the world root, avoiding blanket retention of otherwise
+  unused assets. Incomplete worlds, malformed comments, extra world/object roots
+  and unknown trailing data remain protected.
+
 - **F11 world scan:** progress, cancellation and incomplete-coverage reporting
   accompany orphan/isolated-track and joint/connectivity checks. Jump/Select,
   thresholds and remembered No Factor status support review.
@@ -256,7 +284,8 @@ new v0.21 additions belong in the section above.
   dependencies. Obsolete qmake projects, the unfinished activity simulator and
   its unused OpenAL dependency were removed.
 - **Windows lanes:** matched MinGW remains the parity/package baseline;
-  Visual Studio 2026/MSVC v143 provides an independent lane. Supported systems
+  Visual Studio 2026/MSVC v143 provides an independent lane and the manually
+  accepted v0.22 binary package. Supported systems
   are 64-bit Windows 10 1809 or later and Windows 11.
 - **Compatibility:** MSTS/Open Rails UTF-16 and native route/terrain/object/path
   formats remain central constraints; the legacy renderer remains the parity

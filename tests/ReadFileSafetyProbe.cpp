@@ -12,6 +12,7 @@
 #include <QDebug>
 #include <QTemporaryFile>
 #include <QtEndian>
+#include <QVector>
 
 #include <memory>
 
@@ -21,6 +22,14 @@ FileBuffer::FileBuffer(unsigned char *source, int sourceLength)
 
 FileBuffer::~FileBuffer(){
     delete[] data;
+}
+
+// This probe supplies the primitive buffer operations without linking the
+// editor's Game dependencies. getBlockEnd() itself is the production method.
+int FileBuffer::getInt(){
+    const int value = qFromLittleEndian<qint32>(data + off);
+    off += 4;
+    return value;
 }
 
 static std::unique_ptr<FileBuffer> readBytes(const QByteArray &bytes){
@@ -70,7 +79,67 @@ static bool hasPayloadSuffix(const FileBuffer *buffer, const QByteArray &payload
             == payload;
 }
 
+static QByteArray binaryRecord(int token, const QByteArray &payload){
+    QByteArray bytes(8, '\0');
+    qToLittleEndian<quint32>(token + 261844, bytes.data());
+    qToLittleEndian<quint32>(payload.size(), bytes.data() + 4);
+    return bytes + payload;
+}
+
+static bool walkBinaryRecords(FileBuffer &buffer, int parentEnd,
+        QVector<int> &tokens){
+    while(buffer.off < parentEnd){
+        if(parentEnd - buffer.off < 8) return false;
+        const int token = buffer.getInt() - 261844;
+        const int recordEnd = buffer.getBlockEnd();
+        if(recordEnd <= buffer.off || recordEnd > parentEnd) return false;
+        tokens.append(token);
+        // Fixtures have empty labels, as emitted by binary MSTS world files.
+        if(buffer.data[buffer.off++] != 0) return false;
+        if(token == 375 || token == 579 || token == 303 || token == 305){
+            if(!walkBinaryRecords(buffer, recordEnd, tokens)) return false;
+        }
+        // Unknown records and scalar fields must also land on the next token.
+        buffer.off = recordEnd;
+    }
+    return buffer.off == parentEnd;
+}
+
+static bool binaryWorldBoundaries(){
+    const QByteArray label(1, '\0');
+    const QByteArray position = binaryRecord(397, label + QByteArray(12, '\0'));
+    const QByteArray sphere = binaryRecord(579,
+            label + binaryRecord(579, label + position));
+    const QByteArray contents = binaryRecord(584, label + QByteArray(4, '\0'))
+            + sphere + binaryRecord(303, label + position)
+            + binaryRecord(999, label + QByteArray(7, 'x'))
+            + binaryRecord(305, label + position);
+    const QByteArray root = binaryRecord(375, label + contents);
+    // Exercise both world and world-sound envelopes and compressed/plain input.
+    for(const QByteArray &marker : {QByteArray("JINX0w0b______\r\n"),
+                                   QByteArray("JINX0W0b______\r\n")}){
+        const QByteArray payload = marker + root;
+        for(const QByteArray &input : {
+                QByteArray("SIMISA@@@@@@@@@@", 16) + payload,
+                makeAsciiCompressed(payload)}){
+            auto buffer = readBytes(input);
+            if(!buffer) return false;
+            buffer->off = 32;
+            QVector<int> tokens;
+            if(!walkBinaryRecords(*buffer, buffer->length, tokens)
+                    || tokens != QVector<int>({375, 584, 579, 579, 397,
+                                              303, 397, 999, 305, 397}))
+                return false;
+        }
+    }
+    return true;
+}
+
 int main(){
+    if(!binaryWorldBoundaries()){
+        qCritical() << "Binary world/world-sound record boundaries drifted";
+        return 13;
+    }
     if(readBytes(QByteArray())){
         qCritical() << "Zero-byte input was accepted";
         return 1;
@@ -157,6 +226,21 @@ int main(){
             return 12;
         }
         qInfo() << "Local ACE reader/validator passed:" << layout.width << layout.height;
+    }
+    const QString worldPath = qEnvironmentVariable("TSRE_TEST_WORLD_FILE");
+    if(!worldPath.isEmpty()){
+        QFile sample(worldPath);
+        if(!sample.open(QIODevice::ReadOnly)) return 14;
+        const std::unique_ptr<FileBuffer> actual(ReadFile::read(&sample));
+        if(!actual || actual->length < 41) return 15;
+        actual->off = 32;
+        QVector<int> tokens;
+        if(!walkBinaryRecords(*actual, actual->length, tokens)
+                || tokens.isEmpty() || tokens.front() != 375){
+            qCritical() << "Local binary world record walk failed";
+            return 16;
+        }
+        qInfo() << "Local binary world record walk passed:" << tokens.size();
     }
     return 0;
 }

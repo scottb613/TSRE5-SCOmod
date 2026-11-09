@@ -20,9 +20,7 @@
 #include "TerrainGridMath.h"
 #include "TexturePaintMath.h"
 #include "TerrtexProduction.h"
-#include "AceLib.h"
-#include "AceFormatValidator.h"
-#include "ReadFile.h"
+#include "TerrtexProcessing.h"
 #include "Undo.h"
 #include <memory>
 #include "ForestObj.h"
@@ -678,50 +676,10 @@ TerrainTools::TerrainTools(QString name)
     textureBrushLayout->addWidget(GuiFunct::newQLabel("Rotation:", textureLabelWidth), row, 0);
     textureBrushLayout->addWidget(textureRotationValue, row, 1);
     textureBrushLayout->addWidget(textureRotationSlider, row++, 2);
-    createTextureMipmaps = new QCheckBox("Mipmaps");
-    createTextureMipmaps->setToolTip(
-        "Save painted TERRTEX with a full uncompressed mip chain. "
-        "Uses linear-light Lanczos filtering with seamless edge wrapping. "
-        "Includes seasonal mirror painting. Requires square power-of-two textures.");
-    QSettings paintOptions(Game::appDataDir() + "/terrain-paint-options.ini", QSettings::IniFormat);
-    paintBrush->createMipmaps = paintOptions.value("createMipmaps", false).toBool();
-    createTextureMipmaps->setChecked(paintBrush->createMipmaps);
-    QObject::connect(createTextureMipmaps, &QCheckBox::toggled, this, [this](bool enabled){
-        paintBrush->createMipmaps = enabled;
-        QSettings options(Game::appDataDir() + "/terrain-paint-options.ini", QSettings::IniFormat);
-        options.setValue("createMipmaps", enabled);
-        emit setPaintBrush(paintBrush);
-    });
-    ddsTextureOutput = new QCheckBox("DDS");
-    ddsTextureOutput->setToolTip(
-        "Save touched TERRTEX as native uncompressed 24-bit RGB DDS. "
-        "Off saves ACE. Preserves resolution; Mipmaps is a separate choice. "
-        "Format changes also convert existing seasonal variants of the touched patch.");
-    paintBrush->ddsOutput = paintOptions.value("ddsOutput", false).toBool();
-    ddsTextureOutput->setChecked(paintBrush->ddsOutput);
-    QObject::connect(ddsTextureOutput, &QCheckBox::toggled, this, [this](bool enabled){
-        paintBrush->ddsOutput = enabled;
-        QSettings options(Game::appDataDir() + "/terrain-paint-options.ini", QSettings::IniFormat);
-        options.setValue("ddsOutput", enabled);
-        emit setPaintBrush(paintBrush);
-    });
-    QLabel *textureOutputLabel = new QLabel(QString(QChar(0x2022)) + " Output");
-    GuiFunct::styleEditorSubtitle(textureOutputLabel);
-    QFrame *textureOutputCard = new QFrame(terrainTexturePanel);
-    GuiFunct::styleEditorPanelCard(textureOutputCard);
-    QGridLayout *textureOutputOptions = new QGridLayout(textureOutputCard);
-    textureOutputOptions->setContentsMargins(
-        cardHorizontalPadding, cardVerticalPadding,
-        cardHorizontalPadding, cardVerticalPadding);
-    textureOutputOptions->setSpacing(4);
-    textureOutputOptions->addWidget(createTextureMipmaps, 0, 0);
-    textureOutputOptions->addWidget(ddsTextureOutput, 0, 1);
-    const int outputColumnMinimum = qMax(
-        createTextureMipmaps->sizeHint().width(), ddsTextureOutput->sizeHint().width());
-    for(int column = 0; column < 2; ++column) {
-        textureOutputOptions->setColumnMinimumWidth(column, outputColumnMinimum);
-        textureOutputOptions->setColumnStretch(column, 1);
-    }
+    // Intermediate manual painting uses uncompressed ACE without mipmaps.
+    // Final format/compression/mip choices belong to Process All TERRTEX.
+    paintBrush->createMipmaps = false;
+    paintBrush->ddsOutput = false;
     textureBrushLayout->setColumnStretch(2, 1);
     QFrame *textureBrushCard = new QFrame(terrainTexturePanel);
     GuiFunct::styleEditorPanelCard(textureBrushCard);
@@ -733,8 +691,6 @@ TerrainTools::TerrainTools(QString name)
     const int presetSectionIndex = textureVbox->indexOf(presetLabel);
     textureVbox->insertWidget(presetSectionIndex, textureBrushLabel);
     textureVbox->insertWidget(presetSectionIndex + 1, textureBrushCard);
-    textureVbox->insertWidget(presetSectionIndex + 2, textureOutputLabel);
-    textureVbox->insertWidget(presetSectionIndex + 3, textureOutputCard);
     
     // enbankment
     sEsize = new QSlider(Qt::Horizontal);
@@ -1869,8 +1825,8 @@ void TerrainTools::applyPaintPreset()
 
         // Presets written before Scale existed retain the original appearance.
         setTextureBrushScale(TexturePaintMath::presetScalePercent(preset));
-        // Mipmaps are an independent panel preference, never a paint preset.
-        // Ignore legacy "mipmaps" fields so applying a preset cannot change it.
+        // Final mipmap processing belongs to Process All TERRTEX.
+        // Ignore legacy preset "mipmaps" fields.
 
         if (preset.contains("brush"))
             setBrushShapeIndex(preset["brush"].toInt(currentBrushShape));
@@ -2284,8 +2240,8 @@ void TerrainTools::resetDefaultValues()
     setTextureBrushSize(Game::terrainTools[4]);
     setTextureBrushAlpha(Game::terrainTools[5]);
     setTextureBrushScale(100);
-    createTextureMipmaps->setChecked(false);
-    ddsTextureOutput->setChecked(false);
+    paintBrush->createMipmaps = false;
+    paintBrush->ddsOutput = false;
     setTextureBrushRotation(0);
     sSize->setValue(meshBrush->size);
     sIntensity->setValue(meshBrush->alpha*100);
@@ -2323,39 +2279,110 @@ public:
     }
 };
 
+void TerrainTools::paintEntireRoute() {
+    emit routePaintRequested();
+}
+
 void TerrainTools::compressRouteTerrtex()
 {
     if(!Game::writeEnabled || !Game::currentRoute || Game::serverClient) return;
     QVector<QString> unsaved;
     Game::currentRoute->getUnsavedInfo(unsaved);
     if(!unsaved.isEmpty()) {
-        GuiFunct::showEditorStopped(this,"Compress TERRTEX",
-            "Save all route changes before running the final production conversion.");
+        GuiFunct::showEditorStopped(this,"Process All TERRTEX",
+            "Save all route changes before processing TERRTEX.");
         return;
     }
-    const QString journal=Game::routeAppDataDir()+"/terrtex-dxt1-production.json";
-    {
-        QFile marker(journal);
-        if(marker.open(QIODevice::ReadOnly)
-                && QJsonDocument::fromJson(marker.readAll()).object()["complete"].toBool()) {
-            GuiFunct::showEditorStopped(this,"Compress TERRTEX",
-                "This route has already completed production DXT1 conversion. "
-                "DXT1 introduces loss and should only be run once.");
+    // Keep unfinished old conversions separate from the new repeatable operation.
+    const QString legacyJournal=Game::routeAppDataDir()+"/terrtex-dxt1-production.json";
+    if(QFileInfo::exists(legacyJournal)) {
+        QFile marker(legacyJournal);
+        if(!marker.open(QIODevice::ReadOnly)
+            || !QJsonDocument::fromJson(marker.readAll()).object()["complete"].toBool()) {
+            GuiFunct::showEditorStopped(this,"Process All TERRTEX",
+                "An older TERRTEX compression run is incomplete. Finish that run with the original editor version before processing TERRTEX.");
             return;
         }
     }
-    if(!GuiFunct::confirmDestructiveAction(this,"Compress TERRTEX — DXT1",
-        "DXT1 introduces permanent image quality loss and should only be run once, "
-        "as the final step before your production upload.\n\n"
-        "This converts all TERRTEX ACE and DDS textures, including seasons, to opaque DXT1 DDS. "
-        "Alpha is discarded. Dimensions and the presence of mipmaps are preserved. "
-        "Terrain references are updated and ACE originals are deleted. "
-        "No TERRTEX originals or backups are retained. This cannot be undone.\n\n"
-        "An interrupted conversion can be resumed. Continue?")) return;
+    const QString journal=Game::routeAppDataDir()+"/terrtex-processing.json";
+    TerrtexProcessing::Options options;
+    bool resuming=false;
+    if(QFileInfo::exists(journal)) {
+        QFile marker(journal); QJsonParseError parse;
+        if(!marker.open(QIODevice::ReadOnly)) {
+            GuiFunct::showEditorStopped(this,"Process All TERRTEX","Cannot read the processing checkpoint."); return;
+        }
+        const auto record=QJsonDocument::fromJson(marker.readAll(),&parse).object();
+        const int version=record["version"].toInt();
+        if(parse.error!=QJsonParseError::NoError || (version!=3 && !(version==2 && record["complete"].toBool()))) {
+            GuiFunct::showEditorStopped(this,"Process All TERRTEX",
+                "The processing checkpoint is invalid or belongs to an older unfinished operation. Finish older operations with their original editor version."); return;
+        }
+        resuming=!record["complete"].toBool();
+        if(resuming && !TerrtexProcessing::fromJson(record["options"].toObject(),options)) {
+            GuiFunct::showEditorStopped(this,"Process All TERRTEX","The interrupted processing options are invalid."); return;
+        }
+    }
+    QDialog dialog(this); dialog.setWindowTitle("Process All TERRTEX");
+    GuiFunct::styleEditorDialog(&dialog);
+    auto *layout=new QVBoxLayout(&dialog);
+    GuiFunct::addEditorDialogHeader(&dialog,"Process All TERRTEX");
+    auto *formatGroup=new QGroupBox("Output Format",&dialog);
+    auto *formatLayout=new QVBoxLayout(formatGroup);
+    auto *format=new QComboBox(formatGroup);
+    format->addItems({"Keep Existing","ACE","DDS"});
+    format->setCurrentIndex(int(options.output)); formatLayout->addWidget(format);
+    layout->addWidget(formatGroup);
+    auto *compress=new QCheckBox("Compress Uncompressed Textures",&dialog);
+    compress->setToolTip("Convert uncompressed pixels to opaque DXT1. Already DXT-compressed pixels are skipped; ACE zlib wrapping is not DXT pixel compression.");
+    compress->setChecked(options.compress); layout->addWidget(compress);
+    auto *mips=new QGroupBox("Mipmaps",&dialog); auto *mipLayout=new QVBoxLayout(mips);
+    auto *keep=new QRadioButton("Keep Existing",mips);
+    auto *remove=new QRadioButton("Remove Mipmaps",mips);
+    auto *add=new QRadioButton("Add Missing Mipmaps",mips);
+    mipLayout->addWidget(keep); mipLayout->addWidget(remove); mipLayout->addWidget(add);
+    keep->setChecked(options.mipmaps==TerrtexProcessing::Mipmaps::Keep);
+    remove->setChecked(options.mipmaps==TerrtexProcessing::Mipmaps::Remove);
+    add->setChecked(options.mipmaps==TerrtexProcessing::Mipmaps::AddMissing);
+    layout->addWidget(mips);
+    auto *help=new QLabel("Format, compression and mipmaps are independent. "
+        "Keep existing allows mipmap-only processing. Already compressed blocks are not recompressed. "
+        "Adding mipmaps keeps existing levels; removing mipmaps keeps the base. "
+        "This processes every seasonal TERRTEX folder.",&dialog);
+    help->setWordWrap(true); layout->addWidget(help);
+    if(resuming) {
+        auto *resumeLabel=new QLabel("Resuming an interrupted operation with its original settings.",&dialog);
+        resumeLabel->setWordWrap(true); layout->addWidget(resumeLabel);
+        formatGroup->setEnabled(false); compress->setEnabled(false); mips->setEnabled(false);
+    }
+    auto *buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);
+    buttons->button(QDialogButtonBox::Ok)->setText(resuming?"Resume":"Process");
+    layout->addWidget(buttons);
+    QObject::connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);
+    QObject::connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+    const auto updateAction=[&](){ buttons->button(QDialogButtonBox::Ok)->setEnabled(
+        compress->isChecked() || !keep->isChecked() || format->currentIndex()!=0); };
+    QObject::connect(compress,&QCheckBox::toggled,&dialog,updateAction);
+    QObject::connect(keep,&QRadioButton::toggled,&dialog,updateAction);
+    QObject::connect(format,&QComboBox::currentIndexChanged,&dialog,updateAction);
+    updateAction(); dialog.setMinimumWidth(480);
+    if(dialog.exec()!=QDialog::Accepted) return;
+    options.compress=compress->isChecked();
+    options.output=static_cast<TerrtexProcessing::Output>(format->currentIndex());
+    options.mipmaps=remove->isChecked()?TerrtexProcessing::Mipmaps::Remove:
+        add->isChecked()?TerrtexProcessing::Mipmaps::AddMissing:TerrtexProcessing::Mipmaps::Keep;
+    QString confirmation="Process all TERRTEX ACE and DDS files, including seasons. "
+        "Existing compressed bases will not be recompressed.\n\n";
+    confirmation+="Output format: "+format->currentText()+".\n\n";
+    if(options.compress) confirmation+="Uncompressed inputs are compressed to opaque DXT1 in the selected container. This introduces permanent quality loss and discards alpha.\n\n";
+    confirmation+="Mipmap changes retain original base data unless an uncompressed base is being compressed. "
+        "Superseded ACE or DDS originals are removed after terrain references are updated and replacement files verified. "
+        "No original texture backups or Undo are retained. Completed work remains in place if interrupted. Continue?";
+    if(!GuiFunct::confirmDestructiveAction(this,"Process All TERRTEX",confirmation)) return;
 
     QProgressDialog progress("Scanning TERRTEX...",QString(),0,1000,this);
     GuiFunct::styleEditorDialog(&progress);
-    progress.setWindowTitle("Compress TERRTEX — DXT1");
+    progress.setWindowTitle("Process All TERRTEX");
     progress.setWindowModality(Qt::ApplicationModal);
     progress.setWindowFlag(Qt::WindowCloseButtonHint,false);
     progress.setAutoClose(false); progress.setAutoReset(false); progress.setMinimumDuration(0);
@@ -2371,28 +2398,6 @@ void TerrainTools::compressRouteTerrtex()
         QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
         paint.restart();
     });
-    const auto decodeAce=[](const QString &path,QImage &image,bool &mipmaps,QString &error) {
-        QFile input(path);
-        if(!input.open(QIODevice::ReadOnly)) { error="Cannot read ACE: "+path; return false; }
-        std::unique_ptr<FileBuffer> buffer(ReadFile::read(&input));
-        AceFormatLayout layout;
-        if(!buffer || !AceFormatValidator::inspect(buffer->data,buffer->length,layout,&error)) {
-            error=path+": "+error; return false;
-        }
-        // Validate before entering the legacy decoder, including compressed ACE.
-        buffer.reset(); input.close();
-        Texture texture(path); AceLib reader; reader.texture=&texture; reader.run();
-        std::unique_ptr<unsigned char[]> pixels(texture.imageData);
-        if(!texture.loaded || texture.error || texture.missing || !pixels
-                || (texture.bytesPerPixel!=3 && texture.bytesPerPixel!=4)) {
-            error="ACE decode failed: "+path; return false;
-        }
-        mipmaps=texture.saveMipmaps;
-        image=QImage(pixels.get(),texture.width,texture.height,texture.width*texture.bytesPerPixel,
-            texture.bytesPerPixel==3 ? QImage::Format_RGB888 : QImage::Format_RGBA8888).copy();
-        if(image.isNull()) { error="Cannot allocate ACE image: "+path; return false; }
-        return true;
-    };
     const QString routeRoot=Game::root+"/routes/"+Game::route;
     const auto references=[&](const QMap<QString,QString> &names,QString &error) {
         QFileInfoList tiles;
@@ -2433,7 +2438,7 @@ void TerrainTools::compressRouteTerrtex()
                     normalized=QDir::cleanPath(normalized).toLower();
                     const auto found=names.constFind(normalized);
                     if(found!=names.constEnd()) { *name=found.value(); changed=true; }
-                    else if(normalized.endsWith(".ace") && names.contains(QFileInfo(normalized).fileName())) {
+                    else if(names.contains(QFileInfo(normalized).fileName())) {
                         error="Unsupported TERRTEX reference in "+file.fileName()+": "+*name; return false;
                     }
                 }
@@ -2446,27 +2451,43 @@ void TerrainTools::compressRouteTerrtex()
         }
         return true;
     };
+    TerrtexProduction::Processor processor; processor.options=TerrtexProcessing::toJson(options);
+    processor.destination=[options](const QString &relative) { return TerrtexProcessing::destination(relative,options.output); };
+    processor.plan=[&](const QString &relative,QString &output,QString &error) {
+        QString absoluteOutput;
+        if(!TerrtexProcessing::plan(routeRoot+"/terrtex/"+relative,options,absoluteOutput,error)) {
+            error=relative+": "+error; return false;
+        }
+        output=TerrtexProcessing::destination(relative,options.output); return true;
+    };
+    processor.transform=[&](const QString &path,const QByteArray &input,TerrtexProduction::Processed &output,QString &error) {
+        TerrtexProcessing::Change change;
+        if(!TerrtexProcessing::process(path,input,options,change,error)) { error=path+": "+error; return false; }
+        output.bytes=std::move(change.bytes); output.changed=change.changed;
+        output.compressed=change.compressed; output.added=change.added; output.removed=change.removed;
+        output.suffix=change.suffix; output.reformatted=change.reformatted; return true;
+    };
     TerrtexProduction::Result result; QString error;
-    const bool success=TerrtexProduction::run(routeRoot+"/terrtex",journal,decodeAce,references,result,error);
+    const bool success=TerrtexProduction::run(routeRoot+"/terrtex",journal,{},references,result,error,&processor);
     Undo::Clear();
     emit refreshProductionTerrtex();
     if(!success) {
         progress.close();
-        GuiFunct::showEditorStopped(this,"TERRTEX Conversion Stopped",
-            error+"\n\nCompleted conversions remain in place. No originals were backed up. "
-            "Retry this action to resume an interrupted conversion.");
+        GuiFunct::showEditorStopped(this,"TERRTEX Processing Stopped",
+            error+QString("\n\n%1 texture(s) changed; %2 unchanged or resumed; 1 failure.\n"
+                "Completed work remains in place. Retry with the same settings to resume. No texture originals were backed up.")
+                .arg(result.converted).arg(result.skipped));
         return;
     }
     SaveProgress::set(1); progress.setValue(1000);
-    progress.setLabelText("100% complete: Production TERRTEX conversion finished.");
     progress.close();
-    GuiFunct::showEditorNotice(this,"TERRTEX Production Conversion Complete",
-        QString("Converted %1 texture(s); %2 already converted or resumed.\n"
-                "Final TERRTEX size: %3 MiB; space saved: %4 MiB.\n\n"
-                "DXT1 introduces loss and should only be run once. "
-                "No TERRTEX originals or backups were retained.")
-            .arg(result.converted).arg(result.skipped).arg(result.after/1048576.0,0,'f',1)
-            .arg((result.before-result.after)/1048576.0,0,'f',1));
+    GuiFunct::showEditorNotice(this,"TERRTEX Processing Complete",
+        QString("Compressed %1 texture(s).\nMipmaps added to %2; removed from %3.\n"
+            "Unchanged: %4; resumed: %5; failures: 0.\nFinal size: %6 MiB.\n\n"
+            "Format changed: %7. Superseded converted originals were removed.\n"
+            "Existing compressed blocks were preserved. No original texture backups or Undo were retained.")
+            .arg(result.compressed).arg(result.added).arg(result.removed)
+            .arg(result.skipped-result.resumed).arg(result.resumed).arg(result.after/1048576.0,0,'f',1).arg(result.reformatted));
 }
 
 void TerrainTools::resetRouteTerrtexPaint()

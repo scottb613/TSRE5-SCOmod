@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstring>
 #include <functional>
+#include <memory>
 #include <vector>
 #include <QDebug>
 #include "Game.h"
@@ -806,6 +807,30 @@ QString Terrain::getTileName(int x, int y) {
         name = "0" + name;
     //qDebug() << name;
     return "-" + name;
+}
+
+bool Terrain::reloadSavedPaint(QString &error) {
+    std::unique_ptr<TFile> fresh(new TFile);
+    fresh->batchOwned=true;
+    if(!fresh->readT(Game::root+"/routes/"+Game::route+"/tiles/"+name+".t")
+            || !fresh->nsamples || !fresh->sampleSize
+            || *fresh->nsamples!=*tfile->nsamples || *fresh->sampleSize!=*tfile->sampleSize
+            || fresh->patchsetNpatches!=tfile->patchsetNpatches) {
+        error="Saved paint could not be refreshed for loaded tile "+name;
+        return false;
+    }
+    // Keep the live terrain object/heights; replace only the saved descriptor.
+    tfile->batchOwned=true;
+    delete tfile;
+    tfile=fresh.release();
+    for(int i=0;i<256;++i) {
+        texid[i]=texid2[i]=texMirrorId[i]=-1;
+        texModified[i]=texMirrorModified[i]=false;
+        uniqueTex[i]=false;
+    }
+    modified=false;
+    refresh();
+    return true;
 }
 
 void Terrain::refresh() {
@@ -2136,6 +2161,10 @@ int Terrain::paintWaterEdges(Brush* brush) {
     for (int z = 0; z < patches; z++) {
         for (int x = 0; x < patches; x++) {
             if (!hasWater(x, z))
+                continue;
+            if(batchPaintPatch >= 0
+                    && (std::abs(x-batchPaintPatch%patches)>1
+                        || std::abs(z-batchPaintPatch/patches)>1))
                 continue;
 
             int startX = x * patchRes;
@@ -3738,7 +3767,8 @@ int Terrain::pendingSaveWork() const {
     return work;
 }
 
-bool Terrain::save(QString *error) {
+bool Terrain::save(QString *error,
+                   const std::function<bool(RouteSaveTransaction &, QString *)> &prepare) {
     SaveProgress::report(QString("Preparing terrain tile %1...").arg(name));
     const QString routeRoot = QDir::cleanPath(
         Game::root + "/routes/" + Game::route);
@@ -3783,6 +3813,10 @@ bool Terrain::save(QString *error) {
 
     RouteSaveTransaction transaction(routeRoot,
         Game::appDataDir() + "/atomicSaves/" + Game::routeAppDataKey());
+    // Route paint stages one patch at a time into this tile's transaction.
+    // Ordinary editor saves have no prepare callback and keep their behavior.
+    if(prepare && !prepare(transaction, error))
+        return fail(error ? *error : QString("Terrain paint staging failed."));
     QByteArray data;
     std::size_t expectedRawBytes = 0;
     if(tfile->nsamples == NULL

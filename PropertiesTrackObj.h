@@ -62,6 +62,7 @@ signals:
     void requestMainFocus();
     void resetRouteTerrtexRequested();
     void compressRouteTerrtexRequested();
+    void paintEntireRouteRequested();
     void disableRouteWaterRequested();
     void deleteAllPolyVegBakesRequested();
     void replaceRouteForestsRequested();

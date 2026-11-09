@@ -104,6 +104,28 @@ QImage downsample(const QImage &source) {
 }
 }
 
+bool TerrtexMipmaps::reduceForOutput(const QImage &base,int maximumDimension,QImage &output,QString *error) {
+    output=QImage();
+    if(base.isNull() || maximumDimension<0) {
+        if(error) *error="Invalid TERRTEX image or output resolution.";
+        return false;
+    }
+    if(maximumDimension==0 || qMax(base.width(),base.height())<=maximumDimension) {
+        output=base; return true;
+    }
+    QImage image=base.convertToFormat(QImage::Format_RGBA8888);
+    if(image.isNull()) { if(error) *error="Cannot allocate TERRTEX reduction image."; return false; }
+    while(qMax(image.width(),image.height())>maximumDimension) {
+        QImage next;
+        if(qMax(image.width()/2,image.height()/2)<maximumDimension)
+            next=image.scaled(maximumDimension,maximumDimension,Qt::KeepAspectRatio,Qt::SmoothTransformation);
+        else next=downsample(image);
+        if(next.isNull()) { if(error) *error="Cannot allocate reduced TERRTEX image."; return false; }
+        image=std::move(next);
+    }
+    output=std::move(image); return true;
+}
+
 bool TerrtexMipmaps::generate(const QImage &base, QVector<QImage> &levels, QString *error) {
     levels.clear();
     if(error) error->clear();

@@ -24,6 +24,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QElapsedTimer>
+#include "RouteLoadTiming.h"
 #include <QEventLoop>
 #include <QMessageBox>
 #include <QProgressDialog>
@@ -101,6 +102,8 @@
 #include "ObjTools.h"
 #include "RouteMergeDialog.h"
 #include "TerrainTools.h" // Include the dialog header
+#include "RoutePaintDialog.h"
+#include "RoutePaintBatch.h"
 #include "CursorTerrainPick.h"
 #include "TRitem.h"
 #include "TrackObj.h"
@@ -716,6 +719,7 @@ void RouteEditorGLWidget::timerEvent(QTimerEvent *) {
 }
 
 bool RouteEditorGLWidget::initRoute(){
+    RouteLoadTiming loadTiming;
     clearPolyVegCorridor();
     wireSpans = QJsonObject();
     wireUnsavedBakes.clear();
@@ -732,6 +736,7 @@ bool RouteEditorGLWidget::initRoute(){
         wirePreview = nullptr;
     }
     MapWindow::loadMapOverlayState();
+    loadTiming.mark("editor session setup");
     // Init Shape and Trains libs
     currentShapeLib = new ShapeLib();
     Game::currentShapeLib = currentShapeLib;
@@ -750,6 +755,7 @@ bool RouteEditorGLWidget::initRoute(){
     } else {
         route = new Route();
         route->load();
+        loadTiming.mark("route data");
         if (!route->loaded){
             return false;
         }
@@ -757,6 +763,12 @@ bool RouteEditorGLWidget::initRoute(){
 
         qDebug() << "Initializing 3D viewer";
         initRoute2();
+        loadTiming.mark("camera/route controls/show window");
+        if(RouteLoadTiming::enabled()) {
+            QObject::connect(this, &QOpenGLWidget::frameSwapped, this,
+                [loadTiming]() mutable { loadTiming.mark("first presented frame"); },
+                Qt::SingleShotConnection);
+        }
 
 
 
@@ -3720,11 +3732,77 @@ bool RouteEditorGLWidget::resolveTileAutopaintTarget(int &tileX, int &tileZ) {
     return true;
 }
 
+void RouteEditorGLWidget::paintEntireRoute() {
+    auto *tools=qobject_cast<TerrainTools *>(sender());
+    const QString title="Paint Entire Route";
+    if(routePaintBusy || !tools || !route || !route->loaded) return;
+    if(!Game::writeEnabled || Game::serverClient) {
+        GuiFunct::showEditorStopped(this,title,"Route painting requires a writable local route."); return;
+    }
+    QVector<QString> unsaved; route->getUnsavedInfo(unsaved);
+    if(!unsaved.isEmpty()) {
+        GuiFunct::showEditorStopped(this,title,"Save all route changes before painting the route."); return;
+    }
+    const QJsonArray presets=tools->readPaintPresets();
+    if(presets.isEmpty()) {
+        GuiFunct::showEditorStopped(this,title,"Create paint presets in the Texture Panel first."); return;
+    }
+    QScopedValueRollback<bool> busy(routePaintBusy,true);
+    RoutePaintDialog dialog(presets,this);
+    if(dialog.exec()!=QDialog::Accepted) return;
+    PolyVegViewportFreeze freeze(this);
+    makeCurrent();
+    QProgressDialog progress("Validating paint presets...","Cancel",0,0,this);
+    progress.setWindowTitle(title); progress.setWindowModality(Qt::ApplicationModal);
+    progress.setMinimumDuration(0); progress.setAutoClose(false); progress.setAutoReset(false);
+    GuiFunct::styleEditorDialog(&progress); GuiFunct::addEditorDialogHeader(&progress,title);
+    progress.setMinimumWidth(540);
+    QElapsedTimer throttle; throttle.start();
+    bool cancelPending=false;
+    progress.setWindowFlag(Qt::WindowCloseButtonHint,false);
+    progress.show();
+    QObject::connect(&progress,&QProgressDialog::canceled,&progress,[&]() {
+        cancelPending=true;
+        progress.setCancelButton(nullptr);
+        progress.setLabelText("Finishing the current tile before stopping...");
+        progress.show();
+    });
+    SaveProgress::Scope saveProgress([&](const QString &message) {
+        if(throttle.elapsed()<50) return;
+        progress.setLabelText(cancelPending?"Finishing the current tile before stopping...":message);
+        QApplication::processEvents(); throttle.restart();
+    });
+    RoutePaintBatch::Result result; QString error;
+    const bool ok=RoutePaintBatch::run(route,dialog.plan(),presets,tools->brushShapes,
+        [&](int done,int total,const QString &message) {
+            if(throttle.elapsed()>50 || done==total) {
+                progress.setMaximum(total); progress.setValue(done);
+                progress.setLabelText(cancelPending?"Finishing the current tile before stopping...":message);
+                QApplication::processEvents(); throttle.restart();
+            }
+            return !cancelPending;
+        },result,error);
+    progress.close();
+    if(result.saved>0) {
+        // Earlier Undo snapshots must never overwrite committed batch results.
+        Undo::Clear();
+        update();
+    }
+    freeze.finish();
+    const QString summary=QString("%1 tiles saved; %2 skipped; %3 inspected.")
+        .arg(result.saved).arg(result.skipped).arg(result.scanned);
+    if(!ok) GuiFunct::showEditorStopped(this,title,error+"\n\n"+summary
+        +(result.refreshFailed?"\nThe tile was saved. Reopen the route to refresh its display.":
+          "\nThe failed tile was not committed. Previously completed tiles remain saved."));
+    else GuiFunct::showEditorNotice(this,title,(result.cancelled?"Cancelled at a tile boundary.\n":"Complete.\n")+summary);
+}
+
 void RouteEditorGLWidget::paintToolTileTrack(){
     int tileX, tileZ;
     if(!resolveTileAutopaintTarget(tileX, tileZ))
         return;
 
+    TextureUploadBatch uploads;
     int sections = route->setTerrainTextureToTileTrack(tileX, tileZ, defaultPaintBrush);
     if(sections > 0)
         emit tileAutopaintStatus(QString("Autopainted track on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(sections) + QString(" sections."));
@@ -3737,6 +3815,7 @@ void RouteEditorGLWidget::paintToolTileRoad(){
     if(!resolveTileAutopaintTarget(tileX, tileZ))
         return;
 
+    TextureUploadBatch uploads;
     int sections = route->setTerrainTextureToTileRoad(tileX, tileZ, defaultPaintBrush);
     if(sections > 0)
         emit tileAutopaintStatus(QString("Autopainted roads on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(sections) + QString(" sections."));
@@ -3749,6 +3828,7 @@ void RouteEditorGLWidget::paintToolWaterEdges(){
     if(!resolveTileAutopaintTarget(tileX, tileZ))
         return;
 
+    TextureUploadBatch uploads;
     int paintedEdges = Game::terrainLib->paintWaterEdges(defaultPaintBrush, tileX, tileZ);
     if(paintedEdges > 0)
         emit tileAutopaintStatus(QString("Autopainted water edges on tile ") + QString::number(tileX) + QString(", ") + QString::number(tileZ) + QString(": ") + QString::number(paintedEdges));

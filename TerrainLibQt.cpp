@@ -312,6 +312,12 @@ bool TerrainLibQt::reload(int x, int z) {
     return false;
 }
 
+bool TerrainLibQt::refreshPaintedTile(int x,int z,QString &error) {
+    if(!quadTree) return true;
+    TerrainInfo *info=terrainQt.value(quadTree->getMyNameId(x,-z),nullptr);
+    return !info || !info->t || !info->t->loaded || info->t->reloadSavedPaint(error);
+}
+
 int TerrainLibQt::reloadLoaded() {
     std::set<std::pair<int, int>> detailedTiles;
     std::set<std::pair<int, int>> lowTiles;

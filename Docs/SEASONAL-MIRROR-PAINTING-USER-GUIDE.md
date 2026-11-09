@@ -30,6 +30,12 @@ using the matching source texture for each side.
 10. Save the route with **Shift+Ctrl+S**. Change Texture Set to the other side,
     inspect it, then save and reopen for a final check.
 
+Manual mirror painting saves uncompressed ACE without mipmaps. Final output
+format, compression and mipmaps are selected in **Process All TERRTEX** after
+saving; that tool processes Main/Snow and every other seasonal folder together,
+updates terrain references and removes superseded converted originals only
+after verified publication.
+
 ## What Mirror Season paints
 
 Mirror Season has two terrain-paint outputs:

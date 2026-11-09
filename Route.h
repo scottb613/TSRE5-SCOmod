@@ -131,6 +131,7 @@ public:
     void setTerrainTextureToTrack(int x, int y, float *pos, Brush* brush, int mode = 0);
     int setTerrainTextureToTileTrack(int x, int y, Brush* brush);
     int setTerrainTextureToTileRoad(int x, int y, Brush* brush);
+    int collectTerrainPaintPoints(int x, int z, bool roads, QVector<float> &points) const;
     bool findNearestDbHeight(int x, int y, float *pos, float maxDistance, float &height);
     bool resetTerrainTextureOnTile(int x, int y, int &filesDeleted, int &filesFailed);
     bool setTerrainToTrackObj(WorldObj* obj, Brush* brush);

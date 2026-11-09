@@ -49,6 +49,7 @@ public slots:
     void setBrushTextureId(int val);
     void applyPaintPreset();
     void compressRouteTerrtex();
+    void paintEntireRoute();
     void savePaintPreset();
     void removePaintPreset();
     void clearRecentTextureHistory();
@@ -95,6 +96,7 @@ public slots:
 
     
 signals:
+    void routePaintRequested();
     void refreshProductionTerrtex();
     void enableTool(QString name);
     void setPaintBrush(Brush* brush);
@@ -102,6 +104,7 @@ signals:
     void mirrorSeasonError();
     
 private:
+    friend class RouteEditorGLWidget;
     Brush* paintBrush;
     Brush* meshBrush;
     QWidget* terrainTexturePanel;
@@ -158,8 +161,6 @@ private:
     QSlider *textureIntensitySlider;
     QSlider *textureRotationSlider;
     QSlider *textureScaleSlider;
-    QCheckBox *createTextureMipmaps;
-    QCheckBox *ddsTextureOutput;
     QLineEdit *textureSizeValue;
     QLineEdit *textureIntensityValue;
     QLineEdit *textureRotationValue;

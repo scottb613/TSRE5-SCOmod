@@ -4,6 +4,39 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.22 final TERRTEX processing and native-size route painting
+
+- TerrtexProcessing.cpp/.h, TerrtexProduction.h: independent format/compression/
+  mip operations, bidirectional container conversion, exact compatible block
+  transfer, verified reference publication/deferred cleanup and resume source guard.
+- TerrainTools.cpp/.h: final-processing options and Title Case; removed manual
+  panel output controls. RouteEditorWindow.cpp refreshes both texture formats.
+- RoutePaintDialog.cpp/.h, RoutePaintPlan.h, RoutePaintBatch.cpp and
+  RouteEditorGLWidget.cpp: native-size ACE/base-only autopaint, no format/size
+  selectors; legacy recipe output fields ignored, sequence/mirroring retained.
+- DdsDecoder.cpp, DdsLib.cpp, Route.cpp, RouteEditorGLWidget.cpp and
+  RouteLoadTiming.h: byte-channel decoding fast path and opt-in startup timing.
+- ace_codec and texture/processing probes: maintained native ACE handling,
+  exact reference parity, format/mipmap/resume tests and recipe migration.
+
+v0.22 route paint sequence and normal tile upload batching
+
+- Route.cpp/.h: encapsulated terrain-paint point query; batch caller no longer
+  accesses protected track/road database members. First MSVC compile correction.
+
+- RoutePaintPlan.h, RoutePaintBatch.h/.cpp and RoutePaintDialog.h/.cpp: ordered
+  recipe validation/UI, copied preset sources, bounded decoded cache, isolated
+  terrain/patch processing, fresh output names and per-tile staged saves.
+- Terrain.cpp/.h, TerrainLibQt.cpp/.h and TFile.cpp/.h: virtual paint interception,
+  optional save staging callback, owned descriptor release, water patch window
+  and in-place refresh of already-loaded saved texture references.
+- Texture.cpp/.h: CPU-image update guard and nested whole-tile GPU upload queue.
+- PropertiesTrackObj.cpp/.h, TerrainTools.cpp/.h, RouteEditorWindow.cpp and
+  RouteEditorGLWidget.cpp/.h: terrain HACKS action, route guards, viewport/progress,
+  cancellation, completion/error counts and normal tile batching.
+- CMakeLists.txt and tests/RoutePaintPlanProbe.cpp: ordered-row and staged-save
+  regression probe registration. Source prepared; operator build/tests pending.
+
 v0.21 tile autopaint and format compatibility
 
 - RouteEditorGLWidget.cpp/.h, RouteEditorWindow.cpp, CursorTerrainPick.h:

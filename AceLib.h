@@ -25,7 +25,7 @@ public:
     AceLib(const AceLib& orig) = delete;
     virtual ~AceLib();
     //static bool LoadACE(Texture* texture);
-    Texture* texture;
+    Texture* texture = nullptr;
     static bool serialize(Texture *texture, QByteArray &data, QString *error = NULL);
     static bool save(QString path, Texture* t, QString *error = NULL);
     void run();

@@ -70,6 +70,7 @@ public:
     void refresh(int x, int z);
     bool reload(int x, int z);
     int reloadLoaded();
+    bool refreshPaintedTile(int x,int z,QString &error);
     void loadQuadTree();
     void createNewRouteTerrain(int x, int z);
     void saveEmpty(int x, int z);

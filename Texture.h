@@ -13,11 +13,14 @@
 
 #include <QString>
 #include <QVector>
+#include <QSet>
 
 class Brush;
 
 class Texture {
 public:
+    static int uploadBatchDepth;
+    static QSet<Texture *> pendingUploads;
     Texture();
     Texture(QString pathid);
     Texture(const Texture* orig);
@@ -62,6 +65,15 @@ public:
     
 private:
 
+};
+
+// Whole-tile actions publish each changed GPU image once, after all stamps.
+class TextureUploadBatch {
+public:
+    TextureUploadBatch() { ++Texture::uploadBatchDepth; }
+    ~TextureUploadBatch();
+    TextureUploadBatch(const TextureUploadBatch &) = delete;
+    TextureUploadBatch &operator=(const TextureUploadBatch &) = delete;
 };
 
 #endif	/* TEXTURE_H */

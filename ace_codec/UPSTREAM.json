@@ -1,0 +1,61 @@
+{
+  "repository": "https://github.com/GokuMK/TSRE5vc",
+  "commit": "30937472cde4e99517528758f8ff913a719655f6",
+  "stage": "Production CPU ACE reads through AceLib::run; existing renderer and all texture writers retained.",
+  "files": [
+    {
+      "upstream": "src/tsre/texture/AceDocument.cpp",
+      "local": "AceDocument.cpp",
+      "gitBlob": "ee6e4e80af099a70d910e54325cff589936309dc",
+      "localGitBlob": "93084e5a64d56e7af32c6cd43b59e5395ea46c68",
+      "adaptation": "Retain opt-in BC1 decode policy on parsed documents and thumbnail strips; leave serializer/writer/fromPixels unchanged."
+    },
+    {
+      "upstream": "src/tsre/texture/AceDocument.h",
+      "local": "AceDocument.h",
+      "gitBlob": "bd96dada2693554de8518ece53991b196fb1092a",
+      "localGitBlob": "1c3cf0c27f6a1b540883cc67dc00cda3ee90d6cc",
+      "adaptation": "Add default-off AceReadOptions::legacyDxt1Colors and private per-document decode policy."
+    },
+    {
+      "upstream": "src/tsre/texture/DxtCodec.cpp",
+      "local": "DxtCodec.cpp",
+      "gitBlob": "009631261bdad5b1ccf1bbba2db1c750e4c6e821",
+      "localGitBlob": "23577959304504e5c4ff88349cbc18b4e12d33e9",
+      "adaptation": "Add opt-in BC1 bit-replicated endpoint decoding only; preserve default scaling, encode and later helpers."
+    },
+    {
+      "upstream": "src/tsre/texture/DxtCodec.h",
+      "local": "DxtCodec.h",
+      "gitBlob": "06d256a45897086f5fe36dac8982fbacc3a258cb",
+      "localGitBlob": "a1bbf43763972018321a3a65accd84aa87daf849",
+      "adaptation": "Add decode-only ColorExpansion policy with unchanged scaled default."
+    },
+    {
+      "upstream": "thirdparty/miniz/miniz.h",
+      "local": "third_party/miniz/miniz.h",
+      "gitBlob": "a7a8228133f03f035cde278adf0ed023fa53303e"
+    },
+    {
+      "upstream": "thirdparty/miniz/LICENSE",
+      "local": "third_party/miniz/LICENSE",
+      "gitBlob": "1982f4bb8f4afa3dcbe803887fb4af7573430e51"
+    },
+    {
+      "upstream": "thirdparty/miniz/README.md",
+      "local": "third_party/miniz/README.md",
+      "gitBlob": "6c15ae06f357a607153db04c92db6b1364c45a39"
+    }
+  ],
+  "changes": {
+    "date": "2026-11-06",
+    "scope": "Decode-only opt-in GenX BC1 compatibility. No production linkage or encoder/serializer/writer change.",
+    "modifiedFiles": [
+      "AceDocument.cpp",
+      "AceDocument.h",
+      "DxtCodec.cpp",
+      "DxtCodec.h"
+    ],
+    "verification": "Prior codec-only MSVC checks passed. Production adapter wiring and new regressions are source-prepared; operator configure/build and fresh tests pending."
+  }
+}

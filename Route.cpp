@@ -18,6 +18,7 @@
 #include <QTextStream>
 #include <functional>
 #include "Route.h"
+#include "RouteLoadTiming.h"
 #include "TSectionDAT.h"
 #include "GLUU.h"
 #include "Tile.h"
@@ -162,6 +163,7 @@ Route::Route() {
 
 void Route::load(){
 
+    RouteLoadTiming loadTiming;
     Game::currentRoute = this;
     trkName = Game::trkName;
     routeDir = Game::route;
@@ -214,6 +216,7 @@ void Route::load(){
         if(Game::gui)
             QMessageBox::information(NULL, QObject::tr("Route save recovered"), recoveryMessage);
     }
+    loadTiming.mark("route checks/recovery");
 
     trk = new Trk();
     trk->load();
@@ -235,6 +238,7 @@ void Route::load(){
     // Check Track Section Databaase
     if(!checkTrackSectionDatabase())
         return;
+    loadTiming.mark("metadata/environment/track sections");
     
     if(Game::loadAllWFiles){
         preloadWFiles(Game::gui);
@@ -253,7 +257,9 @@ void Route::load(){
     this->roadDB->loadTdb(); 
     Game::trackDB = this->trackDB;
     Game::roadDB = this->roadDB;  
+    loadTiming.mark("world preload/track and road databases");
     loadAddons();    
+    loadTiming.mark("object references/addons");
     
     loadMkrList();
     loadServices();
@@ -261,6 +267,7 @@ void Route::load(){
     loadPaths();
     if(Game::loadActivities)
         loadActivities();
+    loadTiming.mark("markers/services/traffic/paths/activities");
 
     soundList = new SoundList();
     soundList->loadSoundSources(Game::root + "/routes/" + Game::route + "/ssource.dat");
@@ -268,6 +275,7 @@ void Route::load(){
     Game::soundList = soundList;
     
     Game::terrainLib->loadQuadTree();
+    loadTiming.mark("sound lists/terrain quadtrees");
     OrtsWeatherChange::LoadList();
     qDebug() << "184";
     ForestObj::LoadForestList();
@@ -280,6 +288,7 @@ void Route::load(){
     }
     //qDebug() << "198";
     checkRouteDatabase();
+    loadTiming.mark("forest/car lists/world initialization/database checks");
     loaded = true;
     
     Vec3::set(placementAutoTranslationOffset, 0, 0, 0);
@@ -296,6 +305,7 @@ void Route::load(){
     if((Game::UnsafeMode) && (Game::routeRebuildTDB)){
         RebuildTDB();
     }
+    loadTiming.mark("sky/merge/rebuild");
     
     
 }
@@ -1627,6 +1637,12 @@ int Route::setTerrainTextureToTileTrack(int x, int y, Brush* brush){
 
 int Route::setTerrainTextureToTileRoad(int x, int y, Brush* brush){
     return setTerrainTextureToTileFromDb(this->roadDB, x, y, brush);
+}
+
+int Route::collectTerrainPaintPoints(int x, int z, bool roads, QVector<float> &points) const {
+    points.clear();
+    TDB *database = roads ? roadDB : trackDB;
+    return database ? database->getVectorSectionPointsForTile(x, z, points) : 0;
 }
 
 bool Route::findNearestDbHeight(int x, int y, float *pos, float maxDistance, float &height){

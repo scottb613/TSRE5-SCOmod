@@ -8,6 +8,7 @@
 
 #include "DdsDecoder.h"
 #include "Texture.h"
+#include "RouteLoadTiming.h"
 
 #include <QDebug>
 #include <QFileInfo>
@@ -29,6 +30,7 @@ void DdsLib::run() {
     if(texture == nullptr)
         return;
 
+    RouteLoadTiming timing;
     DdsImage image;
     QString error;
     if(!DdsDecoder::decodeFile(texture->pathid, image, &error)) {
@@ -38,6 +40,7 @@ void DdsLib::run() {
         qWarning() << "DDS decode failed:" << texture->pathid << "-" << error;
         return;
     }
+    timing.mark("DDS read/decode");
 
     texture->width = image.width;
     texture->saveDds24 = true;
@@ -54,9 +57,12 @@ void DdsLib::run() {
         // Keep opaque RGB24 and BC1 data in RGB storage. Inventing an alpha
         // channel lets the legacy AA border-removal option make it transparent
         // and would prevent a subsequent RGB24 paint/save cycle.
-        for(int i=0;i<image.width*image.height;++i)
-            std::memcpy(texture->imageData+i*3,image.rgba.constData()+i*4,3);
+        const char *source = image.rgba.constData();
+        unsigned char *destination = texture->imageData;
+        for(int i=0;i<image.width*image.height;++i, source+=4, destination+=3)
+            std::memcpy(destination,source,3);
     } else std::memcpy(texture->imageData,image.rgba.constData(),image.rgba.size());
     texture->loaded = true;
     texture->editable = true;
+    timing.mark("DDS RGB/RGBA publication");
 }

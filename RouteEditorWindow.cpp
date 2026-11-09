@@ -459,6 +459,10 @@ RouteEditorWindow::RouteEditorWindow() {
                          trackProperties, &PropertiesTrackObj::toggleHacksForSelection);
     }
     if(trackProperties != NULL){
+        QObject::connect(trackProperties, &PropertiesTrackObj::paintEntireRouteRequested,
+                         terrainTools, &TerrainTools::paintEntireRoute);
+        QObject::connect(terrainTools, &TerrainTools::routePaintRequested,
+                         glWidget, &RouteEditorGLWidget::paintEntireRoute);
         QObject::connect(terrainTools, &TerrainTools::refreshProductionTerrtex,
                          glWidget, [editor = glWidget](){
             editor->makeCurrent();
@@ -466,7 +470,9 @@ RouteEditorWindow::RouteEditorWindow() {
             const QString prefix=QDir::cleanPath(Game::root+"/routes/"+Game::route+"/terrtex")+'/';
             for(const auto &entry:TexLib::mtex) if(entry.second) {
                 const QString path=QDir::cleanPath(entry.second->pathid);
-                if(path.startsWith(prefix,Qt::CaseInsensitive) && path.endsWith(".dds",Qt::CaseInsensitive))
+                if(path.startsWith(prefix,Qt::CaseInsensitive)
+                    && (path.endsWith(".dds",Qt::CaseInsensitive) || path.endsWith(".ace",Qt::CaseInsensitive))
+                    && QFileInfo::exists(path))
                     cached.append(path);
             }
             for(const QString &path:cached) TexLib::addTex(path,true);

@@ -323,9 +323,29 @@ bool DdsDecoder::decode(
             return false;
         }
 
+        // Standard byte-channel DDS files need no mask search or scaling per
+        // pixel. Keep the generic path for packed/nonstandard channel masks.
+        const bool bgr = redMask == 0x00ff0000 && greenMask == 0x0000ff00
+            && blueMask == 0x000000ff;
+        const bool rgb = redMask == 0x000000ff && greenMask == 0x0000ff00
+            && blueMask == 0x00ff0000;
+        const bool byteChannels = (bgr || rgb)
+            && (alphaMask == 0 || (rgbBits == 32 && alphaMask == 0xff000000));
         uchar *destination = reinterpret_cast<uchar *>(rgba.data());
         for(int y = 0; y < height; ++y) {
             const uchar *row = source + y * sourcePitch;
+            if(byteChannels) {
+                uchar *output = destination + y * width * 4;
+                const int red = bgr ? 2 : 0;
+                const int blue = bgr ? 0 : 2;
+                for(int x = 0; x < width; ++x, row += bytesPerPixel, output += 4) {
+                    output[0] = row[red];
+                    output[1] = row[1];
+                    output[2] = row[blue];
+                    output[3] = alphaMask ? row[3] : 255;
+                }
+                continue;
+            }
             for(int x = 0; x < width; ++x) {
                 quint32 pixel = 0;
                 std::memcpy(&pixel, row + x * bytesPerPixel, bytesPerPixel);

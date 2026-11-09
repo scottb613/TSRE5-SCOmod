@@ -21,6 +21,13 @@ public:
     virtual ~FileBuffer();
     
     int getInt();
+    // Called immediately after a binary token, with off at its size field.
+    // Read the size first: getInt() advances off past that field. Combining
+    // off and getInt() in one expression makes the result order-dependent.
+    int getBlockEnd() {
+        const int payloadBytes = getInt();
+        return off + payloadBytes;
+    }
     unsigned short int getShort();
     short int getSignedShort();
     unsigned int getUint();

@@ -8,6 +8,7 @@
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QtEndian>
 
 #include <cstring>
@@ -217,6 +218,55 @@ int main(int argc, char **argv) {
     passed &= check(
         !DdsDecoder::decode(truncated, image, &error),
         "Truncated DDS data was incorrectly accepted");
+
+    // Independent byte oracle: exercise every component value, both channel
+    // orders, padding, stored/absent alpha and the generic packed-mask path.
+    for(int bits : {24, 32}) for(bool bgr : {false, true})
+        for(bool alpha : {false, true}) {
+            if(bits == 24 && alpha) continue;
+            const int width = 257, height = 2, stride = bits/8;
+            const int pitch = width*stride+7;
+            QByteArray pixels(pitch*height, char(0xcd));
+            QByteArray expected(width*height*4, '\0');
+            for(int i=0; i<width*height; ++i) {
+                const uchar red = uchar(i), green = uchar(i*37), blue = uchar(255-i);
+                char *source = pixels.data()+(i/width)*pitch+(i%width)*stride;
+                source[bgr ? 2 : 0] = char(red);
+                source[1] = char(green);
+                source[bgr ? 0 : 2] = char(blue);
+                if(bits == 32) source[3] = char(i*13);
+                char *output = expected.data()+i*4;
+                output[0] = char(red); output[1] = char(green); output[2] = char(blue);
+                output[3] = alpha ? char(i*13) : char(255);
+            }
+            QByteArray data = makeRgbDds(bits, bgr ? 0xff0000 : 0xff,
+                0xff00, bgr ? 0xff : 0xff0000, alpha ? 0xff000000 : 0, pixels);
+            writeU32(data, 12, height); writeU32(data, 16, width); writeU32(data, 20, pitch);
+            passed &= check(DdsDecoder::decode(data,image,&error)
+                && image.rgba == expected
+                && image.opaqueRgb24 == (bits == 24),
+                QString("Byte-channel DDS parity failed: %1-bit BGR=%2 alpha=%3: %4")
+                    .arg(bits).arg(bgr).arg(alpha).arg(error));
+            data.chop(8); // Remove padding and one pixel byte from the last row.
+            passed &= check(!DdsDecoder::decode(data,image,&error),
+                "Truncated padded DDS was accepted");
+        }
+    const QByteArray packed = makeRgbDds(24, 0xf800, 0x07e0, 0x001f, 0,
+        QByteArray("\x00\xfc\x00",3));
+    passed &= check(DdsDecoder::decode(packed,image,&error)
+        && pixelEquals(image,0,255,130,0,255), "Packed-mask DDS fallback changed");
+
+    // Opt-in throughput evidence, never a machine-dependent pass threshold.
+    if(qEnvironmentVariableIntValue("TSRE_PROFILE_ROUTE_LOAD") != 0) {
+        const int size = 2048;
+        QByteArray data = makeRgbDds(24,0xff0000,0xff00,0xff,0,
+            QByteArray(size*size*3,char(0x5a)));
+        writeU32(data,12,size); writeU32(data,16,size); writeU32(data,20,size*3);
+        QElapsedTimer timer; timer.start();
+        for(int i=0;i<8;++i)
+            passed &= check(DdsDecoder::decode(data,image,&error),"DDS benchmark decode failed");
+        qInfo() << "DDS RGB24 benchmark: 8 x 2048x2048, elapsed_ms=" << timer.elapsed();
+    }
 
     const QStringList paths = app.arguments().mid(1);
     for(const QString &path : paths) {

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
     TSREvc
-    VERSION 0.21.0
+    VERSION 0.22.0
     DESCRIPTION "TSRE GenX Qt6 route editor"
     LANGUAGES C CXX
 )
@@ -37,6 +37,9 @@ find_package(OpenGL REQUIRED)
 find_package(GLUT REQUIRED)
 
 include(cmake/TSREWarnings.cmake)
+
+# ACE codec is required for production reads even when tests are disabled.
+add_subdirectory(ace_codec)
 
 # Keep the established public source layout at the repository root.
 # Tests and rollback/build directories are intentionally outside this glob.
@@ -105,6 +108,7 @@ target_link_libraries(
         OpenGL::GL
         OpenGL::GLU
         GLUT::GLUT
+        tsre_ace_codec
 )
 
 if(TSRE_ENABLE_WARNINGS)
@@ -112,6 +116,15 @@ if(TSRE_ENABLE_WARNINGS)
 endif()
 
 if(BUILD_TESTING)
+    add_executable(tsre_terrtex_processing_probe
+        tests/TerrtexProcessingProbe.cpp TerrtexProcessing.cpp
+        DdsWriter.cpp DdsDecoder.cpp TerrtexMipmaps.cpp)
+    target_include_directories(tsre_terrtex_processing_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_terrtex_processing_probe PRIVATE tsre_ace_codec Qt6::Gui Qt6::Core)
+    add_test(NAME tsre_terrtex_processing_probe
+        COMMAND "${CMAKE_COMMAND}" -E env "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        "$<TARGET_FILE:tsre_terrtex_processing_probe>")
+    set_tests_properties(tsre_terrtex_processing_probe PROPERTIES TIMEOUT 45)
     add_executable(tsre_gltf_graphics_probe
         tests/GltfGraphicsProbe.cpp GltfModel.cpp GltfPreview.cpp)
     target_include_directories(tsre_gltf_graphics_probe PRIVATE "${TSRE_SOURCE_DIR}")
@@ -617,6 +630,18 @@ if(BUILD_TESTING)
             "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
             "$<TARGET_FILE:tsre_forest_osm_cache_probe>"
     )
+
+    add_executable(tsre_route_paint_plan_probe
+        tests/RoutePaintPlanProbe.cpp
+        RouteSaveTransaction.cpp
+        RouteSaveTransaction.h
+        RoutePaintPlan.h)
+    target_include_directories(tsre_route_paint_plan_probe PRIVATE "${TSRE_SOURCE_DIR}")
+    target_link_libraries(tsre_route_paint_plan_probe PRIVATE Qt6::Core)
+    add_test(NAME tsre_route_paint_plan_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        "$<TARGET_FILE:tsre_route_paint_plan_probe>")
 
     if(WIN32)
         add_test(

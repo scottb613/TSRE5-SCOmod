@@ -80,6 +80,7 @@ public:
     bool copyToWorkingFolder=false;
 
 public slots:
+    void paintEntireRoute();
     void autopaintTileShortcut(int kind);
     void chooseCopyToDestination();
     void cleanup();
@@ -274,6 +275,7 @@ protected:
     void drawPointer();
     void pushRenderPointer();
 private:
+    bool routePaintBusy = false;
     QPointer<QWidget> texturePanel;
     bool resolveTileAutopaintTarget(int &tileX, int &tileZ);
 

@@ -333,7 +333,7 @@ void Tile::load() {
         
         while(data->length > data->off){
             idx = data->getToken();
-            offset = data->off + data->getInt() + 4;
+            offset = data->getBlockEnd();
             //qDebug() << idx;
             if(idx == TS::ViewDbSphere){
                 data->off++;
@@ -365,7 +365,7 @@ void Tile::load() {
             data->off++;
             while (data->off < offset) {
                 idxO = data->getToken();
-                offsetO = data->off + data->getInt() + 4;
+                offsetO = data->getBlockEnd();
                 //qDebug() << "nid- "<< idxO;
                 nowy->set(idxO, data);
                 data->off = offsetO;
@@ -510,7 +510,7 @@ void Tile::loadWS() {
         WorldObj* nowy;
         while(data->length > data->off){
             idx = data->getToken();
-            offset = data->off + data->getInt() + 4;
+            offset = data->getBlockEnd();
             //qDebug() << idx;
             if ((nowy = WorldObj::createObj(idx)) == NULL) {
                 data->off = offset;
@@ -519,7 +519,7 @@ void Tile::loadWS() {
             data->off++;
             while (data->off < offset) {
                 idxO = data->getToken();
-                offsetO = data->off + data->getInt() + 4;
+                offsetO = data->getBlockEnd();
                 //qDebug() << "- "<< idxO;
                 nowy->set(idxO, data);
                 data->off = offsetO;
@@ -587,7 +587,7 @@ void Tile::ViewDbSphere::set(QString sh, FileBuffer* data){
 }
 
 void Tile::ViewDbSphere::set(int sh, FileBuffer* data){
-    int offset = data->off + data->getInt() + 4;
+    const int offset = data->getBlockEnd();
     data->off++;
     
     if (sh == TS::VDbId) {

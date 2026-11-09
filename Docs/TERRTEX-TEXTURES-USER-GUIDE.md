@@ -267,67 +267,73 @@ does not use Scale. Reset Defaults restores 100. Paint presets save Scale;
 presets created before this control existed load at 100.
 Inspect patch boundaries with the chosen Scale and Rotation before broad painting.
 
-### Mipmaps and DDS output
+### Painting output
 
-The **Output** section below Brush Settings places **Mipmaps** and **DDS** in
-two equal-width columns. They are
-independent panel preferences, remembered between sessions and unaffected by
-paint presets. Both start off; Reset Defaults restores both off.
-
-Enable **DDS** before painting for native uncompressed **24-bit RGB DDS** output.
-Leave DDS off for ACE output. Neither choice resizes the texture: an existing
-2048 x 2048 patch stays 2048 x 2048. DDS RGB24 is for opaque terrain; a texture
-with transparency stops Save rather than silently losing alpha.
-
-Enable **Mipmaps** before painting to save each subsequently painted
-texture with a complete mip chain down to 1 x 1. The full-resolution pixels and
-dimensions stay unchanged. All levels are uncompressed; filtering uses
-linear-light Lanczos-3, premultiplied alpha, and wrapped texture edges.
-This also applies to Auto Paint, color painting, and seasonal mirror painting.
-
-Paint presets never save or change either checkbox; older presets' mipmap fields
-are ignored. The choices are captured when a
-texture is painted; changing it does not
-retroactively process untouched files. Repaint a texture with the desired
-choice to change how that texture is saved. Mips are written into the selected
-ACE or DDS file;
-the editor's existing renderer filtering is unchanged.
-
-ACE mipmaps require square power-of-two textures (2-8192 pixels). Unsupported
-dimensions stop Save with a clear error; no automatic resizing is performed.
-Uncompressed mip chains use about one third more image data than level 0 alone.
-
-Only modified patches are written. When a touched patch changes output format,
-its terrain reference and existing seasonal variants are converted together in
-the same terrain save transaction. Unrelated patches are not converted. DDS
-output uses an `_dds24.dds` basename and switching back to ACE uses `_ace.ace`
-so Open Rails cannot substitute a stale DDS for the selected ACE output. Old
-files are retained conservatively; a DDS save does not write an ACE duplicate.
+Manual texture/color painting and seasonal mirror painting save uncompressed
+ACE without mipmaps, preserving source dimensions. The texture panel has no
+format or mipmap switches; earlier saved panel preferences are ignored.
+Paint presets do not change these output rules. Use **Process All TERRTEX**
+for final route-wide format, compression and mipmap processing. Route autopaint likewise saves native-size uncompressed ACE without mipmaps.
+Neither painting tool nor Process All TERRTEX offers a size option.
 
 The Reset Route TERRTEX Paint tool resets detailed `tiles` to `terrain.ace` and
 distant-mountain `lo_tiles` to `terrainDM.dds` when present, otherwise
 `terrainDM.ace` when present, otherwise `terrain.ace`. Detailed terrain always
 uses `terrain.ace`. The confirmation shows the selected distant texture.
 
-### Final production DXT1 compression
+### Process All TERRTEX
 
-Finish editing and Save the route. Select terrain, open **Hacks...**, then
-choose **Compress TERRTEX — DXT1**. The action processes the complete route's
-TERRTEX tree, including seasonal ACE and DDS files, and updates detailed/distant
-terrain references. It preserves dimensions and the presence of mipmaps, writes
-opaque DXT1 DDS, and removes ACE originals after references have been published.
+Save the route, select terrain, open **Hacks...**, then choose **Process All
+TERRTEX...**. This is the final processing step for all ACE/DDS textures in
+TERRTEX and every seasonal subfolder. Its three choices are independent:
 
-**DXT1 introduces permanent quality loss, discards alpha and should run once.**
-This final-upload action retains no TERRTEX originals or backups and has no Undo.
-Use a separate production upload copy and retain your editable route separately.
-It is independent of the ordinary ACE/RGB24 DDS paint-output switches.
+- **Output format: Keep existing / ACE / DDS.** Keep existing retains each
+  file's container. ACE or DDS converts files in the other container, including
+  already-compressed textures. Filenames retain their stem and change extension.
+- **Compress uncompressed textures.** Apply opaque, lossy DXT1 only to inputs
+  whose pixels are not already DXT-compressed. ACE zlib wrapping does not count
+  as pixel compression. Existing DXT1-5 blocks are copied without recompression;
+  leaving this unchecked never decompresses an existing compressed texture.
+- **Mipmaps: Keep / Remove / Add missing.** Keep retains authored levels/count;
+  Remove keeps the base; Add missing preserves existing levels and appends only
+  missing levels. Use Keep existing format and disable compression for mip-only
+  work. Neither format conversion nor mip processing resizes the base texture.
 
-The progress bar covers texture conversion, reference updates and final
-verification/removal. Small interruption checkpoints allow retrying a stopped
-conversion without recompressing verified outputs. Completed conversions remain
-in place after a failure; read the error and retry to resume. A completed-run
-marker prevents an accidental repeat in the same editor route context. Inspect
-the result in GenX and Open Rails before uploading the route.
+Defaults are Keep existing format, compression enabled and Keep mipmaps.
+Compression of uncompressed images discards alpha. Format-only conversion
+preserves image alpha and transfers compatible compressed blocks unchanged.
+ACE stores its smallest compressed-format mip tails as planar pixels, while DDS
+uses blocks; those tails are translated as required by the destination. Opaque
+ACE DXT1 black-selector layouts that DDS would interpret as transparency are
+refused rather than silently changing compressed blocks. Container-specific
+opaque authoring resources are not carried between different file formats.
+Mipmap-only operations retain their original container metadata/resources.
+
+Detailed and distant terrain material references are updated whenever names
+change. Replacement files are verified before reference publication and again
+before cleanup. Successful conversion removes superseded ACE **or DDS** inputs;
+no original texture copies or Undo are retained. An existing destination or
+conflicting same-stem ACE/DDS inputs stops processing instead of overwriting.
+Unrelated orphan files are not automatically purged.
+
+The completion report lists format changes, compression, mip additions/removals,
+unchanged/resumed files and final size. Interrupted operations resume with all
+three choices locked; externally changed completed outputs are refused.
+Completed runs can be followed by another operation without recompressing
+existing blocks. Unfinished older processing journals require the original
+editor version; completed older runs can start a new operation.
+
+Use a separate production route copy and retain your editable original. Each
+file publishes atomically; completed work stays after interruption, so this is
+not whole-route rollback. Originals remain until all terrain references and
+replacements are verified; interrupted cleanup resumes with the same settings.
+Linked folders, malformed/unsupported inputs and collisions stop processing.
+ACE mip chains must be complete, square and power-of-two. For a partial DDS
+chain converted to ACE, choose Add missing or Remove explicitly. Indexed ACE
+mip generation in place and DX10/array/cubemap DDS are unsupported. Supported
+DDS storage is RGB24/RGBA32 and DXT1-5. The existing 256 MiB file/decoded-base
+limits and one-texture-at-a-time processing remain; no total-process RAM cap is
+implied. Filtering uses the existing linear-light, alpha-aware terrain filter.
 
 Ordinary Save likewise reports pending PolyVeg/wire baking, texture encoding,
 file publication and cleanup as one operation. Its percentage describes work
@@ -717,3 +723,23 @@ The Texture Panel must remain open and the pointer must be inside the route
 viewport. Panel keyboard focus does not block the shortcuts; holding a key does
 not repeat the operation. The status bar reports painted counts or a missing
 target. Sky or unloaded terrain does not supply a tile. F12 lists the keys.
+
+## Route Paint Sequences (v0.22)
+
+Terrain HACKS > Auto Paint All TERRTEX... runs up to ten saved-preset Track/Roads/Water
+passes, in row order. Each row chooses Main/Snow mirroring. Route autopaint saves
+native-size uncompressed ACE without mipmaps. There are no output-format or
+size controls; older recipe fields are ignored. Use Process All TERRTEX afterward
+for final format, compression and mipmaps. It retains native dimensions. Sources validate
+before painting. It saves each
+completed tile with patch disk staging and a bounded source cache. Cancel keeps
+completed saves and stops between tiles. This route operation clears Undo.
+See HACKS-USER-GUIDE.md for the sequence, memory budgets and coverage limits.
+
+Normal whole-tile commands now coalesce GPU uploads while preserving Undo and
+manual Save. Their unsaved pixel and Undo memory is deliberately retained.
+
+
+Checked Mirror rows require a validated Main/Snow pair. Source dimensions are
+retained for every painted patch and seasonal variant. Operator rebuild and
+visual confirmation remain required for this control-removal revision.

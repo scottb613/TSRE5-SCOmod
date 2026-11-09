@@ -436,8 +436,17 @@ public:
         GuiFunct::styleEditorActionButton(resetTerrtex);
         cleanupLayout->addWidget(resetTerrtex);
 
-        compressTerrtex = new QPushButton("Compress TERRTEX — DXT1");
-        compressTerrtex->setToolTip("Final full-route production conversion, including seasonal ACE and DDS. DXT1 introduces loss and should only be run once. No TERRTEX backups or originals are retained.");
+        paintRoute = new QPushButton("Auto Paint All TERRTEX...");
+        paintRoute->setToolTip("Run up to ten preset Track, Roads and Water paint passes. Completed tiles are saved as the route is processed.");
+        GuiFunct::styleEditorActionButton(paintRoute);
+        cleanupLayout->addWidget(paintRoute);
+        QObject::connect(paintRoute, &QPushButton::clicked, owner, [this]() {
+            this->owner->userButtonPressed();
+            emit this->owner->paintEntireRouteRequested();
+        });
+
+        compressTerrtex = new QPushButton("Process All TERRTEX...");
+        compressTerrtex->setToolTip("Process all seasonal ACE and DDS textures: compress uncompressed inputs, keep/remove/add mipmaps. Existing compressed bases are never recompressed.");
         GuiFunct::styleEditorActionButton(compressTerrtex);
         cleanupLayout->addWidget(compressTerrtex);
         QObject::connect(compressTerrtex, &QPushButton::clicked, owner, [this](){
@@ -572,6 +581,7 @@ private:
         deleteInstances->setVisible(owner->hasSelectedStaticForHacks());
         removeInteractives->setVisible(trackSelected || signalSelected);
         resetTerrtex->setVisible(terrainSelected);
+        paintRoute->setVisible(terrainSelected);
         compressTerrtex->setVisible(terrainSelected);
         waterTilesOff->setVisible(terrainSelected);
         deletePolyVegBakes->setVisible(vegetationSelected);
@@ -625,6 +635,7 @@ private:
     QLabel *trackTitle = NULL, *signalTitle = NULL, *cleanupTitle = NULL;
     QFrame *trackCard = NULL, *signalCard = NULL, *cleanupCard = NULL;
     QPushButton *removeInteractives = NULL, *resetTerrtex = NULL, *compressTerrtex = NULL;
+    QPushButton *paintRoute = NULL;
     QPushButton *waterTilesOff = NULL, *deletePolyVegBakes = NULL, *replaceForests = NULL, *deleteWireBakes = NULL;
     QPushButton *fixJNodePosn = NULL;
     QPushButton *removeTdbVector = NULL;

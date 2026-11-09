@@ -1,54 +1,60 @@
-# TSRE GenX v0.21 - Tile Autopaint and Format Compatibility
+# TSRE GenX v0.22 - Route Autopaint and Final TERRTEX Processing
 
 TSRE GenX is a 64-bit Windows route editor for Microsoft Train Simulator and
 Open Rails routes, with Qt 6/CMake, terrain and map tools, Dynamic Track,
 PolyVeg, Activity Builder and Consist Builder.
 
-> **Current version: v0.21.** Both operator-run clean Release builds passed all
-> 34 registered tests on 29 October 2026. This release follows capped v0.20.
+> **Current version: v0.22.** Clean MinGW and MSVC Release builds and all 39
+> registered tests passed on 9 November 2026, including the enabled reference corpus.
+> The binary package contains the manually accepted MSVC v143 runtime.
 
-## Major Updates Since v0.20
+## Major Updates Since v0.21
 
-### Whole-tile autopaint from the pointer
+### Route painting and native texture dimensions
 
-- Open the Texture Panel with F3, select the source/brush, then hover over a
-  visible loaded terrain tile: Alt+1 paints its track, Alt+2 its roads, and
-  Alt+3 its water edges. The pointer does not need to touch those objects.
-- Camera-ray terrain picking resolves near and far tiles across tile boundaries,
-  independent of foreground objects or previously cached brush depth.
-- Shortcuts work across editor-panel focus and do not repeat while held.
-  The Texture Panel must be open and the pointer inside the route viewport.
-  Status messages report the target/result or explain why no tile was found.
-- F12 and the Auto Paint menu list the assignments. The existing whole-tile
-  painting algorithms and current brush settings are used.
+- **Auto Paint All TERRTEX:** run up to ten saved-preset Track, Roads and Water
+  passes in order, with independent Main/Snow mirroring per row. Invalid checked
+  pairs block Commit and are revalidated before painting.
+- Completed tiles save transactionally, with patch disk staging, a bounded
+  decoded-source cache and viewport suspension. Cancel stops between tiles and
+  retains completed saves. Route autopaint clears Undo; keep an editable backup.
+- Manual and route painting save native-size, uncompressed ACE without mipmaps.
+  There are no format or size selectors in the paint panels or route dialog.
+  Older recipe output fields are ignored while preserving the paint sequence.
+- Normal whole-tile Track/Roads/Water painting coalesces GPU uploads while
+  preserving Undo and manual Save.
 
-### Compressed textures and legacy world files
+### Final TERRTEX processing
 
-- Accept valid compressed ACE headers after the normal file reader expands them,
-  fixing erroneous signature rejection before production DDS conversion.
-  Exact expanded sizes and existing image/allocation limits remain checked.
-- Accept complete legacy Comment footers after the world root during route and
-  generated-asset cleanup. These valid files no longer force blanket retention
-  of otherwise unused assets. Incomplete worlds, malformed comments, extra
-  object/world roots and unknown trailing data remain protected.
-- This release does not change DXT1 compression, mipmap policy, texture output
-  naming or painting/upload performance.
+- **Process All TERRTEX:** independently select **Keep Existing / ACE / DDS**,
+  **Compress Uncompressed Textures**, and **Keep / Remove / Add Missing Mipmaps**.
+  All seasonal folders are included and source dimensions are preserved.
+- Compression applies opaque, lossy DXT1 only to uncompressed pixels. Existing
+  compressed blocks are not recompressed. Mipmap-only operations preserve the
+  base and retained authored levels; adding mips appends missing levels.
+- ACE/DDS conversion works in both directions, updates detailed and distant
+  terrain references, and removes superseded originals after verification.
+  Container-specific small mip tails are translated; unsupported lossy block
+  transfers, partial ACE mip chains and destination collisions are refused.
+- Atomic file publication and durable checkpoints support resume with locked
+  settings. Original and replacement hashes are checked before reference
+  publication and again before cleanup. Externally changed originals stop resume
+  before references change. This final-processing tool retains no original
+  texture backups or Undo and does not provide whole-route rollback.
 
-### Verification
+### Texture decoding and verification
 
-- Both clean MinGW and MSVC Release builds passed all 34 registered tests.
-  The release package uses the complete compiler-matched MinGW runtime.
-- Six rebuilt format/conversion/cleanup CTests passed, including the supplied
-  compressed ACE through the real reader/validator and two supplied world files.
-- The terrain-track probe passed separately; the operator accepted the reported
-  tile-autopaint behavior. Prior-version results are not v0.21 evidence.
-- The complete affected route was not available. Full-route conversion, cleanup
-  rescan and simulator appearance still require confirmation by its owner.
+- The maintained native ACE codec has focused format, alpha, mipmap and input
+  validation coverage. Both compiler lanes match all 68 reference textures exactly.
+- Standard byte-channel DDS decoding avoids repeated per-pixel mask searches.
+  Optional startup diagnostics separate route setup and texture decoding; no
+  universal route-loading speedup is claimed.
+- Both clean Release builds pass all 39 registered tests with no skips,
+  including the enabled local reference corpus.
+  The refreshed MSVC runtime and manual conversion/save/reopen workflow were
+  accepted by the operator on 9 November 2026.
 
-## Complete GenX Feature Summary Through v0.20
-
-The established editor improvements are grouped below. New v0.21 changes appear
-above; this section describes the features carried into the current release.
+## Complete GenX Feature Summary
 
 ### Terrain shaping and high-definition grids
 
@@ -69,6 +75,16 @@ above; this section describes the features carried into the current release.
 
 ### Terrain painting, seasonal textures and output
 
+- **Pointer-tile autopaint:** with F3 open, hover over visible loaded terrain:
+  Alt+1 paints track, Alt+2 roads and Alt+3 water edges across that tile using
+  the current brush. Terrain-height ray picking crosses tile boundaries without
+  precise object aiming. Window shortcuts work across panel focus; held keys do
+  not repeat. F12/menu hints list the keys; the status bar reports results or
+  missing targets. The pointer must be inside the route viewport.
+- **Compressed ACE compatibility:** accepts the file reader's expanded compressed
+  wrapper with exact length checks, avoiding erroneous signature rejection
+  before DDS production conversion while retaining image/allocation limits.
+
 - **Painting coverage:** whole-tile patch selection, automatic track/road
   painting and elevation-following Water Edge painting reduce repetitive work.
   Shorelines use feathered transitions rather than coarse patch outlines.
@@ -84,16 +100,18 @@ above; this section describes the features carried into the current release.
 - **Mirror Season:** paired default/snow painting validates matching sources,
   shows the active side and disables invalid mirroring. Original dimensions,
   including larger TERRTEX, are retained during painting.
-- **ACE/DDS and mipmaps:** independent output switches govern newly painted
-  patches. Native opaque RGB24 DDS complements ACE; saved mipmaps use
-  linear-light, alpha-aware filtering with repeating texture edges.
+- **Painting and final output:** manual painting saves uncompressed ACE without
+  mips. Process All TERRTEX selects final Keep/ACE/DDS format, independent DXT1
+  compression of uncompressed inputs and Keep/Remove/Add missing mipmaps.
 - **Texture/cache corrections:** rectangular cropping, RGB row alignment,
   reload identity and shared-destination staging are corrected. Repeated
   ACE-to-DDS references reuse decoded data rather than multiplying cache entries.
 - **Reset and production tools:** confirmed tile/route resets restore canonical
   detailed/distant materials and remove matching generated assets. Route-wide
-  seasonal TERRTEX compression produces opaque DXT1 with progress/checkpoints:
-  it is lossy, removes alpha, should run once and retains no original backup.
+  seasonal **Process All TERRTEX** converts ACE/DDS in either direction, updates
+  terrain references and removes verified superseded inputs. Existing compressed
+  blocks/authored levels are retained; atomic writes/checkpoints support resume.
+  First-time DXT1 compression is lossy/opaque; no original backups or Undo remain.
 
 ### Water tools and special rulers
 
@@ -214,6 +232,11 @@ above; this section describes the features carried into the current release.
 
 ### Route diagnostics, distribution and object copying
 
+- **Legacy world footers:** route/generated-asset cleanup recognizes complete
+  Comment blocks after the world root, avoiding blanket retention of otherwise
+  unused assets. Incomplete worlds, malformed comments, extra world/object roots
+  and unknown trailing data remain protected.
+
 - **F11 world scan:** progress, cancellation and incomplete-coverage reporting
   accompany orphan/isolated-track and joint/connectivity checks. Jump/Select,
   thresholds and remembered No Factor status support review.
@@ -281,7 +304,8 @@ above; this section describes the features carried into the current release.
   dependencies. Obsolete qmake projects, the unfinished activity simulator and
   its unused OpenAL dependency were removed.
 - **Windows lanes:** matched MinGW remains the parity/package baseline;
-  Visual Studio 2026/MSVC v143 provides an independent lane. Supported systems
+  Visual Studio 2026/MSVC v143 provides an independent lane and the manually
+  accepted v0.22 binary package. Supported systems
   are 64-bit Windows 10 1809 or later and Windows 11.
 - **Compatibility:** MSTS/Open Rails UTF-16 and native route/terrain/object/path
   formats remain central constraints; the legacy renderer remains the parity
@@ -292,17 +316,19 @@ above; this section describes the features carried into the current release.
 
 ## Installation
 
-The binary asset is **`tsre-scomod-v0.21.zip`** with its `.sha256` companion.
-This full release contains the reviewed, compiler-matched MinGW runtime.
+The binary asset is **`tsre-scomod-v0.22.zip`** with its `.sha256` companion.
+This full release contains the reviewed, compiler-matched MSVC v143 runtime.
 
-1. Download the binary ZIP and matching checksum from the v0.21 release.
+1. Download the binary ZIP and matching checksum from the v0.22 release.
    GitHub's automatic source archives are not the runnable Windows package.
 2. Verify the ZIP against its SHA-256 companion.
 3. Extract the **complete archive** to a permanent writable location.
 4. Run **`AddShortcutDesktop.cmd`** from the extracted folder.
 5. Launch through the generated **TSRE GenX** shortcut. Move the shortcut only
    after creating it, and keep the extracted application folder intact.
-6. Keep the executable, matched runtime libraries, plugins, assets and documents
+6. If the Microsoft Visual C++ runtime is unavailable, run the included
+   `vc_redist.x64.exe` installer before starting the editor.
+7. Keep the executable, matched runtime libraries, plugins, assets and documents
    together. Do not mix compiler runtimes or copy only a new executable into an old pack.
 
 Back up routes before terrain conforming, water processing, route-wide saves,
@@ -315,8 +341,8 @@ final upload copy and retain your editable route separately.
 - 64-bit Windows 10 version 1809 or later, or Windows 11. Windows 7 and Qt5/qmake
   builds are unsupported.
 - Existing MSTS/Open Rails route content; SCO LIDEX derivatives for mapped PolyVeg.
-- Source builds use Qt 6.11.1; MinGW 13.1 is the release baseline and MSVC v143
-  is the independent verification lane.
+- Source builds use Qt 6.11.1. Both MinGW 13.1 and MSVC v143 are verified;
+  this download uses the operator-accepted MSVC runtime.
 - Wire discovery is bounded to 512 supports and 256 tiles per run, with an
   8,192-span registry. It cannot infer the intended path among nearby parallel lines.
 - glTF preview is a bounded base-colour/rest-pose preview, not full simulator
@@ -325,13 +351,15 @@ final upload copy and retain your editable route separately.
   its title does not mean ZIP creation. Copy To adds catalog resources, not world
   placements. External editors do not honor the internal operation locks. Abrupt
   process failure can leave unreferenced resources or safe partial terrain updates.
-- Both clean Release compiler suites passed 34/34 tests. Supplied-file checks
-  and the limits of manual/full-route coverage are recorded in the test matrix.
+- Both clean Release compiler suites passed all 39 registered tests in
+  the full runs with no skips (68/68 reference textures exact).
+  Manual acceptance is recorded in the test matrix; exhaustive route coverage
+  and automatic recovery from arbitrary external edits are not claimed.
 
 ## Source and Documentation
 
-The immutable **v0.21** tag identifies the reviewed release source. `tsre-scomod-wip` remains the maintained public source branch.
-`TEST-MATRIX-v0.21.md` records build hashes, tests and manual coverage. Verify the
+The immutable **v0.22** tag identifies the reviewed release source. `tsre-scomod-wip` remains the maintained public source branch.
+`TEST-MATRIX-v0.22.md` records build hashes, tests and manual coverage. Verify the
 binary ZIP with its matching SHA-256 companion before extraction.
 
 The package includes Pack for Distro and Static Object Copy To guides, plus
