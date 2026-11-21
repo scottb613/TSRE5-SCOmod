@@ -23,6 +23,7 @@ public:
     bool support(GameObj* obj);
     void showObj(GameObj* obj);
     void updateObj(GameObj* obj);
+    QPushButton *hacksButton() { return &hacks; }
     
 public slots:
     void flexEnabled();
@@ -43,6 +44,7 @@ signals:
     void userModeChanged();
     void setMoveStep(float val);
     void flexResult(bool success);
+    void hacksToggled(GameObj *obj, QPushButton *button, bool checked);
     
 private:
     QCheckBox chSect[5];
@@ -50,7 +52,8 @@ private:
     QDoubleSpinBox sSectR[5];
     QFormLayout vSect[5];
     QWidget wSect[5];
-    DynTrackObj* dobj;
+    DynTrackObj* dobj = nullptr;
+    QPushButton hacks;
     QSignalMapper dyntrackChSect;
     QSignalMapper dyntrackSect;
     QLineEdit eSectionIdx;

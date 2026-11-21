@@ -43,7 +43,7 @@
 //////// Version
 //////////////////////////////////
 
-QString Game::AppVersion = "v0.22";  // over-ride from main.cpp
+QString Game::AppVersion = "v0.23";  // over-ride from main.cpp
 
 
 bool Game::ServerMode = false;
@@ -140,6 +140,7 @@ bool Game::snapableOnlyRot = false;
 float Game::trackElevationMaxPm = 700.0;
 bool Game::fullscreen = false;
 float Game::uiScale = 1.00f;
+QString Game::panelAlignment = "Center";
 bool Game::markerLines = false;
 
 bool Game::loadAllWFiles = false;
@@ -757,6 +758,7 @@ void Game::InitAssets() {
 }
 
 void Game::load() {
+    panelAlignment = "Center";
     
     QString sh;
     QString path;
@@ -1426,6 +1428,14 @@ void Game::load() {
                 uiScale = 0.75f;
             if(uiScale > 1.25f)
                 uiScale = 1.25f;
+        }
+        if(setname == "panelalignment"){
+            if(setval.compare("Left", Qt::CaseInsensitive) == 0)
+                panelAlignment = "Left";
+            else if(setval.compare("Right", Qt::CaseInsensitive) == 0)
+                panelAlignment = "Right";
+            else
+                panelAlignment = "Center";
         }
 
         if(setname =="season"){

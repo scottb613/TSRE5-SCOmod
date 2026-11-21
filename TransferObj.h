@@ -49,10 +49,12 @@ public:
     void rotate(float x, float y, float z);
     void resize(float x, float y, float z);
     int getDefaultDetailLevel();
+    void prepareOpeningView(OpeningViewLoad &opening) override;
     void render(GLUU* gluu, float lod, float posx, float posz, float* playerW, float* target, float fov, int selectionColor, int renderMode);
     void reload();
     
 private:
+    bool prepareGeometry(bool openingView);
     void drawShape(int selectionColor = 0);
     int tex;
     bool init;

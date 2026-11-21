@@ -94,6 +94,7 @@ public:
     }
 };
 
+QMutex logMutex;
 QFile logFile;
 QTextStream logFileOut;
 QHash<QString, QString> consoleArgs;
@@ -109,6 +110,8 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
         case QtFatalMsg:    symbol = 'X'; break;
     }
     QString output = QString("[%1] %2").arg(symbol).arg(msg);
+    // Asset workers can report read errors through Qt's message handler.
+    QMutexLocker lock(&logMutex);
     if(Game::consoleOutput)
         std::cout << output.toStdString() << std::endl;
     if(logFile.isOpen()){

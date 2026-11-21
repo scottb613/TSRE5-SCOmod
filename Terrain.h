@@ -11,7 +11,10 @@
 #ifndef TERRAIN_H
 #define	TERRAIN_H
 #include <QString>
+#include "OpeningViewLoad.h"
 #include <QStringList>
+#include <QPair>
+#include <QVector>
 #include <functional>
 #include "GLUU.h"
 #include "TFile.h"
@@ -24,6 +27,8 @@ class TerrainInfo;
 class FileBuffer;
 class QDataStream;
 class RouteSaveTransaction;
+struct TerrainMeshData;
+struct TerrainMeshInput;
 
 class Terrain : public GameObj {
     Q_OBJECT
@@ -77,6 +82,7 @@ public:
     bool reloadSavedPaint(QString &error);
     int pendingSaveWork() const;
     void refresh();
+    void queueOpeningTextures(OpeningViewLoad &opening);
     bool isModified();
     void setModified(bool value = true);
     void getLowCornerTileXY(int &X, int &Y);
@@ -191,8 +197,6 @@ protected:
     bool modified = false;
     QString texturepath;
     QString rootTexturepath;
-    Vector3f **vertexData = NULL;//[257][257];
-    Vector3f **normalData = NULL;//[257][257];
     bool hidden[256];
     bool uniqueTex[256];
     int texid[256];
@@ -238,10 +242,19 @@ protected:
     void saveF(QString name);
     void saveF(QDataStream &write);
     void newF();
-    void vertexInit();
-    void normalInit();
-    bool oglInit();
-    void initBlob();
+    bool snapshotRenderMesh(TerrainMeshInput &input);
+    bool uploadRenderMesh(const TerrainMeshData &mesh);
+    bool prepareRenderMesh(bool background = false, bool *pending = nullptr);
+    bool renderMeshFailed = false;
+    bool drawsSurface() const;
+    bool drawsPatch(int patch) const;
+    enum class PatchTextureLoad { Synchronous, Resident, Streaming };
+    int resolvePatchTexture(int patch, bool secondary,
+                            PatchTextureLoad mode = PatchTextureLoad::Synchronous);
+    int preparePatchTexture(int patch, bool secondary, QHash<QPair<int, bool>, int> *residentMaterials = nullptr);
+    QString paintedTexturePath(int patch) const;
+    QVector<QPair<QVector3D, QVector3D>> patchBounds;
+    void initBlob(const TerrainMeshData &mesh);
     void rotateTex(int idx);
     void mirrorXTex(int idx);
     void mirrorYTex(int idx);

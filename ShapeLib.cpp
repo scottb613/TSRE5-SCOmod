@@ -9,6 +9,7 @@
  */
 
 #include "ShapeLib.h"
+#include "RouteFrameProfile.h"
 #include <QDir>
 #include "Game.h"
 #include <QDebug>
@@ -60,15 +61,24 @@ int ShapeLib::addShape(QString path){
     return addShape(path, Game::root+"/routes/"+Game::route+"/textures");
 }       
 
-int ShapeLib::addShape(QString path, QString texPath) {
+int ShapeLib::addShape(QString path, QString texPath, bool rollingStock) {
+    RouteFrameProfile::Scope lookup(RouteFrameProfile::Stage::ShapeLookup, &path);
     QString pathid = path;//(path + "/" + name).toLower();
     pathid.replace("\\", "/");
     pathid.replace("//", "/");
+    const auto directoryKey = [](QString directory) {
+        if(directory.isEmpty())
+            return directory;
+        return QDir::cleanPath(directory.replace('\\', '/'));
+    };
+    const QString textureKey = directoryKey(texPath);
     //console.log(pathid);
     for ( auto it = shape.begin(); it != shape.end(); ++it ){
         if(it->second == NULL) continue;
         if (((SFile*) it->second)->pathid.length() == pathid.length())
-            if (((SFile*) it->second)->pathid == pathid) {
+            if (((SFile*) it->second)->pathid == pathid
+                && directoryKey(it->second->baseTexPath) == textureKey
+                && it->second->rollingStock == rollingStock) {
                 ((SFile*) it->second)->ref++;
                 return (int)it->first;
             }
@@ -77,6 +87,7 @@ int ShapeLib::addShape(QString path, QString texPath) {
 
     shape[jestshape] = new SFile(pathid, path.split("/").last(), texPath);
     shape[jestshape]->pathid = pathid;
+    shape[jestshape]->rollingStock = rollingStock;
     
    
     
@@ -93,6 +104,7 @@ bool ShapeLib::reloadShapeIfCached(QString path) {
         return true;
     }
 
+    bool foundShape = false;
     for(auto it = shape.begin(); it != shape.end(); ++it) {
         SFile *cachedShape = it->second;
         if(cachedShape == NULL)
@@ -105,9 +117,11 @@ bool ShapeLib::reloadShapeIfCached(QString path) {
 
         if(cachedShape->loaded == 1)
             cachedShape->reload();
-        return true;
+        else if(cachedShape->loaded == 0)
+            cachedShape->invalidatePendingRead();
+        foundShape = true;
     }
-    return false;
+    return foundShape;
 }
 
 std::shared_ptr<GltfPreview> ShapeLib::getGltfShape(const QString &path, QString &error) {

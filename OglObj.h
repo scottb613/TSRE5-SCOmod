@@ -15,6 +15,8 @@
 #include "GLUU.h"
 #include "RenderItem.h"
 
+struct OpeningViewLoad;
+
 class OglObj {
 public:
     enum MaterialType {NONE, TEXTURE, COLOR};
@@ -27,12 +29,14 @@ public:
     void initIndexed(const float* punkty, int ptr,
             enum RenderItem::VertexAttr v, int type,
             const unsigned int* indices, int indexCount);
+    bool setForestOffsets(const QVector<float> &offsets);
     void initLitTriangles(const float* positions, int positionFloatCount);
     virtual void pushRenderItem();
     virtual void pushRenderItem(int selectionColor, float lod = 0);
     virtual void render();
     virtual void render(int selectionColor, float lod = 0);
     void deleteVBO();
+    void prepareTexture(OpeningViewLoad &opening);
     void releaseTexture();
     void setMaterial(float r, float g, float b);
     void setMaterial(const QString &path);
@@ -50,6 +54,8 @@ private:
     QOpenGLBuffer IBO;
     int length; 
     int indexLength = 0;
+    QOpenGLBuffer forestOffsetBuffer;
+    int forestInstanceCount = 0;
     bool indexed = false;
     int shapeType;
     int texId;

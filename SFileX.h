@@ -12,7 +12,7 @@
 #define	SFILEX_H
 
 #include "FileBuffer.h"
-class SFile;
+struct SFileGeometry;
 
 class SFileX {
 public:
@@ -30,16 +30,16 @@ public:
     SFileX();
     SFileX(const SFileX& orig);
     virtual ~SFileX();
-    static void odczytajshaders(FileBuffer* bufor, SFile* pliks);
-    static void odczytajpunkty(FileBuffer* bufor, SFile* pliks);
-    static void odczytajuvpunkty(FileBuffer* bufor, SFile* pliks);
-    static void odczytajnormalne(FileBuffer* bufor, SFile* pliks);
-    static void odczytajmatrices(FileBuffer* bufor, SFile* pliks);
-    static void odczytajimages(FileBuffer* bufor, SFile* pliks);
-    static void odczytajtextures(FileBuffer* bufor, SFile* pliks);
-    static void odczytajvtx_states(FileBuffer* bufor, SFile* pliks);
-    static void odczytajprim_states(FileBuffer* bufor, SFile* pliks);
-    static void odczytajlodd(FileBuffer* bufor, SFile* pliks);    
+    static void odczytajshaders(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajpunkty(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajuvpunkty(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajnormalne(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajmatrices(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajimages(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajtextures(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajvtx_states(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajprim_states(FileBuffer* bufor, SFileGeometry* pliks);
+    static bool odczytajlodd(FileBuffer* bufor, SFileGeometry* pliks, float alphaTest);
 private:
 
 };

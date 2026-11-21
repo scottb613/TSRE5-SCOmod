@@ -14,10 +14,12 @@
 #include <QWidget>
 #include <QMainWindow>
 #include <QMap>
+#include <QPointer>
 #include <QTimer>
 
 class QSlider;
 class QLabel;
+class QHBoxLayout;
 class RouteEditorGLWidget;
 class ObjTools;
 class GeoTools;
@@ -142,6 +144,10 @@ private:
     void saveLastSession();
     void applyRestoredSessionGeometry();
     void positionRouteNameLabel();
+    void applyPanelAlignment();
+    void updatePanelDivider();
+    QHBoxLayout *editorLayout = nullptr;
+    QPointer<QWidget> panelDivider;
     QWidget* box;
     QWidget* box2;
     QLabel* propertiesPanelTitle = NULL;

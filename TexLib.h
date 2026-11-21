@@ -32,12 +32,17 @@ public:
     static bool releaseAllMapTextures();
     static void addRef(int texx);
     static int addTex(QString path, QString name, bool reload = false);
-    static int addTex(QString pathid, bool reload = false);
+    static int addTex(QString pathid, bool reload = false, bool exactPath = false);
     static int getTex(QString pathid);
+    static int getResidentTex(const QString &path, const QString &name);
+    // Returns -1 while a requested DDS is decoding or waiting for a worker.
+    static int addStreamingTerrainTex(const QString &path, const QString &name);
     static QString resolveTexturePath(const QStringList &basePaths, const QString &fileName, bool tryAceDdsAlternative = true);
     static int cloneTex(int id);
     static void save(QString type, QString path, int id);
 private:
+    static int getTex(const QString &pathid, bool residentOnly);
+    static int addTexInternal(QString pathid, bool reload, bool exactPath, bool streamDds);
 
 };
 

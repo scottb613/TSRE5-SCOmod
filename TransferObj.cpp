@@ -252,11 +252,11 @@ void TransferObj::reload(){
 }
 
 
-void TransferObj::drawShape(int selectionColor){
+bool TransferObj::prepareGeometry(bool openingView) {
 
     if (!init) {
-        if(!Game::ignoreLoadLimits){
-            if(Game::allowObjLag < 1)  return;
+        if(!openingView && !Game::ignoreLoadLimits){
+            if(Game::allowObjLag < 1) return false;
             Game::allowObjLag-=2;
         }
         
@@ -368,7 +368,17 @@ void TransferObj::drawShape(int selectionColor){
         delete[] punkty;
         init = true;
     }
-    
+    return true;
+}
+
+void TransferObj::prepareOpeningView(OpeningViewLoad &opening) {
+    if (prepareGeometry(true))
+        shape.prepareTexture(opening);
+}
+
+void TransferObj::drawShape(int selectionColor) {
+    if (!prepareGeometry(false))
+        return;
     shape.render(selectionColor);
 }
 

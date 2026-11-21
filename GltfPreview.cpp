@@ -4,6 +4,7 @@
 // Licensed under GNU GPL v3 or later. See LICENSE.md.
 
 #include "GltfPreview.h"
+#include "RouteFrameProfile.h"
 #include "GltfPlacementMath.h"
 #include <QOpenGLBuffer>
 #include <QOpenGLContext>
@@ -98,6 +99,7 @@ GltfPreview::GltfPreview() = default;
 GltfPreview::~GltfPreview() = default;
 
 bool GltfPreview::load(const QString &path, QString &error) {
+    RouteFrameProfile::Scope load(RouteFrameProfile::Stage::GltfLoad, &path);
     if(!model.load(path, error)) { loadError = error; return false; }
     sourcePath = path;
     ++revision;
@@ -116,6 +118,19 @@ void GltfPreview::release() {
 
 bool GltfPreview::draw(const QMatrix4x4 &matrix, QString &error,
         int selectionColor, bool mirroredInstance) {
+    return render(matrix, error, selectionColor, mirroredInstance, false);
+}
+
+bool GltfPreview::prepareOpeningView(QString &error) {
+    if (resources && resources->owner == QOpenGLContext::currentContext() && !dirty) {
+        error.clear();
+        return true;
+    }
+    return render(QMatrix4x4(), error, 0, false, true);
+}
+
+bool GltfPreview::render(const QMatrix4x4 &matrix, QString &error,
+        int selectionColor, bool mirroredInstance, bool prepareOnly) {
     error.clear();
     auto *context = QOpenGLContext::currentContext();
     if(!context) { error = "No current preview graphics context."; return false; }
@@ -140,6 +155,7 @@ bool GltfPreview::draw(const QMatrix4x4 &matrix, QString &error,
         return false;
     };
     if(!resources) {
+        RouteFrameProfile::Scope graphics(RouteFrameProfile::Stage::GltfGraphics, &sourcePath);
         resources = std::make_unique<Resources>();
         resources->owner = context;
         const bool modern = context->format().profile() == QSurfaceFormat::CoreProfile;
@@ -249,6 +265,9 @@ bool GltfPreview::draw(const QMatrix4x4 &matrix, QString &error,
         }
         dirty = false;
     }
+    if (prepareOnly)
+        return true;
+
     auto &shader = resources->shader;
     if(!shader.bind()) return fail("Cannot bind glTF editor shader: " + shader.log());
     shader.setUniformValue("matrix", matrix);
@@ -298,6 +317,7 @@ bool GltfPreview::draw(const QMatrix4x4 &matrix, QString &error,
         shader.setUniformValue("cutoff", primitive.alphaCutoff);
         f->glBindTexture(GL_TEXTURE_2D, mesh->texture ? mesh->texture->textureId() : 0);
         mesh->array.bind();
+        RouteFrameProfile::count(RouteFrameProfile::Counter::GltfDraws);
         f->glDrawArrays(GL_TRIANGLES, 0, GLsizei(primitive.vertices.size() / 5));
     }
     return true;

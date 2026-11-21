@@ -6,6 +6,12 @@
 #include <vector>
 
 namespace RouteSectionPolicy {
+inline constexpr int trackPathCapacity = 12;
+
+inline bool validTrackPathCount(int count) {
+    return count >= 0 && count <= trackPathCapacity;
+}
+
 template<class Map>
 bool occupied(const Map &definitions, int id){
     const auto found = definitions.find(id);

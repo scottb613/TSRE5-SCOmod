@@ -27,6 +27,7 @@
 #include "Game.h"
 #include "MapWindow.h"
 #include "TerrainLib.h"
+#include "TerrainTextureStream.h"
 #include "Texture.h"
 #include "AceLib.h"
 #include <QDebug>
@@ -425,6 +426,10 @@ RouteEditorWindow::RouteEditorWindow() {
         qobject_cast<PropertiesTerrain*>(objProperties["Terrain"]);
     PropertiesTrackObj *trackProperties =
         qobject_cast<PropertiesTrackObj*>(objProperties["TrackObj"]);
+    auto *dyntrackProperties = qobject_cast<PropertiesDyntrack*>(objProperties["Dyntrack"]);
+    if(dyntrackProperties && trackProperties)
+        QObject::connect(dyntrackProperties, &PropertiesDyntrack::hacksToggled,
+                         trackProperties, &PropertiesTrackObj::toggleHacksForSelection);
     if(terrainProperties != NULL){
         QObject::connect(glWidget, &RouteEditorGLWidget::naviInfo,
                          terrainProperties, &PropertiesTerrain::naviInfo);
@@ -466,6 +471,7 @@ RouteEditorWindow::RouteEditorWindow() {
         QObject::connect(terrainTools, &TerrainTools::refreshProductionTerrtex,
                          glWidget, [editor = glWidget](){
             editor->makeCurrent();
+            TerrainTextureStream::clear();
             QStringList cached;
             const QString prefix=QDir::cleanPath(Game::root+"/routes/"+Game::route+"/terrtex")+'/';
             for(const auto &entry:TexLib::mtex) if(entry.second) {
@@ -506,16 +512,21 @@ RouteEditorWindow::RouteEditorWindow() {
 
     glWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     
-    QHBoxLayout *mainLayout = new QHBoxLayout;
-    mainLayout->setContentsMargins(3, 3, 3, 3);
-    mainLayout->setSpacing(3);
-    
-    mainLayout->addWidget(box2);
-    mainLayout->addWidget(glWidget);
-    mainLayout->addWidget(box);
-    
-    remain->setLayout(mainLayout);
-    mainLayout->setContentsMargins(0,0,0,0);
+    editorLayout = new QHBoxLayout(remain);
+    editorLayout->setContentsMargins(0, 0, 0, 0);
+    editorLayout->setSpacing(3);
+    panelDivider = new QWidget(remain);
+    panelDivider->setObjectName("routePanelDivider");
+    panelDivider->setAttribute(Qt::WA_StyledBackground);
+    panelDivider->setFixedWidth(qMax(1, scaledUiSize(2)));
+    panelDivider->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    panelDivider->setStyleSheet(
+        "#routePanelDivider { background-color: palette(mid); }");
+    box->installEventFilter(this);
+    box2->installEventFilter(this);
+    applyPanelAlignment();
+    connect(settingsDialog, &SettingsDialog::panelAlignmentChanged,
+            this, &RouteEditorWindow::applyPanelAlignment);
     
     this->setCentralWidget(remain);
     autoPlacementDock = new QDockWidget(tr("AUTO PLACE"), this);
@@ -1367,6 +1378,10 @@ void RouteEditorWindow::moveEvent(QMoveEvent *event){
 }
 
 bool RouteEditorWindow::eventFilter(QObject *watched, QEvent *event){
+    if (panelDivider && (watched == box || watched == box2)
+            && (event->type() == QEvent::Show || event->type() == QEvent::Hide
+                || event->type() == QEvent::ShowToParent || event->type() == QEvent::HideToParent))
+        updatePanelDivider();
     if((watched == glWidget || watched == menuBar())
     && (event->type() == QEvent::Resize
      || event->type() == QEvent::Move
@@ -1374,6 +1389,36 @@ bool RouteEditorWindow::eventFilter(QObject *watched, QEvent *event){
         QTimer::singleShot(0, this, [this](){ positionRouteNameLabel(); });
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+void RouteEditorWindow::applyPanelAlignment() {
+    QWidget *columns[] = {box2, glWidget, box, panelDivider.data()};
+    for (QWidget *widget : columns)
+        editorLayout->removeWidget(widget);
+
+    // Reorder the existing columns in one layout. Keeping the same parent
+    // preserves the OpenGL context and each panel's width and visible state.
+    if (Game::panelAlignment == "Left") {
+        editorLayout->addWidget(box2);
+        editorLayout->addWidget(panelDivider);
+        editorLayout->addWidget(box);
+        editorLayout->addWidget(glWidget, 1);
+    } else if (Game::panelAlignment == "Right") {
+        editorLayout->addWidget(glWidget, 1);
+        editorLayout->addWidget(box);
+        editorLayout->addWidget(panelDivider);
+        editorLayout->addWidget(box2);
+    } else {
+        editorLayout->addWidget(box2);
+        editorLayout->addWidget(glWidget, 1);
+        editorLayout->addWidget(box);
+    }
+    updatePanelDivider();
+}
+
+void RouteEditorWindow::updatePanelDivider() {
+    panelDivider->setVisible(Game::panelAlignment != "Center"
+                             && !box->isHidden() && !box2->isHidden());
 }
 
 void RouteEditorWindow::positionRouteNameLabel(){
@@ -1982,7 +2027,10 @@ void RouteEditorWindow::showProperties(GameObj* obj){
                 qobject_cast<PropertiesSignal*>(objProperties["Signal"]);
             PropertiesForest *forestProperties =
                 qobject_cast<PropertiesForest*>(objProperties["Forest"]);
-            if(polyVegBakeProperties != NULL && polyVegBakeProperties->support(obj))
+            auto *dyntrackProperties = qobject_cast<PropertiesDyntrack*>(objProperties["Dyntrack"]);
+            if(dyntrackProperties && dyntrackProperties->support(obj))
+                visibleHacksButton = dyntrackProperties->hacksButton();
+            else if(polyVegBakeProperties != NULL && polyVegBakeProperties->support(obj))
                 visibleHacksButton = polyVegBakeProperties->hacksButton();
             else if(staticProperties != NULL && staticProperties->support(obj))
                 visibleHacksButton = staticProperties->hacksButton();

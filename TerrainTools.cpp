@@ -2380,23 +2380,35 @@ void TerrainTools::compressRouteTerrtex()
         "No original texture backups or Undo are retained. Completed work remains in place if interrupted. Continue?";
     if(!GuiFunct::confirmDestructiveAction(this,"Process All TERRTEX",confirmation)) return;
 
-    QProgressDialog progress("Scanning TERRTEX...",QString(),0,1000,this);
+    QProgressDialog progress("Scanning TERRTEX...","Cancel",0,1000,this);
     GuiFunct::styleEditorDialog(&progress);
     progress.setWindowTitle("Process All TERRTEX");
+    GuiFunct::addEditorDialogHeader(&progress,"Process All TERRTEX");
     progress.setWindowModality(Qt::ApplicationModal);
     progress.setWindowFlag(Qt::WindowCloseButtonHint,false);
     progress.setAutoClose(false); progress.setAutoReset(false); progress.setMinimumDuration(0);
-    progress.setMinimumWidth(480); progress.show();
+    progress.setMinimumWidth(480);
+    bool cancelPending=false;
+    const auto cancelConnection=QObject::connect(&progress,&QProgressDialog::canceled,&progress,[&]() {
+        if(cancelPending) return;
+        cancelPending=true;
+        progress.setCancelButton(nullptr);
+        progress.setLabelText("Finishing the current step before stopping...");
+        progress.show();
+    });
+    progress.show();
     SaveProgress::Range whole(0,1);
     int shown=0;
     QElapsedTimer paint; paint.start();
     SaveProgress::Scope reporting([&](const QString &message){
         if(paint.elapsed()<50) return;
-        shown=qMax(shown,qMin(999,int(SaveProgress::fraction()*1000)));
-        progress.setValue(shown);
-        progress.setLabelText(QString("%1% complete: %2").arg(shown/10).arg(message));
-        QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
         paint.restart();
+        shown=qMax(shown,qMin(999,int(SaveProgress::fraction()*1000)));
+        if(!cancelPending) {
+            progress.setLabelText(QString("%1% complete: %2").arg(shown/10).arg(message));
+            progress.setValue(shown);
+        }
+        QApplication::processEvents();
     });
     const QString routeRoot=Game::root+"/routes/"+Game::route;
     const auto references=[&](const QMap<QString,QString> &names,QString &error) {
@@ -2407,6 +2419,7 @@ void TerrainTools::compressRouteTerrtex()
         for(int i=0;i<tiles.size();++i) {
             SaveProgress::set(double(i)/tiles.size());
             SaveProgress::report(QString("Updating terrain references %1 of %2...").arg(i+1).arg(tiles.size()));
+            if(cancelPending) return false;
             const auto &file=tiles[i];
             if(file.isSymLink()) { error="Refusing a linked terrain descriptor."; return false; }
             ProductionTerrainFile descriptor;
@@ -2468,9 +2481,21 @@ void TerrainTools::compressRouteTerrtex()
         output.suffix=change.suffix; output.reformatted=change.reformatted; return true;
     };
     TerrtexProduction::Result result; QString error;
-    const bool success=TerrtexProduction::run(routeRoot+"/terrtex",journal,{},references,result,error,&processor);
-    Undo::Clear();
-    emit refreshProductionTerrtex();
+    const bool success=TerrtexProduction::run(routeRoot+"/terrtex",journal,{},references,result,error,&processor,
+        [&] { return cancelPending; });
+    QObject::disconnect(cancelConnection);
+    if(!result.cancelled || result.converted>0 || result.referencesStarted) {
+        Undo::Clear();
+        emit refreshProductionTerrtex();
+    }
+    if(result.cancelled) {
+        progress.hide();
+        GuiFunct::showEditorNotice(this,"TERRTEX Processing Cancelled",
+            QString("%1 texture(s) compressed during this run. Completed work was kept.\n"
+                "Run Process All TERRTEX again to resume without recompressing completed textures.")
+                .arg(result.compressed));
+        return;
+    }
     if(!success) {
         progress.close();
         GuiFunct::showEditorStopped(this,"TERRTEX Processing Stopped",

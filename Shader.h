@@ -39,6 +39,8 @@ public:
     unsigned int shaderEnableNormals;
     unsigned int shaderSelectionPass;
     int shaderRawPreview = -1;
+    int forestOffsets = -1;
+    int polyVegInstances = -1;
     unsigned int shaderDiffuseColor;
     unsigned int shaderAmbientColor;
     unsigned int shaderSpecularColor;

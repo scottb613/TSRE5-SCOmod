@@ -605,6 +605,11 @@ void WorldObj::pushRenderItems(float lod, float posx, float posz, float* playerW
     
 }
 
+void WorldObj::prepareOpeningView(OpeningViewLoad &opening) {
+    if (shapePointer)
+        shapePointer->prepareForOpeningView(shapeState, opening);
+}
+
 void WorldObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos, float* target, float fov, int selectionColor, int renderMode) {
 
 }

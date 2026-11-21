@@ -1,6 +1,6 @@
 # HACKS User Guide
 
-Applies to TSRE GenX v0.22. HACKS contains advanced recovery, replacement and
+Applies to TSRE GenX v0.23. HACKS contains advanced recovery, replacement and
 route-wide operations for route builders and modders. Some change the current
 selection; others alter the entire route or write directly to disk. Select an
 action for a specific task rather than treating this window as a cleanup list.
@@ -20,7 +20,8 @@ pinned between sessions.
 
 | Selection | Actions available in the shared popup |
 | --- | --- |
-| Supported standard track object | Repair Junction, Repair Elevation, Remove Vector, Remove Branch, Remove All Interactives, Delete All Wire Bakes |
+| Supported standard track object | Repair Junction, Repair Elevation, Remove Vector, Remove Branch, Remove All Interactives, Remove DYNATRAX, Delete All Wire Bakes |
+| Native Dynamic Track | Remove DYNATRAX |
 | Signal | Fix Signal Flags, Remove All Interactives |
 | Terrain | Auto Paint All TERRTEX..., Reset All TERRTEX, Process All TERRTEX..., Water Tiles Off |
 | Static scenery | Delete Instances |
@@ -103,6 +104,23 @@ flags, not a missing model, a signal script or the entire route's signalling.
 Do not assume every signal repair has the same Undo behavior as track repairs.
 
 ## Route object removal
+
+### Remove DYNATRAX
+
+Select a fixed or dynamic track piece, then open **Hacks... → Remove DYNATRAX**.
+TSRE scans the entire route and checks each DynaTrax placement against its local
+track path and TrackDB geometry. Review the placement, tile and file counts in
+the confirmation dialog.
+
+**Yes** saves the converted world records immediately and removes the generated
+DynaTrax shapes and descriptors in the same backed-up operation. Native Dynamic
+Track reuses the original placements and section IDs. The track database and
+shared textures are preserved. The operation clears Undo. **No** cancels it.
+
+Save pending route edits first. TSRE stops the conversion if a referenced
+track path is missing, the geometry does not match TrackDB, a binary world
+contains DynaTrax placements, or another route file still references a
+generated shape. Resolve the reported issue before retrying.
 
 ### Remove All Interactives
 

@@ -17,13 +17,15 @@
 #include <QFile>
 #include <QStringConverter>
 #include <QTextStream>
+#include <limits>
+#include <memory>
 
 TSectionDAT::TSectionDAT(bool autoFix, bool loadRouteNow) {
 
     //// EFO
         loaded = loadGlobal();
     
-    if(loadRouteNow){
+    if(loadRouteNow && trackPathError.isEmpty()){
         const bool routeLoaded = loadRoute(autoFix);
         if(autoFix) loaded = loaded && routeLoaded;
     }
@@ -61,8 +63,10 @@ bool TSectionDAT::loadGlobal() {
         incpath = Game::root + "/routes/" + Game::route + "/openrails";
     }
 
-    FileBuffer* data = ReadFile::read(file);
+    const std::unique_ptr<FileBuffer> buffer(ReadFile::read(file));
     file->close();
+    delete file;
+    FileBuffer *data = buffer.get();
     if (data == nullptr)
         return false;
     data->toUtf16();
@@ -125,7 +129,6 @@ bool TSectionDAT::loadGlobal() {
             //if (tsectionShapes == 0)
             tsectionShapes = ParserX::GetNumber(data);
             int t = 0;
-            int sectionN;
             TrackShape *shp;
             while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
                 //nowy->set(sh, data);
@@ -135,24 +138,26 @@ bool TSectionDAT::loadGlobal() {
                     //qDebug() << t;
                     shape[t] = new TrackShape(t);
                     shp = shape[t];
-                    sectionN = 0;
+                    QVector<TrackShape::SectionIdx> paths;
+                    int declaredPaths = -1;
                     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
                         //nowy->set(sh, data);
                         if (sh == ("filename")) {
                             shp->filename = ParserX::GetString(data);
                         } else if (sh == ("numpaths")) {
-                            shp->numpaths = ParserX::GetNumber(data);
-                            shp->path = new TrackShape::SectionIdx[shp->numpaths];
-                        } else if (sh == ("sectionidx")) {
-                            shp->path[sectionN].n = ParserX::GetNumber(data);
-                            shp->path[sectionN].pos[0] = ParserX::GetNumber(data);
-                            shp->path[sectionN].pos[1] = ParserX::GetNumber(data);
-                            shp->path[sectionN].pos[2] = ParserX::GetNumber(data);
-                            shp->path[sectionN].rotDeg = ParserX::GetNumber(data);
-                            for (int i = 0; i < shp->path[sectionN].n; i++) {
-                                shp->path[sectionN].sect[i] = ParserX::GetNumber(data);
+                            if(declaredPaths >= 0 || !TrackShape::readIndex(data, declaredPaths)
+                                    || !TrackShape::atBlockEnd(data)){
+                                trackPathError = QString("Invalid NumPaths in Global TrackShape %1.").arg(t);
+                                return false;
                             }
-                            sectionN++;
+                        } else if (sh == ("sectionidx")) {
+                            TrackShape::SectionIdx parsed;
+                            if((declaredPaths >= 0 && paths.size() >= declaredPaths)
+                                    || !TrackShape::readPath(data, parsed, true)){
+                                trackPathError = QString("Invalid SectionIdx in Global TrackShape %1.").arg(t);
+                                return false;
+                            }
+                            paths.append(parsed);
                         } else if (sh == ("mainroute")) {
                             shp->mainroute = ParserX::GetNumber(data);
                         } else if (sh == ("clearancedist")) {
@@ -178,6 +183,16 @@ bool TSectionDAT::loadGlobal() {
                             if(Game::debugOutput) qDebug() << sh;
                         }
                         ParserX::SkipToken(data);
+                    }
+                    if((declaredPaths < 0 && !paths.isEmpty())
+                            || (declaredPaths >= 0 && paths.size() != declaredPaths)){
+                        trackPathError = QString("NumPaths does not match the SectionIdx blocks in Global TrackShape %1.").arg(t);
+                        return false;
+                    }
+                    shp->numpaths = int(paths.size());
+                    if(!paths.isEmpty()){
+                        shp->path = new TrackShape::SectionIdx[paths.size()];
+                        std::copy(paths.cbegin(), paths.cend(), shp->path);
                     }
                     ParserX::SkipToken(data);
                     continue;
@@ -320,12 +335,13 @@ bool TSectionDAT::loadRoute(bool autoFix) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
         return false;
-    FileBuffer* data = ReadFile::read(&file);
-    if (data == nullptr)
+    const std::unique_ptr<FileBuffer> data(ReadFile::read(&file));
+    if (!data)
         return false;
-    ParserX::NextLine(data);
+    ParserX::NextLine(data.get());
     
-    loadRouteUtf16Data(data, autoFix);
+    if(!loadRouteUtf16Data(data.get(), autoFix))
+        return false;
     
     this->routeMaxIdx += 2 - this->routeMaxIdx % 2;
     this->routeShapes++;
@@ -336,7 +352,7 @@ bool TSectionDAT::loadRoute(bool autoFix) {
 }
 
 
-void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
+bool TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
     int index = 0;
     QString sh;
     int newIdx = tsectionMaxIdx, newSdx = tsectionShapes;
@@ -357,7 +373,13 @@ void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
                         ParserX::GetNumber(data);
                         newIdx = std::max(newIdx, int(ParserX::GetNumber(data)) + 1);
                     } else if(block == "sectionidx" && token == "trackpath"){
-                        newSdx = std::max(newSdx, int(ParserX::GetNumber(data)) + 1);
+                        int pathId;
+                        if(!TrackShape::readIndex(data, pathId)
+                                || pathId >= std::numeric_limits<int>::max() - 1){
+                            trackPathError = "Invalid route-local TrackPath ID.";
+                            return false;
+                        }
+                        newSdx = std::max(newSdx, pathId + 1);
                     }
                     ParserX::SkipToken(data);
                 }
@@ -417,8 +439,13 @@ void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
         if (sh == "sectionidx") {
             while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
                 if (sh.toLower() == "trackpath") {
-                    //   qDebug() << (int) ParserX::GetNumber(bufor);
-                    index = (int) ParserX::GetNumber(data);
+                    TrackShape::SectionIdx parsed;
+                    if(!TrackShape::readIndex(data, index)
+                            || index >= std::numeric_limits<int>::max() - 1
+                            || !TrackShape::readPath(data, parsed, false)){
+                        trackPathError = QString("Invalid route-local TrackPath %1.").arg(index);
+                        return false;
+                    }
                     if (RouteSectionPolicy::occupied(shape, index)){
                         if(autoFix){
                             autoFixedShapeIds[index] = newSdx;
@@ -434,14 +461,7 @@ void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
                     shape[index] = new TrackShape(index);
                     shape[index]->dyntrack = true;
                     shape[index]->numpaths = 1;
-                    shape[index]->path = new TrackShape::SectionIdx[1];
-                    //this->routeShape[index] = new TrackShape::SectionIdx;
-                    shape[index]->path[0].n = ParserX::GetNumber(data);
-                    shape[index]->path[0].pos[0] = 0;
-                    shape[index]->path[0].pos[1] = 0;
-                    shape[index]->path[0].pos[2] = 0;
-                    for (int i = 0; i < shape[index]->path[0].n; i++)
-                        shape[index]->path[0].sect[i] = ParserX::GetNumber(data);
+                    shape[index]->path = new TrackShape::SectionIdx[1]{parsed};
                     
                     if(autoFix){
                         for (int i = 0; i < shape[index]->path[0].n; i++){
@@ -459,6 +479,7 @@ void TSectionDAT::loadRouteUtf16Data(FileBuffer* data, bool autoFix){
         if(Game::debugOutput) qDebug() << "#RouteTsectionDat - undefined token " << sh;
         ParserX::SkipToken(data);
     }
+    return true;
 }
 
 bool TSectionDAT::isRoadShape(int id) {

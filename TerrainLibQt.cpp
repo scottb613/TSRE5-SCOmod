@@ -1737,6 +1737,36 @@ void TerrainLibQt::render(GLUU *gluu, float * playerT, float* playerW, float* ta
 
 }
 
+TerrainInfo *TerrainLibQt::distantTerrainAt(int x, int z, unsigned int nameId) {
+    auto &entry = terrainQtLo[nameId];
+    if (!entry) {
+        entry = new TerrainInfo();
+        quadTreeLo->fillTerrainInfo(x, -z, entry);
+        if (Game::debugOutput) qDebug() << "TID: " << nameId;
+        entry->t = new Terrain(entry);
+    }
+    return entry;
+}
+
+void TerrainLibQt::queueOpeningDistantTerrain(int x, int z, OpeningViewLoad &opening) {
+    if (!quadTreeLo)
+        return;
+    const int radius = Game::distantLod / 1000 - 10;
+    QSet<unsigned int> queued;
+    for (int n = -1, i = 0, j = 0; n < radius * radius; n += 16) {
+        if (n != -1)
+            spiralLoop(n, i, j);
+        const auto nameId = quadTreeLo->getMyNameId(x + i, -z - j);
+        if (!nameId || queued.contains(nameId))
+            continue;
+        queued.insert(nameId);
+        opening.discovery.emplace_back([this, &opening, x, z, i, j, nameId] {
+            auto *terrain = distantTerrainAt(x + i, z + j, nameId)->t;
+            terrain->queueOpeningTextures(opening);
+        });
+    }
+}
+
 void TerrainLibQt::renderLo(GLUU *gluu, float * playerT, float* playerW, float* target, float fov, int renderMode) {
     int distantCount = Game::distantLod/1000 - 10;
     int renderCount = distantCount*distantCount ;
@@ -1758,16 +1788,11 @@ void TerrainLibQt::renderLo(GLUU *gluu, float * playerT, float* playerW, float* 
             terrainNameId = quadTreeLo->getMyNameId((int) playerT[0] + i, -(int) playerT[1] - j);
             if (terrainNameId == 0)
                 continue;
-            if (terrainQtLo[terrainNameId] == NULL) {
-                terrainQtLo[terrainNameId] = new TerrainInfo();
-                quadTreeLo->fillTerrainInfo((int) playerT[0] + i, -(int) playerT[1] - j, terrainQtLo[terrainNameId]);
-                if(Game::debugOutput) qDebug() << "TID: " << terrainNameId;
-                terrainQtLo[terrainNameId]->t = new Terrain(terrainQtLo[terrainNameId]);
-            }
-            if (terrainQtLo[terrainNameId]->rendered)
+            auto *entry = distantTerrainAt(int(playerT[0]) + i, int(playerT[1]) + j, terrainNameId);
+            if (entry->rendered)
                 continue;
-            terrainQtLo[terrainNameId]->rendered = true;
-            tTile = terrainQtLo[terrainNameId]->t;
+            entry->rendered = true;
+            tTile = entry->t;
 
             if (tTile->loaded == false)
                 continue;

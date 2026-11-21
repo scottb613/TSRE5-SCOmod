@@ -21,7 +21,11 @@
 namespace TerrtexProduction {
 using AceDecoder=std::function<bool(const QString &,QImage &,bool &,QString &)>;
 using References=std::function<bool(const QMap<QString,QString> &,QString &)>;
-struct Result { int converted=0, skipped=0, compressed=0, added=0, removed=0, resumed=0, reformatted=0; qint64 before=0, after=0; };
+struct Result {
+    int converted=0, skipped=0, compressed=0, added=0, removed=0, resumed=0, reformatted=0;
+    qint64 before=0, after=0;
+    bool cancelled=false, referencesStarted=false;
+};
 // Optional processing policy; the original overload remains a regression reference.
 struct Processed {
     QByteArray bytes;
@@ -67,8 +71,13 @@ inline bool safePath(const QString &root,const QString &relative) {
 }
 inline bool run(const QString &textureRoot,const QString &journalPath,
         const AceDecoder &decodeAce,const References &updateReferences,Result &result,QString &error,
-        const Processor *processor=nullptr) {
+        const Processor *processor=nullptr, const std::function<bool()> &cancelRequested={}) {
     result={}; error.clear();
+    const auto stopAtBoundary=[&]() {
+        if(!cancelRequested || !cancelRequested()) return false;
+        result.cancelled=true;
+        return true;
+    };
     const QString root=QFileInfo(textureRoot).canonicalFilePath();
     if(root.isEmpty()) { error="TERRTEX folder was not found."; return false; }
     if(!QDir().mkpath(QFileInfo(journalPath).absolutePath())) { error="Cannot create conversion journal folder."; return false; }
@@ -148,6 +157,7 @@ inline bool run(const QString &textureRoot,const QString &journalPath,
         QDirIterator scan(root,QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot
             | QDir::Hidden | QDir::System,QDirIterator::Subdirectories);
         while(scan.hasNext()) {
+            if(stopAtBoundary()) return true;
             const QFileInfo info(scan.next());
             if(info.isDir()) {
                 if(info.isSymLink() || info.isJunction()) { error="Linked TERRTEX folders are not supported by production conversion."; return false; }
@@ -165,6 +175,7 @@ inline bool run(const QString &textureRoot,const QString &journalPath,
             files.append(QJsonObject{{"source",source},{"output",output},{"size",double(info.size())}});
             SaveProgress::report(QString("Scanning TERRTEX: %1 textures found...").arg(files.size()));
         }
+        if(stopAtBoundary()) return true;
         for(const auto &value:files) {
             const auto entry=value.toObject();
             if(entry["source"]!=entry["output"] && QFile::exists(QDir(root).filePath(entry["output"].toString()))) {
@@ -188,6 +199,7 @@ inline bool run(const QString &textureRoot,const QString &journalPath,
         outputs.insert(dst.toLower());
     }
     for(int i=0;i<files.size();++i) {
+        if(stopAtBoundary()) return true;
         journalIndex=i;
         SaveProgress::Range work(0.80*double(i)/files.size(),0.80*double(i+1)/files.size());
         auto entry=files[i].toObject();
@@ -195,6 +207,7 @@ inline bool run(const QString &textureRoot,const QString &journalPath,
         const QString output=QDir(root).filePath(entry["output"].toString());
         SaveProgress::report(QString("Processing TERRTEX %1 of %2: %3")
             .arg(i+1).arg(files.size()).arg(entry["source"].toString()));
+        if(stopAtBoundary()) return true;
         const QByteArray expected=entry["sha256"].toString().toLatin1();
         result.before+=qint64(entry["size"].toDouble());
         if(!expected.isEmpty() && hashFile(output)==expected) {
@@ -265,6 +278,7 @@ inline bool run(const QString &textureRoot,const QString &journalPath,
         result.compressed+=processed.compressed; result.added+=processed.added; result.removed+=processed.removed;
         result.reformatted+=processed.reformatted;
     }
+    if(stopAtBoundary()) return true;
     QMap<QString,QString> names;
     for(const auto &value:files) {
         const auto entry=value.toObject(); const QString src=entry["source"].toString(), dst=entry["output"].toString();
@@ -279,6 +293,7 @@ inline bool run(const QString &textureRoot,const QString &journalPath,
         for(int i=0;i<files.size();++i) {
             SaveProgress::set(double(i)/files.size());
             SaveProgress::report(QString("Verifying replacement %1 of %2 before terrain references...").arg(i+1).arg(files.size()));
+            if(stopAtBoundary()) return true;
             const auto entry=files[i].toObject();
             const QString output=QDir(root).filePath(entry["output"].toString());
             if(hashFile(output)!=entry["sha256"].toString().toLatin1()) {
@@ -295,7 +310,12 @@ inline bool run(const QString &textureRoot,const QString &journalPath,
         SaveProgress::Range references(0.85,0.94);
         if(!names.isEmpty() || !processor) {
             if(!updateReferences) { error="No terrain reference updater is available."; return false; }
-            if(!updateReferences(names,error)) return false;
+            if(stopAtBoundary()) return true;
+            result.referencesStarted=true;
+            // The reference updater can stop between atomic descriptor writes.
+            // All originals remain available until the reference pass completes.
+            if(!updateReferences(names,error))
+                return error.isEmpty() && stopAtBoundary();
         }
     }
     // No superseded input is removed until all terrain references are published.
@@ -304,6 +324,7 @@ inline bool run(const QString &textureRoot,const QString &journalPath,
         const auto entry=files[i].toObject();
         SaveProgress::set(0.94+0.04*double(i)/files.size());
         SaveProgress::report(QString("Verifying processed texture %1 of %2...").arg(i+1).arg(files.size()));
+        if(stopAtBoundary()) return true;
         const QString source=QDir(root).filePath(entry["source"].toString());
         const QString output=QDir(root).filePath(entry["output"].toString());
         if(hashFile(output)!=entry["sha256"].toString().toLatin1()) { error="Converted texture verification failed: "+output; return false; }
@@ -317,6 +338,7 @@ inline bool run(const QString &textureRoot,const QString &journalPath,
         if(entry["source"]==entry["output"]) continue;
         SaveProgress::set(0.98+0.019*double(i)/files.size());
         SaveProgress::report(QString("Removing superseded texture %1 of %2...").arg(i+1).arg(files.size()));
+        if(stopAtBoundary()) return true;
         const QString source=QDir(root).filePath(entry["source"].toString());
         if(QFile::exists(source)) {
             const QString output=QDir(root).filePath(entry["output"].toString());

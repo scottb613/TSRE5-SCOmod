@@ -105,6 +105,10 @@ foreach ($file in @('CMakeLists.txt', 'CMakePresets.json', 'vcpkg.json')) {
     Copy-Item -Force -LiteralPath (Join-Path $repoRoot $file) -Destination (Join-Path $destinationPath $file)
 }
 
+$toolsDestination = Join-Path $destinationPath 'tools'
+New-Item -ItemType Directory -Force -Path $toolsDestination | Out-Null
+Copy-Item -Force -LiteralPath (Join-Path $repoRoot 'tools\BakeForestPatch.cpp') -Destination $toolsDestination
+
 $scriptsDestination = Join-Path $destinationPath 'scripts'
 New-Item -ItemType Directory -Force -Path $scriptsDestination | Out-Null
 foreach ($script in @(

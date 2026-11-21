@@ -10,6 +10,7 @@
 
 #ifndef ROUTE_H
 #define	ROUTE_H
+#include <QByteArray>
 #include <QMap>
 #include <QString>
 #include <QHash>
@@ -118,6 +119,7 @@ public:
     void reloadLoadedWorldObjects();
     void deleteObj(WorldObj* obj);
     int removeAllInteractives(bool gui = true);
+    void removeDynaTrax(QWidget *parent);
     int deleteAllInstances(WorldObj *selected, bool gui = true);
     int deleteAllPolyVegBakes(bool gui = true);
     void undoPlaceObj(int x, int y, int UiD);
@@ -222,6 +224,12 @@ signals:
     
 protected:
     bool saveKeyRouteFiles(QString &error);
+    void rememberSavedTrackState();
+    void getUnsavedTrackInfo(QVector<QString> &items);
+    QByteArray savedTrackDb;
+    QByteArray savedRoadDb;
+    QByteArray savedTrackSections;
+    bool unsavedTrackSectionConversion = false;
     bool lastSaveResult = false;
     QString trkName;
     QString routeDir;

@@ -4,6 +4,18 @@ Purpose
 
 This file tracks only actual code/project files touched or created during the TSRE terrain/editor improvement work. Documentation, text notes, logs, executables, release packages, settings files, and generated build outputs are intentionally omitted.
 
+v0.23 freight animation texture lookup and version opening
+
+- Eng.cpp/.h, FreightAnimPath.h: shared preview/on-track freight loader; shape-
+  relative texture directories, normalized paths and explicit LoadData overrides.
+- SFile.cpp/.h, ShapeTexturePath.h: per-file shape-directory fallback only after
+  wagon-local textures/seasons; retain original resolution for other shapes.
+- ShapeLib.cpp/.h: cache identity includes primary/fallback texture directories
+  so one shared shape can display multiple wagon-local repaints.
+- tests/ShapeTexturePathProbe.cpp: shared-load directory/precedence regression
+  fixtures; existing seasonal and ACE/DDS coverage retained.
+- Game.cpp, TSRE5_resource.rc, root CMakeLists.txt and vcpkg.json: v0.23 identity.
+
 v0.22 final TERRTEX processing and native-size route painting
 
 - TerrtexProcessing.cpp/.h, TerrtexProduction.h: independent format/compression/

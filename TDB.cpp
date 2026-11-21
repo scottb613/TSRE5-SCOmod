@@ -10,11 +10,14 @@
 
 #include "TDB.h"
 #include "TrackDbFormatValidator.h"
+#include "RouteFrameProfile.h"
 #include <QDebug>
 #include <array>
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <memory>
+#include <utility>
 #include <QStringConverter>
 #include "Game.h"
 #include "ParserX.h"
@@ -148,15 +151,32 @@ bool vectorSectionOwnerIsMissing(const float *sectionData) {
             ownerX, ownerY, (unsigned int)sectionData[4]) == NULL;
 }
 
-bool vectorSectionOwnerIsDyntrack(const float *sectionData) {
-    if(Game::currentRoute == NULL)
-        return false;
+class LoadedTileObjects {
+public:
+    WorldObj *find(const GradeMarkerKey &key) {
+        if (!Game::currentRoute)
+            return nullptr;
+        const Tile *tile = Game::currentRoute->tile.value(key.x * 10000 + key.y);
+        if (!tile || tile->loaded != 1)
+            return nullptr;
+        auto objects = byTile.find(tile);
+        if (objects == byTile.end()) {
+            QHash<unsigned int, WorldObj *> index;
+            index.reserve(tile->obiekty.size());
+            for (const auto &entry : tile->obiekty) {
+                WorldObj *object = entry.second;
+                // Preserve the first loaded match if a tile has duplicate UIDs.
+                if (object && object->loaded && !index.contains(object->UiD))
+                    index.insert(object->UiD, object);
+            }
+            objects = byTile.insert(tile, std::move(index));
+        }
+        return objects.value().value(key.uid);
+    }
 
-    WorldObj *owner = Game::currentRoute->findWorldObjByUid(
-            (int)sectionData[2], -(int)sectionData[3],
-            (unsigned int)sectionData[4]);
-    return dynamic_cast<DynTrackObj*>(owner) != NULL;
-}
+private:
+    QHash<const Tile *, QHash<unsigned int, WorldObj *>> byTile;
+};
 
 }
 
@@ -2623,6 +2643,7 @@ struct GradeMarkerSample {
 }
 
 void TDB::rebuildGradeMarkerCache(){
+    RouteFrameProfile::Scope profile(RouteFrameProfile::Stage::GradeCacheRebuild);
     gradeMarkerTransitionCache.clear();
     gradeMarkerCacheRevision = Game::gradeOverlayRevision;
     if(Game::currentRoute == NULL)
@@ -2631,6 +2652,7 @@ void TDB::rebuildGradeMarkerCache(){
     // TrackDB/RoadDB supplies connectivity.  Live TrackObj data supplies the
     // magnitude and the same physical uphill direction shown by the marker.
     QHash<GradeMarkerKey, GradeMarkerSample> grades;
+    LoadedTileObjects owners;
     for(int nodeId = 1; nodeId <= iTRnodes; ++nodeId){
         TRnode *node = trackNodes[nodeId];
         if(node == NULL || node->typ != 1)
@@ -2640,7 +2662,11 @@ void TDB::rebuildGradeMarkerCache(){
             const int tileX = (int)section.param[2];
             const int tileY = -(int)section.param[3];
             const int uid = (int)section.param[4];
-            WorldObj *obj = Game::currentRoute->findWorldObjByUid(tileX, tileY, uid);
+            const GradeMarkerKey key = gradeMarkerKey(tileX, tileY, uid);
+            if (grades.contains(key))
+                continue;
+
+            WorldObj *obj = owners.find(key);
             if(obj == NULL || (obj->type != "trackobj" && obj->type != "dyntrack"))
                 continue;
 
@@ -2666,7 +2692,7 @@ void TDB::rebuildGradeMarkerCache(){
             }
             sample.worldX = obj->x * 2048.0f + obj->position[0];
             sample.worldZ = obj->y * 2048.0f + obj->position[2];
-            grades.insert(gradeMarkerKey(tileX, tileY, uid), sample);
+            grades.insert(key, sample);
         }
     }
 
@@ -2802,8 +2828,6 @@ int TDB::getGradeMarkerTransition(int x, int y, int UiD){
     // absent while a frame is being rendered.
     if(gradeMarkerCacheRevision != Game::gradeOverlayRevision)
         rebuildGradeMarkerCache();
-    if(!gradeMarkerTransitionCache.contains(key))
-        gradeMarkerTransitionCache.insert(key, GradeMarkerStable);
     return gradeMarkerTransitionCache.value(key, GradeMarkerStable);
 }
 
@@ -2822,23 +2846,17 @@ void TDB::refresh() {
 void TDB::renderAll(GLUU *gluu, float* playerT, float playerRot) {
 
     if (!loaded) return;
-    int hash = (int)playerT[0] * 10000 + (int)playerT[1];
-    if (!isInitLines || lineHash != hash) {
+    const QPoint center{int(playerT[0]), int(playerT[1])};
+    // Keep the anchor close enough to retain local float precision on long routes.
+    constexpr int rebaseRadius = 64;
+    if (!isInitLines || qAbs(center.x() - lineOrigin.x()) > rebaseRadius
+                     || qAbs(center.y() - lineOrigin.y()) > rebaseRadius) {
+        RouteFrameProfile::Scope rebuild(RouteFrameProfile::Stage::TrackDbOverlayBuild);
+        lineOrigin = center;
+        lineLabels.clear();
         TRnode *n;
         int lLen = 0, kLen = 0, pLen = 0;
-        //qDebug() <<"update";
-        lineHash = hash;
-        isInitLines = true;
-        
-        for (auto it = endIdObj.begin(); it != endIdObj.end(); ++it) {
-            TextObj* obj = (TextObj*) it->second;
-            obj->inUse = false;
-        }
-        for (auto it = junctIdObj.begin(); it != junctIdObj.end(); ++it) {
-            TextObj* obj = (TextObj*) it->second;
-            obj->inUse = false;
-        }
-        
+
         for (int i = 1; i <= iTRnodes; i++) {
             n = trackNodes[i];
             if (n == NULL) continue;
@@ -2865,78 +2883,53 @@ void TDB::renderAll(GLUU *gluu, float* playerT, float playerRot) {
             if (n->typ == -1) continue;
             if (n->typ == 1) {
                 if(n->iTrv < 1 ) continue;
-                for (int i = 0; i < n->iTrv - 1; i++) {
+                for (int section = 0; section < n->iTrv - 1; ++section) {
                // EFO Adds    
-                    linie[lPtr++] = ((n->trVectorSection[i].param[8] - playerT[0])*2048 + n->trVectorSection[i].param[10]);
-                    linie[lPtr++] = (n->trVectorSection[i].param[11] + lsectionLineHeight);
-                    linie[lPtr++] = (((-n->trVectorSection[i].param[9] - playerT[1])*2048 - n->trVectorSection[i].param[12]));
+                    linie[lPtr++] = ((n->trVectorSection[section].param[8] - lineOrigin.x())*2048 + n->trVectorSection[section].param[10]);
+                    linie[lPtr++] = (n->trVectorSection[section].param[11] + lsectionLineHeight);
+                    linie[lPtr++] = (((-n->trVectorSection[section].param[9] - lineOrigin.y())*2048 - n->trVectorSection[section].param[12]));
 
                     // EFO Adds
-                    linie[lPtr++] = ((n->trVectorSection[i + 1].param[8] - playerT[0])*2048 + n->trVectorSection[i + 1].param[10]);
-                    linie[lPtr++] = (n->trVectorSection[i + 1].param[11] + lsectionLineHeight);
-                    linie[lPtr++] = (((-n->trVectorSection[i + 1].param[9] - playerT[1])*2048 - n->trVectorSection[i + 1].param[12]));                   
+                    linie[lPtr++] = ((n->trVectorSection[section + 1].param[8] - lineOrigin.x())*2048 + n->trVectorSection[section + 1].param[10]);
+                    linie[lPtr++] = (n->trVectorSection[section + 1].param[11] + lsectionLineHeight);
+                    linie[lPtr++] = (-n->trVectorSection[section + 1].param[9] - lineOrigin.y()) * 2048
+                        - n->trVectorSection[section + 1].param[12];
                 }
                 if (n->TrPinS[1] != 0) {
                     //qDebug() << "track line " << i << n->iTrv;
-                    linie[lPtr++] = ((n->trVectorSection[n->iTrv - 1].param[8] - playerT[0])*2048 + n->trVectorSection[n->iTrv - 1].param[10]);
+                    linie[lPtr++] = ((n->trVectorSection[n->iTrv - 1].param[8] - lineOrigin.x())*2048 + n->trVectorSection[n->iTrv - 1].param[10]);
                     // EFO Adds
                     linie[lPtr++] = (n->trVectorSection[n->iTrv - 1].param[11] + lsectionLineHeight);
-                    linie[lPtr++] = (((-n->trVectorSection[n->iTrv - 1].param[9] - playerT[1])*2048 - n->trVectorSection[n->iTrv - 1].param[12]));
+                    linie[lPtr++] = (((-n->trVectorSection[n->iTrv - 1].param[9] - lineOrigin.y())*2048 - n->trVectorSection[n->iTrv - 1].param[12]));
 
-                    linie[lPtr++] = ((trackNodes[n->TrPinS[1]]->UiD[4] - playerT[0])*2048 + trackNodes[n->TrPinS[1]]->UiD[6]);
+                    linie[lPtr++] = ((trackNodes[n->TrPinS[1]]->UiD[4] - lineOrigin.x())*2048 + trackNodes[n->TrPinS[1]]->UiD[6]);
                     // EFO Adds
                     linie[lPtr++] = (trackNodes[n->TrPinS[1]]->UiD[7] + lsectionLineHeight);
-                    linie[lPtr++] = (((-trackNodes[n->TrPinS[1]]->UiD[5] - playerT[1])*2048 - trackNodes[n->TrPinS[1]]->UiD[8]));
+                    linie[lPtr++] = (((-trackNodes[n->TrPinS[1]]->UiD[5] - lineOrigin.y())*2048 - trackNodes[n->TrPinS[1]]->UiD[8]));
                 }
             } else if (n->typ == 0) {
-                konce[kPtr++] = ((n->UiD[4] - playerT[0])*2048 + n->UiD[6]);
+                konce[kPtr++] = ((n->UiD[4] - lineOrigin.x())*2048 + n->UiD[6]);
                 konce[kPtr++] = (n->UiD[7]);
-                konce[kPtr++] = ((-n->UiD[5] - playerT[1])*2048 - n->UiD[8]);
+                konce[kPtr++] = ((-n->UiD[5] - lineOrigin.y())*2048 - n->UiD[8]);
 
-                konce[kPtr++] = ((n->UiD[4] - playerT[0])*2048 + n->UiD[6]);
+                konce[kPtr++] = ((n->UiD[4] - lineOrigin.x())*2048 + n->UiD[6]);
                 // EFO Adds
                 konce[kPtr++] = (n->UiD[7] + lsectionLineHeight);
-                konce[kPtr++] = ((-n->UiD[5] - playerT[1])*2048 - n->UiD[8]);
+                konce[kPtr++] = ((-n->UiD[5] - lineOrigin.y())*2048 - n->UiD[8]);
                 
-                if(fabs(n->UiD[4] - playerT[0]) > 1) continue;
-                if(fabs(-n->UiD[5] - playerT[1]) > 1) continue;
-                
-                if(!road){
-                    if(endIdObj[i] == NULL){
-                        endIdObj[i] = new TextObj(i);
-                        endIdObj[i]->setColor(50,50,255);
-                    }    
-                    endIdObj[i]->inUse = true;
-                    endIdObj[i]->pos[0] = ((n->UiD[4] - playerT[0])*2048 + n->UiD[6]);
-                    // EFO Adds
-                    endIdObj[i]->pos[1] = n->UiD[7] + lsectionLineHeight;
-                    endIdObj[i]->pos[2] = ((-n->UiD[5] - playerT[1])*2048 - n->UiD[8]);
-                }
             } else if (n->typ == 2) {
-                punkty[pPtr++] = ((n->UiD[4] - playerT[0])*2048 + n->UiD[6]);
+                punkty[pPtr++] = ((n->UiD[4] - lineOrigin.x())*2048 + n->UiD[6]);
                 punkty[pPtr++] = (n->UiD[7]);
-                punkty[pPtr++] = ((-n->UiD[5] - playerT[1])*2048 - n->UiD[8]);
+                punkty[pPtr++] = ((-n->UiD[5] - lineOrigin.y())*2048 - n->UiD[8]);
 
-                punkty[pPtr++] = ((n->UiD[4] - playerT[0])*2048 + n->UiD[6]);
+                punkty[pPtr++] = ((n->UiD[4] - lineOrigin.x())*2048 + n->UiD[6]);
                 // EFO Adds
                 punkty[pPtr++] = (n->UiD[7] + lsectionLineHeight);
-                punkty[pPtr++] = ((-n->UiD[5] - playerT[1])*2048 - n->UiD[8]);
+                punkty[pPtr++] = ((-n->UiD[5] - lineOrigin.y())*2048 - n->UiD[8]);
                 
-                if(fabs(n->UiD[4] - playerT[0]) > 1) continue;
-                if(fabs(-n->UiD[5] - playerT[1]) > 1) continue;
-                
-                if(!road){
-                    if(junctIdObj[i] == NULL){
-                        junctIdObj[i] = new TextObj(i);
-                        junctIdObj[i]->setColor(255,50,50);
-                    }    
-                    junctIdObj[i]->inUse = true;
-                    junctIdObj[i]->pos[0] = ((n->UiD[4] - playerT[0])*2048 + n->UiD[6]);
-                    // EFO Adds
-                    junctIdObj[i]->pos[1] = n->UiD[7] + lsectionLineHeight;
-                    junctIdObj[i]->pos[2] = ((-n->UiD[5] - playerT[1])*2048 - n->UiD[8]);
-                }
             }
+            if (!road && (n->typ == 0 || n->typ == 2))
+                lineLabels[QPoint(int(n->UiD[4]), -int(n->UiD[5]))].append(i);
         }
         linieSieci.setMaterial(0.5, 0.5, 0.5);
         linieSieci.init(linie, lPtr, RenderItem::V, GL_LINES);
@@ -2950,21 +2943,47 @@ void TDB::renderAll(GLUU *gluu, float* playerT, float playerRot) {
         delete[] linie;
         delete[] konce;
         delete[] punkty;
+        isInitLines = true;
     }
 
-    gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
+    gluu->mvPushMatrix();
+    Mat4::translate(gluu->mvMatrix, gluu->mvMatrix,
+                    (lineOrigin.x() - center.x()) * 2048.0f, 0.0f,
+                    (lineOrigin.y() - center.y()) * 2048.0f);
+    gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform,
+        *reinterpret_cast<float(*)[4][4]>(gluu->mvMatrix));
     linieSieci.render();
     konceSieci.render();
     punktySieci.render();
-    
-    if(!road){
-        for (auto it = endIdObj.begin(); it != endIdObj.end(); ++it) {
-            TextObj* obj = (TextObj*) it->second;
-            if(obj->inUse) obj->render(playerRot);
-        }
-        for (auto it = junctIdObj.begin(); it != junctIdObj.end(); ++it) {
-            TextObj* obj = (TextObj*) it->second;
-            if(obj->inUse) obj->render(playerRot);
+    gluu->mvPopMatrix();
+
+    if (road)
+        return;
+    RouteFrameProfile::Scope labels(RouteFrameProfile::Stage::TrackOverlayLabels);
+    for (int dz = -1; dz <= 1; ++dz) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            const auto tileLabels = lineLabels.constFind(center + QPoint(dx, dz));
+            if (tileLabels == lineLabels.cend())
+                continue;
+            for (int id : tileLabels.value()) {
+                const auto node = trackNodes.find(id);
+                if (node == trackNodes.end() || !node->second)
+                    continue;
+                const auto &data = node->second->UiD;
+                const bool end = node->second->typ == 0;
+                TextObj *&label = end ? endIdObj[id] : junctIdObj[id];
+                if (!label) {
+                    label = new TextObj(id);
+                    if (end)
+                        label->setColor(50, 50, 255);
+                    else
+                        label->setColor(255, 50, 50);
+                }
+                label->pos[0] = (data[4] - playerT[0]) * 2048 + data[6];
+                label->pos[1] = data[7] + lsectionLineHeight;
+                label->pos[2] = (-data[5] - playerT[1]) * 2048 - data[8];
+                label->render(playerRot);
+            }
         }
     }
 }
@@ -3066,89 +3085,105 @@ void TDB::getVectorSectionLine(float * &buffer, int &len, int x, int y, int uid,
 }
 
 void TDB::renderLines(GLUU *gluu, float* playerT, float) {
-
-    if (!loaded) return;
-    int hash = (int)playerT[0] * 10000 + (int)playerT[1];
-    if (!sectionLines.loaded || sectionHash != hash || !isInitSectLines) {
-        Vector3f p;
-        Vector3f o;
-        sectionHash = hash;
-        isInitSectLines = true;
-
-        int len = 0;
-        int tileRadius = 1;
-        int hOffset = 0;
-        //int tileRadius = 5;
-        for (int j = 1; j <= iTRnodes; j++) {
-            TRnode* n = trackNodes[j];
-            if (n == NULL) continue;
-            if (n->typ == -1) continue;
-            if (n->typ == 1) {
-                for (int i = 0; i < n->iTrv; i++) {
-                    if (fabs(n->trVectorSection[i].param[8] - playerT[0]) > tileRadius || fabs(-n->trVectorSection[i].param[9] - playerT[1]) > tileRadius) continue;
-                    //p.set(
-                    //        (n->trVectorSection[i].param[8] - playerT[0])*2048 + n->trVectorSection[i].param[10],
-                    //        n->trVectorSection[i].param[11],
-                    //        (-n->trVectorSection[i].param[9] - playerT[1])*2048 - n->trVectorSection[i].param[12]
-                    //        );
-                    //if (sqrt(p.x * p.x + p.z * p.z) > Game::objectLod) continue;
-                    len += getLineBufferSize((int) n->trVectorSection[i].param[0], 3, 6);
-                }
+    if (!loaded)
+        return;
+    const QPoint center{int(playerT[0]), int(playerT[1])};
+    const bool changedTile = sectionViewCenter != center;
+    sectionViewCenter = center;
+    if (!isInitSectLines) {
+        RouteFrameProfile::Scope index(RouteFrameProfile::Stage::TrackSectionOverlayIndex);
+        sectionLocations.clear();
+        sectionOverlays.clear();
+        for (int id = 1; id <= iTRnodes; ++id) {
+            const auto node = trackNodes.find(id);
+            if (node == trackNodes.end() || !node->second || node->second->typ != 1)
+                continue;
+            for (int i = 0; i < node->second->iTrv; ++i) {
+                const float *section = node->second->trVectorSection[i].param;
+                sectionLocations[QPoint(int(section[8]), -int(section[9]))].append({id, i});
             }
         }
-        //qDebug() << len;
-        float* punkty = new float[len];
-        float* ptr = punkty;
-        for (int j = 1; j <= iTRnodes; j++) {
-            TRnode* n = trackNodes[j];
-            if (n == NULL) continue;
-            if (n->typ == -1) continue;
-            if (n->typ == 1) {
-                //qDebug() << j;
-                for (int i = 0; i < n->iTrv; i++) {
-                    if (fabs(n->trVectorSection[i].param[8] - playerT[0]) > tileRadius || fabs(-n->trVectorSection[i].param[9] - playerT[1]) > tileRadius) 
-                        continue;
-                    p.set(
-                            (n->trVectorSection[i].param[8] - playerT[0])*2048 + n->trVectorSection[i].param[10],
-                            n->trVectorSection[i].param[11] + hOffset ,
-                            (-n->trVectorSection[i].param[9] - playerT[1])*2048 - n->trVectorSection[i].param[12]
-                            );
-                    o.set(
-                            /*0n->getVectorSectionXRot(i),*/n->trVectorSection[i].param[13],
-                            n->trVectorSection[i].param[14],
-                            n->trVectorSection[i].param[15]
-                            );
-                    //if (sqrt(p.x * p.x + p.z * p.z) > Game::objectLod) continue;
-                    drawLine(gluu, ptr, p, o,
-                            (int)n->trVectorSection[i].param[0],
-                            vectorSectionOwnerIsDyntrack(
-                                    n->trVectorSection[i].param));
-                }
-            } /*else if (n.typ == 0 || n.typ == 2) {
-                float x = (n.UiD[4] - aktwx)*2048 + n.UiD[6];
-                float y = n.UiD[7];
-                float z = (-n.UiD[5] - aktwz)*2048 - n.UiD[8];
-                if (Math.sqrt(x * x + z * z) > 2000) continue;
-
-                renderT.setSmoothing(false);
-                renderT.begin3DRendering();
-                if (n.typ == 0) renderT.setColor(0.0f, 0.0f, 1.0f, 1.0f);
-                if (n.typ == 2) renderT.setColor(1.0f, 0.0f, 0.0f, 1.0f);
-                renderT.draw3D("" + j, x, y + 4.5f, z, 0.02f);
-                renderT.end3DRendering();
-            }*/
-        }
-        //qDebug() << "aaaa4 "<<ptr - punkty;
-        if(road)
-            sectionLines.setMaterial(0.0, 0.0, 1.0);
-        else
-            sectionLines.setMaterial(Game::wireLineColor->redF(), Game::wireLineColor->greenF(), Game::wireLineColor->blueF());
-        sectionLines.init(punkty, ptr - punkty, RenderItem::V, GL_LINES);
-        delete[] punkty;
+        isInitSectLines = true;
     }
 
-    gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
-    sectionLines.render();
+    LoadedTileObjects owners;
+    QHash<GradeMarkerKey, bool> ownerFrames;
+    const auto usesDynamicFrame = [&owners, &ownerFrames](const GradeMarkerKey &owner) {
+        const auto found = ownerFrames.constFind(owner);
+        if (found != ownerFrames.cend())
+            return found.value();
+        const bool dynamic = dynamic_cast<DynTrackObj *>(owners.find(owner)) != nullptr;
+        ownerFrames.insert(owner, dynamic);
+        return dynamic;
+    };
+
+    const unsigned int revision = Game::gradeOverlayRevision;
+    for (int dz = -1; dz <= 1; ++dz) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            const QPoint tile = center + QPoint(dx, dz);
+            const auto sections = sectionLocations.constFind(tile);
+            if (sections == sectionLocations.cend())
+                continue;
+            SectionOverlayTile *cached = sectionOverlays.object(tile);
+            if (cached && (changedTile || cached->ownerRevision != revision)) {
+                // Arrival of a world tile can resolve the owner of a section
+                // whose mesh was generated before that owner was available.
+                for (auto it = cached->ownerFrames.cbegin(); it != cached->ownerFrames.cend(); ++it) {
+                    if (usesDynamicFrame(it.key()) != it.value()) {
+                        cached = nullptr;
+                        break;
+                    }
+                }
+                if (cached)
+                    cached->ownerRevision = revision;
+            }
+            if (!cached) {
+                RouteFrameProfile::Scope rebuild(RouteFrameProfile::Stage::TrackSectionOverlayBuild);
+                auto replacement = std::make_unique<SectionOverlayTile>();
+                replacement->ownerRevision = revision;
+                QVector<const float *> records;
+                records.reserve(sections.value().size());
+                qsizetype length = 0;
+                for (const auto &[id, index] : sections.value()) {
+                    const auto node = trackNodes.find(id);
+                    if (node == trackNodes.end() || !node->second || node->second->typ != 1
+                            || index >= node->second->iTrv)
+                        continue;
+                    const float *section = node->second->trVectorSection[index].param;
+                    records.append(section);
+                    length += getLineBufferSize(int(section[0]), 3, 6);
+                }
+                if (length <= 0 || length > std::numeric_limits<int>::max() / int(sizeof(float)))
+                    continue;
+                auto vertices = std::make_unique<float[]>(length);
+                float *out = vertices.get();
+                for (const float *section : records) {
+                    const GradeMarkerKey owner{int(section[2]), -int(section[3]), int(section[4])};
+                    const bool dynamic = usesDynamicFrame(owner);
+                    replacement->ownerFrames.insert(owner, dynamic);
+                    const Vector3f position(section[10], section[11], -section[12]);
+                    const Vector3f rotation(section[13], section[14], section[15]);
+                    drawLine(gluu, out, position, rotation, int(section[0]), dynamic);
+                }
+                replacement->geometry.init(vertices.get(), int(out - vertices.get()),
+                                           RenderItem::V, GL_LINES);
+                cached = replacement.release();
+                sectionOverlays.insert(tile, cached);
+            }
+
+            if (road)
+                cached->geometry.setMaterial(0.0, 0.0, 1.0);
+            else
+                cached->geometry.setMaterial(Game::wireLineColor->redF(), Game::wireLineColor->greenF(),
+                                             Game::wireLineColor->blueF());
+            gluu->mvPushMatrix();
+            Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, dx * 2048.0f, 0.0f, dz * 2048.0f);
+            gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform,
+                *reinterpret_cast<float(*)[4][4]>(gluu->mvMatrix));
+            cached->geometry.render();
+            gluu->mvPopMatrix();
+        }
+    }
 }
 
 bool TDB::getDrawPositionOnTrNode(float* out, int id, float metry, float *sElev){
@@ -4482,7 +4517,7 @@ void TDB::saveEmpty(bool road) {
 }
     
 void TDB::updateTrNode(int){
-    
+    refresh();
 }
 
 void TDB::updateTrItem(int){
@@ -4490,7 +4525,9 @@ void TDB::updateTrItem(int){
 }
 
 void TDB::updateTrackSection(int){
-    
+    isInitSectLines = false;
+    if (Game::roadDB && Game::roadDB->tsection == tsection)
+        Game::roadDB->isInitSectLines = false;
 }
 
 void TDB::updateTrackShape(int){
@@ -4538,6 +4575,7 @@ void TDB::prepareSave() {
     qDebug() << "Sorting TR Items";
     sortItemRefs();
     this->isInitLines = false;
+    isInitSectLines = false;
 }
 
 int TDB::updateTrNodeData(FileBuffer *data){
@@ -4569,6 +4607,7 @@ int TDB::updateTrNodeData(FileBuffer *data){
         if (sh == ("remove")) {
             if(Game::debugOutput) qDebug() << "remove trnode" << nid;
             trackNodes[nid] = NULL;
+            refresh();
             ParserX::SkipToken(data);
             continue;
         }
@@ -4582,6 +4621,7 @@ int TDB::updateTrNodeData(FileBuffer *data){
                 continue;
             }
             trackNodes[nid] = nowy;
+            refresh();
             ParserX::SkipToken(data);
             continue;
         }
@@ -4641,7 +4681,11 @@ void TDB::updateTrackShapeData(FileBuffer *data){
     while (!((sh = ParserX::NextTokenInside(data).toLower()) == "")) {
         if(Game::debugOutput) qDebug() << "TDB3618: " << sh;
         if (sh == ("trackshape")) {
-            nowy->loadUtf16Data(data);
+            if(!nowy->loadUtf16Data(data)){
+                qWarning() << "Rejected malformed track shape update";
+                delete nowy;
+                return;
+            }
             this->tsection->shape[nowy->id] = nowy;
             if(nowy->id >= tsection->routeShapes)
                 tsection->routeShapes = nowy->id + 1;
@@ -4662,6 +4706,7 @@ void TDB::updateTrackSectionData(FileBuffer *data){
         if (sh == ("tracksection")) {
             nowy->loadUtf16Data(data);
             this->tsection->sekcja[nowy->id] = nowy;
+            TDB::updateTrackSection(nowy->id);
             if(nowy->id >= tsection->routeMaxIdx){
                 tsection->routeMaxIdx = nowy->id + 1;
                 if(tsection->routeMaxIdx % 2 == 1)
@@ -4682,60 +4727,62 @@ void TDB::saveToStream(QTextStream &out){
     out << "	TrackNodes ( " << (this->iTRnodes) << "\n";
     // qDebug() << "TDB 3657";
     for (int i = 1; i <= this->iTRnodes; i++) {
-        if (trackNodes[i] == NULL) 
+        const auto entry = trackNodes.find(i);
+        if (entry == trackNodes.end() || entry->second == NULL)
             continue;
+        const TRnode *node = entry->second;
         out << "		TrackNode ( " << i << "\n";
-        switch (trackNodes[i]->typ) {
+        switch (node->typ) {
             case 0:
-                out << "			TrEndNode ( " << trackNodes[i]->args[0] << " )\n";
+                out << "			TrEndNode ( " << node->args[0] << " )\n";
                 out << "			UiD ( ";
                 for (int j = 0; j < 12; j++) {
-                    out << trackNodes[i]->UiD[j] << " ";
+                    out << node->UiD[j] << " ";
                 }
                 out << ")\n";
                 out << "			TrPins ( 1 0\n";
-                out << "				TrPin ( " << trackNodes[i]->TrPinS[0] << " " << trackNodes[i]->TrPinK[0] << " )\n";
+                out << "				TrPin ( " << node->TrPinS[0] << " " << node->TrPinK[0] << " )\n";
                 out << "			)\n";
                 break;
             case 1:
                 out << "			TrVectorNode (\n";
-                out << "				TrVectorSections ( " << trackNodes[i]->iTrv << "";
-                for (int j = 0; j < trackNodes[i]->iTrv; j++) {
+                out << "				TrVectorSections ( " << node->iTrv << "";
+                for (int j = 0; j < node->iTrv; j++) {
                     for (int jj = 0; jj < 7; jj++) {
-                        out << " " << trackNodes[i]->trVectorSection[j].param[jj];
+                        out << " " << node->trVectorSection[j].param[jj];
                     }
                     out << " 00";
                     for (int jj = 8; jj < 16; jj++) {
-                        out << " " << trackNodes[i]->trVectorSection[j].param[jj];
+                        out << " " << node->trVectorSection[j].param[jj];
                     }
-                    if (j % 11 == 0 && j > 0 && j < trackNodes[i]->iTrv - 1)
+                    if (j % 11 == 0 && j > 0 && j < node->iTrv - 1)
                         out << "\n					";
                 }
                 out << " )\n";
-                if(trackNodes[i]->trItemRef != 0 && trackNodes[i]->iTri > 0){
-                    out << "				TrItemRefs ( "<<trackNodes[i]->iTri<<"\n";
-                    for(int j = 0; j<trackNodes[i]->iTri; j++){
-                        out << "					TrItemRef ( "<<trackNodes[i]->trItemRef[j]<<" )\n";
+                if(node->trItemRef != 0 && node->iTri > 0){
+                    out << "				TrItemRefs ( "<<node->iTri<<"\n";
+                    for(int j = 0; j<node->iTri; j++){
+                        out << "					TrItemRef ( "<<node->trItemRef[j]<<" )\n";
                     }
                     out << "				)\n";
                 }
                 out << "			)\n";
                 out << "			TrPins ( 1 1\n";
-                out << "				TrPin ( " << trackNodes[i]->TrPinS[0] << " " << trackNodes[i]->TrPinK[0] << " )\n";
-                out << "				TrPin ( " << trackNodes[i]->TrPinS[1] << " " << trackNodes[i]->TrPinK[1] << " )\n";
+                out << "				TrPin ( " << node->TrPinS[0] << " " << node->TrPinK[0] << " )\n";
+                out << "				TrPin ( " << node->TrPinS[1] << " " << node->TrPinK[1] << " )\n";
                 out << "			)\n";
                 break;
             case 2:
-                out << "			TrJunctionNode ( " << trackNodes[i]->args[0] << " " << trackNodes[i]->args[1] << " " << trackNodes[i]->args[2] << " )\n";
+                out << "			TrJunctionNode ( " << node->args[0] << " " << node->args[1] << " " << node->args[2] << " )\n";
                 out << "			UiD ( ";
                 for (int j = 0; j < 12; j++) {
-                    out << trackNodes[i]->UiD[j] << " ";
+                    out << node->UiD[j] << " ";
                 }
                 out << ")\n";
                 out << "			TrPins ( 1 2\n";
-                out << "				TrPin ( " << trackNodes[i]->TrPinS[0] << " " << trackNodes[i]->TrPinK[0] << " )\n";
-                out << "				TrPin ( " << trackNodes[i]->TrPinS[1] << " " << trackNodes[i]->TrPinK[1] << " )\n";
-                out << "				TrPin ( " << trackNodes[i]->TrPinS[2] << " " << trackNodes[i]->TrPinK[2] << " )\n";
+                out << "				TrPin ( " << node->TrPinS[0] << " " << node->TrPinK[0] << " )\n";
+                out << "				TrPin ( " << node->TrPinS[1] << " " << node->TrPinK[1] << " )\n";
+                out << "				TrPin ( " << node->TrPinS[2] << " " << node->TrPinK[2] << " )\n";
                 out << "			)\n";
                 break;
         }
@@ -4748,8 +4795,9 @@ void TDB::saveToStream(QTextStream &out){
     if(this->iTRitems > 0){
         out << "	TrItemTable ( " << (this->iTRitems) << "\n";
         for (int i = 0; i <= this->iTRitems; i++) {
-            if(this->trackItems[i] != NULL)
-                this->trackItems[i]->save(&out);
+            const auto item = trackItems.find(i);
+            if(item != trackItems.end() && item->second != NULL)
+                item->second->save(&out);
         }
         out << "	)\n";
     }
@@ -4795,8 +4843,9 @@ void TDB::saveTitToStream(QTextStream &out) {
     if(this->iTRitems > 0){
         out << "TrItemTable ( " << (this->iTRitems) << "\n";
         for (int i = 0; i <= this->iTRitems; i++) {
-            if(this->trackItems[i] != NULL)
-                this->trackItems[i]->save(&out, tit);
+            const auto item = trackItems.find(i);
+            if(item != trackItems.end() && item->second != NULL)
+                item->second->save(&out, tit);
         }
         out << ")";
     }

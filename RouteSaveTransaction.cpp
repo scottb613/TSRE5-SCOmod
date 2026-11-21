@@ -214,7 +214,7 @@ RouteSaveTransaction::RouteSaveTransaction(const QString &routeRoot,
 
 bool RouteSaveTransaction::addFile(const QString &destination,
                                    const QByteArray &data,
-                                   QString *error) {
+                                   QString *error, const QByteArray &expectedHash) {
     if(error) error->clear();
     const QString cleanDestination = normalizedPath(destination);
     if(!isInsideRoute(cleanDestination, routeRoot)){
@@ -246,7 +246,7 @@ bool RouteSaveTransaction::addFile(const QString &destination,
             } else if(identical) {
                 identical = entry.data == data;
             }
-            if(identical)
+            if(identical && !entry.remove && entry.expectedHash == expectedHash)
                 return true;
             if(error)
                 *error = QString("Duplicate save destination: %1").arg(cleanDestination);
@@ -256,6 +256,7 @@ bool RouteSaveTransaction::addFile(const QString &destination,
 
     FileEntry entry;
     entry.destination = cleanDestination;
+    entry.expectedHash = expectedHash;
     entry.size = data.size();
     if(data.size() > LargePayloadThreshold
             || data.size() > ResidentPayloadLimit - residentBytes) {
@@ -275,6 +276,32 @@ bool RouteSaveTransaction::addFile(const QString &destination,
         entry.data = data;
         residentBytes += data.size();
     }
+    files.append(entry);
+    return true;
+}
+
+bool RouteSaveTransaction::addRemoval(const QString &destination, QString *error) {
+    if(error) error->clear();
+    const QString path = normalizedPath(destination);
+    const QFileInfo file(path);
+    const QString canonicalRoot = QFileInfo(routeRoot).canonicalFilePath();
+    if(!isInsideRoute(path, routeRoot) || canonicalRoot.isEmpty()
+            || !file.isFile() || file.isSymLink()
+            || !isInsideRoute(file.canonicalFilePath(), canonicalRoot)) {
+        if(error) *error = "Invalid route removal target: " + path;
+        return false;
+    }
+    for(const FileEntry &entry : files) {
+        if(entry.destination.compare(path, Qt::CaseInsensitive) == 0) {
+            if(error) *error = "Duplicate save destination: " + path;
+            return false;
+        }
+    }
+    FileEntry entry;
+    entry.destination = path;
+    entry.expectedHash = fileHash(path, error);
+    if(entry.expectedHash.isEmpty()) return false;
+    entry.remove = true;
     files.append(entry);
     return true;
 }
@@ -341,6 +368,12 @@ bool RouteSaveTransaction::commit(QString *error) {
                 writeManifest(generationDir, manifest, NULL);
                 return false;
             }
+            if(!entry.expectedHash.isEmpty() && entry.originalHash != entry.expectedHash){
+                if(error) *error = "Route file changed during the operation: " + entry.destination;
+                manifest.insert("state", "backup_failed");
+                writeManifest(generationDir, manifest, NULL);
+                return false;
+            }
             if(!copyAtomically(entry.destination,
                                generationDir + "/" + entry.backupName,
                                error)){
@@ -348,6 +381,11 @@ bool RouteSaveTransaction::commit(QString *error) {
                 writeManifest(generationDir, manifest, NULL);
                 return false;
             }
+        } else if(!entry.expectedHash.isEmpty()){
+            if(error) *error = "Route file disappeared during the operation: " + entry.destination;
+            manifest.insert("state", "backup_failed");
+            writeManifest(generationDir, manifest, NULL);
+            return false;
         }
 
         QJsonObject fileObject;
@@ -371,9 +409,17 @@ bool RouteSaveTransaction::commit(QString *error) {
     for(const FileEntry &entry : files){
         SaveProgress::set(0.5 + 0.5*filesWritten++/qMax(1,files.size()));
         SaveProgress::report(QString("Writing saved file: %1").arg(QFileInfo(entry.destination).fileName()));
-        const bool written = entry.stagedPath.isEmpty()
-            ? writeBytesAtomically(entry.destination, entry.data, error)
-            : copyAtomically(entry.stagedPath, entry.destination, error);
+        bool written;
+        if(entry.remove){
+            QFile file(entry.destination);
+            written = file.remove();
+            if(!written && error)
+                *error = QString("Could not remove %1: %2").arg(entry.destination, file.errorString());
+        } else {
+            written = entry.stagedPath.isEmpty()
+                ? writeBytesAtomically(entry.destination, entry.data, error)
+                : copyAtomically(entry.stagedPath, entry.destination, error);
+        }
         if(!written){
             QString restoreError;
             if(!restoreManifest(routeRoot, generationDir, manifest, &restoreError) && error)

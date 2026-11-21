@@ -17,6 +17,7 @@
 #include <memory>
 
 class GltfPreview;
+class StaticShapeRenderBatch;
 
 class StaticObj : public WorldObj  {
     Q_OBJECT
@@ -47,8 +48,12 @@ public:
     bool isSimilar(WorldObj *obj);
     void loadingFixes();
     ErrorMessage* checkForErrors();
+    void prepareOpeningView(OpeningViewLoad &opening) override;
     void pushRenderItems(float lod, float posx, float posz, float* playerW, float* target, float fov, int selectionColor);
     void render(GLUU* gluu, float lod, float posx, float posz, float* playerW, float* target, float fov, int selectionColor, int renderMode);
+    void renderWithStaticShapeBatch(GLUU *gluu, float lod, float posx, float posz,
+                                float *playerW, float *target, float fov,
+                                int selectionColor, int renderMode, StaticShapeRenderBatch *batch);
     void updateSim(float deltaTime);
     void pushContextMenuActions(QMenu *menu);
     

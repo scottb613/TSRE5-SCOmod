@@ -13,10 +13,12 @@
 
 #include <QString>
 #include <unordered_map>
+#include <memory>
 #include "WorldObj.h"
 #include "Ref.h"
 
 class GroupObj;
+class StaticShapeRenderBatch;
 
 class Tile {
 public:
@@ -83,6 +85,7 @@ public:
     WorldObj* CheckObj;
     
 private:
+    std::unique_ptr<StaticShapeRenderBatch> staticShapeBatch;
     int maxUiD = 0;
     int maxUiDWS = 100000;    
     bool modified;

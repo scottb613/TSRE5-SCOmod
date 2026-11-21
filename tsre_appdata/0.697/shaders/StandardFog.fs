@@ -28,6 +28,8 @@ uniform sampler2DShadow shadow2;
 uniform float secondTexEnabled;
 uniform mat4 uMVMatrix;
 uniform mat4 uMSMatrix;
+uniform bool uUsePolyVegInstances;
+varying vec3 instancedNormal;
 uniform float enableNormals;
 uniform float selectionPass;
 uniform float rawPreview;
@@ -67,7 +69,8 @@ void main() {
         if(textureEnabled == 0) {
             gl_FragColor = shapeColor;
             if(enableNormals > 0.5 && selectionPass < 0.5) {
-            vec3 solidNormal = normalize(mat3(uMVMatrix) * mat3(uMSMatrix) * vNormal);
+            vec3 solidNormal = normalize(uUsePolyVegInstances ? instancedNormal
+                    : mat3(uMVMatrix) * mat3(uMSMatrix) * vNormal);
             vec3 solidLight = normalize(lightDirection);
             float solidCosTheta = clamp(dot(solidNormal, solidLight), 0, 1);
             float solidSkyAmount = clamp(solidNormal.y * 0.5 + 0.5, 0.0, 1.0);
@@ -92,7 +95,8 @@ void main() {
             //gl_FragColor.a = 1.0;
 
             // calculate normals
-            vec3 normal = normalize(mat3(uMVMatrix) * mat3(uMSMatrix) * vNormal);
+            vec3 normal = normalize(uUsePolyVegInstances ? instancedNormal
+                    : mat3(uMVMatrix) * mat3(uMSMatrix) * vNormal);
             vec3 lights = normalize(lightDirection);
             float cosTheta = clamp(dot( normal, lights ), 0, 1);
             float visibility = (1.0-enableNormals) + cosTheta*enableNormals;

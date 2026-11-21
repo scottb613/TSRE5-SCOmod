@@ -9,6 +9,7 @@
  */
 
 #include "Texture.h"
+#include "RouteFrameProfile.h"
 #include "Brush.h"
 #include "TexturePaintMath.h"
 #include "Undo.h"
@@ -383,6 +384,7 @@ Texture::~Texture() {
 
 bool Texture::GLTextures(bool mipmaps) {
     if(!loaded) return false;
+    RouteFrameProfile::Scope upload(RouteFrameProfile::Stage::TextureUpload, &pathid);
     TightPixelRows unpack(GL_UNPACK_ALIGNMENT);
 
     // This generated alpha texture repeats along a strand; trimming its left

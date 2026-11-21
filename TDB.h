@@ -18,6 +18,8 @@
 #include <unordered_map>
 #include <QVector>
 #include <QHash>
+#include <QCache>
+#include <QPoint>
 #include "OglObj.h"
 #include "TextObj.h"
 #include "SignalObj.h"
@@ -48,10 +50,8 @@ struct GradeMarkerKey {
     }
 };
 
-inline uint qHash(const GradeMarkerKey &key, uint seed = 0) {
-    seed = qHash(key.x, seed);
-    seed = qHash(key.y, seed);
-    return qHash(key.uid, seed);
+inline size_t qHash(const GradeMarkerKey &key, size_t seed = 0) noexcept {
+    return qHashMulti(seed, key.x, key.y, key.uid);
 }
 
 class TDB {
@@ -204,14 +204,21 @@ protected:
     OglObj linieSieci;
     OglObj konceSieci;
     OglObj punktySieci;
-    OglObj sectionLines;
+    QPoint lineOrigin;
+    QHash<QPoint, QVector<int>> lineLabels;
+    struct SectionOverlayTile {
+        OglObj geometry;
+        QHash<GradeMarkerKey, bool> ownerFrames;
+        unsigned int ownerRevision = 0;
+    };
+    QHash<QPoint, QVector<QPair<int, int>>> sectionLocations;
+    QCache<QPoint, SectionOverlayTile> sectionOverlays{25};
+    QPoint sectionViewCenter;
     int defaultEnd = 0;
     float lsectionLineHeight;
     float lwireLineHeight;
     float pointe[3];
     float pointf[3];    
-    int lineHash;
-    int sectionHash;
     int iobjHash;
     bool isInitSectLines = false;
     bool isInitLines = false;

@@ -25,8 +25,11 @@ public:
     bool load(const QString &path, QString &error);
     bool draw(const QMatrix4x4 &matrix, QString &error,
               int selectionColor = 0, bool mirroredInstance = false);
+    bool prepareOpeningView(QString &error);
     void release();
 private:
+    bool render(const QMatrix4x4 &matrix, QString &error, int selectionColor,
+                bool mirroredInstance, bool prepareOnly);
     struct Resources;
     std::unique_ptr<Resources> resources;
     bool dirty = false;

@@ -28,6 +28,8 @@ TransformWorldObjDialog::TransformWorldObjDialog(QWidget *parent)
             this, [this](){ emit userButtonPressed(); });
     connect(ok, SIGNAL (released()), this, SLOT (ok()));
     connect(cancel, SIGNAL (released()), this, SLOT (cancel()));
+    for(QLineEdit *field : {&posX, &posY, &posZ, &rotX, &rotY, &rotZ})
+        connect(field, &QLineEdit::returnPressed, ok, &QPushButton::click);
 
     QVBoxLayout *root = popupLayout();
     addPopupSubtitle(QString(QChar(0x2022)) + " Object Offset");

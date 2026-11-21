@@ -9,6 +9,11 @@
  */
 
 #include "SFile.h"
+#include "RouteFrameProfile.h"
+#include "OpeningViewLoad.h"
+#include "PolyVegObject.h"
+#include <QOpenGLExtraFunctions>
+#include <QThreadPool>
 #include "WireAttachmentOrder.h"
 #include <cmath>
 #include "SFileC.h"
@@ -16,6 +21,7 @@
 #include "ReadFile.h"
 #include "ParserX.h"
 #include "TexLib.h"
+#include "ShapeTexturePath.h"
 #include "Texture.h"
 #include <QDebug>
 #include <QtCore>
@@ -33,6 +39,135 @@
 #include "Renderer.h"
 #include "Route.h"
 #include "Terrain.h"
+
+#include <chrono>
+#include <future>
+#include <map>
+#include <memory>
+#include <new>
+#include <limits>
+#include <utility>
+
+struct SFileReadResult {
+    std::unique_ptr<SFileGeometry> geometry;
+    std::unique_ptr<FileBuffer> descriptor;
+    bool shapeOpened = false;
+    bool descriptorOpened = false;
+    qint64 workerParseNs = 0;
+};
+
+namespace {
+std::unique_ptr<FileBuffer> readShapeFile(const QString &path, bool &opened) {
+    QFile file(path);
+    opened = file.open(QIODevice::ReadOnly);
+    return opened ? std::unique_ptr<FileBuffer>(ReadFile::read(&file)) : nullptr;
+}
+
+struct ShapeParseOptions {
+    float alphaTest;
+    bool debugOutput;
+};
+
+SFileReadResult readAndParseShape(const QString &path, bool readDescriptor,
+                                ShapeParseOptions options, bool background) {
+    SFileReadResult result;
+    std::unique_ptr<FileBuffer> source;
+    {
+        RouteFrameProfile::Scope read(RouteFrameProfile::Stage::ShapeRead, &path);
+        source = readShapeFile(path, result.shapeOpened);
+        if (source && readDescriptor)
+            result.descriptor = readShapeFile(path + "d", result.descriptorOpened);
+    }
+    if (!source)
+        return result;
+
+    QElapsedTimer timer;
+    if (background)
+        timer.start();
+    RouteFrameProfile::Scope parse(RouteFrameProfile::Stage::ShapeParse, &path);
+    auto geometry = std::make_unique<SFileGeometry>();
+    if (geometry->parse(*source, options.alphaTest, options.debugOutput))
+        result.geometry = std::move(geometry);
+    if (background)
+        result.workerParseNs = timer.nsecsElapsed();
+    return result;
+}
+
+using ShapeReadClock = std::chrono::steady_clock;
+struct PendingShapeRead {
+    std::future<SFileReadResult> result;
+    ShapeReadClock::time_point lastRequest;
+
+    bool ready() const {
+        return result.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
+};
+
+struct ShapeReadPool {
+    std::map<QString, PendingShapeRead> pending;
+    QThreadPool workers;
+
+    ShapeReadPool() { workers.setMaxThreadCount(2); }
+
+    bool takeOrStart(const QString &path, ShapeParseOptions options, bool allowUpload,
+                     SFileReadResult &result) {
+        const auto now = ShapeReadClock::now();
+        const auto it = pending.find(path);
+        if (it != pending.end()) {
+            it->second.lastRequest = now;
+            if (!allowUpload || !it->second.ready())
+                return false;
+            auto completed = std::move(it->second.result);
+            pending.erase(it);
+            try {
+                result = completed.get();
+            } catch (const std::bad_alloc &) {
+                qWarning() << "Insufficient memory to read shape:" << path;
+                result.shapeOpened = true;
+            }
+            RouteFrameProfile::count(RouteFrameProfile::Counter::ShapeReadCompleted);
+            if (result.workerParseNs > 0)
+                RouteFrameProfile::recordDuration(RouteFrameProfile::Stage::ShapeWorkerParse,
+                                                  result.workerParseNs, path);
+            return true;
+        }
+
+        // Bound the number of decoded sources waiting for the editor. Release
+        // completed reads whose shapes are no longer being requested.
+        constexpr std::size_t maxOutstanding = 4;
+        if (pending.size() >= maxOutstanding) {
+            for (auto stale = pending.begin(); stale != pending.end();) {
+                if (now - stale->second.lastRequest > std::chrono::milliseconds(500)
+                        && stale->second.ready())
+                    stale = pending.erase(stale);
+                else
+                    ++stale;
+            }
+            if (pending.size() >= maxOutstanding)
+                return false;
+        }
+
+        // The worker owns its source and parsed data. The live SFile and its
+        // OpenGL resources stay on the render thread.
+        if (workers.activeThreadCount() >= workers.maxThreadCount())
+            return false;
+        std::packaged_task<SFileReadResult()> task([path, options] {
+            return readAndParseShape(path, true, options, true);
+        });
+        auto future = task.get_future();
+        if (workers.tryStart(std::move(task))) {
+            pending.emplace(path, PendingShapeRead{std::move(future), now});
+            RouteFrameProfile::count(RouteFrameProfile::Counter::ShapeReadSubmitted);
+        }
+        return false;
+    }
+};
+
+ShapeReadPool &shapeReads() {
+    static ShapeReadPool pool;
+    return pool;
+}
+} // namespace
 
 SFile::SFile() {
     pathid = "";
@@ -71,35 +206,105 @@ QString SFile::evaluatePathId() {   //// EFO fixing relative paths which have fo
 }
 
 void SFile::load() {
-    //unsigned long long int timeNow = QDateTime::currentMSecsSinceEpoch();
-    
-    /// EFO fix relative path errors AFP
-    pathid = evaluatePathId();  
-    
-    QFile *file = new QFile(pathid);
-    
-    if (!file->open(QIODevice::ReadOnly)){
-        if(Game::debugOutput) qDebug() << "SFile 77 S Shape: not exist "<<pathid;                
-        
-        int stringpos = pathid.lastIndexOf("/") + 1;
-        int stringsub = pathid.length() - stringpos;
-        QString shortpath = pathid.mid(stringpos,stringsub); 
-        // qDebug() << "shortpath = " << shortpath;
-        Route::missingList.append(shortpath);
-        file->close();
+    RouteFrameProfile::Scope shapeLoad(RouteFrameProfile::Stage::ShapeLoad, &pathid);
+    pathid = evaluatePathId();
+    invalidatePendingRead();
+    loaded = 2;
+    loadDecoded(readAndParseShape(pathid, !loadedSd,
+                                  {GLUU::get()->alphaTest, Game::debugOutput}, false));
+}
+
+void SFile::invalidatePendingRead() {
+    shapeReads().pending.erase(pathid);
+}
+
+bool SFile::loadForRender() {
+    if (!GLUU::get()->streamShapeReads) {
+        if (Game::allowObjLag < 1)
+            return false;
+        Game::allowObjLag -= 2;
+        load();
+        return true;
+    }
+
+    pathid = evaluatePathId();
+    SFileReadResult result;
+    if (!shapeReads().takeOrStart(pathid, {GLUU::get()->alphaTest, Game::debugOutput},
+                                  Game::allowObjLag >= 1, result))
+        return false;
+    Game::allowObjLag -= 2;
+    loaded = 2;
+    RouteFrameProfile::Scope shapeLoad(RouteFrameProfile::Stage::ShapeLoad, &pathid);
+    loadDecoded(std::move(result));
+    return true;
+}
+
+void SFile::loadDecoded(SFileReadResult result) {
+    if (!result.shapeOpened) {
+        if (Game::debugOutput) qDebug() << "S Shape: not exist" << pathid;
+        Route::missingList.append(pathid.mid(pathid.lastIndexOf('/') + 1));
         return;
     }
-    FileBuffer* data = ReadFile::read(file);
-    if (data == nullptr) {
+    if (!result.geometry) {
         Route::missingList.append(QFileInfo(pathid).fileName());
-        file->close();
         return;
     }
+    static_cast<SFileGeometry &>(*this) = std::move(*result.geometry);
+    loaded = uploadGeometry() ? 1 : 2;
+    if (!loadedSd) {
+        if (!result.descriptorOpened && Game::legacySupport)
+            qDebug() << "Sd Shape: not exist" << pathid + "d";
+        if (result.descriptor)
+            loadSd(result.descriptor.get());
+    }
+}
+
+bool SFile::uploadGeometry() {
+    auto *context = QOpenGLContext::currentContext();
+    if (!context)
+        return false;
+    auto *f = context->functions();
+    for (int lod = 0; lod < iloscd; ++lod) {
+        auto &level = distancelevel[lod];
+        for (int i = 0; i < level.iloscs; ++i) {
+            auto &object = level.subobiekty[i];
+            RouteFrameProfile::Scope upload(RouteFrameProfile::Stage::ShapeGraphics, &pathid);
+            if (object.vertices.size() > std::numeric_limits<int>::max() / sizeof(float))
+                return false;
+            auto graphics = std::make_unique<SubGraphics>();
+            if (!graphics->VAO.create() || !graphics->VBO.create())
+                return false;
+            {
+                QOpenGLVertexArrayObject::Binder vao(&graphics->VAO);
+                if (!graphics->VBO.bind())
+                    return false;
+                graphics->VBO.allocate(object.vertices.data(), int(object.vertices.size() * sizeof(float)));
+                constexpr int stride = 9 * sizeof(float);
+                f->glEnableVertexAttribArray(0);
+                f->glEnableVertexAttribArray(1);
+                f->glEnableVertexAttribArray(2);
+                f->glEnableVertexAttribArray(3);
+                f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, nullptr);
+                f->glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(3 * sizeof(float)));
+                f->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(6 * sizeof(float)));
+                f->glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(8 * sizeof(float)));
+                graphics->VBO.release();
+            }
+            object.graphics = std::move(graphics);
+            std::vector<float>().swap(object.vertices);
+        }
+    }
+    return true;
+}
+
+bool SFileGeometry::parse(FileBuffer &source, float alphaTest, bool debugOutput) {
+    auto *data = &source;
+    bool hasLods = false;
     int loadingCount = 0;
     //qDebug() << "--" << pathid << "--" << data->length;
 
     data->off = 32;
-    if (data->getInt() == 71) {
+    if (data->length >= 36 && data->getInt() == 71) {
         int pozycja, offset, akto;
         data->off = 32;
         int val = data->getInt();
@@ -166,11 +371,12 @@ void SFile::load() {
                     break;
                 case 31:
                     if(loadingCount < 9){
-                        qDebug() << "#shape - loading error" << 31 << TS::IdName[31];
-                        return;
+                        qDebug() << "#shape - loading error" << 31;
+                        return false;
                     }
-                    SFileC::odczytajloddc(data, this);
-                    loaded = 1;
+                    if (!SFileC::odczytajloddc(data, this, alphaTest))
+                        return false;
+                    hasLods = true;
                     break;
                 case 29:
                     int pozycja1,offset1,akto1,some_val;
@@ -187,13 +393,13 @@ void SFile::load() {
                         switch (pozycja1) {
                             case 28:
                                 animations.push_back(Animation());
-                                animations.back().loadC(data, akto1 + offset1);
+                                animations.back().loadC(data, akto1 + offset1, debugOutput);
                                 if(animations.size() > 0){
                                     //qDebug() << animations[0].node.size();
                                 }
                                 break;
                             default:
-                                if(Game::debugOutput) qDebug() << "#SFile Animations - unknown token: "<< pozycja1 << TS::IdName[pozycja1];
+                                if(debugOutput) qDebug() << "#SFile Animations - unknown token: " << pozycja1;
                                 break;
                         }
                         data->off = akto1 + offset1;
@@ -201,7 +407,7 @@ void SFile::load() {
                     }
                     break;
                 default:
-                    if(Game::debugOutput) qDebug() << "#SFile - unknown token: "<< pozycja << TS::IdName[pozycja];
+                    if(debugOutput) qDebug() << "#SFile - unknown token: " << pozycja;
                     break;
             }
             data->off = akto + offset;
@@ -305,11 +511,12 @@ void SFile::load() {
                     }
                     if(sh == "lod_controls"){
                         if(loadingCount < 9){
-                            if(Game::debugOutput) qDebug() << "#shape - loading error" << sh;
-                            return;
+                            if(debugOutput) qDebug() << "#shape - loading error" << sh;
+                            return false;
                         }
-                        SFileX::odczytajlodd(data, this);
-                        loaded = 1;
+                        if (!SFileX::odczytajlodd(data, this, alphaTest))
+                            return false;
+                        hasLods = true;
                         ParserX::SkipToken(data);
                         continue;
                     }
@@ -319,7 +526,7 @@ void SFile::load() {
                                 animations.push_back(Animation());
                                 animations.back().loadX(data);
                                 if(animations.size() > 0){
-                                    if(Game::debugOutput) qDebug() << "Sfile306:" << animations[0].node.size();
+                                    if(debugOutput) qDebug() << "Sfile306:" << animations[0].node.size();
                                            
                                     /*for(int i = 0; i < animations[0].node.size(); i++){
                                         qDebug() << animations[0].node[i].linearKey.size();
@@ -335,27 +542,23 @@ void SFile::load() {
                         ParserX::SkipToken(data);
                         continue;
                     }
-                    if(Game::debugOutput) qDebug() << "#shape - undefined token" << sh;
+                    if(debugOutput) qDebug() << "#shape - undefined token" << sh;
                     ParserX::SkipToken(data);
                 }
                 
                 ParserX::SkipToken(data);
                 continue;
             }
-            if(Game::debugOutput) qDebug() << "#SFile - undefined token" << sh;
+            if(debugOutput) qDebug() << "#SFile - undefined token" << sh;
             ParserX::SkipToken(data);
         }
     }
-    delete data;
-    file->close();
-    if(loaded == 1)
+    if (hasLods)
         buildFrameIds();
-    loadSd();
-    //qDebug() <<this->pathid << QDateTime::currentMSecsSinceEpoch() - timeNow;
-    return;
+    return hasLods && iloscd > 0;
 }
 
-void SFile::Animation::loadC(FileBuffer* data, int length){
+void SFileGeometry::Animation::loadC(FileBuffer* data, int length, bool debugOutput){
     data->off++;
     frames = data->getInt();
     fps = data->getInt();
@@ -435,7 +638,7 @@ void SFile::Animation::loadC(FileBuffer* data, int length){
                                 }
                                 break;
                             default:
-                                if(Game::debugOutput) qDebug() << "#controller" << pozycja2 << TS::IdName[pozycja2];
+                                if(debugOutput) qDebug() << "#controller" << pozycja2;
                                 break;
                         }
                         data->off = akto2 + offset2;
@@ -446,7 +649,7 @@ void SFile::Animation::loadC(FileBuffer* data, int length){
                 }
                 break;
             default:
-                if(Game::debugOutput) qDebug() << "#SFile Animation - unknown token: "<< pozycja << TS::IdName[pozycja];
+                if(debugOutput) qDebug() << "#SFile Animation - unknown token: " << pozycja;
                 break;
         }
         data->off = akto + offset;
@@ -454,7 +657,7 @@ void SFile::Animation::loadC(FileBuffer* data, int length){
     }
 }
 
-void SFile::Animation::loadX(FileBuffer* data){
+void SFileGeometry::Animation::loadX(FileBuffer* data){
     frames = ParserX::GetNumber(data);
     fps = ParserX::GetNumber(data);
     
@@ -539,18 +742,7 @@ void SFile::Animation::loadX(FileBuffer* data){
     }
 }
 
-void SFile::loadSd() {
-    if(loadedSd == true)
-        return;
-    QFile file(pathid+"d");
-    if (!file.open(QIODevice::ReadOnly)){
-        if(Game::legacySupport) qDebug() << "Sd Shape: not exist "<<pathid+"d";  /// EFO only show for legacy support
-        return;
-    }
-    FileBuffer* data = ReadFile::read(&file);
-    file.close();
-    if (data == nullptr)
-        return;
+void SFile::loadSd(FileBuffer *data) {
     data->toUtf16();
     data->skipBOM();
     QString sh;
@@ -619,14 +811,22 @@ void SFile::loadSd() {
     }
     texPath = baseTexPath;
     loadedSd = true;
-    delete data;
 }
 
 QString SFile::resolveTexturePath(QString textureName) const {
+    if(rollingStock)
+        return ShapeTexturePath::resolveRollingStock(
+            baseTexPath, ShapeTexturePath::rollingStockSeason(esdAlternativeTexture, Game::season),
+            textureName);
     return Terrain::resolveTexturePath(baseTexPath, Terrain::textureSubdirCandidatesForFlags(esdAlternativeTexture, Game::season), textureName, true);
 }
 
-void SFile::getSize() {
+int SFile::loadTexture(const QString &textureName) const {
+    const QString path = resolveTexturePath(textureName);
+    return path.isEmpty() ? -2 : TexLib::addTex(path, false, rollingStock);
+}
+
+void SFileGeometry::getSize() {
         float tx[2]{-9999, 9999}, ty[2]{-9999, 9999}, tz[2]{-9999, 9999};
         for (int i = 0; i < tpoints.ipoints ; i++) {
             if(tpoints.points[i].x < tx[1]) tx[1] = tpoints.points[i].x;
@@ -850,17 +1050,20 @@ void SFile::addSnapablePoints(QVector<float> &out){
 
 void SFile::reload() {
     if(Game::debugOutput) qDebug() << "reload";
+    invalidatePendingRead();
     // Use the same resolved path (including case and season) as rendering.
     // The path/name overload lowercases its cache key and can reload a
     // different entry; walking only LOD 0 also misses higher-LOD textures.
     QSet<QString> paths;
-    if(loaded == 1 && image != NULL) {
+    if(loaded == 1 && image) {
         for(int i = 0; i < ilosci; i++)
             paths.insert(resolveTexturePath(image[i].name));
     }
     for(const QString &path : paths) {
+        if(path.isEmpty())
+            continue;
         if(Game::debugOutput) qDebug() << "Reload shape texture:" << path;
-        TexLib::addTex(path, true);
+        TexLib::addTex(path, true, rollingStock);
     }
     renderItems.clear();
     requiresUpdate = true;
@@ -868,7 +1071,7 @@ void SFile::reload() {
 }
 
 void SFile::refreshSeasonTextures() {
-    if (loaded != 1 || ilosci <= 0 || image == NULL)
+    if (loaded != 1 || ilosci <= 0 || !image)
         return;
 
     texPath = baseTexPath;
@@ -999,11 +1202,7 @@ void SFile::pushRenderItem(int selectionColor, unsigned int stateId){
     if (isinit != 1 || loaded == 2)
         return;
     if (loaded == 0) {
-        if(Game::allowObjLag < 1) return;
-        
-        Game::allowObjLag-=2;
-        loaded = 2;
-        load();
+        loadForRender();
         return;
     }
     
@@ -1065,9 +1264,8 @@ void SFile::pushRenderItem(int selectionColor, unsigned int stateId){
                     r->enableTextures(image[texture[primstate[prim_state].arg4].image].texAddr);
                 } else if (image[texture[primstate[prim_state].arg4].image].tex == -2) {
                 } else if (image[texture[primstate[prim_state].arg4].image].tex == -1) {
-                    image[texture[primstate[prim_state].arg4].image].tex = TexLib::addTex(
-                            resolveTexturePath(image[texture[primstate[prim_state].arg4].image].name)
-                            );
+                    auto &materialImage = image[texture[primstate[prim_state].arg4].image];
+                    materialImage.tex = loadTexture(materialImage.name);
                     requiresUpdate = true;
                 } else if (TexLib::mtex[image[texture[primstate[prim_state].arg4].image].tex]->glLoaded) {
                     image[texture[primstate[prim_state].arg4].image].texAddr = TexLib::mtex[image[texture[primstate[prim_state].arg4].image].tex]->tex[0];
@@ -1079,8 +1277,8 @@ void SFile::pushRenderItem(int selectionColor, unsigned int stateId){
                     //                    requiresUpdate = true;
                 }
 
-                r->VBO = &distancelevel[currentDlevel].subobiekty[i].VBO;
-                r->VAO = &distancelevel[currentDlevel].subobiekty[i].VAO;
+                r->VBO = &distancelevel[currentDlevel].subobiekty[i].graphics->VBO;
+                r->VAO = &distancelevel[currentDlevel].subobiekty[i].graphics->VAO;
                 //r->mvMatrix = Mat4::clone(Game::currentRenderer->mvMatrix);
                 r->vertOffset = distancelevel[currentDlevel].subobiekty[i].czesci[j].offset;
                 r->vertCount = distancelevel[currentDlevel].subobiekty[i].czesci[j].iloscv;
@@ -1108,26 +1306,260 @@ void SFile::pushRenderItem(int selectionColor, unsigned int stateId){
     }
 }
 
+bool SFile::staticBatchState(unsigned int stateId, int &lod, int &subObjects) const {
+    if (isinit != 1 || loaded != 1 || animated || stateId >= unsigned(state.size()))
+        return false;
+
+    const State &placement = state[stateId];
+    if (placement.animated || !placement.enableSubObjQueue.isEmpty())
+        return false;
+    lod = placement.distanceLevel;
+    if (lod < 0 || lod >= iloscd)
+        return false;
+    subObjects = placement.enabledSubObjs;
+    return distancelevel[lod].iloscs <= 32;
+}
+
+bool SFile::polyVegBatchState(int lod, int subObjects) const {
+    const dist &level = distancelevel[lod];
+    const czes *part = nullptr;
+    for (int i = 0; i < level.iloscs; ++i) {
+        if (!(unsigned(subObjects) & (1u << i)) || level.subobiekty[i].iloscc == 0)
+            continue;
+        if (part || level.subobiekty[i].iloscc != 1)
+            return false;
+        part = &level.subobiekty[i].czesci[0];
+    }
+    if (!part || !part->enabled || part->iloscv == 0)
+        return false;
+
+    // A first encounter may load a texture or draw a placeholder. Keep
+    // that transition on the original single-placement path.
+    const int slot = primstate[part->prim_state_idx].arg4;
+    if (slot < 0 || slot >= ilosct)
+        return false;
+    const int id = texture[slot].image;
+    return id >= 0 && id < ilosci && image[id].texAddr >= 0;
+}
+
+bool SFile::opaqueBatchState(int lod, int subObjects) const {
+    const dist &level = distancelevel[lod];
+    bool hasGeometry = false;
+    for (int i = 0; i < level.iloscs; ++i) {
+        if (!(unsigned(subObjects) & (1u << i)))
+            continue;
+        const auto &sub = level.subobiekty[i];
+        for (int j = 0; j < sub.iloscc; ++j) {
+            const auto &part = sub.czesci[j];
+            if (!part.iloscv)
+                continue;
+            if (!part.enabled || part.prim_state_idx < 0 || part.prim_state_idx >= iloscps)
+                return false;
+            const auto &material = primstate[part.prim_state_idx];
+            if (material.arg4 < 0 || material.arg4 >= ilosct)
+                return false;
+            const int id = texture[material.arg4].image;
+            if (id < 0 || id >= ilosci || image[id].texAddr < 0
+                    || TexLib::disabledTextures.value(image[id].texAddr) == 1)
+                return false;
+            // TexDiff forces fragment alpha to 1. A resident RGB texture is
+            // also opaque under the same shader, regardless of its alpha test.
+            if (material.arg2 < 0 || material.arg2 >= ishaders
+                    || shader[material.arg2].alpha != 1.0f) {
+                const auto found = TexLib::mtex.find(image[id].tex);
+                if (found == TexLib::mtex.end() || !found->second
+                        || !found->second->glLoaded || found->second->type != GL_RGB)
+                    return false;
+            }
+            hasGeometry = true;
+        }
+    }
+    return hasGeometry;
+}
+
+void StaticShapeRenderBatch::begin(bool vegetation, bool scenery) {
+    vegetationEnabled = vegetation;
+    sceneryEnabled = scenery;
+    nonOpaque.clear();
+}
+
+bool StaticShapeRenderBatch::enqueue(SFile &candidate, unsigned int candidateState,
+                                     float *tileMatrix, float *objectMatrix,
+                                     const QString &fileName, bool preview) {
+    int lod, subObjects;
+    if (!candidate.staticBatchState(candidateState, lod, subObjects))
+        return false;
+    const Key key{&candidate, lod, subObjects};
+    bool vegetation = false;
+    {
+        RouteFrameProfile::Scope candidateCheck(RouteFrameProfile::Stage::PolyVegCandidate);
+        vegetation = candidate.polyVegBatchState(lod, subObjects)
+            && (preview || (plants.key.shape == &candidate && !rawPreview)
+                        || PolyVegObject::isRawShape(fileName));
+    }
+
+    Group *group = nullptr;
+    if (vegetation) {
+        if (!vegetationEnabled)
+            return false;
+        flushScenery();
+        if (!(plants.key == key) || rawPreview != preview) {
+            flushVegetation();
+            plants.key = key;
+            plants.state = candidateState;
+            rawPreview = preview;
+        }
+        group = &plants;
+    } else {
+        if (!sceneryEnabled || preview || nonOpaque.contains(key))
+            return false;
+        const auto found = sceneryIndices.constFind(key);
+        if (found == sceneryIndices.cend()) {
+            if (!candidate.opaqueBatchState(lod, subObjects)) {
+                nonOpaque.insert(key);
+                return false;
+            }
+            flushVegetation();
+            sceneryIndices.insert(key, sceneryGroups.size());
+            sceneryGroups.append(Group{key, candidateState, {}});
+            group = &sceneryGroups.back();
+        } else {
+            group = &sceneryGroups[*found];
+        }
+    }
+
+    std::array<float, 16> transform;
+    Mat4::multiply(transform.data(), tileMatrix, objectMatrix);
+    group->matrices.append(transform);
+    return true;
+}
+
+void StaticShapeRenderBatch::draw(const Group &group, QOpenGLExtraFunctions *f,
+                                  bool preview, bool staticScenery) {
+    GLUU *gluu = GLUU::get();
+    Shader *shader = gluu->currentShader;
+    gluu->enableTextures();
+    shader->setUniformValue(shader->shaderRawPreview, preview ? 1.0f : 0.0f);
+
+    const auto &matrices = group.matrices;
+    const auto setMatrix = [shader](const auto &matrix) {
+        shader->setUniformValue(shader->mvMatrixUniform,
+            *reinterpret_cast<const float (*)[4][4]>(matrix.data()));
+    };
+    if (matrices.size() > 1 && f && shader->polyVegInstances >= 0 &&
+            (buffer.isCreated() || buffer.create()) && buffer.bind()) {
+        buffer.setUsagePattern(QOpenGLBuffer::StreamDraw);
+        buffer.allocate(matrices.constData(), int(matrices.size() * sizeof(matrices.front())));
+        setMatrix(matrices.back());
+        if (staticScenery)
+            RouteFrameProfile::count(RouteFrameProfile::Counter::StaticShapePlacements, matrices.size());
+        group.key.shape->render(0, group.state, f, int(matrices.size()), staticScenery);
+        buffer.release();
+    } else {
+        for (const auto &matrix : matrices) {
+            setMatrix(matrix);
+            group.key.shape->render(0, group.state);
+        }
+    }
+    shader->setUniformValue(shader->shaderRawPreview, 0.0f);
+}
+
+void StaticShapeRenderBatch::flushVegetation() {
+    if (plants.matrices.isEmpty())
+        return;
+    RouteFrameProfile::Scope flushTiming(RouteFrameProfile::Stage::PolyVegFlush);
+    draw(plants, GLUU::vegetationInstancing(), rawPreview, false);
+    plants.matrices.clear();
+    plants.key = {};
+}
+
+void StaticShapeRenderBatch::flushScenery() {
+    if (sceneryGroups.isEmpty())
+        return;
+    RouteFrameProfile::Scope flushTiming(RouteFrameProfile::Stage::StaticShapeFlush);
+    auto *functions = GLUU::staticShapeInstancing();
+    for (const auto &group : sceneryGroups)
+        draw(group, functions, false, true);
+    sceneryGroups.clear();
+    sceneryIndices.clear();
+}
+
+void StaticShapeRenderBatch::flush() {
+    flushVegetation();
+    flushScenery();
+}
+
+void SFile::applyPendingSubObjects(unsigned int stateId) {
+    auto &queue = state[stateId].enableSubObjQueue;
+    for (auto it = queue.begin(); it != queue.end();) {
+        enableSubObjByName(stateId, it.key(), it.value());
+        it = queue.erase(it);
+    }
+}
+
+void SFile::prepareForOpeningView(unsigned int stateId, OpeningViewLoad &opening) {
+    if (isinit != 1 || loaded == 2 || stateId >= unsigned(state.size()))
+        return;
+    if (loaded == 0) {
+        loaded = 2;
+        load();
+    }
+    if (loaded != 1)
+        return;
+
+    applyPendingSubObjects(stateId);
+    const auto &placement = state[stateId];
+    if (placement.distanceLevel < 0 || placement.distanceLevel >= iloscd)
+        return;
+    const auto &level = distancelevel[placement.distanceLevel];
+    for (int i = 0; i < level.iloscs && i < 32; ++i) {
+        if (!(unsigned(placement.enabledSubObjs) & (1u << i)))
+            continue;
+        const auto &subObject = level.subobiekty[i];
+        for (int j = 0; j < subObject.iloscc; ++j) {
+            const auto &part = subObject.czesci[j];
+            if (!part.enabled)
+                continue;
+            const int slot = primstate[part.prim_state_idx].arg4;
+            if (slot < 0 || slot >= ilosct)
+                continue;
+            const int id = texture[slot].image;
+            if (id < 0 || id >= ilosci || image[id].texAddr >= 0)
+                continue;
+            if (image[id].tex == -1)
+                image[id].tex = loadTexture(image[id].name);
+            if (image[id].tex < 0)
+                continue;
+            const auto found = TexLib::mtex.find(image[id].tex);
+            if (found == TexLib::mtex.end() || !found->second)
+                continue;
+            Texture *material = found->second;
+            if (material->decodePending)
+                opening.queueSceneryTexture(image[id].tex);
+            else if (material->glLoaded)
+                image[id].texAddr = material->tex[0];
+            else if (material->loaded)
+                opening.queueSceneryTexture(image[id].tex);
+        }
+    }
+}
+
 void SFile::render(int selectionColor, unsigned int stateId) {
+    render(selectionColor, stateId, nullptr, 0);
+}
+
+void SFile::render(int selectionColor, unsigned int stateId,
+                   QOpenGLExtraFunctions *instancing, int instanceCount, bool staticScenery) {
 
     if (isinit != 1 || loaded == 2)
         return;
     if (loaded == 0) {
-        if(Game::allowObjLag < 1)  return;
-        
-        Game::allowObjLag-=2;
-        loaded = 2;
-        load();
+        if (!loadForRender())
+            RouteFrameProfile::count(RouteFrameProfile::Counter::ShapeLoadDeferred);
         return;
     }
-    
-    if(state[stateId].enableSubObjQueue.size() > 0){
-        //qDebug() << "queue"<<state[stateId].enableSubObjQueue.size();
-        for (auto it = state[stateId].enableSubObjQueue.begin(); it != state[stateId].enableSubObjQueue.end();){
-            enableSubObjByName(stateId, it.key(), it.value());
-            it = state[stateId].enableSubObjQueue.erase(it);
-        }
-    }
+
+    applyPendingSubObjects(stateId);
 
     int oldmatrix = -2;
     float m[16];
@@ -1142,7 +1574,7 @@ void SFile::render(int selectionColor, unsigned int stateId) {
     
     int currentDlevel = state[stateId].distanceLevel;
     for (int i = 0; i < distancelevel[currentDlevel].iloscs; i++) {
-        QOpenGLVertexArrayObject::Binder vaoBinder(&distancelevel[currentDlevel].subobiekty[i].VAO);
+        QOpenGLVertexArrayObject::Binder vaoBinder(&distancelevel[currentDlevel].subobiekty[i].graphics->VAO);
 
         if(((state[stateId].enabledSubObjs >> i) & 1) == 0)
             continue;
@@ -1219,8 +1651,7 @@ void SFile::render(int selectionColor, unsigned int stateId) {
             } else if(image[imageId].tex == -2){
                 useUntexturedMaterial();
             } else if(image[imageId].tex == -1){
-                image[imageId].tex = TexLib::addTex(
-                        resolveTexturePath(image[imageId].name));
+                image[imageId].tex = loadTexture(image[imageId].name);
                 useUntexturedMaterial();
             } else {
                 const auto textureIt = TexLib::mtex.find(image[imageId].tex);
@@ -1245,8 +1676,39 @@ void SFile::render(int selectionColor, unsigned int stateId) {
                 }
             }
             
-            //QOpenGLVertexArrayObject::Binder vaoBinder(&distancelevel[0].subobiekty[i].czesci[j].VAO);
-            f->glDrawArrays(GL_TRIANGLES, distancelevel[currentDlevel].subobiekty[i].czesci[j].offset, distancelevel[currentDlevel].subobiekty[i].czesci[j].iloscv);/**/
+            const czes &part = distancelevel[currentDlevel].subobiekty[i].czesci[j];
+            RouteFrameProfile::count(RouteFrameProfile::Counter::ShapeDraws);
+            if (instancing) {
+                RouteFrameProfile::count(staticScenery ? RouteFrameProfile::Counter::StaticShapeInstancedDraws
+                                                       : RouteFrameProfile::Counter::PolyVegInstancedDraws);
+                RouteFrameProfile::count(staticScenery ? RouteFrameProfile::Counter::StaticShapePrimitiveInstances
+                                                       : RouteFrameProfile::Counter::PolyVegInstances, instanceCount);
+                constexpr int firstColumn = 5;
+                for (int column = 0; column < 4; ++column) {
+                    const int attribute = firstColumn + column;
+                    f->glEnableVertexAttribArray(attribute);
+                    f->glVertexAttribPointer(attribute, 4, GL_FLOAT, GL_FALSE,
+                        sizeof(std::array<float, 16>),
+                        reinterpret_cast<const void *>(column * 4 * sizeof(float)));
+                    instancing->glVertexAttribDivisor(attribute, 1);
+                }
+                Shader *shader = gluu->currentShader;
+                shader->setUniformValue(shader->polyVegInstances, GLint(1));
+                instancing->glDrawArraysInstanced(GL_TRIANGLES, part.offset, part.iloscv, instanceCount);
+                shader->setUniformValue(shader->polyVegInstances, GLint(0));
+                for (int column = 0; column < 4; ++column) {
+                    const int attribute = firstColumn + column;
+                    instancing->glVertexAttribDivisor(attribute, 0);
+                    f->glDisableVertexAttribArray(attribute);
+                }
+            } else {
+                if (selectionColor == 0 && RouteFrameProfile::collectingShapeDraws()) {
+                    static const QString untextured = QStringLiteral("<untextured>");
+                    RouteFrameProfile::countShapeDraw(pathid,
+                        validImage && texEnabled ? image[imageId].name : untextured);
+                }
+                f->glDrawArrays(GL_TRIANGLES, part.offset, part.iloscv);
+            }
             
             if(selectionColor == 0)
                 gluu->enableTextures();
@@ -1491,7 +1953,7 @@ float* SFile::getPmatrixAnimated(int currentDlevel, float* pmatrix, int matrix, 
     return pmatrix;
 }
 
-void SFile::buildFrameIds(){
+void SFileGeometry::buildFrameIds(){
     for(int i = 0; i < animations.size(); i++){
         for(int j = 0; j < animations[i].node.size(); j++){
             int frameCount = animations[i].frames;

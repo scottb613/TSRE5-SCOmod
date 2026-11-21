@@ -9,6 +9,8 @@
  */
 
 #include "OglObj.h"
+#include "OpeningViewLoad.h"
+#include "RouteFrameProfile.h"
 #include "TexLib.h"
 #include "Game.h"
 #include "GLMatrix.h"
@@ -16,6 +18,7 @@
 #include "Renderer.h"
 #include "Vector4f.h"
 #include <QVector>
+#include <QOpenGLExtraFunctions>
 #include <cmath>
 
 namespace {
@@ -24,10 +27,12 @@ Texture *resolveCachedTexture(int &texId, QString *resource) {
         return NULL;
 
     auto texture = TexLib::mtex.find(texId);
+    // A material can request an ACE path that TexLib resolved to DDS.
+    // Keep using this entry when that requested path is a recorded alias.
     const bool cachedTextureMatches = texture != TexLib::mtex.end()
             && texture->second != NULL
-            && texture->second->pathid.compare(
-                   *resource, Qt::CaseInsensitive) == 0;
+            && (texture->second->pathid.compare(*resource, Qt::CaseInsensitive) == 0
+                || texture->second->hashid.contains(*resource));
     if(texId == -1 || !cachedTextureMatches) {
         texId = TexLib::addTex(*resource);
         if(texId < 0)
@@ -97,6 +102,8 @@ void OglObj::deleteVBO(){
     loaded = false;
     indexed = false;
     indexLength = 0;
+    forestOffsetBuffer.destroy();
+    forestInstanceCount = 0;
 }
 
 float* OglObj::mapBuffer(){
@@ -218,11 +225,35 @@ void OglObj::initIndexed(const float* punkty, int ptr,
     loaded = true;
 }
 
+void OglObj::prepareTexture(OpeningViewLoad &opening) {
+    if (materialType != TEXTURE)
+        return;
+    Texture *texture = resolveCachedTexture(texId, res);
+    if (texture && (texture->decodePending || (texture->loaded && !texture->glLoaded)))
+        opening.queueSceneryTexture(texId);
+}
+
 void OglObj::releaseTexture(){
     if(materialType != TEXTURE || texId < 0)
         return;
     TexLib::releaseMapTexture(texId);
     texId = -1;
+}
+
+bool OglObj::setForestOffsets(const QVector<float> &offsets) {
+    auto *f = GLUU::vegetationInstancing();
+    if (!f || offsets.isEmpty() || !forestOffsetBuffer.create())
+        return false;
+    QOpenGLVertexArrayObject::Binder vaoBinder(&VAO);
+    if (!forestOffsetBuffer.bind())
+        return false;
+    forestOffsetBuffer.allocate(offsets.constData(), int(offsets.size() * sizeof(float)));
+    f->glEnableVertexAttribArray(4);
+    f->glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+    f->glVertexAttribDivisor(4, 1);
+    forestOffsetBuffer.release();
+    forestInstanceCount = int(offsets.size() / 3);
+    return true;
 }
 
 void OglObj::initLitTriangles(const float* positions, int positionFloatCount) {
@@ -358,10 +389,21 @@ void OglObj::render(int selectionColor, float lod) {
     gluu->currentShader->setUniformValue(gluu->currentShader->msMatrixUniform, *reinterpret_cast<float(*)[4][4]>(gluu->objStrMatrix));
     gluu->currentMsMatrinxHash = 0;//gluu->getMatrixHash(gluu->objStrMatrix);
     QOpenGLVertexArrayObject::Binder vaoBinder(&VAO);
-    if(indexed)
+    if (forestInstanceCount > 0) {
+        auto *instancing = GLUU::vegetationInstancing();
+        auto *shader = gluu->currentShader;
+        if (instancing && shader->forestOffsets >= 0) {
+            shader->setUniformValue(shader->forestOffsets, GLint(1));
+            RouteFrameProfile::count(RouteFrameProfile::Counter::ForestInstancedDraws);
+            RouteFrameProfile::count(RouteFrameProfile::Counter::ForestTreeInstances, forestInstanceCount);
+            instancing->glDrawArraysInstanced(shapeType, 0, length, forestInstanceCount);
+            shader->setUniformValue(shader->forestOffsets, GLint(0));
+        }
+    } else if (indexed) {
         f->glDrawElements(shapeType, indexLength, GL_UNSIGNED_INT, nullptr);
-    else
-        f->glDrawArrays(shapeType, 0, length); /**/
+    } else {
+        f->glDrawArrays(shapeType, 0, length);
+    }
     
     if(lineWidth > 0 && lineWidth != Game::oglDefaultLineWidth)
         f->glLineWidth(Game::oglDefaultLineWidth);

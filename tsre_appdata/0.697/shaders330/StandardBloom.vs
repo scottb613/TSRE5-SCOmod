@@ -12,6 +12,8 @@ uniform mat4 uPMatrix;
 uniform mat4 uFMatrix;
 uniform mat4 uMVMatrix;
 uniform mat4 uMSMatrix;
+uniform bool uUseForestOffsets;
+in vec3 forestOffset;
 uniform float fogDensity;
 
 out vec2 vTextureCoord;
@@ -22,10 +24,13 @@ out vec4 shadow2Pos;
 out float vAlpha;
 
 void main() {
-    shadowPos = uShadowPMatrix * uMVMatrix * uMSMatrix * vertex;
-    shadow2Pos = uShadow2PMatrix * uMVMatrix * uMSMatrix * vertex;
-    gl_Position = uPMatrix * uMVMatrix * uMSMatrix * vertex;
-    vec4 fogPosition = uFMatrix * uMVMatrix * uMSMatrix * vertex;
+    vec4 localVertex = vertex;
+    if (uUseForestOffsets)
+        localVertex.xyz += forestOffset;
+    shadowPos = uShadowPMatrix * uMVMatrix * uMSMatrix * localVertex;
+    shadow2Pos = uShadow2PMatrix * uMVMatrix * uMSMatrix * localVertex;
+    gl_Position = uPMatrix * uMVMatrix * uMSMatrix * localVertex;
+    vec4 fogPosition = uFMatrix * uMVMatrix * uMSMatrix * localVertex;
     vTextureCoord = aTextureCoord;
 
     fogFactor = sqrt((fogPosition.x)*(fogPosition.x) + (fogPosition.z)*(fogPosition.z))/(lod*1.4);

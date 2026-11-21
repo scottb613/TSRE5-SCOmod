@@ -261,9 +261,26 @@ void StaticObj::pushRenderItems(float lod, float posx, float posz, float* player
     }
 }
 
+void StaticObj::prepareOpeningView(OpeningViewLoad &opening) {
+    if (!gltfShape) {
+        WorldObj::prepareOpeningView(opening);
+    } else if (!gltfShape->model.primitives.empty()) {
+        QString error;
+        gltfShape->prepareOpeningView(error);
+    }
+}
+
 void StaticObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos, float* target, float fov, int selectionColor, int renderMode) {
+    renderWithStaticShapeBatch(gluu, lod, posx, posz, pos, target, fov,
+                           selectionColor, renderMode, nullptr);
+}
+
+void StaticObj::renderWithStaticShapeBatch(GLUU *gluu, float lod, float posx, float posz,
+                                      float *pos, float *target, float fov,
+                                      int selectionColor, int renderMode, StaticShapeRenderBatch *batch) {
     if(!Game::viewPolyVeg && PolyVegObject::isVegetationShape(fileName, polyVegRaw)) return;
     if(gltfShape) {
+        if (batch) batch->flush();
         if(!loaded || jestPQ < 2 || gltfShape->model.primitives.empty()) return;
         if(renderMode == gluu->RENDER_SHADOWMAP && Game::mstsShadows
                 && getShadowType() != WorldObj::ShadowDynamic) return;
@@ -328,6 +345,16 @@ void StaticObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos
                     * std::max(matrixScale[0], std::max(matrixScale[1], matrixScale[2]));
             loadSnapablePoints();
         }
+    }
+
+    if (batch) {
+        if (!selected && !Game::showWorldObjPivotPoints &&
+                !(Game::viewSnapable && snapablePoints.size() == 6) && shapePointer) {
+            if (batch->enqueue(*shapePointer, shapeState, gluu->mvMatrix, matrix,
+                               fileName, polyVegRaw))
+                return;
+        }
+        batch->flush();
     }
 
     if(Game::viewSnapable)

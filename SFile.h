@@ -18,19 +18,29 @@
 #include <QOpenGLShaderProgram>
 #include <QMatrix4x4>
 #include <QString>
+#include <QHash>
 #include <QVector>
+#include <QVarLengthArray>
 #include <QSet>
 #include <QMap>
 #include <QVector3D>
+#include <array>
+#include <memory>
+#include <limits>
+#include <vector>
 
 class FileBuffer;
 class ShapeTextureInfo;
 class ShapeHierarchyInfo;
 class ContentHierarchyInfo;
 class RenderItem;
+class QOpenGLExtraFunctions;
+class StaticShapeRenderBatch;
+struct SFileReadResult;
 
-class SFile {
-public:
+struct OpeningViewLoad;
+
+struct SFileGeometry {
 
     struct SObjHeader {
         QVector<int> geometryNodeMap;
@@ -44,27 +54,30 @@ public:
     struct czes {
         int iloscv;
         int prim_state_idx;
-        //QOpenGLBuffer VBO;
-        //QOpenGLVertexArrayObject VAO;
         int offset;
-        int* idx;
+        std::unique_ptr<int[]> idx;
         bool enabled = true;
     };
 
-    struct sub {
-        int iloscc;
-        SObjHeader header;
-        czes* czesci;
+    struct SubGraphics {
         QOpenGLBuffer VBO;
         QOpenGLVertexArrayObject VAO;
+    };
+
+    struct sub {
+        int iloscc = 0;
+        SObjHeader header;
+        std::unique_ptr<czes[]> czesci;
+        std::vector<float> vertices;
+        std::unique_ptr<SubGraphics> graphics;
     };
 
     struct dist {
         int levelSelection;
         int ilosch;
-        int* hierarchia;
+        std::unique_ptr<int[]> hierarchia;
         int iloscs;
-        sub* subobiekty;
+        std::unique_ptr<sub[]> subobiekty;
     };
 
     struct matrt {
@@ -98,9 +111,9 @@ public:
     };
 
     struct punlist {
-        fpoint* points;
-        fpoint* uv_points;
-        fpoint* normals;
+        std::unique_ptr<fpoint[]> points;
+        std::unique_ptr<fpoint[]> uv_points;
+        std::unique_ptr<fpoint[]> normals;
         int ipoints;
         int iuv_points;
         int inormals;
@@ -158,17 +171,96 @@ public:
         int frames;
         float fps;
         QVector<AnimNode> node;
-        void loadC(FileBuffer* data, int length);
+        void loadC(FileBuffer* data, int length, bool debugOutput);
         void loadX(FileBuffer* data);
     };
     
     QVector<Animation> animations;
+    punlist tpoints{};
+    int iloscd = 0;
+    int iloscm = 0;
+    std::unique_ptr<matrt[]> macierz;
+    int ilosci = 0;
+    std::unique_ptr<imgs[]> image;
+    int ilosct = 0;
+    std::unique_ptr<text[]> texture;
+    int iloscv = 0;
+    std::unique_ptr<vtxs[]> vtxstate;
+    int iloscps = 0;
+    std::unique_ptr<primst[]> primstate;
+    std::unique_ptr<dist[]> distancelevel;
+    int ishaders = 0;
+    std::unique_ptr<fshader[]> shader;
+    float size = 0;
+    float bound[6]{};
+
+    bool parse(FileBuffer &source, float alphaTest, bool debugOutput);
+    void getSize();
+    void buildFrameIds();
+
+    template <typename Vertex>
+    bool packVertices(sub &object, const Vertex *source, int sourceCount, float defaultAlphaTest) {
+        std::size_t vertexCount = 0;
+        for (int i = 0; i < object.iloscc; ++i) {
+            if (object.czesci[i].iloscv < 0)
+                return false;
+            vertexCount += object.czesci[i].iloscv;
+        }
+        if (vertexCount > std::numeric_limits<int>::max() / (9 * sizeof(float)))
+            return false;
+        object.vertices.resize(vertexCount * 9);
+        int offset = 0;
+        for (int i = 0; i < object.iloscc; ++i) {
+            auto &part = object.czesci[i];
+            part.offset = offset;
+            if (part.iloscv == 0)
+                continue;
+            if (part.prim_state_idx < 0 || part.prim_state_idx >= iloscps)
+                return false;
+            const auto &material = primstate[part.prim_state_idx];
+            const bool fullyOpaque = material.arg2 >= 0 && material.arg2 < ishaders
+                && shader[material.arg2].alpha == 1;
+            const float alpha = fullyOpaque ? 1.0f
+                : (material.arg6 == 1 ? -0.51f : -defaultAlphaTest);
+            for (int j = 0; j < part.iloscv; ++j) {
+                const int index = part.idx[j];
+                if (index < 0 || index >= sourceCount)
+                    return false;
+                const auto &vertex = source[index];
+                if (vertex.point >= unsigned(tpoints.ipoints))
+                    return false;
+                const auto &point = tpoints.points[vertex.point];
+                const auto normal = vertex.normal < unsigned(tpoints.inormals)
+                    ? tpoints.normals[vertex.normal] : fpoint{0, 1, 0};
+                const auto uv = vertex.uvpoint < unsigned(tpoints.iuv_points)
+                    ? tpoints.uv_points[vertex.uvpoint] : fpoint{};
+                float *packed = object.vertices.data() + std::size_t(offset + j) * 9;
+                packed[0] = point.x;
+                packed[1] = point.y;
+                packed[2] = point.z;
+                packed[3] = normal.x;
+                packed[4] = normal.y;
+                packed[5] = normal.z;
+                packed[6] = uv.x;
+                packed[7] = uv.y;
+                packed[8] = alpha;
+            }
+            offset += part.iloscv;
+            part.idx.reset();
+        }
+        return true;
+    }
+};
+
+class SFile : public SFileGeometry {
+public:
     bool animated = false;
     
     QString pathid;
     QString sciezka;
     QString nazwa;
     QString baseTexPath;
+    bool rollingStock = false;
     QString texPath;
     QString sdName;
     int isinit = 0;
@@ -180,27 +272,7 @@ public:
     int esdAlternativeTexture = -1;
     QVector<EsdBoundingBox> esdBoundingBox;
     
-    //VBO vbo[];
-    punlist tpoints;
-    // zmienne
-    int iloscd;
-    int iloscm = 0;
-    matrt* macierz;
-    int ilosci;
-    imgs* image;
-    int ilosct;
-    text* texture;
-    int iloscv;
-    vtxs* vtxstate;
-    int iloscps;
-    primst* primstate;
-    dist* distancelevel;
     int currentDistanceLevel = 0;
-    
-    int ishaders;
-    fshader* shader;
-    float size;
-    float bound[6];
     
     QString evaluatePathId();   /// EFO to fix relative paths
     
@@ -214,9 +286,9 @@ public:
     void updateSim(float deltaTime, unsigned int stateId = 0);
     void render();
     void render(int selectionColor, unsigned int stateId);
+    void prepareForOpeningView(unsigned int stateId, OpeningViewLoad &opening);
     void pushRenderItem();
     void pushRenderItem(int selectionColor, unsigned int stateId);
-    void getSize();
     bool getBoxPoints(QVector<float> &points);
     void getFloorBorderLinePoints(float *&punkty);
     bool isSnapable();
@@ -224,6 +296,7 @@ public:
     QMap<int, QVector3D> wireAttachmentOrigins();
     void addSnapablePoints(QVector<float> &out);
     void reload();
+    void invalidatePendingRead();
     void refreshSeasonTextures();
     unsigned int newState();
     void releaseState(unsigned int stateId);
@@ -239,6 +312,14 @@ public:
     void altPathFix(QString pathid);
     
 private:
+    friend class StaticShapeRenderBatch;
+    bool staticBatchState(unsigned int stateId, int &lod, int &subObjects) const;
+    bool polyVegBatchState(int lod, int subObjects) const;
+    bool opaqueBatchState(int lod, int subObjects) const;
+    void render(int selectionColor, unsigned int stateId,
+                QOpenGLExtraFunctions *instancing, int instanceCount,
+                bool staticScenery = false);
+
     struct State {
         bool animated = false; 
         int enabledSubObjs = 0xFFFFFFFF;
@@ -250,15 +331,58 @@ private:
     QVector<State> state;
     QSet<unsigned int> releasedStateIds;
     
-    void loadSd();
+    void applyPendingSubObjects(unsigned int stateId);
+    bool loadForRender();
+    void loadDecoded(SFileReadResult result);
+    bool uploadGeometry();
+    void loadSd(FileBuffer *data);
     QString resolveTexturePath(QString textureName) const;
+    int loadTexture(const QString &textureName) const;
     float* getPmatrix(int currentDlevel, float* pmatrix, int matrix);
     float* getPmatrixAnimated(int currentDlevel, float* pmatrix, int matrix, float frame);
-    void buildFrameIds();
     bool snapable = false;
     //float *mvMatrix = NULL;
     bool requiresUpdate = false;
     QHash<unsigned int, QVector<RenderItem *>> renderItems;
+};
+
+class StaticShapeRenderBatch {
+public:
+    void begin(bool vegetation, bool scenery);
+    bool enqueue(SFile &shape, unsigned int stateId, float *tileMatrix,
+                 float *objectMatrix, const QString &fileName, bool rawPreview);
+    void flush();
+
+private:
+    struct Key {
+        SFile *shape = nullptr;
+        int lod = 0;
+        int subObjects = 0;
+        bool operator==(const Key &other) const {
+            return shape == other.shape && lod == other.lod && subObjects == other.subObjects;
+        }
+        friend size_t qHash(const Key &key, size_t seed) noexcept {
+            return qHashMulti(seed, key.shape, key.lod, key.subObjects);
+        }
+    };
+    struct Group {
+        Key key;
+        unsigned int state = 0;
+        QVarLengthArray<std::array<float, 16>, 1> matrices;
+    };
+    void draw(const Group &group, QOpenGLExtraFunctions *functions,
+              bool rawPreview, bool staticScenery);
+    void flushVegetation();
+    void flushScenery();
+
+    bool vegetationEnabled = false;
+    bool sceneryEnabled = false;
+    bool rawPreview = false;
+    Group plants;
+    QSet<Key> nonOpaque;
+    QHash<Key, qsizetype> sceneryIndices;
+    QVector<Group> sceneryGroups;
+    QOpenGLBuffer buffer;
 };
 
 #endif	/* SFILE_H */

@@ -5,6 +5,7 @@
 // Licensed under GNU GPL v3 or later. See LICENSE.md.
 
 #include "PolyVegObject.h"
+#include "RouteFrameProfile.h"
 
 #include "ForestDefinition.h"
 #include "Game.h"
@@ -49,6 +50,7 @@ const QSet<QString> &rawShapeNames() {
 }
 
 bool PolyVegObject::isRawShape(const QString &fileName) {
+    RouteFrameProfile::Scope schema(RouteFrameProfile::Stage::PolyVegSchema);
     return rawShapeNames().contains(shapeBaseName(fileName).toLower());
 }
 

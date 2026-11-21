@@ -1,7 +1,11 @@
 #pragma once
 #include <QStringView>
+class QByteArray;
+class QString;
 
 namespace WorldCleanupValidation {
+bool expandMstsFile(QByteArray input, QByteArray &expanded);
+bool decodeWorldFile(const QByteArray &input, QString &text, QByteArray &binaryPayload);
 // A reference scan may authorize deletion only after seeing a complete world
 // envelope. This deliberately does not interpret object data or change files.
 inline bool completeTextWorld(QStringView text) {

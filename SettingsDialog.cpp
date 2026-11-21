@@ -6,6 +6,7 @@
 #include <QTabWidget>
 #include <QFormLayout>
 #include <QPushButton>
+#include <QComboBox>
 #include <QScrollArea>
 #include <QRadioButton>
 #include <QLineEdit>
@@ -89,7 +90,9 @@ void SettingsDialog::createScrollTab(QFormLayout*& layout, QTabWidget* tabs, con
     tabs->addTab(sa, title);
 }
 
-void SettingsDialog::addRow(QFormLayout* l, const QString& key, const QString& type, const QString& label, const QString& helpText) {
+void SettingsDialog::addRow(QFormLayout* l, const QString& key, const QString& type,
+                            const QString& label, const QString& helpText,
+                            const QStringList& choices) {
     QString lowKey = key.toLower();
     QString tooltip = helpForSetting(key, helpText);
     QWidget* rowField = new QWidget();
@@ -108,7 +111,12 @@ void SettingsDialog::addRow(QFormLayout* l, const QString& key, const QString& t
 
     QWidget* inputPart = nullptr;
 
-    if (type == "bool") {
+    if (!choices.isEmpty()) {
+        auto *choice = new QComboBox;
+        choice->addItems(choices);
+        valueWidgetMap[lowKey] = choice;
+        inputPart = choice;
+    } else if (type == "bool") {
         QWidget* boolCont = new QWidget();
         QHBoxLayout* h = new QHBoxLayout(boolCont);
         h->setContentsMargins(0, 0, 0, 0);
@@ -580,6 +588,9 @@ void SettingsDialog::setupUi() {
 
     createScrollTab(l, tabs, "UI");
     addRow(l, "toolsHidden", "bool", "Tools Hidden", "");
+    addRow(l, "panelAlignment", "choice", "Panel Alignment",
+           "Place Tools and Properties together on the left or right, or on either side of the viewport.",
+           {"Left", "Center", "Right"});
     addRow(l, "uiScale", "number", "UI Scale", "0.75 to 1.25 supported");
     addRow(l, "scoSoundEnabled", "bool", "UI Sounds", "Enables interface clicks, error buzzes, and success chirps");
 
@@ -763,6 +774,7 @@ bool SettingsDialog::save(const QString& filename) {
 
     out << "\n\n//// UI / Windows / Scaling\n\n";
     writeSetting(out, "toolsHidden", "false", "only show the viewport");
+    writeSetting(out, "panelAlignment", "Center", "Route Editor Tools and Properties placement");
     writeSetting(out, "uiScale", "1.00", "global editor UI font/panel scale; 0.75 to 1.25 supported");
     writeSetting(out, "scoSoundEnabled", "true", "interface clicks, error buzzes, and success chirps");
 
@@ -930,6 +942,13 @@ bool SettingsDialog::save(const QString& filename) {
     if(!file.commit())
         return false;
 
+    if(filename.isEmpty()) {
+        const QString alignment = settings.value("panelAlignment").toString("Center");
+        if(Game::panelAlignment != alignment) {
+            Game::panelAlignment = alignment;
+            emit panelAlignmentChanged();
+        }
+    }
     accept();
     return true;
 }
@@ -955,6 +974,8 @@ QString SettingsDialog::currentValue(const QString& key, const QString& fallback
                 return first->text().trimmed() + ", " + second->text().trimmed();
         } else if (QRadioButton* rb = qobject_cast<QRadioButton*>(w)) {
             return rb->isChecked() ? "true" : "false";
+        } else if (auto *choice = qobject_cast<QComboBox*>(w)) {
+            return choice->currentText();
         } else if (QLineEdit* le = qobject_cast<QLineEdit*>(w)) {
             return le->text().trimmed();
         } else if (QTextEdit* te = qobject_cast<QTextEdit*>(w)) {
@@ -1095,6 +1116,10 @@ void SettingsDialog::updateWidgetValue(const QString& key, const QString& val) {
         rb->setChecked(isTrue);
         QRadioButton* rbFalse = rb->property("buddy").value<QRadioButton*>();
         if (rbFalse) rbFalse->setChecked(!isTrue);
+    } else if (auto *choice = qobject_cast<QComboBox*>(w)) {
+        const int index = choice->findText(val.trimmed(), Qt::MatchFixedString);
+        if (index >= 0)
+            choice->setCurrentIndex(index);
     } else if (QLineEdit* le = qobject_cast<QLineEdit*>(w)) {
         le->setText(val);
     } else if (QTextEdit* te = qobject_cast<QTextEdit*>(w)) {
@@ -1127,6 +1152,7 @@ QString SettingsDialog::getGameValue(const QString& key) {
     if (key == "writetdb") return Game::writeTDB ? "true" : "false";
     if (key == "systemtheme") return Game::systemTheme ? "true" : "false";
     if (key == "toolshidden") return Game::toolsHidden ? "true" : "false";
+    if (key == "panelalignment") return Game::panelAlignment;
     if (key == "usennumpad") return Game::usenNumPad ? "true" : "false";
     if (key == "camerafov") return QString::number(Game::cameraFov);
     if (key == "cameraspeedmin") return QString::number(Game::cameraSpeedMin);

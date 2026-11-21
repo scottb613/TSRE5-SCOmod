@@ -28,6 +28,7 @@
 #include <QEventLoop>
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QOpenGLContext>
 #include <QDialogButtonBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -64,6 +65,7 @@
 #include "GLH.h"
 #include "Vector2f.h"
 #include "TerrainLib.h"
+#include "TerrainLibQt.h"
 #include "TDB.h"
 #include "Brush.h"
 #include "GeoCoordinates.h"
@@ -76,6 +78,7 @@
 #include "Undo.h"
 #include "Environment.h"
 #include "Terrain.h"
+#include "TerrainTextureStream.h"
 #include "WaterBedClearanceMath.h"
 #include "PlaceGuardMath.h"
 #include "OrtsTurntableConfig.h"
@@ -507,6 +510,31 @@ m_yRot(0),
 m_zRot(0) {
 
     this->installEventFilter(this);
+    connect(this, &QOpenGLWidget::frameSwapped, this, [this] {
+        if (openingView) {
+            if (loadingJump && loadingJump->blankPainted && !loadingJump->started) {
+                loadingJump->started = true;
+                if (openingTiming)
+                    openingTiming->mark("jump blank frame");
+                QTimer::singleShot(0, this, &RouteEditorGLWidget::advanceOpeningView);
+            }
+            return;
+        }
+        if (!scenePainted)
+            return;
+        if (openingTiming) {
+            openingTiming->mark("first presented frame");
+            openingTiming.reset();
+        }
+        frameProfile.presented();
+        if (palettePending) {
+            palettePending = false;
+            QTimer::singleShot(0, this, [this] {
+                if (!openingView && route && route->loaded)
+                    emit preloadTexturesSignal();
+            });
+        }
+    });
     StaticCopyUi::restoreDestination(copyToDestination,copyToWorkingFolder);
 
     waterMessageLabel = new QLabel(this);
@@ -571,6 +599,7 @@ QSize RouteEditorGLWidget::sizeHint() const {
 
 void RouteEditorGLWidget::cleanup() {
     makeCurrent();
+    TerrainTextureStream::clear();
     if(currentShapeLib) currentShapeLib->releaseGltfGraphics();
     //delete gluu->m_program;
     //gluu->m_program = 0;
@@ -578,7 +607,7 @@ void RouteEditorGLWidget::cleanup() {
 }
 
 void RouteEditorGLWidget::timerEvent(QTimerEvent *) {
-    if(forestReplacementBusy || routeSaveBusy) return;
+    if(forestReplacementBusy || routeSaveBusy || openingView) return;
     // The OpenGL widget and its timer persist at Main Load. During a restored
     // route load, progress processing can dispatch this timer after the Route
     // pointer is assigned but before loading and camera initialization finish.
@@ -720,6 +749,17 @@ void RouteEditorGLWidget::timerEvent(QTimerEvent *) {
 
 bool RouteEditorGLWidget::initRoute(){
     RouteLoadTiming loadTiming;
+    if (openingView)
+        finishOpeningView(false);
+    if (isValid()) {
+        makeCurrent();
+        TerrainTextureStream::clear();
+        doneCurrent();
+    }
+    openingTiming.reset();
+    preparedViewPositions.clear();
+    scenePainted = false;
+    palettePending = false;
     clearPolyVegCorridor();
     wireSpans = QJsonObject();
     wireUnsavedBakes.clear();
@@ -764,11 +804,8 @@ bool RouteEditorGLWidget::initRoute(){
         qDebug() << "Initializing 3D viewer";
         initRoute2();
         loadTiming.mark("camera/route controls/show window");
-        if(RouteLoadTiming::enabled()) {
-            QObject::connect(this, &QOpenGLWidget::frameSwapped, this,
-                [loadTiming]() mutable { loadTiming.mark("first presented frame"); },
-                Qt::SingleShotConnection);
-        }
+        if (RouteLoadTiming::enabled())
+            openingTiming = loadTiming;
 
 
 
@@ -778,12 +815,16 @@ bool RouteEditorGLWidget::initRoute(){
 }
 
 void RouteEditorGLWidget::initRoute2(){
+    if (RouteFrameProfile::enabled())
+        frameProfile = RouteFrameProfile{};
     QObject::connect(route, SIGNAL(objectSelected(GameObj*)), this, SLOT(objectSelected(GameObj*)));
     QObject::connect(route, SIGNAL(objectSelected(QVector<GameObj*>)), this, SLOT(objectSelected(QVector<GameObj*>)));
     QObject::connect(route, SIGNAL(sendMsg(QString)), this, SLOT(msg(QString)));
 
     // Init Camera
     cameraInit();
+    if (!Game::serverClient)
+        beginOpeningView();
 
     // The OpenGL widget persists when the editor returns to Main Load, so
     // initializeGL() runs only for the first route. Refresh marker controls
@@ -791,11 +832,252 @@ void RouteEditorGLWidget::initRoute2(){
     emit mkrList(route->getMkrList());
     emit routeLoaded(route);
     emit showWindow();
-    // Let the newly shown OpenGL surface present its first complete frame
-    // before terrain-palette texture decoding uses the GUI thread.
-    QTimer::singleShot(100, this, [this](){ emit preloadTexturesSignal(); });
+    if (openingView) {
+        openingProgress->show();
+        update();
+        QTimer::singleShot(0, this, &RouteEditorGLWidget::advanceOpeningView);
+    } else {
+        palettePending = true;
+    }
 
     return;
+}
+
+void RouteEditorGLWidget::beginOpeningView(bool jump) {
+    openingView = std::make_unique<OpeningViewLoad>();
+    openingView->profiling = RouteLoadTiming::enabled();
+    openingRoute = route;
+    const QString title = jump ? tr("Loading Jump Destination") : tr("Loading Route");
+    const QString status = jump ? tr("Finding assets around the destination...")
+                                : tr("Finding assets for the opening view...");
+    openingProgress = new QProgressDialog(status,
+                                          QString(), 0, 0, window());
+    openingProgress->setWindowTitle(title);
+    openingProgress->setWindowModality(Qt::WindowModal);
+    openingProgress->setWindowFlag(Qt::WindowCloseButtonHint, false);
+    openingProgress->setCancelButton(nullptr);
+    openingProgress->setAutoClose(false);
+    openingProgress->setAutoReset(false);
+    openingProgress->setMinimumDuration(0);
+    GuiFunct::styleEditorDialog(openingProgress.data());
+    GuiFunct::addEditorDialogHeader(openingProgress.data(), title);
+    openingProgress->setMinimumWidth(440);
+}
+
+void RouteEditorGLWidget::advanceOpeningView() {
+    if (!openingView || (loadingJump && !loadingJump->started))
+        return;
+    if (route != openingRoute || !route || !route->loaded) {
+        finishOpeningView(false);
+        return;
+    }
+    if (!isVisible() || !isValid()) {
+        QTimer::singleShot(16, this, &RouteEditorGLWidget::advanceOpeningView);
+        return;
+    }
+    makeCurrent();
+    if (QOpenGLContext::currentContext() != context()) {
+        finishOpeningView(false);
+        return;
+    }
+    Game::currentShapeLib = currentShapeLib;
+    glActiveTexture(GL_TEXTURE0);
+
+    auto *const activeLoad = openingView.get();
+    auto &opening = *activeLoad;
+    if (opening.discoveryCount == 0) {
+        if (loadingJump) {
+            const auto &jump = *loadingJump;
+            moveCameraForJump(jump.tile.x(), jump.tile.y(),
+                              jump.position.x(), jump.position.y(), jump.position.z());
+        }
+        const int tileX = int(camera->pozT[0]);
+        const int tileZ = int(camera->pozT[1]);
+        const QVector3D position(camera->getPos()[0], camera->getPos()[1], camera->getPos()[2]);
+        TerrainTextureStream::setView(QPoint(tileX, tileZ), QPointF(position.x(), position.z()));
+        const int radius = qMax(0, Game::tileLod);
+        QVector<QPoint> offsets;
+        for (int x = -radius; x <= radius; ++x) {
+            for (int z = -radius; z <= radius; ++z)
+                offsets.append(QPoint(x, z));
+        }
+        std::stable_sort(offsets.begin(), offsets.end(), [](const QPoint &a, const QPoint &b) {
+            return QPoint::dotProduct(a, a) < QPoint::dotProduct(b, b);
+        });
+        auto *terrainLib = Game::terrainLib;
+        auto nearTerrain = std::make_shared<QSet<Terrain *>>();
+        for (const QPoint &offset : offsets) {
+            const int x = tileX + offset.x();
+            const int z = tileZ + offset.y();
+            opening.discovery.emplace_back([terrainLib, &opening, nearTerrain, x, z] {
+                auto *terrain = terrainLib->getTerrainByXY(x, z, true);
+                if (terrain && !nearTerrain->contains(terrain)) {
+                    nearTerrain->insert(terrain);
+                    terrain->queueOpeningTextures(opening);
+                }
+            });
+        }
+        if (auto *quadTerrain = dynamic_cast<TerrainLibQt *>(terrainLib)) {
+            quadTerrain->queueOpeningDistantTerrain(tileX, tileZ, opening);
+        }
+        const float objectRadius = qMax(0.0f, float(Game::objectLod));
+        auto *openingRoute = route;
+        for (const QPoint &offset : offsets) {
+            opening.discovery.emplace_back([openingRoute, &opening, position, objectRadius, tileX, tileZ, offset] {
+                auto *tile = openingRoute->requestTile(tileX + offset.x(), tileZ + offset.y(), false);
+                if (!tile || tile->loaded != 1)
+                    return;
+                for (int index = 0; index < tile->jestObiektow; ++index) {
+                    const auto found = tile->obiekty.find(index);
+                    auto *object = found == tile->obiekty.end() ? nullptr : found->second;
+                    if (!object || !object->loaded)
+                        continue;
+                    if (!Game::viewPolyVeg && PolyVegObject::isVegetationShape(object->fileName, object->polyVegRaw))
+                        continue;
+                    const float dx = offset.x() * 2048.0f + object->position[0] - position.x();
+                    const float dz = offset.y() * 2048.0f + object->position[2] - position.z();
+                    if (dx * dx + dz * dz < objectRadius * objectRadius || object->isInternalLodControl())
+                        opening.assets.emplace_back([object, &opening] {
+                            object->prepareOpeningView(opening);
+                            return true;
+                        });
+                }
+            });
+        }
+        opening.discoveryCount = int(opening.discovery.size());
+        if (openingProgress)
+            openingProgress->setRange(0, opening.discoveryCount);
+    }
+
+    const bool discovering = !opening.discovery.empty();
+    QElapsedTimer slice;
+    slice.start();
+    int processed = 0;
+    if (discovering) {
+        while (!opening.discovery.empty() && (processed == 0 || slice.elapsed() < 10)) {
+            auto job = std::move(opening.discovery.front());
+            opening.discovery.pop_front();
+            job();
+            ++processed;
+        }
+    } else {
+        for (std::size_t remaining = opening.assets.size(); remaining; --remaining) {
+            const int assetBudgetMs = opening.sceneryTextures.empty() ? 10 : 7;
+            if (slice.elapsed() >= assetBudgetMs)
+                break;
+            auto job = std::move(opening.assets.front());
+            opening.assets.pop_front();
+            if (job())
+                ++processed;
+            else
+                opening.assets.push_back(std::move(job));
+        }
+
+        // Decode completions can arrive after the object that requested the
+        // texture has already been prepared. Upload each shared image once.
+        if (opening.assets.empty() && !opening.sceneryDecodeGrace.isValid())
+            opening.sceneryDecodeGrace.start();
+        constexpr int decodeGraceMs = 350;
+        for (std::size_t remaining = opening.sceneryTextures.size();
+                remaining && slice.elapsed() < 10; --remaining) {
+            const int id = opening.sceneryTextures.front();
+            opening.sceneryTextures.pop_front();
+            const auto found = TexLib::mtex.find(id);
+            if (found == TexLib::mtex.end() || !found->second)
+                continue;
+            Texture *texture = found->second;
+            if (texture->decodePending) {
+                if (!opening.sceneryDecodeGrace.isValid()
+                        || opening.sceneryDecodeGrace.elapsed() < decodeGraceMs)
+                    opening.sceneryTextures.push_back(id);
+                else
+                    ++opening.sceneryDeferred;
+            } else if (texture->loaded && !texture->glLoaded && texture->GLTextures()) {
+                gluu->invalidateTextureBinding();
+                ++opening.sceneryUploaded;
+                ++processed;
+            }
+        }
+    }
+    doneCurrent();
+
+    if (discovering) {
+        opening.discovered += processed;
+        if (opening.discovery.empty()) {
+            opening.assetCount = int(opening.assets.size());
+            if (openingTiming) {
+                openingTiming->mark(loadingJump ? "discover jump view" : "discover opening view");
+                qInfo() << "Opening view asset jobs:" << opening.assetCount;
+            }
+            if (openingProgress) {
+                openingProgress->setLabelText(tr("Loading terrain textures and objects..."));
+                openingProgress->setRange(0, qMax(1, opening.assetCount));
+                openingProgress->setValue(0);
+            }
+        } else if (openingProgress) {
+            openingProgress->setValue(opening.discovered);
+        }
+    } else {
+        opening.prepared += processed;
+        if (openingProgress)
+            openingProgress->setValue(opening.prepared);
+    }
+
+    // Modal progress updates can dispatch events, including a route change.
+    if (openingView.get() != activeLoad)
+        return;
+    if (opening.discovery.empty() && opening.assets.empty() && opening.sceneryTextures.empty())
+        finishOpeningView(true);
+    else
+        QTimer::singleShot(processed > 0 ? 1 : 4, this, &RouteEditorGLWidget::advanceOpeningView);
+}
+
+void RouteEditorGLWidget::finishOpeningView(bool completed) {
+    const bool wasJump = loadingJump.has_value();
+    if (completed && openingTiming) {
+        openingTiming->mark(wasJump ? "prepare jump view" : "prepare opening view");
+        qInfo() << "Opening view terrain"
+                << "queued_patches=" << openingView->queuedTerrainPatches
+                << "resident_textures=" << openingView->terrainTextures.size();
+        qInfo() << "Opening view scenery"
+                << "uploaded_textures=" << openingView->sceneryUploaded
+                << "deferred_decodes=" << openingView->sceneryDeferred;
+    }
+    if (completed) {
+        // Asset coverage is centered on this horizontal position. A change
+        // of altitude or heading does not change the discovery radius.
+        const QPoint tile{int(camera->pozT[0]), int(camera->pozT[1])};
+        const float *position = camera->getPos();
+        const QPointF center = wasJump ? QPointF(loadingJump->position.x(), loadingJump->position.z())
+                                       : QPointF(position[0], position[2]);
+        if (preparedPreviewRevision != TerrainTextureStream::previewRevision()) {
+            preparedViewPositions.clear();
+            preparedPreviewRevision = TerrainTextureStream::previewRevision();
+        }
+        auto &prepared = preparedViewPositions[tile];
+        if (!prepared.contains(center))
+            prepared.append(center);
+    } else {
+        openingTiming.reset();
+    }
+    loadingJump.reset();
+    openingView.reset();
+    openingRoute = nullptr;
+    if (openingProgress) {
+        openingProgress->hide();
+        openingProgress->deleteLater();
+        openingProgress.clear();
+    }
+    lastTime = QDateTime::currentMSecsSinceEpoch();
+    if (wasJump) {
+        if (RouteFrameProfile::enabled())
+            frameProfile = RouteFrameProfile{};
+        if (completed)
+            armJumpChirp();
+    } else {
+        palettePending = true;
+    }
+    update();
 }
 
 void RouteEditorGLWidget::cameraInit(){
@@ -803,7 +1085,7 @@ void RouteEditorGLWidget::cameraInit(){
     cameraFree = new CameraFree(aaa);
     //cameraObj = new CameraConsist();
     camera = cameraFree;
-    float spos[3];
+    float spos[3]{};
     if (Game::start == 2) {
         camera->setPozT(Game::startTileX, -Game::startTileY);
     } else {
@@ -811,8 +1093,10 @@ void RouteEditorGLWidget::cameraInit(){
         spos[0] = route->getStartpX();
         spos[2] = -route->getStartpZ();
     }
-    if (Game::terrainLib->load(route->getStartTileX(), -route->getStartTileZ())) {
-        spos[1] = 20 + Game::terrainLib->getHeight(route->getStartTileX(), -route->getStartTileZ(), route->getStartpX(), -route->getStartpZ());
+    const int tileX = int(camera->pozT[0]);
+    const int tileZ = int(camera->pozT[1]);
+    if (Game::terrainLib->load(tileX, tileZ)) {
+        spos[1] = 20 + Game::terrainLib->getHeight(tileX, tileZ, spos[0], spos[2]);
     } else {
         spos[1] = 0;
     }
@@ -862,6 +1146,21 @@ void RouteEditorGLWidget::initializeGL() {
     //qDebug() << "gluu->initShader();";
     if(Game::debugOutput) qDebug() << "# InitShaders";
     gluu->initShader();
+    if (RouteFrameProfile::enabled()) {
+        const auto format = context()->format();
+        const auto *fog = gluu->shaders.value(QStringLiteral("StandardFog"));
+        qInfo() << "Editor profile config"
+                << "gl_major=" << format.majorVersion()
+                << "gl_minor=" << format.minorVersion()
+                << "vegetation_instancing_available=" << (GLUU::vegetationInstancing() != nullptr)
+                << "static_shape_instancing_available=" << (GLUU::staticShapeInstancing() != nullptr)
+                << "forest_shader=" << (fog && fog->forestOffsets >= 0)
+                << "polyveg_shader=" << (fog && fog->polyVegInstances >= 0)
+                << "shadows=" << Game::shadowsEnabled
+                << "fps_limit=" << Game::fpsLimit
+                << "load_budget=" << Game::maxObjLag
+                << "ignore_load_limits=" << Game::ignoreLoadLimits;
+    }
     if(Game::debugOutput) qDebug() << "# InitShaders finished";
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -946,8 +1245,17 @@ void RouteEditorGLWidget::setMoveStep(float val){
 }
 
 void RouteEditorGLWidget::paintGL(){
+    if (openingView) {
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (loadingJump)
+            loadingJump->blankPainted = true;
+        return;
+    }
     if(forestReplacementBusy) return;
+    const bool drawsScene = route && route->loaded && !selection;
     paintGL2();
+    scenePainted = scenePainted || drawsScene;
     return;
 
     // Here is not finishes, future version of TSRE renderer.
@@ -1063,9 +1371,26 @@ void RouteEditorGLWidget::paintGL2() {
     if (route == NULL) return;
     if (!route->loaded) return;
 
+    RouteFrameProfile::Frame profileFrame(frameProfile, !selection);
+    static const bool backgroundShapeReads =
+            qEnvironmentVariableIntValue("TSRE_DISABLE_BACKGROUND_SHAPE_READS") == 0;
+    QScopedValueRollback<bool> shapeReads(gluu->streamShapeReads, backgroundShapeReads);
+    // Visible terrain gets the first opportunity to use the texture budget.
+    constexpr qint64 nearTextureBudgetNs = 8000000;
+    qint64 textureBudgetNs = 4000000;
+    QScopedValueRollback<qint64 *> textureBudget(gluu->terrainTextureBudgetNs,
+                                               selection ? nullptr : &textureBudgetNs);
+    if (!selection) {
+        const float *position = camera->getPos();
+        TerrainTextureStream::setView(QPoint(int(camera->pozT[0]), int(camera->pozT[1])),
+                                      QPointF(position[0], position[2]));
+    }
+
     // Render Shadows
-    if (Game::shadowsEnabled > 0)
-       renderShadowMaps();
+    if (Game::shadowsEnabled > 0) {
+        RouteFrameProfile::Scope shadows(RouteFrameProfile::Stage::Shadows);
+        renderShadowMaps();
+    }
 
     // Render Scene
     //gluu->currentShader = gluu->shaders["StandardBloom"];
@@ -1084,6 +1409,7 @@ void RouteEditorGLWidget::paintGL2() {
     glClearColor(gluu->skyColor[0], gluu->skyColor[1], gluu->skyColor[2], 1.0);
     glViewport(0, 0, (float) this->width() * Game::PixelRatio, (float) this->height() * Game::PixelRatio);
     Mat4::identity(gluu->mvMatrix);
+    Mat4::identity(gluu->objStrMatrix);
 
     Mat4::perspective(gluu->fMatrix, Game::cameraFov * M_PI / 180, float(this->width()) / this->height(), 0.2f, Game::objectLod);
     Mat4::multiply(gluu->fMatrix, gluu->fMatrix, camera->getMatrix());
@@ -1101,6 +1427,7 @@ void RouteEditorGLWidget::paintGL2() {
     glClear(GL_DEPTH_BUFFER_BIT);
 
     // Render Low Resolution Terrain
+    RouteFrameProfile::Scope distantTerrain(RouteFrameProfile::Stage::DistantTerrain);
     Mat4::perspective(gluu->pMatrix, Game::cameraFov * M_PI / 180, float(this->width()) / this->height(), 600.0f, Game::distantLod);
     Mat4::multiply(gluu->pMatrix, gluu->pMatrix, camera->getMatrix());
     gluu->setMatrixUniforms();
@@ -1118,11 +1445,20 @@ void RouteEditorGLWidget::paintGL2() {
     Mat4::identity(gluu->mvMatrix);
     glClear(GL_DEPTH_BUFFER_BIT);
 
+    distantTerrain.finish();
+    textureBudgetNs = nearTextureBudgetNs;
+
     // Render High Resolution Terrain
+    RouteFrameProfile::Scope nearTerrain(RouteFrameProfile::Stage::NearTerrain);
     Mat4::perspective(gluu->pMatrix, Game::cameraFov * M_PI / 180, float(this->width()) / this->height(), 0.2f, Game::objectLod);
     Mat4::multiply(gluu->pMatrix, gluu->pMatrix, camera->getMatrix());
     gluu->setMatrixUniforms();
     Game::terrainLib->render(gluu, camera->pozT, camera->getPos(), camera->getTarget(), 3.14f / 3, renderMode);
+    if (!selection) {
+        constexpr qint64 offscreenTextureBudgetNs = 1000000;
+        TerrainTextureStream::prefetchOffscreen(qMin(textureBudgetNs, offscreenTextureBudgetNs));
+    }
+    nearTerrain.finish();
 
     //glClear(GL_DEPTH_BUFFER_BIT);
     // Render World
@@ -1133,7 +1469,10 @@ void RouteEditorGLWidget::paintGL2() {
     if (stickPointerToTerrain && Game::viewTerrainShape)
         if (!selection) drawPointer();
 
-    route->render(gluu, camera->pozT, camera->getPos(), camera->getTarget(), camera->getRotX(), 3.14f / 3, renderMode);
+    {
+        RouteFrameProfile::Scope world(RouteFrameProfile::Stage::World);
+        route->render(gluu, camera->pozT, camera->getPos(), camera->getTarget(), camera->getRotX(), 3.14f / 3, renderMode);
+    }
     renderWirePreview();
     renderPolyVegBakeMarkers();
 
@@ -3180,7 +3519,33 @@ void RouteEditorGLWidget::jumpTo(float *posT, float *pos) {
 }
 
 void RouteEditorGLWidget::jumpTo(int X, int Z, float x, float y, float z) {
+    if (!route || !route->loaded || !camera || !Game::terrainLib || openingView)
+        return;
     if(Game::debugOutput) qDebug() << "jump: " << X << " " << Z;
+
+    const QPoint tile(X, Z);
+    const bool sameTile = X == int(camera->pozT[0]) && Z == int(camera->pozT[1]);
+    const auto prepared = preparedViewPositions.constFind(tile);
+    if (sameTile || (preparedPreviewRevision == TerrainTextureStream::previewRevision()
+                     && prepared != preparedViewPositions.constEnd() && prepared->contains(QPointF(x, z)))
+            || Game::serverClient || !isVisible() || !isValid()) {
+        moveCameraForJump(X, Z, x, y, z);
+        armJumpChirp();
+        update();
+        return;
+    }
+
+    QObject::disconnect(jumpChirpConnection);
+    loadingJump = LoadingJump{tile, QVector3D(x, y, z)};
+    scenePainted = false;
+    if (RouteLoadTiming::enabled())
+        openingTiming.emplace();
+    beginOpeningView(true);
+    openingProgress->show();
+    update();
+}
+
+void RouteEditorGLWidget::moveCameraForJump(int X, int Z, float x, float y, float z) {
     Game::terrainLib->load(X, Z);
     float h = Game::terrainLib->getHeight(X, Z, x, z);
     //if(h == -1)
@@ -3190,11 +3555,12 @@ void RouteEditorGLWidget::jumpTo(int X, int Z, float x, float y, float z) {
 
     camera->setPozT(X, Z);
     camera->setPos(x, y, z);
+}
+
+void RouteEditorGLWidget::armJumpChirp() {
     QObject::disconnect(jumpChirpConnection);
     jumpChirpConnection = QObject::connect(this, &QOpenGLWidget::frameSwapped,
         this, [this](){ playPlacementSound("SCOchirp.wav"); }, Qt::SingleShotConnection);
-    update();
-
 }
 
 /// EFO Object Selected
@@ -8701,7 +9067,7 @@ bool ortsTurntableEntry(WorldObj *obj, OrtsTurntableConfig::Entry &entry) {
     const auto close = [](double a, double b) { return std::isfinite(a) && std::abs(a-b) < 0.002; };
     SFile *model = obj->shapePointer;
     if(model == NULL || model->loaded != 1 || model->iloscm != 2 ||
-            model->macierz == NULL || model->animations.size() != 1)
+            !model->macierz || model->animations.size() != 1)
         return false;
     if(model->macierz[0].name != "BASIN" || model->macierz[1].name != "TRACKPIECE")
         return false;

@@ -10,6 +10,8 @@
 
 #include <QDebug>
 #include <QBuffer>
+#include <QByteArrayView>
+#include <QCryptographicHash>
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
@@ -17,7 +19,10 @@
 #include <QStringConverter>
 #include <QTextStream>
 #include <functional>
+#include <limits>
 #include "Route.h"
+#include "RouteFrameProfile.h"
+#include <QVarLengthArray>
 #include "RouteLoadTiming.h"
 #include "TSectionDAT.h"
 #include "GLUU.h"
@@ -140,6 +145,43 @@ bool serializeUtf16Text(int precision,
     return !data.isEmpty();
 }
 
+// Compare the persistent state, including mutations that bypass node-update
+// notifications and database objects swapped in by Undo. Stream the digest so
+// checking for unsaved edits does not require a second full copy of the files.
+class TrackSaveDigest : public QIODevice {
+public:
+    TrackSaveDigest() { open(WriteOnly); }
+    bool isSequential() const override { return true; }
+    QByteArray result() const { return hash.result(); }
+private:
+    qint64 readData(char *, qint64) override { return -1; }
+    qint64 writeData(const char *data, qint64 size) override {
+        hash.addData(QByteArrayView(data, size));
+        return size;
+    }
+    QCryptographicHash hash{QCryptographicHash::Sha256};
+};
+
+QByteArray databaseDigest(TDB *db) {
+    if(!db) return {};
+    TrackSaveDigest digest;
+    QTextStream out(&digest);
+    out.setRealNumberPrecision(std::numeric_limits<float>::max_digits10);
+    db->saveToStream(out);
+    out.flush();
+    return digest.result();
+}
+
+QByteArray sectionDigest(TSectionDAT *sections) {
+    if(!sections) return {};
+    TrackSaveDigest digest;
+    QTextStream out(&digest);
+    out.setRealNumberPrecision(std::numeric_limits<float>::max_digits10);
+    sections->saveRouteToStream(out);
+    out.flush();
+    return digest.result();
+}
+
 bool recoverRouteSaveIfRequired(QString &message) {
     return RouteSaveTransaction::recoverInterrupted(
                 activeRouteRoot(), activeRouteBackupRoot(), &message);
@@ -257,6 +299,8 @@ void Route::load(){
     this->roadDB->loadTdb(); 
     Game::trackDB = this->trackDB;
     Game::roadDB = this->roadDB;  
+    rememberSavedTrackState();
+    unsavedTrackSectionConversion = tsection->updateSectionDataRequired;
     loadTiming.mark("world preload/track and road databases");
     loadAddons();    
     loadTiming.mark("object references/addons");
@@ -366,6 +410,11 @@ void Route::load(QString name){
 
     this->tsection = new TSectionDAT();
     
+    if(!tsection->trackPathError.isEmpty()){
+        qWarning() << tsection->trackPathError;
+        return;
+    }
+
     if(Game::loadAllWFiles){
         preloadWFiles(true);
     }
@@ -425,6 +474,15 @@ void Route::mergeRoute(QString route2Name, float offsetX, float offsetY, float o
     
     Route *route2 = new Route();
     route2->load(route2Name);
+    if(!route2->loaded){
+        const QString error = route2->tsection && !route2->tsection->trackPathError.isEmpty()
+            ? route2->tsection->trackPathError : tr("The source route could not be loaded.");
+        delete route2;
+        setAsCurrentGameRoute();
+        if(Game::gui)
+            GuiFunct::showEditorStopped(nullptr, tr("Route Merge Stopped"), error);
+        return;
+    }
     float mOffset[3];
     mOffset[0] = offsetX;// (-4*2048) - 256;
     mOffset[1] = offsetY;//81.47992;
@@ -661,6 +719,12 @@ void Route::checkRouteDatabase(){
 }
 
 bool Route::checkTrackSectionDatabase(){
+    if(!tsection->trackPathError.isEmpty()){
+        qWarning() << tsection->trackPathError;
+        if(Game::gui)
+            GuiFunct::showEditorStopped(nullptr, "Invalid Track Sections", tsection->trackPathError);
+        return false;
+    }
     if(!this->tsection->dataOutOfSync)
         return true;
     
@@ -1099,7 +1163,10 @@ WorldObj* Route::updateWorldObjData(FileBuffer *data){
 }
 
 void Route::loadTSectionData(FileBuffer *data){
-    tsection->loadRouteUtf16Data(data, false);
+    if(!tsection->loadRouteUtf16Data(data, false)){
+        qWarning() << tsection->trackPathError;
+        return;
+    }
     tsection->routeMaxIdx += 2 - tsection->routeMaxIdx % 2;
     tsection->routeShapes++;
     if(Game::serverClient != NULL){
@@ -1360,10 +1427,17 @@ void Route::render(GLUU *gluu, float * playerT, float* playerW, float* target, f
         maxtile = 1;
     }
 
-    Tile *tTile;
+    struct VisibleTile {
+        Tile *tile;
+        int x;
+        int z;
+    };
+    QVarLengthArray<VisibleTile, 25> visibleTiles;
+    // Complete world-tile discovery before drawing any grade symbols. Each
+    // newly available tile invalidates the shared grade-transition cache.
     for (int i = mintile; i <= maxtile; i++) {
         for (int j = maxtile; j >= mintile; j--) {
-            tTile = requestTile((int)playerT[0] + i, (int)playerT[1] + j, false);
+            Tile *tTile = requestTile((int)playerT[0] + i, (int)playerT[1] + j, false);
             if(tTile == NULL)
                 continue;
             
@@ -1373,12 +1447,17 @@ void Route::render(GLUU *gluu, float * playerT, float* playerW, float* target, f
                         Route::newTile((int)playerT[0] + i, (int)playerT[1] + j);
                         tTile = tile[((int)playerT[0] + i)*10000 + (int)playerT[1] + j];
                     }
-            if (tTile->loaded == 1) {
-                gluu->mvPushMatrix();
-                Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, 2048 * i, 0, 2048 * j);
-                tTile->render(playerT, playerW, target, fov, renderMode);
-                gluu->mvPopMatrix();
-            }
+            if (tTile->loaded == 1)
+                visibleTiles.append({tTile, i, j});
+        }
+    }
+    {
+        RouteFrameProfile::Scope tileDraw(RouteFrameProfile::Stage::WorldTileDraw);
+        for (const auto &entry : visibleTiles) {
+            gluu->mvPushMatrix();
+            Mat4::translate(gluu->mvMatrix, gluu->mvMatrix, 2048 * entry.x, 0, 2048 * entry.z);
+            entry.tile->render(playerT, playerW, target, fov, renderMode);
+            gluu->mvPopMatrix();
         }
     }
 
@@ -1501,14 +1580,17 @@ void Route::render(GLUU *gluu, float * playerT, float* playerW, float* target, f
     }
 
     if (renderMode == gluu->RENDER_DEFAULT) {
-        if(Game::viewTrackDbLines && trackDB != NULL)
-            trackDB->renderAll(gluu, playerT, playerRot);
-        if(Game::viewTsectionLines && trackDB != NULL)
-            trackDB->renderLines(gluu, playerT, playerRot);
-        if(Game::viewTrackDbLines && roadDB != NULL)
-            roadDB->renderAll(gluu, playerT, playerRot);
-        if(Game::viewTsectionLines && roadDB != NULL)
-            roadDB->renderLines(gluu, playerT, playerRot);
+        {
+            RouteFrameProfile::Scope trackOverlay(RouteFrameProfile::Stage::WorldTrackOverlay);
+            if(Game::viewTrackDbLines && trackDB != NULL)
+                trackDB->renderAll(gluu, playerT, playerRot);
+            if(Game::viewTsectionLines && trackDB != NULL)
+                trackDB->renderLines(gluu, playerT, playerRot);
+            if(Game::viewTrackDbLines && roadDB != NULL)
+                roadDB->renderAll(gluu, playerT, playerRot);
+            if(Game::viewTsectionLines && roadDB != NULL)
+                roadDB->renderLines(gluu, playerT, playerRot);
+        }
         if(Game::viewMarkers)
             if(this->mkr != NULL)
                 this->mkr->render(gluu, playerT, playerW, playerRot);
@@ -3672,6 +3754,25 @@ int Route::getTileHiddenObjCount(int x, int z) {
     return tTile->jestHiddenObj;
 }
 
+void Route::rememberSavedTrackState(){
+    savedTrackDb = databaseDigest(trackDB);
+    savedRoadDb = databaseDigest(roadDB);
+    savedTrackSections = sectionDigest(tsection);
+    unsavedTrackSectionConversion = false;
+}
+
+void Route::getUnsavedTrackInfo(QVector<QString> &items){
+    if(unsavedTrackSectionConversion
+            || (!savedTrackDb.isEmpty() && savedTrackDb != databaseDigest(trackDB)))
+        items.push_back(tr("[TDB] Track database"));
+    if(unsavedTrackSectionConversion
+            || (!savedRoadDb.isEmpty() && savedRoadDb != databaseDigest(roadDB)))
+        items.push_back(tr("[RDB] Road database"));
+    if(unsavedTrackSectionConversion
+            || (!savedTrackSections.isEmpty() && savedTrackSections != sectionDigest(tsection)))
+        items.push_back(tr("[TSECTION] Route track sections"));
+}
+
 void Route::getUnsavedInfo(QVector<QString> &items){
     if (!Game::writeEnabled) return;
     
@@ -3682,6 +3783,7 @@ void Route::getUnsavedInfo(QVector<QString> &items){
         }
     }
     Game::terrainLib->getUnsavedInfo(items);
+    getUnsavedTrackInfo(items);
     if(this->trk->isModified())
         items.push_back("[S] Route Settings - TRK File");
     
@@ -3707,6 +3809,17 @@ void Route::getUnsavedInfo(QVector<QString> &items){
 void Route::save() {
     lastSaveResult = false;
     if (!Game::writeEnabled) return;
+    if(!Game::writeTDB){
+        QVector<QString> unsavedTrack;
+        getUnsavedTrackInfo(unsavedTrack);
+        if(!unsavedTrack.isEmpty()){
+            emit sendMsg("saveError");
+            if(Game::gui)
+                GuiFunct::showEditorStopped(nullptr, tr("Route Save Failed"),
+                    tr("Track database writing is disabled and the route has unsaved track or road data. Enable database writing before saving."));
+            return;
+        }
+    }
     qDebug() << __FILE__ << " " << __LINE__ << ":" << "save";
     int worldCount = 0, worldDone = 0;
     for(Tile *t : tile) if(t && t->loaded == 1 && t->isModified()) ++worldCount;
@@ -3896,6 +4009,8 @@ bool Route::saveKeyRouteFiles(QString &error) {
     if(!transaction.commit(&error))
         return false;
 
+    if(Game::writeTDB)
+        rememberSavedTrackState();
     if(saveTrk)
         trk->setModified(false);
     qDebug() << "Route key files saved atomically";

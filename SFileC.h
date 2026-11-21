@@ -13,7 +13,7 @@
 
 #include "FileBuffer.h"
 
-class SFile;
+struct SFileGeometry;
 
 class SFileC {
 public:
@@ -26,17 +26,17 @@ public:
         unsigned short material;
         unsigned int uvpoint = 0;
     };
-    static void odczytajshaders(FileBuffer* bufor, SFile* pliks);
+    static void odczytajshaders(FileBuffer* bufor, SFileGeometry* pliks);
     //static void szukajsekcjic(int szukane, FileBuffer* bufor);
-    static void odczytajpunktyc(FileBuffer* bufor, SFile* pliks);
-    static void odczytajuvpunktyc(FileBuffer* bufor, SFile* pliks);
-    static void odczytajnormalnec(FileBuffer* bufor, SFile* pliks);
-    static void odczytajmatricesc(FileBuffer* bufor, SFile* pliks);
-    static void odczytajimagesc(FileBuffer* bufor, SFile* pliks);
-    static void odczytajtexturesc(FileBuffer* bufor, SFile* pliks);
-    static void odczytajvtx_statesc(FileBuffer* bufor, SFile* pliks);
-    static void odczytajprim_statesc(FileBuffer* bufor, SFile* pliks);
-    static void odczytajloddc(FileBuffer* bufor, SFile* pliks);
+    static void odczytajpunktyc(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajuvpunktyc(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajnormalnec(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajmatricesc(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajimagesc(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajtexturesc(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajvtx_statesc(FileBuffer* bufor, SFileGeometry* pliks);
+    static void odczytajprim_statesc(FileBuffer* bufor, SFileGeometry* pliks);
+    static bool odczytajloddc(FileBuffer* bufor, SFileGeometry* pliks, float alphaTest);
 private:
 
 };

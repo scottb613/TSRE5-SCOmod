@@ -1,40 +1,80 @@
-TSRE GenX v0.22 Feature Summary
+TSRE GenX v0.23 Feature Summary
 
-## New in v0.22
+## New in v0.23
 
-- **Final TERRTEX processing:** removed format/mipmap switches
-  from F3 and route autopaint; both save native-size uncompressed ACE without mips. Process All
-  TERRTEX independently selects Keep/ACE/DDS, compression of uncompressed pixels,
-  and Keep/Remove/Add missing mips. Both conversion directions update detailed/
-  distant/seasonal references and remove superseded originals after verification.
-  There is no size option in either tool. Existing compressed blocks are retained;
-  resume checks original hashes before changing references and locks all choices.
+### Route loading and rendering
 
-- **Route-paint sequence controls:** wider preset fields,
-  centered Mirror controls and Water target. Format/size controls are removed;
-  legacy recipe output fields are ignored. Checked Mirror pairs validate before
-  Commit and painting; final format/compression/mips belong to Process All TERRTEX.
+- **Work across CPU cores.** Background workers read and decode painted ACE and
+  DDS terrain textures, prepare terrain meshes, and read, decompress and parse
+  uncached legacy scenery shapes. OpenGL buffer and texture uploads stay on the
+  render thread, with per-frame limits during normal movement.
+- **Opening a route and jumping to a new area.** A progress bar covers the
+  initial loading while ordinary 3D redraws are paused. Terrain textures for the
+  opening area are prepared around the camera so turning immediately has
+  coverage. Terrain farther away streams in as you move.
+- **Painted terrain streaming.** Shared default ground textures can display
+  immediately. Painted tiles use existing mipmaps or generated previews, then
+  upgrade to full resolution near the camera for painting. Eligible opaque
+  DXT1 ACE and DDS terrain textures upload compressed on supported hardware,
+  with CPU decoding available when needed.
+- **Instanced vegetation and scenery.** Repeated trees in Forest and eligible
+  PolyVeg regions, and compatible opaque scenery such as repeated buildings,
+  share draw calls. Picking and shadows keep their individual rendering paths.
+- **Track overlays and diagnostics.** TrackDB, RoadDB and Tsection overlays
+  reuse geometry across tile boundaries, and grade symbols reuse cached data.
+  Optional profiling identifies time spent on loading, uploads and overlays,
+  and ranks scenery draws by shape and material.
 
-- Development opened 29 October 2026 from capped v0.21. Application, Windows
-  resources, manifests and working-runtime paths identify v0.22.
-- **Paint Entire Route:** terrain HACKS opens a ten-row sequence
-  of existing preset dropdowns, Track/Roads/Water targets and per-row Main/Snow
-  mirroring. Empty rows and absent targets are skipped; repeated targets apply
-  their layers in order. Native-size uncompressed ACE is saved without mipmaps;
-  there are no format/size choices. Process All TERRTEX controls final output.
-  Presets and mirror sources validate before painting. Completed tiles save
-  transactionally, with patch disk staging, a bounded source cache and viewport
-  suspension. Cancel stops between tiles and retains completed saves.
-- **Normal whole-tile uploads:** Track/Roads/Water tile actions
-  upload each changed GPU texture once after the brush stamps. Undo and manual
-  Save are retained; unsaved pixels and Undo data still require memory.
-- Both clean Release lanes pass all 39 registered tests (including corpus supplements);
-  the operator accepted the refreshed MSVC runtime and manual TERRTEX workflow.
+### Rolling stock and Consist Editor
 
-## Complete GenX Feature Summary Through v0.21
+- Legacy wagon bodies, freight animations and LoadData containers use the
+  corresponding Open Rails texture lookup rules in previews and on the route.
+  ACE and DDS follow seasonal lookup order with DDS preferred within each
+  directory. Shared shapes can keep separate wagon repaints.
+- Self-contained glTF and GLB previews can display embedded PNG, JPEG and
+  supported DDS textures, including PNG transparency. Large GLB files are
+  memory-mapped for preview while decoded textures retain their memory limits.
 
-Significant editor improvements are grouped below by workflow. New v0.22
-changes belong above; this section describes the established capabilities.
+### Route editing and maintenance
+
+- **Panel alignment.** In F12, choose Left or Right to group Tools and
+  Properties on the same side with a divider. Center keeps the viewport
+  between the panels and is the default. The editor saves the selection.
+- **Transform.** Press Enter or keypad Enter after filling in Translate or
+  Rotate. The transform remains undoable.
+- **Remove DYNATRAX.** Scans the route from a selected track piece and asks for
+  confirmation before replacing detected placements with native Dynamic Track.
+  The conversion removes obsolete generated shapes and descriptors while
+  protecting assets still in use. Placements that cannot be reconstructed
+  safely block conversion.
+- **Process All TERRTEX.** Cancel lets the active texture finish. Resuming
+  checks completed output and skips verified textures, including textures
+  that have already been compressed.
+- **Path and database safety.** Track-path input is checked before indexing
+  track records. Route saves and unsaved-change prompts detect TrackDB and
+  RoadDB changes even when no world object was edited.
+
+### Builds and testing
+
+- The routine compile builds the application and its dependencies. Use
+  -WithProbes to explicitly compile the diagnostic probes. The release
+  verification builds and tests the full registered suite in MinGW and MSVC.
+
+TSRE GenX v0.23 Highlights
+
+Background workers distribute terrain texture decoding, terrain mesh preparation
+and legacy shape loading across CPU cores. A progress screen covers startup and
+uncached jumps. Nearby painted ground streams to full resolution as you move.
+Instanced trees and repeated scenery and reusable track overlay geometry reduce
+draw work. Consist previews use Open Rails texture lookup rules and display
+embedded glTF textures. F12 saves panel alignment, Enter applies transforms,
+DYNATRAX can be converted to Dynamic Track, and TERRTEX processing can be
+cancelled and resumed.
+
+## Complete GenX Feature Summary Through v0.22
+
+Established capabilities are grouped below. Fresh v0.23 verification is recorded
+separately in TEST-MATRIX-v0.23.md.
 
 ### Terrain shaping and high-definition grids
 
@@ -54,6 +94,15 @@ changes belong above; this section describes the established capabilities.
   for retry. This does not replace complete route backups.
 
 ### Terrain painting, seasonal textures and output
+
+- **Paint Entire Route:** up to ten saved-preset Track/Roads/Water passes with
+  per-row Main/Snow mirroring; invalid checked pairs block Commit and painting.
+  Native-size uncompressed ACE is saved without mips. Completed tiles save
+  transactionally with bounded decoded-source caching and viewport suspension;
+  Cancel retains completed tiles. Wider preset fields and centered controls
+  support sequence editing; legacy recipe output fields are ignored.
+- **Whole-tile uploads:** normal Track/Roads/Water tile actions upload each
+  changed texture once after brush stamps, preserving Undo and manual Save.
 
 - **Pointer-tile autopaint:** with F3 open, hover over visible loaded terrain:
   Alt+1 paints track, Alt+2 roads and Alt+3 water edges across that tile using

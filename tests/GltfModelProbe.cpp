@@ -189,23 +189,6 @@ int main(int argc, char **argv) {
     const QString binaryPath = directory.filePath("model.glb");
     check(write(binaryPath, glb(original, bytes)), "write GLB");
     check(model.load(binaryPath, error), "load GLB binary chunk");
-    {
-        // A small triangle in a large BIN chunk isolates file/buffer acceptance
-        // from the independent geometry and decoded-texture budgets.
-        QByteArray largeBytes = bytes;
-        largeBytes.resize(64 * 1024 * 1024 + 4, char(0));
-        QJsonObject largeJson = original;
-        QJsonArray largeBuffers = largeJson["buffers"].toArray();
-        QJsonObject largeBuffer = largeBuffers[0].toObject();
-        largeBuffer["byteLength"] = largeBytes.size();
-        largeBuffers[0] = largeBuffer;
-        largeJson["buffers"] = largeBuffers;
-        const QString largePath = directory.filePath("over64mib.glb");
-        check(write(largePath, glb(largeJson, largeBytes)), "write GLB above former 64 MiB cap");
-        GltfModel largeModel;
-        check(largeModel.load(largePath, error) && largeModel.primitives.size() == 1,
-                "load GLB and declared BIN buffer above former 64 MiB cap");
-    }
     check(near(model.minimum.x(), -5), "GLB and glTF geometry match");
 
     QJsonObject json = original;
@@ -263,8 +246,8 @@ int main(int argc, char **argv) {
     }
     json = original;
     json["images"] = QJsonArray{QJsonObject{{"uri", "not-read.dds"}, {"mimeType", "image/vnd-ms.dds"}}};
-    check(load(model, path, json, error) && model.warnings.join(" ").contains("ORTS image schema"),
-            "warn about ORTS-incompatible MIME on unused optional DDS image");
+    check(load(model, path, json, error) && !model.warnings.join(" ").contains("ORTS image schema"),
+            "recognize DDS MIME metadata supported by the current Open Rails loader");
 
     json = original;
     QJsonArray nodes = json["nodes"].toArray();
@@ -336,6 +319,7 @@ int main(int argc, char **argv) {
     primitive["material"] = 0; primitives[0] = primitive; mesh["primitives"] = primitives;
     meshes[0] = mesh; json["meshes"] = meshes;
     QImage image(2, 2, QImage::Format_RGBA8888); image.fill(Qt::red);
+    image.setPixelColor(1, 1, QColor(0, 0, 255, 0));
     check(image.save(directory.filePath("color.png"), "PNG"), "write PNG texture");
     json["images"] = QJsonArray{QJsonObject{{"uri", "color.png"}}};
     json["textures"] = QJsonArray{QJsonObject{{"source", 0}}};
@@ -350,18 +334,148 @@ int main(int argc, char **argv) {
     QBuffer pngBuffer(&png); pngBuffer.open(QIODevice::WriteOnly);
     check(image.save(&pngBuffer, "PNG"), "encode embedded PNG");
     json["images"] = QJsonArray{QJsonObject{{"uri", "data:image/png;base64," + QString::fromLatin1(png.toBase64())}}};
-    check(load(model, path, json, error), "base64 embedded PNG");
-    const int pngOffset = int(texturedBytes.size());
-    texturedBytes += png;
-    buffers = json["buffers"].toArray();
-    buffer = buffers[0].toObject(); buffer["byteLength"] = texturedBytes.size();
-    buffer["uri"] = "data:application/octet-stream;base64," + QString::fromLatin1(texturedBytes.toBase64());
-    buffers[0] = buffer; json["buffers"] = buffers;
-    views.append(QJsonObject{{"buffer", 0}, {"byteOffset", pngOffset}, {"byteLength", png.size()}});
-    json["bufferViews"] = views;
-    json["images"] = QJsonArray{QJsonObject{{"bufferView", 3}, {"mimeType", "image/png"}}};
-    check(write(binaryPath, glb(json, texturedBytes)), "write GLB with embedded PNG");
-    check(model.load(binaryPath, error) && model.primitives[0].image.size() == QSize(2, 2), "GLB buffer-view PNG");
+    check(load(model, path, json, error) && model.primitives[0].image.isNull()
+            && model.warnings.join(" ").contains("direct image data URIs"),
+            "match Open Rails when a material uses a direct image data URI");
+    const auto embedImage = [&](const QByteArray &payload, const QString &mime) {
+        const QByteArray bin = texturedBytes + payload;
+        auto embedded = json;
+        embedded["buffers"] = QJsonArray{QJsonObject{{"byteLength", bin.size()},
+            {"uri", "data:application/octet-stream;base64," + QString::fromLatin1(bin.toBase64())}}};
+        auto imageViews = views;
+        imageViews.append(QJsonObject{{"buffer", 0}, {"byteOffset", texturedBytes.size()},
+            {"byteLength", payload.size()}});
+        embedded["bufferViews"] = imageViews;
+        embedded["images"] = QJsonArray{QJsonObject{{"bufferView", 3}, {"mimeType", mime}}};
+        return embedded;
+    };
+    json = embedImage(png, "image/png");
+    check(QFile::remove(directory.filePath("color.png")), "remove texture sidecar before embedded tests");
+    check(load(model, path, json, error) && model.primitives[0].image.size() == QSize(2, 2)
+            && model.primitives[0].image.pixelColor(0, 0) == QColor(Qt::red)
+            && model.primitives[0].image.pixelColor(1, 1).alpha() == 0,
+            "self-contained glTF buffer-view PNG preserves pixels and alpha");
+    const QImage decodedPng = model.primitives[0].image;
+    check(write(binaryPath, glb(json, texturedBytes + png)), "write GLB with embedded PNG");
+    check(model.load(binaryPath, error) && model.primitives[0].image == decodedPng,
+            "GLB buffer-view PNG preserves pixels and alpha");
+    check(!load(model, path, embedImage(png, "image/jpeg"), error)
+            && error.contains("declared PNG/JPEG MIME type") && model.primitives[0].image == decodedPng,
+            "reject mismatched embedded MIME type and preserve previously loaded texture");
+    check(!load(model, path, embedImage(png, {}), error) && error.contains("MIME type"),
+            "reject absent MIME type for an image buffer view");
+    auto dualSource = json;
+    dualSource["images"] = QJsonArray{QJsonObject{{"uri", "color.png"},
+        {"bufferView", 3}, {"mimeType", "image/png"}}};
+    check(!load(model, path, dualSource, error) && error.contains("no URI"),
+            "reject competing URI and buffer-view image sources");
+
+    QImage opaqueImage(2, 2, QImage::Format_RGB32); opaqueImage.fill(Qt::red);
+    QByteArray jpeg;
+    QBuffer jpegBuffer(&jpeg); jpegBuffer.open(QIODevice::WriteOnly);
+    check(opaqueImage.save(&jpegBuffer, "JPEG", 100), "encode embedded JPEG");
+    const auto jpegModel = embedImage(jpeg, "image/jpeg");
+    check(load(model, path, jpegModel, error) && model.primitives[0].image.size() == QSize(2, 2)
+            && model.primitives[0].image.pixelColor(0, 0).red() > 240,
+            "self-contained glTF buffer-view JPEG decodes actual pixels");
+    check(write(binaryPath, glb(jpegModel, texturedBytes + jpeg)), "write GLB with embedded JPEG");
+    check(model.load(binaryPath, error) && model.primitives[0].image.size() == QSize(2, 2)
+            && model.primitives[0].image.pixelColor(0, 0).red() > 240,
+            "GLB buffer-view JPEG decodes actual pixels");
+
+    // A BC1/DXT1 block whose first RGB565 endpoint is pure red.
+    QByteArray dds(136, char(0));
+    std::memcpy(dds.data(), "DDS ", 4);
+    qToLittleEndian<quint32>(124, dds.data() + 4);
+    qToLittleEndian<quint32>(0x81007, dds.data() + 8);
+    qToLittleEndian<quint32>(4, dds.data() + 12);
+    qToLittleEndian<quint32>(4, dds.data() + 16);
+    qToLittleEndian<quint32>(8, dds.data() + 20);
+    qToLittleEndian<quint32>(32, dds.data() + 76);
+    qToLittleEndian<quint32>(4, dds.data() + 80);
+    std::memcpy(dds.data() + 84, "DXT1", 4);
+    qToLittleEndian<quint32>(0x1000, dds.data() + 108);
+    qToLittleEndian<quint16>(0xf800, dds.data() + 128);
+    auto ddsModel = embedImage(dds, "image/vnd-ms.dds");
+    ddsModel["extensionsUsed"] = QJsonArray{"MSFT_texture_dds"};
+    ddsModel["extensionsRequired"] = QJsonArray{"MSFT_texture_dds"};
+    const QJsonObject ddsTexture{{"extensions", QJsonObject{
+        {"MSFT_texture_dds", QJsonObject{{"source", 0}}}}}};
+    ddsModel["textures"] = QJsonArray{ddsTexture};
+    check(load(model, path, ddsModel, error) && model.primitives[0].image.size() == QSize(4, 4)
+            && model.primitives[0].image.pixelColor(0, 0) == QColor(Qt::red),
+            "self-contained glTF loads the required MSFT_texture_dds source");
+    check(write(binaryPath, glb(ddsModel, texturedBytes + dds)), "write GLB with embedded DDS");
+    check(model.load(binaryPath, error) && model.primitives[0].image.size() == QSize(4, 4)
+            && model.primitives[0].image.pixelColor(0, 0) == QColor(Qt::red),
+            "GLB buffer-view DDS decodes actual pixels");
+    check(!model.warnings.join(' ').contains("Optional ORTS extension is not previewed yet: MSFT_texture_dds"),
+            "supported DDS extension does not produce an unsupported-preview warning");
+    {
+        // Put the DDS above both former GLB size limits without allocating the
+        // intervening padding in the test process.
+        constexpr quint32 imageOffset = 340 * 1024 * 1024;
+        const quint32 binSize = imageOffset + quint32(dds.size());
+        auto largeJson = ddsModel;
+        largeJson["buffers"] = QJsonArray{QJsonObject{{"byteLength", qint64(binSize)}}};
+        auto largeViews = largeJson["bufferViews"].toArray();
+        auto imageView = largeViews[3].toObject();
+        imageView["byteOffset"] = qint64(imageOffset);
+        largeViews[3] = imageView;
+        largeJson["bufferViews"] = largeViews;
+        QByteArray prefix = glb(largeJson, texturedBytes);
+        const quint32 binOffset = 28 + qFromLittleEndian<quint32>(prefix.constData() + 12);
+        qToLittleEndian<quint32>(binOffset + binSize, prefix.data() + 8);
+        qToLittleEndian<quint32>(binSize, prefix.data() + binOffset - 8);
+
+        const QString largePath = directory.filePath("large-embedded-dds.glb");
+        QFile largeFile(largePath);
+        const bool prepared = largeFile.open(QIODevice::WriteOnly)
+            && largeFile.write(prefix) == prefix.size()
+            && largeFile.seek(qint64(binOffset) + imageOffset)
+            && largeFile.write(dds) == dds.size();
+        largeFile.close();
+        check(prepared, "write GLB with an embedded DDS above 320 MiB");
+        GltfModel largeModel;
+        check(prepared && largeModel.load(largePath, error) && !largeModel.primitives.empty()
+                && largeModel.primitives[0].image.pixelColor(0, 0) == QColor(Qt::red),
+                "decode embedded DDS from a large file-backed GLB");
+        check(QFile::remove(largePath), "release the file mapping after loading");
+    }
+    auto largeExternal = json;
+    largeExternal["buffers"] = QJsonArray{QJsonObject{{"byteLength", 257 * 1024 * 1024},
+        {"uri", "large.bin"}}};
+    check(!load(model, path, largeExternal, error) && error.contains("buffer budget"),
+            "separately loaded buffers retain the allocation limit");
+    auto invalidDds = ddsModel;
+    invalidDds["images"] = QJsonArray{QJsonObject{{"bufferView", 3}, {"mimeType", "image/png"}}};
+    check(!load(model, path, invalidDds, error) && error.contains("MIME type"),
+            "reject an MSFT_texture_dds buffer view without the DDS MIME type");
+    QByteArray oversizedDds = dds;
+    qToLittleEndian<quint32>(8192, oversizedDds.data() + 12);
+    qToLittleEndian<quint32>(8192, oversizedDds.data() + 16);
+    check(write(binaryPath, glb(ddsModel, texturedBytes + oversizedDds)), "write DDS over the preview budget");
+    check(!model.load(binaryPath, error) && error.contains("DDS image is too large"),
+            "reject DDS dimensions over the preview budget before decoding");
+    QByteArray cubeDds = dds;
+    qToLittleEndian<quint32>(0x1008, cubeDds.data() + 108);
+    qToLittleEndian<quint32>(0x200, cubeDds.data() + 112);
+    check(write(binaryPath, glb(ddsModel, texturedBytes + cubeDds)), "write DDS with cubemap flags");
+    check(!model.load(binaryPath, error) && error.contains("2D texture"),
+            "reject cubemaps as glTF DDS material textures");
+    check(image.save(directory.filePath("color.png"), "PNG"), "write the optional core fallback texture");
+    check(write(directory.filePath("color.dds"), dds), "write DDS sidecar");
+    auto optionalDds = json;
+    optionalDds["extensionsUsed"] = QJsonArray{"MSFT_texture_dds"};
+    optionalDds["images"] = QJsonArray{QJsonObject{{"uri", "color.dds"}}, QJsonObject{{"uri", "color.png"}}};
+    auto optionalTexture = ddsTexture;
+    optionalTexture["source"] = 1;
+    optionalDds["textures"] = QJsonArray{optionalTexture};
+    check(load(model, path, optionalDds, error) && model.primitives[0].image.size() == QSize(4, 4),
+            "select the declared DDS extension image ahead of the optional core image");
+    check(write(directory.filePath("color.dds"), dds.left(129)), "truncate selected DDS file");
+    check(!load(model, path, optionalDds, error) && error.contains("truncated"),
+            "report corrupt selected DDS instead of displaying the core fallback");
     // A conventional 4K texture exceeds decimal 16 million pixels, but fits
     // the bounded preview budget. Exercise the actual GLB image decode path.
     QImage image4k(4096, 4096, QImage::Format_RGBA8888);
@@ -370,18 +484,8 @@ int main(int argc, char **argv) {
     QBuffer png4kBuffer(&png4k); png4kBuffer.open(QIODevice::WriteOnly);
     check(image4k.save(&png4kBuffer, "PNG"), "encode 4096-square PNG");
     image4k = QImage();
-    QByteArray bytes4k = texturedBytes.left(pngOffset) + png4k;
-    QJsonObject json4k = json;
-    QJsonArray buffers4k = json4k["buffers"].toArray();
-    QJsonObject buffer4k = buffers4k[0].toObject();
-    buffer4k["byteLength"] = bytes4k.size();
-    buffer4k["uri"] = "data:application/octet-stream;base64," + QString::fromLatin1(bytes4k.toBase64());
-    buffers4k[0] = buffer4k; json4k["buffers"] = buffers4k;
-    QJsonArray views4k = json4k["bufferViews"].toArray();
-    QJsonObject imageView4k = views4k[3].toObject();
-    imageView4k["byteLength"] = png4k.size();
-    views4k[3] = imageView4k; json4k["bufferViews"] = views4k;
-    check(write(binaryPath, glb(json4k, bytes4k)), "write GLB with embedded 4K PNG");
+    check(write(binaryPath, glb(embedImage(png4k, "image/png"), texturedBytes + png4k)),
+            "write GLB with embedded 4K PNG");
     check(model.load(binaryPath, error) && !model.primitives.empty()
             && model.primitives[0].image.size() == QSize(4096, 4096),
             "accept standard 4K embedded base-colour texture");
@@ -392,10 +496,7 @@ int main(int argc, char **argv) {
     QBuffer pngOverBuffer(&pngOverBudget); pngOverBuffer.open(QIODevice::WriteOnly);
     check(imageOverBudget.save(&pngOverBuffer, "PNG"), "encode over-budget PNG");
     imageOverBudget = QImage();
-    QJsonObject jsonOverBudget = json;
-    jsonOverBudget["images"] = QJsonArray{QJsonObject{
-        {"uri", "data:image/png;base64," + QString::fromLatin1(pngOverBudget.toBase64())}}};
-    check(!load(model, path, jsonOverBudget, error)
+    check(!load(model, path, embedImage(pngOverBudget, "image/png"), error)
             && error.contains("pixel budget"), "reject image beyond 4K pixel budget");
 
     material["alphaMode"] = "BLEND"; json["materials"] = QJsonArray{material};

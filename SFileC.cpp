@@ -11,25 +11,20 @@
 #include "SFileC.h"
 #include "SFile.h"
 #include <QDebug>
-#include <QOpenGLWidget>
-#include <QOpenGLFunctions>
-#include <QOpenGLVertexArrayObject>
-#include <QOpenGLBuffer>
-#include "GLUU.h"
 #include "TS.h"
 
-    void SFileC::odczytajshaders(FileBuffer* bufor, SFile* pliks) {
+    void SFileC::odczytajshaders(FileBuffer* bufor, SFileGeometry* pliks) {
         int temp;
 
         bufor->off += 1;
         pliks->ishaders = bufor->getInt();
 
-        pliks->shader = new SFile::fshader[pliks->ishaders];
+        pliks->shader.reset(new SFileGeometry::fshader[pliks->ishaders]);
         for (int i = 0; i < pliks->ishaders; i++) {
             bufor->off += 4;
             temp = bufor->get();
             bufor->off += 6;
-            //pliks->image[i] = new SFile::imgs();
+            //pliks->image[i] = new SFileGeometry::imgs();
             pliks->shader[i].name = "";
             for (int j = 0; j < (temp - 3) / 2; j++) {
                 pliks->shader[i].name += QChar(bufor->get());
@@ -66,14 +61,14 @@
     //Oczytanie i zapisanie sekcji points
     //-----------------------------------
 
-    void SFileC::odczytajpunktyc(FileBuffer* bufor, SFile* pliks) {
+    void SFileC::odczytajpunktyc(FileBuffer* bufor, SFileGeometry* pliks) {
         bufor->off += 1;
         pliks->tpoints.ipoints = bufor->getInt();
 
-        pliks->tpoints.points = new SFile::fpoint[ pliks->tpoints.ipoints + 1];
+        pliks->tpoints.points.reset(new SFileGeometry::fpoint[ pliks->tpoints.ipoints + 1]);
         for (int i = 0; i <  pliks->tpoints.ipoints; i++) {
             bufor->off += 9;
-            //pliks->tpoints.points[i] = new SFile::fpoint();
+            //pliks->tpoints.points[i] = new SFileGeometry::fpoint();
             pliks->tpoints.points[i].x = bufor->getFloat();
             pliks->tpoints.points[i].y = bufor->getFloat();
             pliks->tpoints.points[i].z = bufor->getFloat();
@@ -84,14 +79,14 @@
     //Oczytanie i zapisanie sekcji uv_points
     //-----------------------------------
 
-    void SFileC::odczytajuvpunktyc(FileBuffer* bufor, SFile* pliks) {
+    void SFileC::odczytajuvpunktyc(FileBuffer* bufor, SFileGeometry* pliks) {
         bufor->off += 1;
         pliks->tpoints.iuv_points = bufor->getInt();
         
-        pliks->tpoints.uv_points = new SFile::fpoint[pliks->tpoints.iuv_points + 1];
+        pliks->tpoints.uv_points.reset(new SFileGeometry::fpoint[pliks->tpoints.iuv_points + 1]);
         for (int i = 0; i < pliks->tpoints.iuv_points; i++) {
             bufor->off += 9;
-            //pliks->tpoints.uv_points[i] = new SFile::fpoint();
+            //pliks->tpoints.uv_points[i] = new SFileGeometry::fpoint();
             pliks->tpoints.uv_points[i].x = bufor->getFloat();
             pliks->tpoints.uv_points[i].y = bufor->getFloat();
         }
@@ -101,13 +96,13 @@
     //Oczytanie i zapisanie sekcji normals
     //-----------------------------------
 
-    void SFileC::odczytajnormalnec(FileBuffer* bufor, SFile* pliks) {
+    void SFileC::odczytajnormalnec(FileBuffer* bufor, SFileGeometry* pliks) {
         bufor->off += 1;
         pliks->tpoints.inormals = bufor->getInt();
-        pliks->tpoints.normals = new SFile::fpoint[pliks->tpoints.inormals + 1];
+        pliks->tpoints.normals.reset(new SFileGeometry::fpoint[pliks->tpoints.inormals + 1]);
         for (int i = 0; i < pliks->tpoints.inormals; i++) {
             bufor->off += 9;
-            //pliks->tpoints.normals[i] = new SFile::fpoint();
+            //pliks->tpoints.normals[i] = new SFileGeometry::fpoint();
             pliks->tpoints.normals[i].x = bufor->getFloat();
             pliks->tpoints.normals[i].y = bufor->getFloat();
             pliks->tpoints.normals[i].z = bufor->getFloat();
@@ -118,20 +113,21 @@
     //Oczytanie i zapisanie sekcji matrices
     //-----------------------------------
 
-    void SFileC::odczytajmatricesc(FileBuffer* bufor, SFile* pliks) {
+    void SFileC::odczytajmatricesc(FileBuffer* bufor, SFileGeometry* pliks) {
         int temp;
 
         bufor->off += 1;
         pliks->iloscm = bufor->getInt();
 
-        pliks->macierz = new SFile::matrt[pliks->iloscm + 1];
+        pliks->macierz.reset(new SFileGeometry::matrt[pliks->iloscm + 1]);
         for (int i = 0; i < pliks->iloscm; i++) {
             bufor->off += 8;
             temp = bufor->get();
-            pliks->macierz[i].name = *bufor->getString(bufor->off, bufor->off + temp*2);
+            const std::unique_ptr<QString> name(bufor->getString(bufor->off, bufor->off + temp*2));
+            pliks->macierz[i].name = *name;
             //qDebug() << pliks->macierz[i].name;
             bufor->off += temp*2;
-            //pliks->macierz[i] = new SFile::matrt();
+            //pliks->macierz[i] = new SFileGeometry::matrt();
             for (int j = 0; j < 16; j++) {
                 if(j==3 || j==7 || j==11) {
                     pliks->macierz[i].param[j] = 0;
@@ -150,18 +146,18 @@
     //Oczytanie i zapisanie sekcji images
     //-----------------------------------
 
-    void SFileC::odczytajimagesc(FileBuffer* bufor, SFile* pliks) {
+    void SFileC::odczytajimagesc(FileBuffer* bufor, SFileGeometry* pliks) {
         int temp;
 
         bufor->off += 1;
         pliks->ilosci = bufor->getInt();
 
-        pliks->image = new SFile::imgs[pliks->ilosci + 1];
+        pliks->image.reset(new SFileGeometry::imgs[pliks->ilosci + 1]);
         for (int i = 0; i < pliks->ilosci; i++) {
             bufor->off += 4;
             temp = bufor->get();
             bufor->off += 6;
-            //pliks->image[i] = new SFile::imgs();
+            //pliks->image[i] = new SFileGeometry::imgs();
             pliks->image[i].name = "";
             for (int j = 0; j < (temp - 3) / 2; j++) {
                 pliks->image[i].name += QChar(bufor->get());
@@ -175,16 +171,16 @@
     //Oczytanie i zapisanie sekcji textures
     //-----------------------------------
 
-    void SFileC::odczytajtexturesc(FileBuffer* bufor, SFile* pliks) {
+    void SFileC::odczytajtexturesc(FileBuffer* bufor, SFileGeometry* pliks) {
 
         bufor->off += 1;
 
         pliks->ilosct = bufor->getInt();
 
-        pliks->texture = new SFile::text[pliks->ilosct];
+        pliks->texture.reset(new SFileGeometry::text[pliks->ilosct]);
 
         for (int i = 0; i < pliks->ilosct; i++) {
-            //pliks->texture[i] = new SFile::text();
+            //pliks->texture[i] = new SFileGeometry::text();
             bufor->off += 9;
             pliks->texture[i].image = bufor->getInt();
             pliks->texture[i].arg1 = bufor->getInt();
@@ -197,16 +193,16 @@
     //Oczytanie i zapisanie sekcji vtx_states
     //-----------------------------------
 
-    void SFileC::odczytajvtx_statesc(FileBuffer* bufor, SFile* pliks) {
+    void SFileC::odczytajvtx_statesc(FileBuffer* bufor, SFileGeometry* pliks) {
 
         bufor->off += 1;
         pliks->iloscv = bufor->getInt();
 
-        pliks->vtxstate = new SFile::vtxs[pliks->iloscv];
+        pliks->vtxstate.reset(new SFileGeometry::vtxs[pliks->iloscv]);
 
         for (int i = 0; i < pliks->iloscv; i++) {
             bufor->off += 9;
-            //pliks->vtxstate[i] = new SFile::vtxs();
+            //pliks->vtxstate[i] = new SFileGeometry::vtxs();
             pliks->vtxstate[i].arg1 = bufor->getInt();
             pliks->vtxstate[i].matrix = bufor->getInt();
             pliks->vtxstate[i].arg2 = bufor->getInt();
@@ -219,19 +215,19 @@
     //Oczytanie i zapisanie sekcji prim_states
     //-----------------------------------
 
-    void SFileC::odczytajprim_statesc(FileBuffer* bufor, SFile* pliks) {
+    void SFileC::odczytajprim_statesc(FileBuffer* bufor, SFileGeometry* pliks) {
         int temp;
 
         bufor->off += 1;
         pliks->iloscps = bufor->getInt();
 
-        pliks->primstate = new SFile::primst[pliks->iloscps];
+        pliks->primstate.reset(new SFileGeometry::primst[pliks->iloscps]);
         for (int i = 0; i < pliks->iloscps; i++) {
             bufor->off += 8;
             temp = bufor->get();
             bufor->off += temp*2;
 
-            //pliks->primstate[i] = new SFile::primst();
+            //pliks->primstate[i] = new SFileGeometry::primst();
 
             pliks->primstate[i].arg1 = bufor->getInt();
             pliks->primstate[i].arg2 = bufor->getInt();
@@ -260,14 +256,12 @@
     //Oczytanie i zapisanie sekcji loddetail
     //-----------------------------------
 
-    void SFileC::odczytajloddc(FileBuffer* bufor, SFile* pliks) {
+    bool SFileC::odczytajloddc(FileBuffer* bufor, SFileGeometry* pliks, float alphaTest) {
         int temp;
-        int i, w, n, p, txt;
-        int v_ilosc;
-        
-        QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
-        GLUU* gluu = GLUU::get();
-        fvertex* vert = new fvertex[120000];
+        int i;
+
+        std::unique_ptr<fvertex[]> vert;
+        int vertexCapacity = 0;
 
         bufor->off += 5; // pominiecie ilosci lodcontrols;
 
@@ -284,7 +278,7 @@
         pliks->iloscd = bufor->getInt();
 
         // przydzielenie dla nich pamieci
-        pliks->distancelevel = new SFile::dist[pliks->iloscd];
+        pliks->distancelevel.reset(new SFileGeometry::dist[pliks->iloscd]);
 
         for (int j = 0; j < pliks->iloscd; j++) {
             //pliks.distancelevel[j] = new Sfile.dist();
@@ -298,7 +292,7 @@
             pliks->distancelevel[j].ilosch = bufor->getInt();
 
             // przydzielenie dla niej pamieci
-            pliks->distancelevel[j].hierarchia = new int[pliks->distancelevel[j].ilosch + 1];
+            pliks->distancelevel[j].hierarchia.reset(new int[pliks->distancelevel[j].ilosch + 1]);
             // wczytanie hierarchii
             for (int ii = 0; ii < pliks->distancelevel[j].ilosch; ii++) {
                 pliks->distancelevel[j].hierarchia[ii] = bufor->getInt();
@@ -310,10 +304,10 @@
             //qDebug () << "--iloscs " << pliks->distancelevel[j].iloscs;
 
             // przydzielenie im pamieci
-            pliks->distancelevel[j].subobiekty = new SFile::sub[pliks->distancelevel[j].iloscs + 1];
+            pliks->distancelevel[j].subobiekty.reset(new SFileGeometry::sub[pliks->distancelevel[j].iloscs + 1]);
             // wczytanie subobjektow
             for (int ii = 0; ii < pliks->distancelevel[j].iloscs; ii++) {
-                //pliks->distancelevel[j].subobiekty[ii] = new SFile::sub();
+                //pliks->distancelevel[j].subobiekty[ii] = new SFileGeometry::sub();
 
                 
                 bufor->off += 9;
@@ -353,7 +347,7 @@
                                         }
                                         break;
                                     default:
-                                        qDebug() << "#SFile geometry_info - unknown token: "<< pozycja3 << TS::IdName[pozycja3];
+                                        qDebug() << "#SFile geometry_info - unknown token: "<< pozycja3;
                                         break;
                                 }
                                 bufor->off = akto3 + offset3;
@@ -372,10 +366,12 @@
                 // Wczytanie wierzcholkow
                 bufor->findToken(TS::vertices);
                 bufor->off += 5;
-                v_ilosc = bufor->getInt();
-                if(v_ilosc > 120000){
-                    delete[] vert;
-                    vert = new fvertex[v_ilosc];
+                const int v_ilosc = bufor->getInt();
+                if (v_ilosc < 0)
+                    return false;
+                if (v_ilosc > vertexCapacity) {
+                    vert.reset(new fvertex[v_ilosc]);
+                    vertexCapacity = v_ilosc;
                 }
                 
                 //qDebug () << "iloscv " << v_ilosc;
@@ -392,6 +388,7 @@
                     bufor->off += 9;
                     vert[jj].material = (short) bufor->getInt();
                     
+                    vert[jj].uvpoint = 0;
                     for(int jjjj = 0; jjjj<vert[jj].material; jjjj++){
                         if(jjjj == 0) vert[jj].uvpoint = (unsigned int) bufor->getInt();
                         else bufor->getInt();
@@ -407,11 +404,11 @@
                 //System.out.println("iloscc "+pliks.distancelevel[j].subobiekty[ii].iloscc);
                 int czilosc = 0, aktidx = 0;
                 // przydzielenie im pamieci   
-                pliks->distancelevel[j].subobiekty[ii].czesci = new SFile::czes[pliks->distancelevel[j].subobiekty[ii].iloscc + 1];
+                pliks->distancelevel[j].subobiekty[ii].czesci.reset(new SFileGeometry::czes[pliks->distancelevel[j].subobiekty[ii].iloscc + 1]);
 
                 // wczytanie czesci  
                 for (int jj = 0; jj < pliks->distancelevel[j].subobiekty[ii].iloscc; jj++) {
-                    //pliks->distancelevel[j]->subobiekty[ii].czesci[czilosc] = new SFile::czes();
+                    //pliks->distancelevel[j]->subobiekty[ii].czesci[czilosc] = new SFileGeometry::czes();
                     //qDebug() << "cc " << pliks->distancelevel[j].subobiekty[ii].iloscc;
                     temp = bufor->getInt();
 
@@ -430,42 +427,17 @@
                         //int directxSmierdzi = 0;
                         //for (int iii = 0; iii < pliks.distancelevel[j].subobiekty[ii].czesci[czilosc].iloscv; iii++) {
                         
-                        pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].idx = new int[pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].iloscv];
+                        pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].idx.reset(new int[pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].iloscv]);
                         for (int iii = pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].iloscv - 1; iii >= 0; iii--) {
-                            //pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].wierzcholki[iii] = new SFile::wie();
+                            //pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].wierzcholki[iii] = new SFileGeometry::wie();
                             pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].idx[iii] = bufor->getInt();
                             //w = bufor->getInt();
                             //System.out.println("----v "+w);
-                            /*n = vert[w].normal;
-                            txt = vert[w].uvpoint;
-                            p = vert[w].point;
 
-                            wierzcholki[iii*8+0] = pliks->tpoints.points[p].x;
-                            wierzcholki[iii*8+1] = pliks->tpoints.points[p].y;
-                            wierzcholki[iii*8+2] = pliks->tpoints.points[p].z;
-                            wierzcholki[iii*8+3] = pliks->tpoints.normals[n].x;
-                            wierzcholki[iii*8+4] = pliks->tpoints.normals[n].y;
-                            wierzcholki[iii*8+5] = pliks->tpoints.normals[n].z;
-                            wierzcholki[iii*8+6] = pliks->tpoints.uv_points[txt].x;
-                            wierzcholki[iii*8+7] = pliks->tpoints.uv_points[txt].y;
-                        */
                             //directxSmierdzi-=2;
                             //if(directxSmierdzi<-2) directxSmierdzi = 2;
                         }
-                        /*QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
-                        pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].VAO.create();
-                        QOpenGLVertexArrayObject::Binder vaoBinder(&pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].VAO);
-                        
-                        pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].VBO.create();
-                        pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].VBO.bind();
-                        pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].VBO.allocate(wierzcholki, pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].iloscv * 8 * sizeof(GLfloat));
-                        f->glEnableVertexAttribArray(0);
-                        f->glEnableVertexAttribArray(1);
-                        f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), 0);
-                        f->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), reinterpret_cast<void *>(6 * sizeof(GLfloat)));
-                        pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].VBO.release();
-                        
-                        delete[] wierzcholki;*/
+
                         
                         bufor->off += 4;
                         temp = bufor->getInt();
@@ -481,76 +453,14 @@
                 }
                 pliks->distancelevel[j].subobiekty[ii].iloscc = czilosc;
                 /////////////////////////
-                int iloscv = 0;
-                int offset = 0;
-                for (int jj = 0; jj < pliks->distancelevel[j].subobiekty[ii].iloscc; jj++) {
-                    iloscv += pliks->distancelevel[j].subobiekty[ii].czesci[jj].iloscv;
-                }
-
-                pliks->distancelevel[j].subobiekty[ii].VAO.create();
-                QOpenGLVertexArrayObject::Binder vaoBinder(&pliks->distancelevel[j].subobiekty[ii].VAO);
-                        
-                pliks->distancelevel[j].subobiekty[ii].VBO.create();
-                pliks->distancelevel[j].subobiekty[ii].VBO.bind();
-                pliks->distancelevel[j].subobiekty[ii].VBO.allocate(iloscv * 9 * sizeof(GLfloat));
-                f->glEnableVertexAttribArray(0);
-                f->glEnableVertexAttribArray(1);
-                f->glEnableVertexAttribArray(2);
-                f->glEnableVertexAttribArray(3);
-                f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(GLfloat), 0);
-                f->glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(GLfloat), reinterpret_cast<void *>(3 * sizeof(GLfloat)));
-                f->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 9 * sizeof(GLfloat), reinterpret_cast<void *>(6 * sizeof(GLfloat)));
-                f->glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 9 * sizeof(GLfloat), reinterpret_cast<void *>(8 * sizeof(GLfloat)));
-
-                for (int jj = 0; jj < pliks->distancelevel[j].subobiekty[ii].iloscc; jj++) {
-                    float *wierzcholki = new float[pliks->distancelevel[j].subobiekty[ii].czesci[jj].iloscv*9];
-
-                    for (int iii = pliks->distancelevel[j].subobiekty[ii].czesci[jj].iloscv - 1; iii >= 0; iii--) {
-                            //pliks->distancelevel[j].subobiekty[ii].czesci[czilosc].wierzcholki[iii] = new SFile::wie();
-
-                        w = pliks->distancelevel[j].subobiekty[ii].czesci[jj].idx[iii];
-                        int prim_state = pliks->distancelevel[j].subobiekty[ii].czesci[jj].prim_state_idx;
-                        float alpha = 0;
-                        float alphaTest = 0;
-                        if(pliks->primstate[prim_state].arg2 < pliks->ishaders)
-                            alpha = pliks->shader[pliks->primstate[prim_state].arg2].alpha;
-                        else 
-                            alpha = 0;
-                        if(pliks->primstate[prim_state].arg6 == 1)
-                            alphaTest = -0.51f;
-                        else 
-                            alphaTest = -gluu->alphaTest;
-                        if(alpha == 1)
-                            alphaTest = 1.0;
-                            //System.out.println("----v "+w);
-                        n = vert[w].normal;
-                        txt = vert[w].uvpoint;
-                        p = vert[w].point;
-
-                        wierzcholki[iii*9+0] = pliks->tpoints.points[p].x;
-                        wierzcholki[iii*9+1] = pliks->tpoints.points[p].y;
-                        wierzcholki[iii*9+2] = pliks->tpoints.points[p].z;
-                        wierzcholki[iii*9+3] = pliks->tpoints.normals[n].x;
-                        wierzcholki[iii*9+4] = pliks->tpoints.normals[n].y;
-                        wierzcholki[iii*9+5] = pliks->tpoints.normals[n].z;
-                        wierzcholki[iii*9+6] = pliks->tpoints.uv_points[txt].x;
-                        wierzcholki[iii*9+7] = pliks->tpoints.uv_points[txt].y;
-                        wierzcholki[iii*9+8] = alphaTest;
-                            //directxSmierdzi-=2;
-                            //if(directxSmierdzi<-2) directxSmierdzi = 2;
-                    }
-                    pliks->distancelevel[j].subobiekty[ii].VBO.write(offset * 9 * sizeof(GLfloat), wierzcholki, pliks->distancelevel[j].subobiekty[ii].czesci[jj].iloscv * 9 * sizeof(GLfloat));
-                    delete[] wierzcholki;
-                    pliks->distancelevel[j].subobiekty[ii].czesci[jj].offset = offset;
-                    offset += pliks->distancelevel[j].subobiekty[ii].czesci[jj].iloscv;
-                    delete[] pliks->distancelevel[j].subobiekty[ii].czesci[jj].idx;
-                }
-                pliks->distancelevel[j].subobiekty[ii].VBO.release();
+                if (!pliks->packVertices(pliks->distancelevel[j].subobiekty[ii], vert.get(),
+                                         v_ilosc, alphaTest))
+                    return false;
             }
         }
-        delete[] vert;
-        delete[] pliks->tpoints.normals;
-        delete[] pliks->tpoints.points;
-        delete[] pliks->tpoints.uv_points;
-        return;
+
+        pliks->tpoints.normals.reset();
+        pliks->tpoints.points.reset();
+        pliks->tpoints.uv_points.reset();
+        return true;
     }

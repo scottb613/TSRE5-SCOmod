@@ -7,9 +7,7 @@
 /*
  * Native DDS decoder used by the Qt6 port.
  *
- * The block layout follows the Microsoft DDS/BC1-BC3 specification.  Only the
- * top mip level is expanded because TSRE generates its OpenGL mipmaps after
- * upload.
+ * The block layout follows the Microsoft DDS/BC1-BC3 specification.
  */
 
 #include "DdsDecoder.h"
@@ -201,6 +199,151 @@ uchar extractChannel(quint32 pixel, quint32 mask, uchar defaultValue) {
 
 } // namespace
 
+qint64 DdsDecoder::minimumUploadBytes(const QString &path, bool nativeDxt1) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return 0;
+    const auto header = file.read(DdsFileHeaderSize);
+    const char *data = header.constData();
+    if (header.size() != DdsFileHeaderSize || !header.startsWith("DDS ")
+            || readU32(data + 4) != 124 || readU32(data + 76) != 32)
+        return 0;
+    const quint32 width = readU32(data + 16);
+    const quint32 height = readU32(data + 12);
+    if (!width || !height || width > MaximumDimension || height > MaximumDimension)
+        return 0;
+    const qint64 decodedBytes = qint64(width) * height * 4;
+    if (quint64(decodedBytes) > MaximumDecodedBytes)
+        return 0;
+    // Header information can establish a lower bound. The full mip must
+    // still pass the opacity and layout checks before compressed upload.
+    if (nativeDxt1 && width % 4 == 0 && height % 4 == 0
+            && (readU32(data + 80) & DdsPixelFormatFourCc)
+            && readU32(data + 84) == FourCcDxt1 && readU32(data + 24) <= 1)
+        return decodedBytes / 8;
+    return decodedBytes;
+}
+
+bool DdsDecoder::readOpaqueBc1(const QString &path, int maximumSide, DdsBc1Level &level) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    const auto header = file.read(DdsFileHeaderSize);
+    const char *data = header.constData();
+    if (header.size() != DdsFileHeaderSize || !header.startsWith("DDS ")
+            || readU32(data + 4) != 124 || readU32(data + 76) != 32
+            || !(readU32(data + 80) & DdsPixelFormatFourCc) || readU32(data + 84) != FourCcDxt1
+            || readU32(data + 24) > 1)
+        return false;
+
+    quint32 width = readU32(data + 16);
+    quint32 height = readU32(data + 12);
+    if (!width || !height || width > MaximumDimension || height > MaximumDimension
+            || quint64(width) * height * 4 > MaximumDecodedBytes)
+        return false;
+    const quint32 flags = readU32(data + 8);
+    const quint32 mipCount = flags & 0x20000 ? readU32(data + 28) : 1;
+    const auto bytesFor = [](quint32 w, quint32 h) {
+        return qint64((w + 3) / 4) * ((h + 3) / 4) * 8;
+    };
+    qint64 offset = DdsFileHeaderSize;
+    for (quint32 mip = 0; maximumSide > 0 && std::max(width, height) > quint32(maximumSide); ++mip) {
+        if (mip + 1 >= mipCount || mip >= 15)
+            return false;
+        offset += bytesFor(width, height);
+        width = std::max(1u, width / 2);
+        height = std::max(1u, height / 2);
+    }
+    // Standard terrain dimensions have whole blocks. Edge blocks and
+    // transparent selectors use the existing decoder for exact pixel rules.
+    if (width % 4 || height % 4 || !file.seek(offset))
+        return false;
+    const auto size = bytesFor(width, height);
+    auto blocks = file.read(size);
+    if (blocks.size() != size)
+        return false;
+    for (qsizetype i = 0; i < blocks.size(); i += 8) {
+        const char *block = blocks.constData() + i;
+        const quint32 selectors = readU32(block + 4);
+        if (readU16(reinterpret_cast<const uchar *>(block))
+                    <= readU16(reinterpret_cast<const uchar *>(block + 2))
+                && (selectors & (selectors >> 1) & 0x55555555u))
+            return false;
+    }
+    level = {int(width), int(height), std::move(blocks)};
+    return true;
+}
+
+bool DdsDecoder::decodeStoredPreview(const QString &path, int maximumSide, DdsImage &image) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    QByteArray header = file.read(DdsFileHeaderSize);
+    if (header.size() != DdsFileHeaderSize || !header.startsWith("DDS ")
+            || readU32(header.constData() + 4) != 124 || readU32(header.constData() + 76) != 32
+            || maximumSide < 1)
+        return false;
+
+    const quint32 flags = readU32(header.constData() + 8);
+    quint32 height = readU32(header.constData() + 12);
+    quint32 width = readU32(header.constData() + 16);
+    const quint32 mipCount = readU32(header.constData() + 28);
+    if (!width || !height || width > MaximumDimension || height > MaximumDimension
+            || !(flags & 0x20000) || mipCount < 2 || mipCount > 16
+            || readU32(header.constData() + 24) > 1)
+        return false;
+
+    const quint32 format = readU32(header.constData() + 80);
+    const quint32 fourCc = readU32(header.constData() + 84);
+    const quint32 bits = readU32(header.constData() + 88);
+    const bool compressed = format & DdsPixelFormatFourCc;
+    int unitSize = 0;
+    if (compressed) {
+        if (fourCc == FourCcDxt1)
+            unitSize = 8;
+        else if (fourCc == FourCcDxt3 || fourCc == FourCcDxt5)
+            unitSize = 16;
+    } else if ((format & DdsPixelFormatRgb) && (bits == 24 || bits == 32)) {
+        unitSize = bits / 8;
+        // A padded top pitch does not specify the layout of the lower mips.
+        if ((flags & DdsHeaderPitch) && readU32(header.constData() + 20) != width * unitSize)
+            return false;
+    }
+    if (!unitSize || std::max(width, height) <= quint32(maximumSide))
+        return false;
+
+    const auto levelBytes = [compressed, unitSize](quint32 w, quint32 h) -> qint64 {
+        if (compressed)
+            return qint64((w + 3) / 4) * ((h + 3) / 4) * unitSize;
+        return qint64(w) * h * unitSize;
+    };
+    qint64 offset = DdsFileHeaderSize;
+    for (quint32 level = 1; level < mipCount; ++level) {
+        if (!compressed && (width * unitSize) % 4)
+            return false;
+        offset += levelBytes(width, height);
+        width = std::max(1u, width / 2);
+        height = std::max(1u, height / 2);
+        if (std::max(width, height) > quint32(maximumSide))
+            continue;
+        if (!compressed && (width * unitSize) % 4)
+            return false;
+        const qint64 bytes = levelBytes(width, height);
+        if (offset + bytes > file.size() || !file.seek(offset))
+            return false;
+        auto levelPixels = file.read(bytes);
+        if (levelPixels.size() != bytes)
+            return false;
+        qToLittleEndian(height, header.data() + 12);
+        qToLittleEndian(width, header.data() + 16);
+        if (!compressed)
+            qToLittleEndian(quint32(width * unitSize), header.data() + 20);
+        header.append(levelPixels);
+        return decode(header, image);
+    }
+    return false;
+}
+
 bool DdsDecoder::decodeFile(
     const QString &path, DdsImage &image, QString *error) {
     QFile file(path);
@@ -212,7 +355,8 @@ bool DdsDecoder::decodeFile(
 }
 
 bool DdsDecoder::decode(
-    const QByteArray &fileData, DdsImage &image, QString *error) {
+    const QByteArray &fileData, DdsImage &image, QString *error,
+    quint64 maximumDecodedBytes) {
     image = DdsImage();
     if(fileData.size() < DdsFileHeaderSize) {
         setError(error, QStringLiteral("file is shorter than the DDS header"));
@@ -239,7 +383,7 @@ bool DdsDecoder::decode(
     }
     const quint64 decodedSize =
         static_cast<quint64>(widthValue) * heightValue * 4;
-    if(decodedSize > MaximumDecodedBytes
+    if(decodedSize > MaximumDecodedBytes || decodedSize > maximumDecodedBytes
             || decodedSize > static_cast<quint64>(
                 std::numeric_limits<qsizetype>::max())) {
         setError(error, QStringLiteral("DDS image is too large"));

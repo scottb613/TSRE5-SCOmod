@@ -9,25 +9,43 @@
  */
 
 #include "TexLib.h"
+#include "RouteFrameProfile.h"
 #include "ShapeTexturePath.h"
 #include "AceLib.h"
 #include "DdsLib.h"
+#include "TerrainTextureStream.h"
 #include "ImageLib.h"
 #include "PaintTexLib.h"
 #include "MapLib.h"
 #include "Texture.h"
 #include <QDebug>
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
+#include <utility>
 #include "Game.h"
 #include "Route.h"
 
 int TexLib::jesttextur = 0;
 std::unordered_map<int, Texture*> TexLib::mtex;
 QHash<int, int> TexLib::disabledTextures;
+
+namespace {
+void startTextureDecode(QThread *loader, int id, Texture *texture) {
+    texture->decodePending = true;
+    QObject::connect(loader, &QThread::finished, QCoreApplication::instance(),
+        [id, texture] {
+            const auto found = TexLib::mtex.find(id);
+            if (found != TexLib::mtex.end() && found->second == texture)
+                texture->decodePending = false;
+        }, Qt::QueuedConnection);
+    QObject::connect(loader, &QThread::finished, loader, &QObject::deleteLater);
+    loader->start();
+}
+}
 
 QString TexLib::resolveTexturePath(const QStringList &basePaths, const QString &fileName, bool tryAceDdsAlternative) {
     return ShapeTexturePath::resolve(basePaths, fileName, tryAceDdsAlternative);
@@ -129,32 +147,59 @@ void TexLib::addRef(int texx) {
     }    
 }
 
+namespace {
+QString texturePathKey(const QString &path, const QString &name) {
+    QString key = (path + "/" + name).toLower();
+    key.replace("\\", "/");
+    key.replace("//", "/");
+    return key;
+}
+}
+
 int TexLib::addTex(QString path, QString name, bool reload) {
-    QString pathid = (path+"/"+name).toLower();
-    pathid.replace("\\", "/");
-    pathid.replace("//", "/");
-    return addTex(pathid, reload);
+    return addTex(texturePathKey(path, name), reload);
 }
 
 int TexLib::getTex(QString pathid) {
-    for ( auto it = mtex.begin(); it != mtex.end(); ++it ){
-        if(it->second == NULL) continue;
-        for(int i = 0; i < ((Texture*) it->second)->hashid.size(); i++)
-            if (((Texture*) it->second)->hashid[i].length() == pathid.length()) 
-                if (((Texture*) it->second)->hashid[i] == pathid) {
-                    ((Texture*) it->second)->ref++;
-                    return (int)it->first;
-                }
+    return getTex(pathid, false);
+}
+
+int TexLib::getResidentTex(const QString &path, const QString &name) {
+    return getTex(texturePathKey(path, name), true);
+}
+
+int TexLib::getTex(const QString &pathid, bool residentOnly) {
+    for (const auto &[id, texture] : mtex) {
+        if (!texture || (residentOnly && !texture->glLoaded))
+            continue;
+        if (texture->hashid.contains(pathid)) {
+            ++texture->ref;
+            return id;
+        }
     }
     return -1;
 }
 
-int TexLib::addTex(QString pathid, bool reload) {
+int TexLib::addTex(QString pathid, bool reload, bool exactPath) {
+    return addTexInternal(std::move(pathid), reload, exactPath, false);
+}
+
+int TexLib::addStreamingTerrainTex(const QString &path, const QString &name) {
+    return addTexInternal(texturePathKey(path, name), false, false, true);
+}
+
+int TexLib::addTexInternal(QString pathid, bool reload, bool exactPath, bool streamDds) {
     const QString requestedPathid = pathid;
+    if (reload)
+        TerrainTextureStream::invalidate(requestedPathid);
+    RouteFrameProfile::Scope request(RouteFrameProfile::Stage::TextureRequest, &requestedPathid);
+    RouteFrameProfile::Scope cache(RouteFrameProfile::Stage::TextureCacheLookup);
     Texture* newFile = NULL;
     int texId = -1;
     for ( auto it = mtex.begin(); it != mtex.end(); ++it ){
         if(it->second == NULL) continue;
+        if(exactPath && it->second->pathid != pathid)
+            continue;
         for(int i = 0; i < ((Texture*) it->second)->hashid.size(); i++)
             if (((Texture*) it->second)->hashid[i].length() == pathid.length()) 
                 if (((Texture*) it->second)->hashid[i] == pathid) {
@@ -174,13 +219,13 @@ int TexLib::addTex(QString pathid, bool reload) {
         if(newFile != NULL)
             break;
     }
-    //qDebug() << "Nowa " << jesttextur << " textura: " << pathid;
+    cache.finish();
     
     QString tType = pathid.toLower().split(".").last();
     
     /// EFO there's no good reason to swap DDS and ACE files... 
     /// This allows it to be done, default is NOT to
-    if(Game::imageSubstitution)
+    if(!exactPath && Game::imageSubstitution)
     {
         /// If DDS doesn't exist but ACE does
         if(tType == "dds"){   
@@ -201,7 +246,7 @@ int TexLib::addTex(QString pathid, bool reload) {
         }
     }
     
-    if(Game::imageUpgrade)
+    if(!exactPath && Game::imageUpgrade)
     {
             if(tType == "ace"){            
             /// check to see if DDS exists for ACE
@@ -222,6 +267,9 @@ int TexLib::addTex(QString pathid, bool reload) {
     // files remain distinct unless substitution/upgrade actually changed the
     // requested path.
     if(pathid != requestedPathid){
+        if (reload)
+            TerrainTextureStream::invalidate(pathid);
+        RouteFrameProfile::Scope resolvedCache(RouteFrameProfile::Stage::TextureCacheLookup);
         for(auto it = mtex.begin(); it != mtex.end(); ++it){
             Texture *texture = it->second;
             if(texture == NULL)
@@ -245,6 +293,17 @@ int TexLib::addTex(QString pathid, bool reload) {
         }
     }
     
+    DdsTextureData streamed;
+    const bool useStreamed = streamDds && tType == "dds";
+    if (useStreamed) {
+        // Keep pending assets out of the shared cache. Edits, reloads,
+        // and saves can continue to use the synchronous texture path.
+        if (!DdsLib::takeStreamed(pathid, streamed))
+            return -1;
+    } else if (tType == "dds") {
+        DdsLib::discardStreamed(pathid);
+    }
+
     if(tType == "ace" || tType == "dds"){
         if(!QFile::exists(pathid)){
             qWarning() << "Missing texture:" << pathid.toLower();
@@ -283,8 +342,7 @@ int TexLib::addTex(QString pathid, bool reload) {
         AceLib* t = new AceLib();
         t->texture = newFile;
         if(AceLib::IsThread && !reload){
-            QObject::connect(t, &QThread::finished, t, &QObject::deleteLater);
-            t->start();
+            startTextureDecode(t, texId, newFile);
         } else {
             t->run();
             delete t;
@@ -293,21 +351,18 @@ int TexLib::addTex(QString pathid, bool reload) {
         ImageLib* t = new ImageLib();
         t->texture = newFile;
         if(ImageLib::IsThread && !reload){
-            QObject::connect(t, &QThread::finished, t, &QObject::deleteLater);
-            t->start();
+            startTextureDecode(t, texId, newFile);
         } else {
             t->run();
             delete t;
         }
     } else if(tType == "dds"){
-        DdsLib* t = new DdsLib();
-        t->texture = newFile;
-        if(DdsLib::IsThread && !reload){
-            QObject::connect(t, &QThread::finished, t, &QObject::deleteLater);
-            t->start();
+        if (useStreamed) {
+            DdsLib::publish(*newFile, std::move(streamed));
         } else {
-            t->run();
-            delete t;
+            DdsLib decoder;
+            decoder.texture = newFile;
+            decoder.run();
         }
     } else if(tType == ":painttex"){
         PaintTexLib* t = new PaintTexLib();

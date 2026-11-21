@@ -9,6 +9,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QElapsedTimer>
+#include <QTemporaryFile>
 #include <QtEndian>
 
 #include <cstring>
@@ -255,6 +256,74 @@ int main(int argc, char **argv) {
         QByteArray("\x00\xfc\x00",3));
     passed &= check(DdsDecoder::decode(packed,image,&error)
         && pixelEquals(image,0,255,130,0,255), "Packed-mask DDS fallback changed");
+
+    QByteArray mipChain = makeRgbDds(24, 0xff0000, 0xff00, 0xff, 0,
+                                      QByteArray(8 * 8 * 3, char(20)));
+    writeU32(mipChain, 8, 0x0002100f);
+    writeU32(mipChain, 12, 8);
+    writeU32(mipChain, 16, 8);
+    writeU32(mipChain, 20, 24);
+    writeU32(mipChain, 28, 2);
+    mipChain.append(QByteArray(4 * 4 * 3, char(93)));
+    const auto checkPreview = [&](const QByteArray &data, bool expected) {
+        QTemporaryFile file;
+        if (!file.open() || file.write(data) != data.size())
+            return false;
+        const auto path = file.fileName();
+        file.close();
+        DdsImage preview;
+        const bool decoded = DdsDecoder::decodeStoredPreview(path, 4, preview);
+        return expected ? decoded && preview.width == 4 && preview.height == 4
+                                && pixelEquals(preview, 0, 93, 93, 93, 255)
+                        : !decoded;
+    };
+    passed &= check(checkPreview(mipChain, true), "DDS preview did not select the stored mip");
+    mipChain.chop(1);
+    passed &= check(checkPreview(mipChain, false), "Truncated mip was accepted");
+    writeU32(mipChain, 28, 1);
+    passed &= check(checkPreview(mipChain, false), "DDS without mips reported a stored preview");
+
+    const auto readNative = [](const QByteArray &data, int maximumSide, DdsBc1Level &level) {
+        QTemporaryFile file;
+        if (!file.open() || file.write(data) != data.size())
+            return false;
+        const auto path = file.fileName();
+        file.close();
+        return DdsDecoder::readOpaqueBc1(path, maximumSide, level);
+    };
+    QByteArray topBlock(8, '\0'), mipBlock(8, '\0');
+    writeU16(topBlock, 0, 0xf800);
+    writeU16(mipBlock, 0, 0x07e0);
+    QByteArray nativeChain = makeDds(0x31545844, topBlock.repeated(4));
+    writeU32(nativeChain, 8, 0x000a1007);
+    writeU32(nativeChain, 12, 8);
+    writeU32(nativeChain, 16, 8);
+    writeU32(nativeChain, 28, 2);
+    nativeChain.append(mipBlock);
+    const auto minimumUpload = [](const QByteArray &data, bool nativeDxt1) {
+        QTemporaryFile file;
+        if (!file.open() || file.write(data) != data.size())
+            return qint64(-1);
+        const auto path = file.fileName();
+        file.close();
+        return DdsDecoder::minimumUploadBytes(path, nativeDxt1);
+    };
+    passed &= check(minimumUpload(nativeChain, true) == 32
+        && minimumUpload(nativeChain, false) == 256,
+        "DDS upload preflight must use the top mip and the active upload mode");
+    passed &= check(minimumUpload(nativeChain.left(12), true) == 0,
+        "A truncated DDS header must not produce an upload estimate");
+    DdsBc1Level native;
+    passed &= check(readNative(nativeChain, 0, native) && native.width == 8 && native.height == 8
+        && native.blocks == topBlock.repeated(4), "Native DDS did not preserve top BC1 blocks");
+    passed &= check(readNative(nativeChain, 4, native) && native.width == 4 && native.height == 4
+        && native.blocks == mipBlock, "Native DDS did not preserve preview BC1 blocks");
+    nativeChain.chop(1);
+    passed &= check(!readNative(nativeChain, 4, native), "Native DDS accepted a truncated mip");
+    QByteArray transparent(8, '\0');
+    writeU32(transparent, 4, 0xffffffff);
+    passed &= check(!readNative(makeDds(0x31545844, transparent), 0, native),
+                    "Transparent BC1 must use the pixel path");
 
     // Opt-in throughput evidence, never a machine-dependent pass threshold.
     if(qEnvironmentVariableIntValue("TSRE_PROFILE_ROUTE_LOAD") != 0) {

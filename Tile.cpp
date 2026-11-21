@@ -9,6 +9,7 @@
  */
 
 #include "Tile.h"
+#include "RouteFrameProfile.h"
 #include "Game.h"
 #include "FileBuffer.h"
 #include "ParserX.h"
@@ -115,6 +116,7 @@ QString Tile::getNameXY(int e) {
 }
 
 void Tile::wczytajObiekty() {
+    RouteFrameProfile::Scope objects(RouteFrameProfile::Stage::WorldObjectInit);
     for (auto it = obiekty.begin(); it != obiekty.end(); ++it) {
         //console.log(obj.type);
         WorldObj* obj = (WorldObj*) it->second;
@@ -292,9 +294,10 @@ void Tile::replaceWorldObj(WorldObj *nowy){
 }
 
 void Tile::load() {
+    QString path;
+    RouteFrameProfile::Scope tileLoad(RouteFrameProfile::Stage::WorldTileLoad, &path);
     route = new Route();    
     QString sh;
-    QString path;
     path = Game::root + "/routes/" + Game::route + "/world/w" + getNameXY(x) + "" + getNameXY(-z) + ".w";
     path.replace("//", "/");
     
@@ -1129,6 +1132,17 @@ void Tile::pushRenderItems(float* playerT, float* playerW, float* target, float 
 void Tile::render(float * playerT, float* playerW, float* target, float fov, int renderMode) {
     if (loaded != 1) return;
     GLUU* gluu = GLUU::get();
+    StaticShapeRenderBatch *batch = nullptr;
+    if (renderMode == gluu->RENDER_DEFAULT && gluu->currentShader->polyVegInstances >= 0) {
+        const bool vegetation = Game::viewPolyVeg && GLUU::vegetationInstancing();
+        const bool scenery = GLUU::staticShapeInstancing() != nullptr;
+        if (vegetation || scenery) {
+            if (!staticShapeBatch)
+                staticShapeBatch = std::make_unique<StaticShapeRenderBatch>();
+            batch = staticShapeBatch.get();
+            batch->begin(vegetation, scenery);
+        }
+    }
     //gl.activeTexture(gl.TEXTURE0);
     //gluu->setMatrixUniforms();
     //this.obiekty.forEach(function(obj) {
@@ -1168,13 +1182,23 @@ void Tile::render(float * playerT, float* playerW, float* target, float fov, int
                     //else
                         selectionColor |= (i) << 4;
                 }
-                obiekty[i]->render(gluu, lod, lodx, lodz, playerW, target, fov, selectionColor, renderMode);
-                //obiekty[i]->render(gluu);
+                RouteFrameProfile::count(RouteFrameProfile::Counter::ObjectRenderAttempts);
+                WorldObj *object = obiekty[i];
+                auto *staticObject = batch ? qobject_cast<StaticObj *>(object) : nullptr;
+                if (staticObject) {
+                    staticObject->renderWithStaticShapeBatch(gluu, lod, lodx, lodz,
+                        playerW, target, fov, selectionColor, renderMode, batch);
+                } else {
+                    if (batch) batch->flush();
+                    object->render(gluu, lod, lodx, lodz, playerW, target, fov, selectionColor, renderMode);
+                }
                 gluu->mvPopMatrix();
             }
         }
     }
     
+    if (batch) batch->flush();
+
     /*for (int i = 0; i < jestObiektowWS; i++) {
         if (obiektyWS[i]->loaded) {//
             gluu->mvPushMatrix();

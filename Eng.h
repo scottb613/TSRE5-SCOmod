@@ -29,7 +29,7 @@ public:
     
     struct EngShape {
         QString name;
-        QString altpath;
+        QString containerTexturePath;
         float x = 0;
         float y = 0;
         float z = 0;
@@ -102,7 +102,8 @@ private:
     Ruch *ruch1 = NULL;
     Ruch *ruch2 = NULL;
     void addToFileList(QString val);
-    int loadLegacyShape(const QString &name, const QString &texturePath);
+    int loadLegacyShape(const QString &name);
+    void loadFreightShapes();
     void renderShape(EngShape &model, int selectionColor);
     void reloadShape(EngShape &model);
     

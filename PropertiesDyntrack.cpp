@@ -236,6 +236,16 @@ PropertiesDyntrack::PropertiesDyntrack() {
     elevType.setCurrentIndex(Game::DefaultElevationBox);
     showElevBox(elevType.currentText());
     vbox->addWidget(gradeCard);
+    hacks.setText("Hacks...");
+    hacks.setCheckable(true);
+    hacks.setProperty("editorPopupKey", "hacksHelper");
+    GuiFunct::styleEditorActionButton(&hacks);
+    hacks.setFocusPolicy(Qt::NoFocus);
+    connect(&hacks, &QPushButton::toggled, this, [this](bool checked){
+        GuiFunct::setEditorPopupButtonActive(&hacks, checked);
+        emit hacksToggled(dobj, &hacks, checked);
+    });
+    vbox->addWidget(&hacks);
     
     vbox->addStretch(1);
     this->setLayout(vbox);

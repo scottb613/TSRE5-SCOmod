@@ -5,13 +5,45 @@
 // Licensed under GNU GPL v3 or later. See LICENSE.md.
 
 #include "TerrainGridMath.h"
+#include "TerrainMesh.h"
 
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <iterator>
 #include <vector>
 
 namespace {
+bool expectPackedMesh() {
+    TerrainMeshInput input;
+    TerrainGridMath::RenderLayoutError error;
+    if (!TerrainGridMath::calculateRenderLayout(4, 2, input.layout, error))
+        return false;
+    input.sampleSize = 8;
+    input.heights.assign(25, 10.0f);
+    input.textureTransforms.assign(4, {1, 2, 3, 4, 5, 6});
+    const auto mesh = buildTerrainMesh(input);
+    const auto &vertices = mesh->patchVertices;
+    const float firstTriangle[] = {
+        0, 10, 0, 0, 1, 0, 1, 2,
+        0, 10, 8, 0, 1, 0, 5, 8,
+        8, 10, 8, 0, 1, 0, 8, 13
+    };
+    if (vertices.size() != input.layout.totalFloatCount
+            || !std::equal(std::begin(firstTriangle), std::end(firstTriangle), vertices.begin())
+            || vertices[input.layout.patchFloatCount + 2] != 16
+            || mesh->bounds[1].first.x() != 16
+            || mesh->bounds[2].first.z() != 16)
+        return false;
+
+    input.flags.assign(25, 0);
+    input.flags[0] = 4;
+    const auto withHole = buildTerrainMesh(input);
+    const auto pad = withHole->patchVertices.begin() + input.layout.patchFloatCount - 6 * 8;
+    return withHole->patchVertices[0] == 8 && withHole->patchVertices[2] == 8
+        && std::all_of(pad, pad + 6 * 8, [](float value) { return value == 0.0f; });
+}
+
 bool expectLayout(const int samples, const int patches,
                   const int expectedPatchResolution,
                   const std::size_t expectedPatchFloatCount,
@@ -155,6 +187,10 @@ bool expectRotationIndependentScale() {
 
 int main() {
     bool ok = true;
+    if (!expectPackedMesh()) {
+        std::cerr << "Terrain mesh winding, UVs, bounds, or gap padding changed\n";
+        ok = false;
+    }
     ok &= TerrainGridMath::SupportedPatchDimension == 16;
     ok &= TerrainGridMath::SupportedPatchRecordCount == 256;
     ok &= expectLayout(256, 16, 16, 12288, 12582912);

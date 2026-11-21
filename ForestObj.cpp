@@ -9,6 +9,7 @@
  */
 
 #include <QFile>
+#include "RouteFrameProfile.h"
 #include "ForestObj.h"
 #include "GLMatrix.h"
 #include <math.h>
@@ -50,10 +51,6 @@ ForestObj::ForestObj(const ForestObj& o) : WorldObj(o) {
     population = o.population;
     tex = o.tex;
     init = false;
-    if(o.texturePath != NULL){
-        texturePath = new QString();
-        *texturePath = *o.texturePath;
-    }
 
 }
 
@@ -318,194 +315,169 @@ void ForestObj::render(GLUU* gluu, float lod, float posx, float posz, float* pos
 
     gluu->currentShader->setUniformValue(gluu->currentShader->mvMatrixUniform, *reinterpret_cast<float(*)[4][4]> (gluu->mvMatrix));
    
-    if(selectionColor != 0){
-        int wColor = (int)(selectionColor/65536);
-        int sColor = (int)(selectionColor - wColor*65536)/256;
-        int bColor = (int)(selectionColor - wColor*65536 - sColor*256);
-        shape.setMaterial((float)wColor/255.0f, (float)sColor/255.0f, (float)bColor/255.0f);
-    } else {
-        shape.setMaterial(texturePath);
-    }
-    
-    drawShape();
-};
+    drawShape(selectionColor);
+}
 
-void ForestObj::drawShape(){
-    QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
-    /*if (tex == -2) {
-        f->glDisable(GL_TEXTURE_2D);
-    } else {
-        f->glEnable(GL_TEXTURE_2D);
-        if (tex == -1) {
-            tex = TexLib::addTex(resPath, treeTexture);
-            f->glDisable(GL_TEXTURE_2D);
-        }
-    }*/
-
+bool ForestObj::prepareGeometry(bool openingView) {
     if (textureRevision != ForestObj::TextureRevision) {
         init = false;
-        if (texturePath != NULL) {
-            delete texturePath;
-            texturePath = NULL;
-        }
         shape.deleteVBO();
         textureRevision = ForestObj::TextureRevision;
     }
 
     if (!init) {
-        if(!Game::ignoreLoadLimits){
+        if(!openingView && !Game::ignoreLoadLimits){
             int forestLoadCost = 2 + population / 200;
             if(forestLoadCost > Game::maxObjLag)
                 forestLoadCost = Game::maxObjLag;
             if(forestLoadCost < 2)
                 forestLoadCost = 2;
-            if(Game::allowObjLag < forestLoadCost)
-                return;
+            if (Game::allowObjLag < forestLoadCost) {
+                RouteFrameProfile::count(RouteFrameProfile::Counter::ForestBuildDeferred);
+                return false;
+            }
             Game::allowObjLag -= forestLoadCost;
         }
         
-        //qint64 timeNow = QDateTime::currentMSecsSinceEpoch();
-            
-            int iloscv = population*24;
-            float* punkty = new float[iloscv*9];
-            int ptr = 0;
-            
-            GLUU* gluu = GLUU::get();
-            float alpha = -gluu->alphaTest;
+        RouteFrameProfile::Scope build(RouteFrameProfile::Stage::ForestBuild, &treeTexture);
+        shape.deleteVBO();
 
-            int seed = (int)(position[0] + position[1] + position[2]);
-            //Random random = new Random(seed);
-            std::srand(seed);
-            float treeSizeXt = treeSizeX*0.7;
-            float posT[2];
-            posT[0] = x;
-            posT[1] = y;
-            //qDebug() << x << y;
-            float tposx, tposz;
-            
-            QVector<Vector4f> fpoints;
-            float off = ((qDirection[1]+0.00001f)/fabs(qDirection[1]+0.00001f))*(float)-acos(qDirection[3])*2.0;
-            for(int uu = 0; uu < population; uu++){
-                
-                tposx = ((float)((std::rand()%1000))/1000)*areaX-areaX/2.0;
-                tposz = ((float)((std::rand()%1000))/1000)*areaZ-areaZ/2.0;
-                
-                Vector2f uuu(tposx,tposz);
-                uuu.rotate(off, 0);
-                tposx = uuu.x;
-                tposz = uuu.y;
-                                
-                fpoints.push_back(Vector4f(tposx+position[0], 0, tposz+position[2], 9999));
-            }
-            
-            if(ForestClearDistance > 0){
-                float bBox[4];
-                bBox[0] = bBox[2] = 9999;
-                bBox[1] = bBox[3] = -9999;
-                Vector2f v;
-                for(int u = -1; u < 2; u+=2)
-                    for(int y = -1; y < 2; y+=2){
-                        v.set(areaX*u/2,areaZ*y/2);
-                        v.rotate(off, 0);
-                        if(v.x < bBox[0])
-                            bBox[0] = v.x;
-                        if(v.x > bBox[1])
-                            bBox[1] = v.x;
-                        if(v.y < bBox[2])
-                            bBox[2] = v.y;
-                        if(v.y > bBox[3])
-                            bBox[3] = v.y;
-                    }
-                bBox[0] += position[0];
-                bBox[1] += position[0];
-                bBox[2] += position[2];
-                bBox[3] += position[2];            
-                // if(Game::debugOutput) qDebug() << "FO401: "<< bBox[0] << bBox[1] << bBox[2] << bBox[3];
-            
-                if(Game::trackDB != NULL)
-                    Game::trackDB->fillNearestSquaredDistanceToTDBXZ(posT, fpoints, bBox);
-                if(Game::roadDB != NULL)
-                    Game::roadDB->fillNearestSquaredDistanceToTDBXZ(posT, fpoints, bBox);
-            }
-            for(int uu = 0; uu < population; uu++){
-                if(ForestClearDistance > 0){
-                    if(fpoints[uu].c < ForestClearDistance*ForestClearDistance)
-                        continue;
+        int seed = (int)(position[0] + position[1] + position[2]);
+        std::srand(seed);
+        float posT[2];
+        posT[0] = x;
+        posT[1] = y;
+        float tposx, tposz;
+
+        QVector<Vector4f> fpoints;
+        float off = ((qDirection[1]+0.00001f)/fabs(qDirection[1]+0.00001f))*(float)-acos(qDirection[3])*2.0;
+        for(int uu = 0; uu < population; uu++){
+
+            tposx = ((float)((std::rand()%1000))/1000)*areaX-areaX/2.0;
+            tposz = ((float)((std::rand()%1000))/1000)*areaZ-areaZ/2.0;
+
+            Vector2f uuu(tposx,tposz);
+            uuu.rotate(off, 0);
+            tposx = uuu.x;
+            tposz = uuu.y;
+
+            fpoints.push_back(Vector4f(tposx+position[0], 0, tposz+position[2], 9999));
+        }
+
+        if(ForestClearDistance > 0){
+            float bBox[4];
+            bBox[0] = bBox[2] = 9999;
+            bBox[1] = bBox[3] = -9999;
+            Vector2f v;
+            for(int u = -1; u < 2; u+=2)
+                for(int y = -1; y < 2; y+=2){
+                    v.set(areaX*u/2,areaZ*y/2);
+                    v.rotate(off, 0);
+                    if(v.x < bBox[0])
+                        bBox[0] = v.x;
+                    if(v.x > bBox[1])
+                        bBox[1] = v.x;
+                    if(v.y < bBox[2])
+                        bBox[2] = v.y;
+                    if(v.y > bBox[3])
+                        bBox[3] = v.y;
                 }
+            bBox[0] += position[0];
+            bBox[1] += position[0];
+            bBox[2] += position[2];
+            bBox[3] += position[2];
 
-                float wysokosc = Game::terrainLib->getHeight(x, y, fpoints[uu].x, fpoints[uu].z);
-                
-                tposx = fpoints[uu].x - position[0];
-                tposz = fpoints[uu].z - position[2];
-                
-                for(int j = -1; j < 2; j+=2){
-                    for(int i = -1; i<2; i+=2){
-                            punkty[ptr++] = -treeSizeXt*i*j/2.0 + tposx;
-                            punkty[ptr++] = wysokosc+treeSizeZ;
-                            punkty[ptr++] = -treeSizeXt*i/2.0 + tposz;
-                            punkty[ptr++] = 0; punkty[ptr++] = 1; punkty[ptr++] = 0;
-                            punkty[ptr++] = 0; punkty[ptr++] = 0;
-                            punkty[ptr++] = alpha;
-                            
-                            punkty[ptr++] = treeSizeXt*i*j/2.0 + tposx;
-                            punkty[ptr++] = wysokosc+treeSizeZ;
-                            punkty[ptr++] = treeSizeXt*i/2.0 + tposz;
-                            punkty[ptr++] = 0; punkty[ptr++] = 1; punkty[ptr++] = 0;
-                            punkty[ptr++] = 1; punkty[ptr++] = 0;
-                            punkty[ptr++] = alpha;
-                            
-                            punkty[ptr++] = treeSizeXt*i*j/2.0 + tposx;
-                            punkty[ptr++] = wysokosc;
-                            punkty[ptr++] = treeSizeXt*i/2.0 + tposz;
-                            punkty[ptr++] = 0; punkty[ptr++] = 1; punkty[ptr++] = 0;
-                            punkty[ptr++] = 1; punkty[ptr++] = 1;
-                            punkty[ptr++] = alpha;
-                            
-                            punkty[ptr++] = -treeSizeXt*i*j/2.0 + tposx;
-                            punkty[ptr++] = wysokosc;
-                            punkty[ptr++] = -treeSizeXt*i/2.0 + tposz;
-                            punkty[ptr++] = 0; punkty[ptr++] = 1; punkty[ptr++] = 0;
-                            punkty[ptr++] = 0; punkty[ptr++] = 1;
-                            punkty[ptr++] = alpha;
-                            
-                            punkty[ptr++] = -treeSizeXt*i*j/2.0 + tposx;
-                            punkty[ptr++] = wysokosc+treeSizeZ;
-                            punkty[ptr++] = -treeSizeXt*i/2.0 + tposz;
-                            punkty[ptr++] = 0; punkty[ptr++] = 1; punkty[ptr++] = 0;
-                            punkty[ptr++] = 0; punkty[ptr++] = 0;
-                            punkty[ptr++] = alpha;
-                            
-                            punkty[ptr++] = treeSizeXt*i*j/2.0 + tposx;
-                            punkty[ptr++] = wysokosc;
-                            punkty[ptr++] = treeSizeXt*i/2.0 + tposz;
-                            punkty[ptr++] = 0; punkty[ptr++] = 1; punkty[ptr++] = 0;
-                            punkty[ptr++] = 1; punkty[ptr++] = 1;
-                            punkty[ptr++] = alpha;
-                    }
+            if(Game::trackDB != NULL)
+                Game::trackDB->fillNearestSquaredDistanceToTDBXZ(posT, fpoints, bBox);
+            if(Game::roadDB != NULL)
+                Game::roadDB->fillNearestSquaredDistanceToTDBXZ(posT, fpoints, bBox);
+        }
+
+        QVector<float> offsets;
+        const float clearanceSquared = ForestClearDistance * ForestClearDistance;
+        for (const Vector4f &point : fpoints) {
+            if (ForestClearDistance > 0 && point.c < clearanceSquared)
+                continue;
+            const float height = Game::terrainLib->getHeight(x, y, point.x, point.z);
+            offsets << point.x - position[0] << height << point.z - position[2];
+        }
+
+        RouteFrameProfile::count(RouteFrameProfile::Counter::ForestTreesBuilt, offsets.size() / 3);
+        QVector<float> tree;
+        tree.reserve(24 * RenderItem::VNTA);
+        const float halfWidth = float(treeSizeX * 0.7) / 2.0f;
+        const float alpha = -GLUU::get()->alphaTest;
+        const auto addVertex = [&](float x, float y, float z, float u, float v) {
+            tree << x << y << z << 0.0f << 1.0f << 0.0f << u << v << alpha;
+        };
+        // Keep both sides of each crossed quad and the original UV winding.
+        for (int direction : {-1, 1}) {
+            for (int side : {-1, 1}) {
+                const float z = halfWidth * side;
+                const float x = z * direction;
+                addVertex(-x, treeSizeZ, -z, 0, 0);
+                addVertex( x, treeSizeZ,  z, 1, 0);
+                addVertex( x, 0,          z, 1, 1);
+                addVertex(-x, 0,         -z, 0, 1);
+                addVertex(-x, treeSizeZ, -z, 0, 0);
+                addVertex( x, 0,          z, 1, 1);
+            }
+        }
+
+        GLUU *gluu = GLUU::get();
+        const auto supportsForest = [gluu](const char *name) {
+            const Shader *shader = gluu->shaders.value(QString::fromLatin1(name));
+            return shader && shader->forestOffsets >= 0;
+        };
+        bool instanced = false;
+        if (offsets.size() > 3 && GLUU::vegetationInstancing()
+                && supportsForest("StandardFog") && supportsForest("StandardBloom")
+                && supportsForest("Shadows")) {
+            shape.init(tree.data(), int(tree.size()), RenderItem::VNTA, GL_TRIANGLES);
+            instanced = shape.setForestOffsets(offsets);
+        }
+        if (!instanced) {
+            QVector<float> vertices;
+            vertices.reserve(tree.size() * (offsets.size() / 3));
+            for (qsizetype i = 0; i < offsets.size(); i += 3) {
+                for (qsizetype j = 0; j < tree.size(); j += RenderItem::VNTA) {
+                    vertices << tree[j] + offsets[i] << tree[j + 1] + offsets[i + 1]
+                             << tree[j + 2] + offsets[i + 2];
+                    for (int component = 3; component < RenderItem::VNTA; ++component)
+                        vertices << tree[j + component];
                 }
             }
+            shape.init(vertices.data(), int(vertices.size()), RenderItem::VNTA, GL_TRIANGLES);
+        }
 
-        texturePath = new QString(Terrain::resolveTexturePath(resPath.toLower(), Terrain::textureSubdirCandidatesForSeason(Game::season), treeTexture.toLower(), true));
-        shape.setMaterial(texturePath);
-        shape.init(punkty, ptr, RenderItem::VNTA, GL_TRIANGLES);
-        /*shape.VAO.create();
-        QOpenGLVertexArrayObject::Binder vaoBinder(&shape.VAO);
-
-        shape.VBO.create();
-        shape.VBO.bind();
-        shape.VBO.allocate(punkty, ptr * sizeof (GLfloat));
-        f->glEnableVertexAttribArray(0);
-        f->glEnableVertexAttribArray(1);
-        f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof (GLfloat), 0);
-        f->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof (GLfloat), reinterpret_cast<void *> (6 * sizeof (GLfloat)));
-        shape.VBO.release();*/
-        //shape.iloscv = ptr/8;
-        //qint64 timeNow2 = QDateTime::currentMSecsSinceEpoch();
-        //qDebug() << "forest gen time: " << (timeNow2 - timeNow);
-        delete[] punkty;
+        texturePath = Terrain::resolveTexturePath(resPath.toLower(),
+            Terrain::textureSubdirCandidatesForSeason(Game::season), treeTexture.toLower(), true);
         init = true;
     }
-    shape.render();
+    return true;
+}
+
+void ForestObj::prepareOpeningView(OpeningViewLoad &opening) {
+    if (Game::viewForestRegions && prepareGeometry(true)) {
+        shape.setMaterial(texturePath);
+        shape.prepareTexture(opening);
+    }
+}
+
+void ForestObj::drawShape(int selectionColor) {
+    if (!prepareGeometry(false))
+        return;
+    if (selectionColor != 0)
+        shape.setMaterial(((selectionColor >> 16) & 255) / 255.0f,
+                          ((selectionColor >> 8) & 255) / 255.0f,
+                          (selectionColor & 255) / 255.0f);
+    else
+        shape.setMaterial(texturePath);
+
+    {
+        RouteFrameProfile::Scope draw(RouteFrameProfile::Stage::ForestDraw, &treeTexture);
+        shape.render();
+    }
     if(selected){
         drawBox();
     }

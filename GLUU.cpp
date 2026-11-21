@@ -16,6 +16,8 @@
 #include "Vector4f.h"
 #include <QDebug>
 #include <QFile>
+#include <QOpenGLContext>
+#include <QOpenGLExtraFunctions>
 #ifndef __APPLE__
 #include <GL/gl.h>
 #else
@@ -29,6 +31,31 @@
 GLUU* GLUU::get() {
     static GLUU* gluu = new GLUU();
     return gluu;
+}
+
+namespace {
+QOpenGLExtraFunctions *instanceFunctions() {
+    auto *context = QOpenGLContext::currentContext();
+    if (!context || context->isOpenGLES())
+        return nullptr;
+    const auto format = context->format();
+    if (format.majorVersion() < 3 ||
+            (format.majorVersion() == 3 && format.minorVersion() < 3))
+        return nullptr;
+    return context->extraFunctions();
+}
+}
+
+QOpenGLExtraFunctions *GLUU::vegetationInstancing() {
+    static const bool enabled =
+            qEnvironmentVariableIntValue("TSRE_DISABLE_VEGETATION_INSTANCING") == 0;
+    return enabled ? instanceFunctions() : nullptr;
+}
+
+QOpenGLExtraFunctions *GLUU::staticShapeInstancing() {
+    static const bool enabled =
+            qEnvironmentVariableIntValue("TSRE_DISABLE_STATIC_SHAPE_INSTANCING") == 0;
+    return enabled ? instanceFunctions() : nullptr;
 }
 
 GLUU::GLUU() {
@@ -82,6 +109,8 @@ void GLUU::initShader() {
         currentShader->bindAttributeLocation("aTextureCoord", 1);
         currentShader->bindAttributeLocation("normal", 2);
         currentShader->bindAttributeLocation("alpha", 3);
+        currentShader->bindAttributeLocation("forestOffset", 4);
+        currentShader->bindAttributeLocation("polyVegMatrix", 5);
         if(!currentShader->link()){
             qDebug() << "Shader link failed.";
         }
@@ -100,6 +129,8 @@ void GLUU::initShader() {
         currentShader->skyColor = currentShader->uniformLocation("skyColor");
 
         currentShader->shaderRawPreview = currentShader->uniformLocation("rawPreview");
+        currentShader->forestOffsets = currentShader->uniformLocation("uUseForestOffsets");
+        currentShader->polyVegInstances = currentShader->uniformLocation("uUsePolyVegInstances");
         currentShader->shaderAlpha = currentShader->uniformLocation("isAlpha");
         currentShader->shaderAlphaTest = currentShader->uniformLocation("alphaTest");
         currentShader->shaderTextureEnabled = currentShader->uniformLocation("textureEnabled");

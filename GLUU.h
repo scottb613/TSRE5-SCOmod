@@ -23,6 +23,8 @@
 //QT_FORWARD_DECLARE_CLASS(QOpenGLShaderProgram)
 
 
+class QOpenGLExtraFunctions;
+
 class GLUU {
 public:
     enum RenderMode {
@@ -67,6 +69,8 @@ public:
     float* mvMatrix;
     float* objStrMatrix;
     static GLUU *get();
+    static QOpenGLExtraFunctions *vegetationInstancing();
+    static QOpenGLExtraFunctions *staticShapeInstancing();
     GLUU();
     virtual ~GLUU();
     void initShader();
@@ -83,6 +87,9 @@ public:
     void enableNormals();
     void setBrightness(float val);
     void bindTexture(QOpenGLFunctions *f, unsigned int texAddr);
+    void invalidateTextureBinding() { currentTexture = -1; }
+    qint64 *terrainTextureBudgetNs = nullptr;
+    bool streamShapeReads = false;
     long long int getMatrixHash(float *matrix);
     void makeShadowFramebuffer(unsigned int &frameBuffer, unsigned int &texture, int texSize, GLenum ATEX );
     bool textureEnabled;

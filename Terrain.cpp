@@ -8,6 +8,7 @@
  *  See LICENSE.md or https://www.gnu.org/licenses/gpl.html
  */
 
+#include <QElapsedTimer>
 #include "Terrain.h"
 #include <algorithm>
 #include <cmath>
@@ -15,6 +16,11 @@
 #include <functional>
 #include <memory>
 #include <vector>
+#include <chrono>
+#include <future>
+#include <limits>
+#include <map>
+#include <QThreadPool>
 #include <QDebug>
 #include "Game.h"
 #include <QFile>
@@ -25,6 +31,7 @@
 #include <QMap>
 #include <QSet>
 #include <QScopedValueRollback>
+#include <QStringView>
 #include "ReadFile.h"
 #include "AceLib.h"
 #include "DdsWriter.h"
@@ -44,6 +51,9 @@
 #include "Renderer.h"
 #include "RouteSaveTransaction.h"
 #include "TerrainGridMath.h"
+#include "TerrainMesh.h"
+#include "TerrainTextureStream.h"
+#include "RouteFrameProfile.h"
 #include "WaterBedClearanceMath.h"
 
 QString Terrain::TileDir[2] = {"tiles", "lo_tiles"};
@@ -51,6 +61,39 @@ Brush* Terrain::DefaultBrush = NULL;
 
 namespace {
 bool legacyTextureDomainWarningShown = false;
+
+using MeshClock = std::chrono::steady_clock;
+struct PendingMesh {
+    std::future<std::unique_ptr<TerrainMeshData>> result;
+    MeshClock::time_point lastRequest;
+    bool ready() const {
+        return result.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
+};
+
+struct TerrainMeshPool {
+    std::map<const Terrain *, PendingMesh> pending;
+    QThreadPool workers;
+    TerrainMeshPool() { workers.setMaxThreadCount(2); }
+
+    bool hasRoom(MeshClock::time_point now) {
+        constexpr std::size_t maxOutstanding = 4;
+        if (pending.size() >= maxOutstanding) {
+            for (auto it = pending.begin(); it != pending.end();) {
+                if (now - it->second.lastRequest > std::chrono::milliseconds(500) && it->second.ready())
+                    it = pending.erase(it);
+                else
+                    ++it;
+            }
+        }
+        return pending.size() < maxOutstanding && workers.activeThreadCount() < workers.maxThreadCount();
+    }
+};
+
+TerrainMeshPool &meshPool() {
+    static TerrainMeshPool pool;
+    return pool;
+}
 
 float storedTerrainFloat(const int bits){
     static_assert(sizeof(bits) == sizeof(float));
@@ -624,6 +667,7 @@ void Terrain::loadFFile(FileBuffer *data){
 }
 
 Terrain::~Terrain() {
+    meshPool().pending.erase(this);
     long timeNow1 = QDateTime::currentMSecsSinceEpoch();
     setMapOverlayVisible(false);
     if (this->loaded) {
@@ -836,6 +880,8 @@ bool Terrain::reloadSavedPaint(QString &error) {
 void Terrain::refresh() {
     if (!loaded) return;
     isOgl = false;
+    renderMeshFailed = false;
+    meshPool().pending.erase(this);
     lines.loaded = false;
     //reloadLines();
 }
@@ -876,7 +922,9 @@ int Terrain::getTexture(int x, int z, float posx, float posz) {
     getPatchCoords(x, z, posx, posz);
     int patches = tfile->patchsetNpatches;
 
-    return texid[z * patches + x];
+    if (x < 0 || z < 0 || x >= patches || z >= patches)
+        return -1;
+    return resolvePatchTexture(z * patches + x, false);
 }
 
 void Terrain::convertTexToDefaultCoords(int idx) {
@@ -2249,9 +2297,11 @@ void Terrain::paintTextureOnTile(Brush* brush, int y, int u, float x, float z) {
     const QString existingName = *tfile->materials[(int)tfile->tdata[(y*patches+u)*13+6]].tex[0];
     if(TerrainTextureFormat::isPaintedPatchName(existingName,name))
         name = existingName;
-    if (texid[y * patches + u] < 0)
+    const int id = resolvePatchTexture(y * patches + u, false);
+    const auto source = TexLib::mtex.find(id);
+    if (source == TexLib::mtex.end() || !source->second || !source->second->loaded)
         return;
-    
+
     bool newSwatch = false;
     if (name != *tfile->materials[(int) tfile->tdata[(y * patches + u)*13 + 0 + 6]].tex[0]) {
         if(Game::seasonalEditing && Game::season.length() > 0)
@@ -2284,16 +2334,8 @@ void Terrain::paintTextureOnTile(Brush* brush, int y, int u, float x, float z) {
 }
 
 void Terrain::pushRenderItem(float lodx, float lodz, int tileX, int tileY, float* playerW, float* target, float fov, int selectionColor){
-    if (!loaded)
+    if (!prepareRenderMesh())
         return;
-    if (!isOgl) {
-        Game::terrainLib->fillRaw(this, (int) mojex, (int) mojez);
-        vertexInit();
-        normalInit();
-        isOgl = oglInit();
-        if(!isOgl)
-            return;
-    }
 
     if (!lines.loaded) {
         reloadLines();
@@ -2577,19 +2619,217 @@ void Terrain::pushRenderItemWater(float lodx, float lodz, float tileX, float til
     }
 }
 
-void Terrain::render(float lodx, float lodz, int tileX, int tileY, float* playerW, float* target, float fov, int selectionColor) {
-    if (!loaded)
-        return;
-    if (!isOgl) {
-        Game::terrainLib->fillRaw(this, (int) mojex, (int) mojez);
-        vertexInit();
-        normalInit();
-        isOgl = oglInit();
-        if(!isOgl)
-            return;
+bool Terrain::prepareRenderMesh(bool background, bool *pending) {
+    if (pending)
+        *pending = false;
+    if (!loaded || renderMeshFailed)
+        return false;
+    if (isOgl)
+        return true;
+    static const bool allowWorkers =
+        qEnvironmentVariableIntValue("TSRE_DISABLE_BACKGROUND_TERRAIN_MESH") == 0;
+    auto &pool = meshPool();
+    std::unique_ptr<TerrainMeshData> mesh;
+    try {
+        if (background && allowWorkers && VAO && !VAO->isCreated()) {
+            const auto now = MeshClock::now();
+            const auto found = pool.pending.find(this);
+            if (found != pool.pending.end() && found->second.ready()) {
+                auto result = std::move(found->second.result);
+                pool.pending.erase(found);
+                mesh = result.get();
+                RouteFrameProfile::count(RouteFrameProfile::Counter::TerrainMeshCompleted);
+            } else {
+                if (found != pool.pending.end()) {
+                    found->second.lastRequest = now;
+                } else if (pool.hasRoom(now)) {
+                    TerrainMeshInput input;
+                    if (!snapshotRenderMesh(input)) {
+                        renderMeshFailed = true;
+                        return false;
+                    }
+                    // Only the snapshot moves to the worker. Terrain pointers,
+                    // neighboring tiles, and GL objects stay on the editor thread.
+                    std::packaged_task<std::unique_ptr<TerrainMeshData>()> task(
+                        [input = std::move(input)] { return buildTerrainMesh(input); });
+                    auto result = task.get_future();
+                    if (pool.workers.tryStart(std::move(task))) {
+                        pool.pending.emplace(this, PendingMesh{std::move(result), now});
+                        RouteFrameProfile::count(RouteFrameProfile::Counter::TerrainMeshSubmitted);
+                    }
+                }
+                if (pending)
+                    *pending = true;
+                return false;
+            }
+        } else {
+            pool.pending.erase(this);
+            TerrainMeshInput input;
+            if (snapshotRenderMesh(input)) {
+                RouteFrameProfile::Scope build(RouteFrameProfile::Stage::TerrainMeshBuild, &name);
+                mesh = buildTerrainMesh(input);
+            }
+        }
+    } catch (const std::bad_alloc &) {
+        qWarning() << "Not enough memory to prepare terrain mesh:" << name;
+    }
+    isOgl = mesh && uploadRenderMesh(*mesh);
+    renderMeshFailed = !isOgl;
+    return isOgl;
+}
+
+bool Terrain::drawsSurface() const {
+    return Game::viewTerrainShape && !(showBlob && MapWindow::isAlpha == 0);
+}
+
+bool Terrain::drawsPatch(int patch) const {
+    return !hidden[patch] && (tfile->flags[patch] & 1) == 0;
+}
+
+QString Terrain::paintedTexturePath(int patch) const {
+    if (texid[patch] >= 0)
+        return {};
+    const int material = int(tfile->tdata[patch * 13 + 6]);
+    if (material < 0 || material >= tfile->materialsCount)
+        return {};
+    const auto *texture = tfile->materials[material].tex[0];
+    if (!texture)
+        return {};
+    const auto separator = qMax(texture->lastIndexOf('/'), texture->lastIndexOf('\\'));
+    const auto basename = QStringView(*texture).sliced(separator + 1);
+    if (basename.size() <= name.size() || basename[name.size()] != QLatin1Char('_')
+            || !basename.startsWith(name, Qt::CaseInsensitive))
+        return {};
+    const bool ace = texture->endsWith(".ace", Qt::CaseInsensitive);
+    if (!ace && !texture->endsWith(".dds", Qt::CaseInsensitive))
+        return {};
+    if (ace && Game::textureQuality > 1 && !Game::writeEnabled)
+        return {};
+    const int patches = tfile->patchsetNpatches;
+    const QString normal = name + '_' + QString::number(patch / patches) + '_'
+                           + QString::number(patch % patches) + ".ace";
+    if (!TerrainTextureFormat::isPaintedPatchName(*texture, normal))
+        return {};
+    return QDir::cleanPath(texturepath + *texture).toLower();
+}
+
+int Terrain::resolvePatchTexture(int patch, bool secondary, PatchTextureLoad mode) {
+    auto &id = secondary ? texid2[patch] : texid[patch];
+    if (id == -1) {
+        const int material = int(tfile->tdata[patch * 13 + 6]);
+        if (material < 0 || material >= tfile->materialsCount ||
+                (secondary && tfile->materials[material].count153 < 2)) {
+            id = -2;
+            return -1;
+        }
+        const QString *name = tfile->materials[material].tex[secondary ? 1 : 0];
+        if (!name)
+            id = -2;
+        else if (mode == PatchTextureLoad::Resident)
+            id = TexLib::getResidentTex(texturepath, *name);
+        else if (mode == PatchTextureLoad::Streaming)
+            id = TexLib::addStreamingTerrainTex(texturepath, *name);
+        else
+            id = TexLib::addTex(texturepath, *name);
+    }
+    return id;
+}
+
+int Terrain::preparePatchTexture(int patch, bool secondary,
+                                 QHash<QPair<int, bool>, int> *residentMaterials) {
+    GLUU *gluu = GLUU::get();
+    qint64 *budget = gluu->terrainTextureBudgetNs;
+    auto &cached = secondary ? texid2[patch] : texid[patch];
+    const auto found = TexLib::mtex.find(cached);
+    if (cached >= 0 && found != TexLib::mtex.end() && found->second) {
+        if (found->second->glLoaded)
+            return int(found->second->tex[0]);
+        if (!found->second->loaded)
+            return -1;
     }
 
+    if (cached < -1)
+        return -1;
+    if (budget && *budget <= 0) {
+        if (cached != -1 || !residentMaterials)
+            return -1;
+
+        // An unvisited patch can reference a texture another patch already
+        // uploaded. Share that texture even after this frame's budget is spent.
+        const QPair<int, bool> key{int(tfile->tdata[patch * 13 + 6]), secondary};
+        const auto known = residentMaterials->constFind(key);
+        if (known != residentMaterials->constEnd()) {
+            if (*known >= 0) {
+                cached = *known;
+                TexLib::addRef(cached);
+            }
+        } else {
+            const int id = resolvePatchTexture(patch, secondary, PatchTextureLoad::Resident);
+            residentMaterials->insert(key, id);
+        }
+        return cached >= 0 ? int(TexLib::mtex.at(cached)->tex[0]) : -1;
+    }
+
+    QElapsedTimer timer;
+    if (budget)
+        timer.start();
+    const auto mode = budget ? PatchTextureLoad::Streaming : PatchTextureLoad::Synchronous;
+    const int id = resolvePatchTexture(patch, secondary, mode);
+    const auto it = TexLib::mtex.find(id);
+    Texture *texture = id >= 0 && it != TexLib::mtex.end() ? it->second : nullptr;
+    if (texture && texture->loaded && !texture->glLoaded) {
+        texture->GLTextures(secondary);
+        gluu->invalidateTextureBinding();
+    }
+    if (budget)
+        *budget -= timer.nsecsElapsed();
+    return texture && texture->glLoaded ? int(texture->tex[0]) : -1;
+}
+
+void Terrain::queueOpeningTextures(OpeningViewLoad &opening) {
+    if (!loaded || !tfile || !drawsSurface())
+        return;
+    opening.assets.emplace_back([this] {
+        bool pending = false;
+        prepareRenderMesh(true, &pending);
+        return !pending;
+    });
+    // Prepare all drawable patches in the opening neighborhood. The camera
+    // can rotate within that neighborhood before it crosses a tile boundary.
+    const int patches = tfile->patchsetNpatches;
+    for (int patch = 0; patch < patches * patches; ++patch) {
+        if (!drawsPatch(patch))
+            continue;
+        ++opening.queuedTerrainPatches;
+        opening.assets.emplace_back([this, &opening, patch, previewPath = paintedTexturePath(patch)] {
+            int base = -1;
+            if (previewPath.isEmpty()) {
+                base = preparePatchTexture(patch, false);
+            } else {
+                const auto preview = TerrainTextureStream::request(previewPath, true);
+                if (preview.pending)
+                    return false;
+                base = preview.texture;
+                if (base < 0)
+                    base = preparePatchTexture(patch, false);
+            }
+            const int detail = base >= 0 ? preparePatchTexture(patch, true) : -1;
+            if (opening.profiling) {
+                if (base >= 0)
+                    opening.terrainTextures.insert(base);
+                if (detail >= 0)
+                    opening.terrainTextures.insert(detail);
+            }
+            return true;
+        });
+    }
+}
+
+void Terrain::render(float lodx, float lodz, int tileX, int tileY, float* playerW, float* target, float fov, int selectionColor) {
     GLUU* gluu = GLUU::get();
+    if (!prepareRenderMesh(gluu->terrainTextureBudgetNs != nullptr))
+        return;
+
     QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
     if (!lines.loaded) {
         reloadLines();
@@ -2619,106 +2859,91 @@ void Terrain::render(float lodx, float lodz, int tileX, int tileY, float* player
         selectedlines.render();
     }
 
-    gluu->enableTextures();  
+    gluu->enableTextures();
     gluu->enableNormals();
-    
-    float lod = 0;
-    float size = 512;
 
     QOpenGLVertexArrayObject::Binder vaoBinder(VAO);
-    
-    if(Game::viewTerrainShape && (!(showBlob && MapWindow::isAlpha == 0) || selectionColor != 0)){
-        float shaderSecondTexUV = 0;
-        for (int uu = 0; uu < patches; uu++) {
-            for (int yy = 0; yy < patches; yy++) {
-                if (hidden[yy * patches + uu]) continue;
-                if ((tfile->flags[yy * patches + uu] & 1) != 0) continue;
-                /*float lodxx = lodx + uu * 128 - 1024;
-                float lodzz = lodz + yy * 128 - 1024;
-                lod = sqrt(lodxx * lodxx + lodzz * lodzz);
-                //System.out.println("-- "+lodxx+" "+lodzz);
-                if (lod > Game::objectLod) continue;
+    const TerrainViewFrustum frustum(openingViewMatrix(gluu->pMatrix)
+        * openingViewMatrix(gluu->mvMatrix) * openingViewMatrix(gluu->objStrMatrix));
 
-                if ((lod > size)) {
-                    float v1[2];
-                    v1[0] = playerW[0] - (target[0]);
-                    v1[1] = playerW[2] - (target[2]);
-                    float v2[2];
-                    v2[0] = lodxx;
-                    v2[1] = lodzz;
-                    float iloczyn = v1[0] * v2[0] + v1[1] * v2[1];
-                    float d1 = sqrt(v1[0] * v1[0] + v1[1] * v1[1]);
-                    float d2 = sqrt(v2[0] * v2[0] + v2[1] * v2[1]);
-                    float zz = iloczyn / (d1 * d2);
-                    if (zz > 0) continue;
-
-                    float ccos = cos(fov) + zz;
-                    float xxx = sqrt(2 * d2 * d2 * (1 - ccos));
-                    if ((ccos > 0) && (xxx > size)) continue;
-                }*/
-
-                if(selectionColor != 0){
-                    int tselectionColor = selectionColor | (yy * patches + uu);
-                    int wColor = (int)(tselectionColor/65536);
-                    int sColor = (int)(tselectionColor - wColor*65536)/256;
-                    int bColor = (int)(tselectionColor - wColor*65536 - sColor*256);
-                    gluu->disableTextures((float)wColor/255.0f, (float)sColor/255.0f, (float)bColor/255.0f, 1);
-                } else {
-                    if (texid[yy * patches + uu] == -2) {
-                    } else {
-                        if (texid[yy * patches + uu] == -1) {
-                            //texid[uu*16+yy] = TexLib.addTex(texturepath,"nasyp-k.ace", gl);
-                            //qDebug() << texturepath << " "<<tfile->tdata[(yy * 16 + uu)*7+0] <<" "<< tfile->materials[(int)tfile->tdata[(yy * 16 + uu)*7+0]].tex[0];
-                            if (tfile->materialsCount <= (int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6]){
-                                texid[yy * patches + uu] = -2;
-                                return;
-                            } else {
-                                texid[yy * patches + uu] = TexLib::addTex(texturepath, *tfile->materials[(int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6]].tex[0]);
-                            }//System.out.println(tfile.materials[tfile.tdata[uu*16+yy]].tex[0]);
-                            //texid = TexLib.addTex(texturepath,"nasyp-k.ace", gl);
-                            //    gl.glDisable(GL2.GL_TEXTURE_2D);
-                        }
-                        if (TexLib::mtex[texid[yy * patches + uu]]->loaded) {
-                            if (!TexLib::mtex[texid[yy * patches + uu]]->glLoaded)
-                                TexLib::mtex[texid[yy * patches + uu]]->GLTextures();
-                            f->glActiveTexture(GL_TEXTURE0);
-                            //f->glBindTexture(GL_TEXTURE_2D, TexLib::mtex[texid[yy * 16 + uu]]->tex[0]);
-                            gluu->bindTexture(f, TexLib::mtex[texid[yy * patches + uu]]->tex[0]);
-                        } else {
-                        }
+    if (drawsSurface() || (Game::viewTerrainShape && selectionColor != 0)) {
+        QHash<QPair<int, bool>, int> residentMaterials;
+        const QPoint tile{int(mojex), int(mojez)};
+        const auto *budget = gluu->terrainTextureBudgetNs;
+        const bool prefetch = selectionColor == 0 && budget && !lowTile
+            && TerrainTextureStream::wantsOffscreen(tile);
+        const auto patchCenter = [sampleSize, samples](const auto &bounds) {
+            const auto center = (bounds.first + bounds.second) * 0.5f;
+            return QPointF(center.x() - 1024, center.z() + 1024 - sampleSize * samples);
+        };
+        float secondUv = 0;
+        for (int uu = 0; uu < patches; ++uu) {
+            for (int yy = 0; yy < patches; ++yy) {
+                const int patch = yy * patches + uu;
+                if (!drawsPatch(patch))
+                    continue;
+                const auto &bounds = patchBounds[patch];
+                if (selectionColor == 0 && !frustum.intersects(bounds.first, bounds.second)) {
+                    if (prefetch && *budget > 0) {
+                        const auto path = paintedTexturePath(patch);
+                        if (!path.isEmpty())
+                            TerrainTextureStream::queueOffscreen(path, tile, patchCenter(bounds));
                     }
-                    if (texid2[yy * patches + uu] == -2) {
-                    } else if (tfile->materials[(int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6]].count153 < 2){
-                            texid2[yy * patches + uu] = -2;
+                    continue;
+                }
+
+                if (selectionColor != 0) {
+                    const int color = selectionColor | patch;
+                    gluu->disableTextures(((color >> 16) & 255) / 255.0f,
+                                          ((color >> 8) & 255) / 255.0f,
+                                          (color & 255) / 255.0f, 1);
+                } else {
+                    f->glActiveTexture(GL_TEXTURE0);
+                    int base = -1;
+                    const QString previewPath = budget ? paintedTexturePath(patch) : QString{};
+                    if (previewPath.isEmpty()) {
+                        base = preparePatchTexture(patch, false, &residentMaterials);
                     } else {
-                        if (texid2[yy * patches + uu] == -1) {
-                            if (tfile->materialsCount <= (int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6])
-                                texid[yy * patches + uu] = -2;
-                            else
-                                texid2[yy * patches + uu] = TexLib::addTex(texturepath, *tfile->materials[(int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6]].tex[1]);
-                        }
-                        if (TexLib::mtex[texid2[yy * patches + uu]]->loaded) {
-                            if (!TexLib::mtex[texid2[yy * patches + uu]]->glLoaded)
-                                TexLib::mtex[texid2[yy * patches + uu]]->GLTextures(true);
-                            f->glActiveTexture(GL_TEXTURE1);
-                            f->glBindTexture(GL_TEXTURE_2D, TexLib::mtex[texid2[yy * patches + uu]]->tex[0]);
-                            const float secondTexUv = storedTerrainFloat(tfile->materials[(int) tfile->tdata[(yy * patches + uu)*13 + 0 + 6]].itex[1][3]);
-                            if(shaderSecondTexUV != secondTexUv){
-                                shaderSecondTexUV = secondTexUv;
-                                gluu->currentShader->setUniformValue(gluu->currentShader->shaderSecondTexEnabled, shaderSecondTexUV);
-                            }
-                        } else {
-                        }
+                        const bool allowWork = *budget > 0;
+                        QElapsedTimer timer;
+                        if (allowWork)
+                            timer.start();
+                        const auto streamed = TerrainTextureStream::request(previewPath, allowWork, !lowTile,
+                            tile, patchCenter(bounds));
+                        base = streamed.texture;
+                        if (allowWork)
+                            *gluu->terrainTextureBudgetNs -= timer.nsecsElapsed();
+                        if (base < 0 && !streamed.pending)
+                            base = preparePatchTexture(patch, false, &residentMaterials);
+                    }
+                    const int detail = base >= 0 ? preparePatchTexture(patch, true, &residentMaterials) : -1;
+                    if (base >= 0) {
+                        gluu->enableTextures();
+                        gluu->bindTexture(f, base);
+                    } else {
+                        gluu->disableTextures(0.5f, 0.5f, 0.5f, 1.0f);
+                    }
+                    float uv = 0;
+                    if (base >= 0 && detail >= 0) {
+                        f->glActiveTexture(GL_TEXTURE1);
+                        f->glBindTexture(GL_TEXTURE_2D, detail);
+                        const int material = int(tfile->tdata[patch * 13 + 6]);
+                        uv = storedTerrainFloat(tfile->materials[material].itex[1][3]);
+                    }
+                    if (secondUv != uv) {
+                        secondUv = uv;
+                        gluu->currentShader->setUniformValue(gluu->currentShader->shaderSecondTexEnabled, uv);
                     }
                 }
-                
-                f->glDrawArrays(GL_TRIANGLES, (uu * patches + yy) * patchRes * patchRes * 6, patchRes * patchRes * 6);
+                f->glDrawArrays(GL_TRIANGLES, (uu * patches + yy) * patchRes * patchRes * 6,
+                                patchRes * patchRes * 6);
             }
         }
         f->glActiveTexture(GL_TEXTURE0);
         gluu->currentShader->setUniformValue(gluu->currentShader->shaderSecondTexEnabled, 0.0f);
     }
-        
+
+    float lod = 0;
     if(Game::viewTerrainGrid || !Game::viewTerrainShape){
         gluu->disableTextures(0.7,0.7,0.7,1.0);
         gluu->mvPushMatrix();
@@ -3147,483 +3372,87 @@ void Terrain::reloadLines() {
     delete[] punkty;
 }
 
-void Terrain::vertexInit() {
-    // this.vertexData[0] = new Array();
-    int samples = *tfile->nsamples;
-    int sampleSize = *tfile->sampleSize;
-
-    vertexData = new Vector3f*[samples+1];
-    for (int i = 0; i < samples+1; i++)
-        vertexData[i] = new Vector3f[samples+1];
-
-    //qDebug() << "min" << sampleSize << samples;
-    for (int j = 0, jj = 0; jj < samples; j += sampleSize, jj++) {
-        for (int i = 0, ii = 0; ii < samples; i += sampleSize, ii++) {
-            vertexData[jj][ii].set(j, terrainData[ii][jj], i);
-            vertexData[jj][ii + 1].set(j, terrainData[ii + 1][jj], (i + sampleSize));
-            vertexData[(jj + 1)][ii + 1].set((j + sampleSize), terrainData[(ii + 1)][jj + 1], (i + sampleSize));
-            vertexData[(jj + 1)][ii].set((j + sampleSize), terrainData[(ii)][jj + 1], i);
-        }
-    }
-}
-
-void Terrain::normalInit() {
-    int samples = *tfile->nsamples;
-    int sampleSize = *tfile->sampleSize;
-    normalData = new Vector3f*[samples+1];
-    for (int i = 0; i < samples+1; i++)
-        normalData[i] = new Vector3f[samples+1];
-    Vector3f U, V, O;
-    for (int jj = 0; jj < samples; jj++) {
-        for (int ii = 0; ii < samples; ii++) {
-            U.setFromSub( vertexData[jj][ii], vertexData[jj + 1][ii]);
-            V.setFromSub( vertexData[jj][ii], vertexData[jj][ii + 1]);
-            O.setFromCross(V, U);
-            normalData[jj][ii].add( O );
-            normalData[jj + 1][ii].add( O );
-            normalData[jj][ii + 1].add( O );
-            U.setFromSub( vertexData[jj + 1][ii + 1], vertexData[jj + 1][ii]);
-            V.setFromSub( vertexData[jj + 1][ii + 1], vertexData[jj][ii + 1]);
-            O.setFromCross(U, V);
-            normalData[jj + 1][ii + 1].add( O );
-            normalData[jj + 1][ii].add( O );
-            normalData[jj][ii + 1].add( O );
-        }
-    }
-
-    for (int jj = 0; jj < samples+1; jj++) {
-        for (int ii = 0; ii < samples+1; ii++) {
-            normalData[jj][ii].normalize();
-        }
-    }
-};
-/*
-void Terrain::oglInit() {
-    if(!VAO->isCreated()){
-       VAO->create();
-       VBO->create();
-    }
-    QOpenGLVertexArrayObject::Binder vaoBinder(VAO);
-    VBO->bind();
-    VBO->allocate(256 * 16 * 16 * 6 * 5 * sizeof (GLfloat));
-    QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
-    f->glEnableVertexAttribArray(0);
-    f->glEnableVertexAttribArray(1);
-    f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof (GLfloat), 0);
-    f->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof (GLfloat), reinterpret_cast<void *> (3 * sizeof (GLfloat)));
-    
-    int ilosc = 16 * 16;
-    int suma;
-    float * punkty = new float[16 * 16 * 30];
-    //  var punkty = Terrain.punkty;
-    for (int uu = 0; uu < 16; uu++) {
-        for (int yy = 0; yy < 16; yy++) {
-            int ptr = 0;
-
-            for (int ii = 0; ii < 16; ii++) {
-                for (int jj = 0; jj < 16; jj++) {
-                    if (jestF) {
-                        suma = ((fData[yy * 16 + ii][uu * 16 + jj]) & 0x04);
-                        suma += ((fData[yy * 16 + ii][uu * 16 + jj + 1]) & 0x04);
-                        suma += ((fData[yy * 16 + ii + 1][uu * 16 + jj + 1]) & 0x04);
-                        suma += ((fData[yy * 16 + ii + 1][uu * 16 + jj]) & 0x04);
-                    }
-
-                    if (!jestF || (suma < 4)) {
-                        punkty[ptr++] = vertexData[(uu * 16 + jj)][yy * 16 + ii].x;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj)][yy * 16 + ii].y;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj)][yy * 16 + ii].z;
-                        punkty[ptr++] = jj * tfile->tdata[(yy * 16 + uu)*13 + 3 + 6] + ii * tfile->tdata[(yy * 16 + uu)*13 + 4 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 1 + 6];
-                        punkty[ptr++] = jj * tfile->tdata[(yy * 16 + uu)*13 + 5 + 6] + ii * tfile->tdata[(yy * 16 + uu)*13 + 6 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 2 + 6];
-
-                        punkty[ptr++] = vertexData[(uu * 16 + jj)][yy * 16 + ii + 1].x;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj)][yy * 16 + ii + 1].y;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj)][yy * 16 + ii + 1].z;
-                        punkty[ptr++] = (jj) * tfile->tdata[(yy * 16 + uu)*13 + 3 + 6] + (ii + 1) * tfile->tdata[(yy * 16 + uu)*13 + 4 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 1 + 6];
-                        punkty[ptr++] = (jj) * tfile->tdata[(yy * 16 + uu)*13 + 5 + 6] + (ii + 1) * tfile->tdata[(yy * 16 + uu)*13 + 6 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 2 + 6];
-
-                        punkty[ptr++] = vertexData[(uu * 16 + jj + 1)][yy * 16 + ii + 1].x;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj + 1)][yy * 16 + ii + 1].y;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj + 1)][yy * 16 + ii + 1].z;
-                        punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * 16 + uu)*13 + 3 + 6] + (ii + 1) * tfile->tdata[(yy * 16 + uu)*13 + 4 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 1 + 6];
-                        punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * 16 + uu)*13 + 5 + 6] + (ii + 1) * tfile->tdata[(yy * 16 + uu)*13 + 6 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 2 + 6];
-
-                        punkty[ptr++] = vertexData[(uu * 16 + jj)][yy * 16 + ii].x;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj)][yy * 16 + ii].y;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj)][yy * 16 + ii].z;
-                        punkty[ptr++] = jj * tfile->tdata[(yy * 16 + uu)*13 + 3 + 6] + ii * tfile->tdata[(yy * 16 + uu)*13 + 4 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 1 + 6];
-                        punkty[ptr++] = jj * tfile->tdata[(yy * 16 + uu)*13 + 5 + 6] + ii * tfile->tdata[(yy * 16 + uu)*13 + 6 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 2 + 6];
-
-                        punkty[ptr++] = vertexData[(uu * 16 + jj + 1)][yy * 16 + ii + 1].x;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj + 1)][yy * 16 + ii + 1].y;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj + 1)][yy * 16 + ii + 1].z;
-                        punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * 16 + uu)*13 + 3 + 6] + (ii + 1) * tfile->tdata[(yy * 16 + uu)*13 + 4 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 1 + 6];
-                        punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * 16 + uu)*13 + 5 + 6] + (ii + 1) * tfile->tdata[(yy * 16 + uu)*13 + 6 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 2 + 6];
-
-                        punkty[ptr++] = vertexData[(uu * 16 + jj + 1)][yy * 16 + ii].x;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj + 1)][yy * 16 + ii].y;
-                        punkty[ptr++] = vertexData[(uu * 16 + jj + 1)][yy * 16 + ii].z;
-                        punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * 16 + uu)*13 + 3 + 6] + (ii) * tfile->tdata[(yy * 16 + uu)*13 + 4 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 1 + 6];
-                        punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * 16 + uu)*13 + 5 + 6] + (ii) * tfile->tdata[(yy * 16 + uu)*13 + 6 + 6] + tfile->tdata[(yy * 16 + uu)*13 + 2 + 6];
-                    }
-                }
-            }
-            VBO->write((uu * 16 + yy) * 16 * 16 * 6 * 5 * sizeof (GLfloat), punkty, 16 * 16 * 6 * 5 * sizeof (GLfloat));
-        }
-    }
-
-    VBO->release();
-    delete[] punkty;
-
-    if(showBlob)
-    if(showBlob)
-        initBlob();
-    else
-        terrainBlob.deleteVBO();
-    else
-        terrainBlob.deleteVBO();
-    //for (int i = 0; i < 257; i++)
-    //    delete normalData[i];
-    //delete normalData;
-    for (int i = 0; i < 257; i++)
-        delete[] vertexData[i];
-    delete[] vertexData;
-}*/
-
-bool Terrain::oglInit() {
-    static_assert(sizeof(GLfloat) == sizeof(float));
-    if(tfile == NULL || tfile->nsamples == NULL){
-        qWarning() << "Terrain render initialization rejected: missing terrain descriptor";
+bool Terrain::snapshotRenderMesh(TerrainMeshInput &input) {
+    RouteFrameProfile::Scope snapshot(RouteFrameProfile::Stage::TerrainMeshSnapshot, &name);
+    if (!tfile || !tfile->nsamples || !tfile->sampleSize || !tfile->tdata || !terrainData)
         return false;
-    }
-
-    TerrainGridMath::RenderLayout layout;
-    TerrainGridMath::RenderLayoutError layoutError;
     const int samples = *tfile->nsamples;
     const int patches = tfile->patchsetNpatches;
-    const auto releaseCpuMesh = [this, samples](){
-        if(vertexData != NULL){
-            for(int i = 0; i < samples + 1; ++i)
-                delete[] vertexData[i];
-            delete[] vertexData;
-            vertexData = NULL;
-        }
-        if(normalData != NULL){
-            for(int i = 0; i < samples + 1; ++i)
-                delete[] normalData[i];
-            delete[] normalData;
-            normalData = NULL;
-        }
-    };
-    if(!TerrainGridMath::calculateRenderLayout(
-            samples, patches, layout, layoutError)){
+    TerrainGridMath::RenderLayoutError error;
+    if (!TerrainGridMath::calculateRenderLayout(samples, patches, input.layout, error)) {
         qWarning() << "Terrain render initialization rejected:"
-                   << TerrainGridMath::renderLayoutErrorText(layoutError)
-                   << "samples" << samples << "patches" << patches;
-        releaseCpuMesh();
+                   << TerrainGridMath::renderLayoutErrorText(error) << "samples" << samples
+                   << "patches" << patches;
         return false;
     }
-    const int patchRes = layout.patchResolution;
+    input.sampleSize = *tfile->sampleSize;
+    if (input.sampleSize <= 0 || input.sampleSize > std::numeric_limits<int>::max() / samples)
+        return false;
 
-    if(VAO == NULL || VBO == NULL){
-        qWarning() << "Terrain render initialization rejected: missing VAO/VBO objects";
-        releaseCpuMesh();
-        return false;
+    {
+        RouteFrameProfile::Scope borders(RouteFrameProfile::Stage::TerrainBorderRead, &name);
+        Game::terrainLib->fillRaw(this, int(mojex), int(mojez));
     }
+    const int row = samples + 1;
+    input.heights.resize(std::size_t(row) * row);
+    if (jestF)
+        input.flags.resize(input.heights.size());
+    for (int i = 0; i < row; ++i) {
+        const auto offset = std::size_t(i) * row;
+        std::copy_n(terrainData[i], row, input.heights.data() + offset);
+        if (jestF)
+            std::copy_n(fData[i], row, input.flags.data() + offset);
+    }
+    input.textureTransforms.resize(input.layout.patchCount);
+    for (std::size_t patch = 0; patch < input.layout.patchCount; ++patch)
+        std::copy_n(tfile->tdata + patch * 13 + 7, 6, input.textureTransforms[patch].begin());
+    return true;
+}
 
-    QOpenGLContext *context = QOpenGLContext::currentContext();
-    if(context == NULL){
-        qWarning() << "Terrain render initialization rejected: no current OpenGL context";
-        releaseCpuMesh();
+bool Terrain::uploadRenderMesh(const TerrainMeshData &mesh) {
+    RouteFrameProfile::Scope upload(RouteFrameProfile::Stage::TerrainMeshUpload, &name);
+    auto *context = QOpenGLContext::currentContext();
+    if (!context || !VAO || !VBO)
         return false;
-    }
-    QOpenGLFunctions *f = context->functions();
-
-    if(!VAO->isCreated()){
-        if(!VAO->create()){
-            qWarning() << "Terrain render initialization failed to create VAO";
-            releaseCpuMesh();
-            return false;
-        }
-    }
-    if(!VBO->isCreated() && !VBO->create()){
-        qWarning() << "Terrain render initialization failed to create VBO";
-        releaseCpuMesh();
+    if ((!VAO->isCreated() && !VAO->create()) || (!VBO->isCreated() && !VBO->create()))
         return false;
-    }
     QOpenGLVertexArrayObject::Binder vaoBinder(VAO);
-    if(!VBO->bind()){
-        qWarning() << "Terrain render initialization failed to bind VBO";
-        releaseCpuMesh();
+    if (!VBO->bind())
         return false;
-    }
-    const GLenum preAllocationError = f->glGetError();
-    if(preAllocationError != GL_NO_ERROR)
-        qWarning() << "Pre-existing OpenGL error before terrain VBO allocation:"
-                   << QString::number(preAllocationError, 16);
-    VBO->allocate(static_cast<int>(layout.totalByteCount));
-    const GLenum allocationError = f->glGetError();
-    if(allocationError != GL_NO_ERROR
-            || VBO->size() != static_cast<int>(layout.totalByteCount)){
-        qWarning() << "Terrain VBO allocation failed: requested"
-                   << layout.totalByteCount << "bytes, allocated" << VBO->size()
-                   << "OpenGL error" << QString::number(allocationError, 16);
+
+    auto *f = context->functions();
+    const GLenum priorError = f->glGetError();
+    if (priorError != GL_NO_ERROR)
+        qWarning() << "Pre-existing OpenGL error before terrain VBO allocation:" << priorError;
+    const int bytes = int(mesh.patchVertices.size() * sizeof(float));
+    VBO->allocate(mesh.patchVertices.data(), bytes);
+    const GLenum error = f->glGetError();
+    if (error != GL_NO_ERROR || VBO->size() != bytes) {
+        qWarning() << "Terrain VBO upload failed: requested" << bytes
+                   << "bytes, allocated" << VBO->size() << "OpenGL error" << error;
         VBO->release();
-        releaseCpuMesh();
         return false;
     }
     f->glEnableVertexAttribArray(0);
     f->glEnableVertexAttribArray(1);
     f->glEnableVertexAttribArray(2);
-    f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof (GLfloat), 0);
-    f->glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof (GLfloat), reinterpret_cast<void *> (3 * sizeof (GLfloat)));
-    f->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof (GLfloat), reinterpret_cast<void *> (6 * sizeof (GLfloat)));
-    
-    //int ilosc = 16 * 16;
-    //int suma;
-    std::vector<GLfloat> punkty(layout.patchFloatCount);
-    if(Game::debugOutput)
-        qDebug() << "Terrain render buffers: samples" << samples
-                 << "patches" << patches << "patch resolution" << patchRes
-                 << "CPU patch floats" << layout.patchFloatCount
-                 << "VBO bytes" << layout.totalByteCount;
-    //  var punkty = Terrain.punkty;
-    std::size_t finalWriteEnd = 0;
-    for (int uu = 0; uu < patches; uu++) {
-        for (int yy = 0; yy < patches; yy++) {
-            std::size_t ptr = 0;
-            // Terrain-hole flags omit complete triangles, but rendering keeps a
-            // fixed vertex range for every patch. Clear the reusable scratch
-            // block so omitted triangles remain degenerate instead of uploading
-            // uninitialized heap data as enormous terrain vertices.
-            std::fill(punkty.begin(), punkty.end(), 0.0f);
-            bool fi0j0 = true, fi1j0 = true, fi0j1 = true, fi1j1 = true;
-
-            for (int ii = 0; ii < patchRes; ii++) {
-                for (int jj = 0; jj < patchRes; jj++) {
-                    if (jestF) {
-                        fi0j0 = !(((fData[yy * patchRes + ii][uu * patchRes + jj]) & 0x04) >> 2);
-                        fi0j1 = !(((fData[yy * patchRes + ii][uu * patchRes + jj + 1]) & 0x04) >> 2);
-                        fi1j1 = !(((fData[yy * patchRes + ii + 1][uu * patchRes + jj + 1]) &0x04) >> 2);
-                        fi1j0 = !(((fData[yy * patchRes + ii + 1][uu * patchRes + jj]) & 0x04) >> 2);
-                    }
-                    /*if (jestF) {
-                        suma = ((fData[yy * 16 + ii][uu * 16 + jj]) & 0x04);
-                        suma += ((fData[yy * 16 + ii][uu * 16 + jj + 1]) & 0x04);
-                        suma += ((fData[yy * 16 + ii + 1][uu * 16 + jj + 1]) & 0x04);
-                        suma += ((fData[yy * 16 + ii + 1][uu * 16 + jj]) & 0x04);
-                    }*/
-
-                    //if (!jestF || (suma < 4)) {
-                        if(((ii+jj) % 2 == 0)){
-                            if(fi0j0 && fi1j0 && fi1j1){
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii].z;
-                            punkty[ptr++] = jj * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + ii * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = jj * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + ii * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = (jj) * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = (jj) * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-                            }
-                            ///////////////////////////////////////////////////////////
-                            if(fi0j0 && fi0j1 && fi1j1){
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii].z;
-                            punkty[ptr++] = jj * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + ii * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = jj * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + ii * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii].z;
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + (ii) * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + (ii) * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-                            }
-                        }
-                        if(((ii+jj) % 2 == 1)){
-                            if(fi0j1 && fi1j1 && fi1j0){
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = (jj) * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = (jj) * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-                            
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii].z;
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + (ii) * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + (ii) * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-                            }
-                            ///////////////////////////////////////////////////////////
-                            if(fi0j0 && fi0j1 && fi1j0){
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii].z;
-                            punkty[ptr++] = jj * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + ii * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = jj * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + ii * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii + 1].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii + 1].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj)][yy * patchRes + ii + 1].z;
-                            punkty[ptr++] = (jj) * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = (jj) * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + (ii + 1) * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii].x;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii].y;
-                            punkty[ptr++] = vertexData[(uu * patchRes + jj + 1)][yy * patchRes + ii].z;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii].x;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii].y;
-                            punkty[ptr++] = normalData[(uu * patchRes + jj + 1)][yy * patchRes + ii].z;
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 3 + 6] + (ii) * tfile->tdata[(yy * patches + uu)*13 + 4 + 6] + tfile->tdata[(yy * patches + uu)*13 + 1 + 6];
-                            punkty[ptr++] = (jj + 1) * tfile->tdata[(yy * patches + uu)*13 + 5 + 6] + (ii) * tfile->tdata[(yy * patches + uu)*13 + 6 + 6] + tfile->tdata[(yy * patches + uu)*13 + 2 + 6];
-                            }
-                        }
-                    //}
-                }
-            }
-            /*for(var jj = 0; jj<16; jj++){
-                for(var ii = 0; ii<16; ii++){
-                    punkty.put(normalData[uu*16+jj][yy*16+ii].toFloat());
-                    punkty.put(normalData[uu*16+jj][yy*16+ii+1].toFloat());
-                    punkty.put(normalData[uu*16+jj+1][yy*16+ii+1].toFloat());
-
-                    punkty.put(normalData[uu*16+jj][yy*16+ii].toFloat());
-                    punkty.put(normalData[uu*16+jj+1][yy*16+ii+1].toFloat());
-                    punkty.put(normalData[uu*16+jj+1][yy*16+ii].toFloat());
-                }
-            }*/
-
-            //QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
-            //if(!VBO[0]->isCreated()){
-                //VAO[uu * 16 + yy]->create();
-           //     VBO[0]->create();
-            //}
-            
-            //QOpenGLVertexArrayObject::Binder vaoBinder(VAO[uu * 16 + yy]);
-            
-            //VBO[0]->bind();
-            //VBO[0]->
-            if(ptr > layout.patchFloatCount){
-                qCritical() << "Terrain CPU vertex generation exceeded its buffer:"
-                            << ptr << ">" << layout.patchFloatCount
-                            << "patch" << uu << yy;
-                VBO->release();
-                releaseCpuMesh();
-                return false;
-            }
-            const std::size_t patchIndex =
-                    static_cast<std::size_t>(uu) * patches + yy;
-            const std::size_t writeOffset =
-                    patchIndex * layout.patchByteCount;
-            const std::size_t writeEnd = writeOffset + layout.patchByteCount;
-            if(writeEnd > layout.totalByteCount){
-                qCritical() << "Terrain VBO write exceeds allocation:"
-                            << writeEnd << ">" << layout.totalByteCount
-                            << "patch" << uu << yy;
-                VBO->release();
-                releaseCpuMesh();
-                return false;
-            }
-            finalWriteEnd = writeEnd;
-            VBO->write(static_cast<int>(writeOffset), punkty.data(),
-                       static_cast<int>(layout.patchByteCount));
-            const GLenum writeError = f->glGetError();
-            if(writeError != GL_NO_ERROR){
-                qWarning() << "Terrain VBO write failed for patch" << uu << yy
-                           << "offset" << writeOffset
-                           << "bytes" << layout.patchByteCount
-                           << "OpenGL error" << QString::number(writeError, 16);
-                VBO->release();
-                releaseCpuMesh();
-                return false;
-            }
-            //VBO[0]->allocate(punkty, 16 * 16 * 6 * 5 * sizeof (GLfloat));
-            //f->glEnableVertexAttribArray(0);
-            //f->glEnableVertexAttribArray(1);
-            //f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof (GLfloat), 0);
-            //f->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof (GLfloat), reinterpret_cast<void *> (3 * sizeof (GLfloat)));
-            //VBO[0]->release();
-        }
-    }
-
-    if(finalWriteEnd != layout.totalByteCount){
-        qCritical() << "Terrain VBO writes did not cover the allocation:"
-                    << finalWriteEnd << "!=" << layout.totalByteCount;
-        VBO->release();
-        releaseCpuMesh();
-        return false;
-    }
-
+    f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), nullptr);
+    f->glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
+                             reinterpret_cast<void *>(3 * sizeof(float)));
+    f->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
+                             reinterpret_cast<void *>(6 * sizeof(float)));
     VBO->release();
+    patchBounds = mesh.bounds;
 
-    if(showBlob)
-        initBlob();
+    if (showBlob)
+        initBlob(mesh);
     else
         terrainBlob.deleteVBO();
-    //for (int i = 0; i < 257; i++)
-    //    delete normalData[i];
-    //delete normalData;
-
-    releaseCpuMesh();
     return true;
 }
 
-void Terrain::initBlob(){
+void Terrain::initBlob(const TerrainMeshData &mesh) {
+
     const float alpha = -0.01f;
     const int samples = *tfile->nsamples;
     const int rowWidth = samples + 1;
@@ -3636,12 +3465,12 @@ void Terrain::initBlob(){
     const float step = 1.0f / samples;
     for(int jj = 0; jj <= samples; ++jj){
         for(int ii = 0; ii <= samples; ++ii){
-            punkty[ptr++] = vertexData[jj][ii].x;
-            punkty[ptr++] = vertexData[jj][ii].y+0.00;
-            punkty[ptr++] = vertexData[jj][ii].z;
-            punkty[ptr++] = normalData[jj][ii].x;
-            punkty[ptr++] = normalData[jj][ii].y;
-            punkty[ptr++] = normalData[jj][ii].z;
+            punkty[ptr++] = mesh.positions[std::size_t(jj) * rowWidth + ii].x;
+            punkty[ptr++] = mesh.positions[std::size_t(jj) * rowWidth + ii].y+0.00;
+            punkty[ptr++] = mesh.positions[std::size_t(jj) * rowWidth + ii].z;
+            punkty[ptr++] = mesh.normals[std::size_t(jj) * rowWidth + ii].x;
+            punkty[ptr++] = mesh.normals[std::size_t(jj) * rowWidth + ii].y;
+            punkty[ptr++] = mesh.normals[std::size_t(jj) * rowWidth + ii].z;
             punkty[ptr++] = (jj)*step;
             punkty[ptr++] = (ii)*step;
             punkty[ptr++] = alpha;
@@ -3985,10 +3814,13 @@ bool Terrain::save(QString *error,
 
     // A previously saved opposite-format target may already be cached.
     // Reload it only after the transaction succeeds; never reuse stale pixels.
-    for(const QString &destination : changedTextureDestinations)
+    for(const QString &destination : changedTextureDestinations) {
+        TerrainTextureStream::invalidate(destination);
         if(TexLib::getTex(destination) >= 0) TexLib::addTex(destination,true);
+    }
 
     for(const TextureSave &save : textureSaves) {
+        TerrainTextureStream::invalidate(save.destination);
         save.texture->hashid.removeAll(save.texture->pathid.toLower());
         save.texture->pathid = save.destination.toLower();
         if(!save.texture->hashid.contains(save.texture->pathid)) save.texture->hashid.append(save.texture->pathid);

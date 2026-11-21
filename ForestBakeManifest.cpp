@@ -66,12 +66,14 @@ QJsonObject entryObject(const ForestBakeManifestEntry &entry) {
     return object;
 }
 
-bool expandedWorldFile(QByteArray data, QByteArray &expanded) {
+}
+
+bool WorldCleanupValidation::expandMstsFile(QByteArray data, QByteArray &expanded) {
     expanded = data;
     if(data.size() < 18) return true;
     const bool hasBom = static_cast<unsigned char>(data[0]) == 0xFF
         && static_cast<unsigned char>(data[1]) == 0xFE;
-    if(!hasBom && data.size() > 16 && data[7] == 'F') {
+    if(!hasBom && data.size() > 16 && data.startsWith("SIMISA@F")) {
         data[12] = data[11];
         data[13] = data[10];
         data[14] = data[9];
@@ -81,7 +83,8 @@ bool expandedWorldFile(QByteArray data, QByteArray &expanded) {
         expanded = data.left(16) + payload;
         return true;
     }
-    if(hasBom && data.size() > 34 && data[16] == 'F') {
+    if(hasBom && data.size() > 34 && data[16] == 'F'
+            && data.mid(2, 12) == QByteArray("S\0I\0M\0I\0S\0A\0", 12)) {
         data[30] = data[19];
         data[31] = data[18];
         data[32] = data[17];
@@ -94,10 +97,10 @@ bool expandedWorldFile(QByteArray data, QByteArray &expanded) {
     return true;
 }
 
-bool decodedWorldFile(const QByteArray &input, QString &text,
+bool WorldCleanupValidation::decodeWorldFile(const QByteArray &input, QString &text,
                       QByteArray &binaryPayload) {
     QByteArray data;
-    if(!expandedWorldFile(input, data)) return false;
+    if(!expandMstsFile(input, data)) return false;
     // Expansion retains the compressed wrapper, whose size bytes are not text.
     // Restore its ordinary signature before decoding a textual world payload.
     if(input.size() > 16 && input.startsWith("SIMISA@F"))
@@ -154,6 +157,7 @@ bool decodedWorldFile(const QByteArray &input, QString &text,
     return !decoder.hasError() && WorldCleanupValidation::completeTextWorld(text);
 }
 
+namespace {
 bool isGeneratedBakeName(const QString &name) {
     static const QRegularExpression pattern(
         QStringLiteral("^V[+-]\\d{5}[+-]\\d{5}-\\d{2}\\.s$"),
@@ -385,7 +389,7 @@ bool ForestBakeManifest::pruneUnreferenced(const QString &routePath,
         QByteArray binaryPayload;
         const QByteArray data = worldFile.readAll();
         if(worldFile.error() != QFileDevice::NoError
-                || !decodedWorldFile(data, worldText, binaryPayload)) {
+                || !WorldCleanupValidation::decodeWorldFile(data, worldText, binaryPayload)) {
             error = "Unable to decode saved world file safely: "
                     + worldFile.fileName();
             return false;

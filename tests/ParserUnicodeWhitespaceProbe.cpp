@@ -7,6 +7,7 @@
 #include "FileBuffer.h"
 #include "ParserX.h"
 #include "ActivityPathId.h"
+#include "TrackShape.h"
 
 #include <QDebug>
 #include <QString>
@@ -48,6 +49,30 @@ static bool expectToken(FileBuffer *buffer, const QString &expected){
 }
 
 int main(){
+    // Invoke the production reader on complete and malformed path blocks.
+    {
+        auto buffer = makeBuffer("12 7 8 9 10 11 12 13 14 15 16 17 18 )");
+        TrackShape::SectionIdx path;
+        if(!TrackShape::readPath(&buffer, path, false) || path.n != 12 || path.sect[11] != 18)
+            return 16;
+    }
+    {
+        auto buffer = makeBuffer("2 -1.5 2.5 3.5 45 11 12 )");
+        TrackShape::SectionIdx path;
+        if(!TrackShape::readPath(&buffer, path, true) || path.n != 2
+                || path.pos[0] != -1.5f || path.rotDeg != 45 || path.sect[1] != 12)
+            return 17;
+    }
+    for(const QString &invalid : QStringList{"13 )", "-1 )", "1.5 1 )", "2 10 )",
+                                              "1 10 11 )", "1 10", "1 -1 )"}){
+        auto buffer = makeBuffer(invalid);
+        TrackShape::SectionIdx path;
+        path.n = 5;
+        if(TrackShape::readPath(&buffer, path, false) || path.n != 5){
+            qCritical() << "Accepted or partially applied malformed track path:" << invalid;
+            return 18;
+        }
+    }
     const QStringList pathIds {
         QStringLiteral("M\u00fcnster"),
         QStringLiteral("\u00c4\u00d6\u00dc_\u00e4\u00f6\u00fc_\u00df-01"),

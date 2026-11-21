@@ -211,6 +211,7 @@ public:
     static float gradeAssistNextPercent;
     
     static float uiScale;
+    static QString panelAlignment;
     
     static bool markerLines;
     static bool seasonalEditing;

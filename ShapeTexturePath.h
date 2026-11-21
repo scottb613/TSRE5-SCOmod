@@ -39,4 +39,46 @@ inline QString resolve(const QStringList &basePaths, QString fileName,
         .replace('\\', '/');
 }
 
+inline QString rollingStockSeason(int flags, QString season) {
+    season = season.trimmed().toLower();
+    if(season == "snow")
+        season = "wintersnow";
+    if(flags & 0x03) // Snow or SnowTrack takes precedence over other selectors.
+        return season == "winter" || season.endsWith("snow") ? QString("snow") : QString();
+
+    const QStringList selectors{"spring", "autumn", "winter", "springsnow",
+                                "autumnsnow", "wintersnow"};
+    const qsizetype index = selectors.indexOf(season);
+    return index >= 0 && (flags & (0x04 << index)) != 0 ? season : QString();
+}
+
+inline QString resolveRollingStock(QString basePath, const QString &seasonSubdir,
+                                   QString fileName) {
+    basePath.replace('\\', '/');
+    fileName.replace('\\', '/');
+    const QString suffix = QFileInfo(fileName).suffix().toLower();
+    if((suffix != "ace" && suffix != "dds") || fileName.contains(':'))
+        return {};
+
+    const QString selectedRoot = seasonSubdir.isEmpty() ? basePath : basePath + '/' + seasonSubdir;
+    const QString requested = QDir::cleanPath(selectedRoot + '/' + fileName);
+    QString candidate = requested;
+    const QStringList selectors{"autumn", "autumnsnow", "snow", "spring",
+                                "springsnow", "winter", "wintersnow"};
+    // Open Rails climbs only through named season directories, up to five attempts.
+    for(int depth = 0; depth < 5; ++depth) {
+        const QString stem = candidate.chopped(3);
+        if(QFileInfo(stem + "dds").isFile())
+            return stem + "dds";
+        if(QFileInfo(stem + "ace").isFile())
+            return stem + "ace";
+        const QFileInfo file(candidate);
+        const QFileInfo directory(file.path());
+        if(!selectors.contains(directory.fileName(), Qt::CaseInsensitive))
+            break;
+        candidate = QDir(directory.path()).filePath(file.fileName());
+    }
+    return requested;
+}
+
 }

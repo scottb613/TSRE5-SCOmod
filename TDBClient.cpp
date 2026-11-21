@@ -24,6 +24,7 @@ TDBClient::TDBClient(const TDBClient& o) : TDB(o){
 void TDBClient::updateTrNode(int nid){
     if(nid < 0)
         return;
+    TDB::updateTrNode(nid);
     Game::serverClient->updateTrackNodeData(nid, this->tdbId, this->trackNodes[nid]);
 }
 
@@ -34,6 +35,7 @@ void TDBClient::updateTrItem(int iid){
 }
 
 void TDBClient::updateTrackSection(int id){
+    TDB::updateTrackSection(id);
     Game::serverClient->updateTrackSectionData(this->tsection->sekcja[id]);
 }
 

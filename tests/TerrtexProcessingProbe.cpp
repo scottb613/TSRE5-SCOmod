@@ -362,6 +362,54 @@ void changedSourceResumeTests() {
             "valid resume cleans originals only after successful references");
     }
 }
+void cancellationTests() {
+    for(const auto output:{Output::Keep,Output::Dds}) {
+        QTemporaryDir temp;
+        const QString root=temp.path()+"/terrtex", journal=temp.path()+"/process.json";
+        check(temp.isValid()&&QDir().mkpath(root),"cancellation fixture folder");
+        const QByteArray raw=ace(AceEncoding::Rgb,false);
+        const QByteArray compressed=dds(1,1);
+        check(write(root+"/a.ace",raw)&&write(root+"/b.ace",raw)
+            &&write(root+"/already.dds",compressed),"cancellation fixture textures");
+        auto policy=processor(root,{true,Mipmaps::Keep,output});
+        const auto transform=policy.transform;
+        bool requested=false, requestOnCompress=true;
+        QString firstSource;
+        policy.transform=[&](const QString &path,const QByteArray &input,TerrtexProduction::Processed &change,QString &error) {
+            if(!transform(path,input,change,error)) return false;
+            if(requestOnCompress && change.compressed) {
+                firstSource=QFileInfo(path).fileName();
+                requested=true;
+            }
+            return true;
+        };
+        int references=0;
+        const auto publish=[&](const QMap<QString,QString> &,QString &) {
+            ++references;
+            return true;
+        };
+        TerrtexProduction::Result result;
+        QString error;
+        check(TerrtexProduction::run(root,journal,{},publish,result,error,&policy,[&]{return requested;})
+            &&result.cancelled&&result.compressed==1&&!result.referencesStarted&&references==0,
+            "cancel waits for the active texture commit and stops before finalization");
+        if(firstSource.isEmpty()) continue;
+        const QString firstOutput=policy.destination(firstSource);
+        const QString nextSource=firstSource=="a.ace"?"b.ace":"a.ace";
+        const QByteArray completed=read(root+'/'+firstOutput);
+        check(!completed.isEmpty()&&completed!=raw&&read(root+'/'+nextSource)==raw
+            &&read(root+"/already.dds")==compressed,"cancel keeps first output and untouched inputs");
+        if(output==Output::Dds)
+            check(read(root+'/'+firstSource)==raw,"renamed input remains until publication of references");
+        requested=false;
+        requestOnCompress=false;
+        check(TerrtexProduction::run(root,journal,{},publish,result,error,&policy,[&]{return requested;})
+            &&!result.cancelled&&result.compressed==1&&result.resumed>=1,
+            "resume compresses only the remaining uncompressed texture");
+        check(read(root+'/'+firstOutput)==completed&&read(root+"/already.dds")==compressed
+            &&references==(output==Output::Dds?1:0),"resume preserves completed bytes and publishes references once");
+    }
+}
 void routeTests() {
     QTemporaryDir temp; check(temp.isValid(),"temporary route available");
     const QString root=temp.path()+"/terrtex",journal=temp.path()+"/process.json";
@@ -420,6 +468,6 @@ void routeTests() {
 }
 }
 int main(int argc,char **argv) {
-    QCoreApplication app(argc,argv); ddsTests(); aceTests(); formatTests(); routeTests(); reverseRouteTests(); changedSourceResumeTests();
+    QCoreApplication app(argc,argv); ddsTests(); aceTests(); formatTests(); routeTests(); reverseRouteTests(); changedSourceResumeTests(); cancellationTests();
     std::cout<<"TERRTEX processing checks="<<checks<<" failures="<<failures<<'\n'; return failures?1:0;
 }

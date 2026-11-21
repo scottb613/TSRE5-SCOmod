@@ -12,6 +12,7 @@
 #define	TRACKSHAPE_H
 
 #include <QString>
+#include "RouteSectionPolicy.h"
 
 class QTextStream;
 class FileBuffer;
@@ -20,13 +21,13 @@ class TrackShape {
 public:
     struct SectionIdx{
         int n = 0;
-        float pos[3];
+        float pos[3]{};
         float rotDeg = 0;
-        unsigned int sect[12];
+        unsigned int sect[RouteSectionPolicy::trackPathCapacity]{};
     };
     
     QString filename;
-    int id;
+    int id = -1;
     int numpaths = 0;
     int mainroute = -1;
     int clearancedist = -1;
@@ -35,7 +36,7 @@ public:
     bool roadshape = false;
     bool manualjunctionshape = false;
     bool dyntrack = false;
-    SectionIdx *path;
+    SectionIdx *path = nullptr;
     int xoverpts = 0;
     float *xoverpt = NULL;
     
@@ -47,7 +48,10 @@ public:
     QString getHashString();
     //void getShapePath();
     void saveToStream(QTextStream &out);
-    void loadUtf16Data(FileBuffer *data);
+    bool loadUtf16Data(FileBuffer *data);
+    static bool readIndex(FileBuffer *data, int &index);
+    static bool atBlockEnd(FileBuffer *data);
+    static bool readPath(FileBuffer *data, SectionIdx &result, bool positioned);
 private:
 
 };

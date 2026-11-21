@@ -415,6 +415,12 @@ public:
         routeHelp->setStyleSheet("QLabel { color: #c7c7c7; padding: 0px 3px 2px 3px; }");
         cleanupLayout->addWidget(routeHelp);
 
+        removeDynaTrax = new QPushButton("Remove DYNATRAX");
+        removeDynaTrax->setToolTip(
+            "Scans the route for DynaTrax and previews conversion to native Dynamic Track.");
+        GuiFunct::styleEditorActionButton(removeDynaTrax);
+        cleanupLayout->addWidget(removeDynaTrax);
+
         removeInteractives = new QPushButton("Remove All Interactives");
         removeInteractives->setToolTip(
             "Loads every world tile, then removes all TrackDB/RoadDB-linked interactive "
@@ -510,6 +516,11 @@ public:
             this->owner->removeAllInteractivesEnabled();
             this->owner->requestMainFocus();
         });
+        QObject::connect(removeDynaTrax, &QPushButton::clicked, owner, [this](){
+            this->owner->userButtonPressed();
+            this->owner->removeDynaTraxEnabled();
+            this->owner->requestMainFocus();
+        });
         QObject::connect(deleteInstances, &QPushButton::clicked, owner, [this](){
             this->owner->userButtonPressed();
             this->owner->deleteSelectedInstancesEnabled();
@@ -568,6 +579,9 @@ protected:
 private:
     void syncSelection(){
         const bool trackSelected = owner->hasSelectedTrackForHacks();
+        const bool dynamicTrackSelected = owner->hacksSelection && owner->hacksSelection->loaded
+            && owner->hacksSelection->type == "dyntrack";
+        removeDynaTrax->setVisible(trackSelected || dynamicTrackSelected);
         const bool signalSelected = owner->hasSelectedSignalForHacks();
         const bool terrainSelected = owner->hacksContextType == GameObj::terrainobj;
         const WorldObj *object = owner->hacksSelection;
@@ -587,7 +601,7 @@ private:
         deletePolyVegBakes->setVisible(vegetationSelected);
         replaceForests->setVisible(vegetationSelected);
         deleteWireBakes->setVisible(trackSelected || wireSelected);
-        const bool routeActions = terrainSelected || trackSelected || signalSelected
+        const bool routeActions = terrainSelected || trackSelected || dynamicTrackSelected || signalSelected
             || owner->hasSelectedStaticForHacks() || vegetationSelected || wireSelected;
         cleanupCard->setVisible(routeActions);
         const bool multipleSections = int(trackSelected)+int(signalSelected)+int(routeActions)>1;
@@ -633,6 +647,7 @@ private:
 
     PropertiesTrackObj *owner;
     QLabel *trackTitle = NULL, *signalTitle = NULL, *cleanupTitle = NULL;
+    QPushButton *removeDynaTrax = NULL;
     QFrame *trackCard = NULL, *signalCard = NULL, *cleanupCard = NULL;
     QPushButton *removeInteractives = NULL, *resetTerrtex = NULL, *compressTerrtex = NULL;
     QPushButton *paintRoute = NULL;
@@ -1171,6 +1186,12 @@ void PropertiesTrackObj::hacksWindowClosed(){
         activeHacksButton = NULL;
     }
     requestMainFocus();
+}
+
+void PropertiesTrackObj::removeDynaTraxEnabled(){
+    if(Game::currentRoute && hacksSelection && hacksSelection->loaded
+            && (hasSelectedTrackForHacks() || hacksSelection->type == "dyntrack"))
+        Game::currentRoute->removeDynaTrax(hacksWindow);
 }
 
 void PropertiesTrackObj::removeAllInteractivesEnabled(){

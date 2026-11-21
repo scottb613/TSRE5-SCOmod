@@ -43,6 +43,7 @@ public:
     QString pathid;
     QVector<QString> hashid;
     bool loaded = false;
+    bool decodePending = false; // Set and cleared on the editor thread.
     int ref = 0;
     bool glLoaded = false;
     bool editable = false;

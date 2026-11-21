@@ -20,7 +20,7 @@ public:
     void delRef(int texx);
     void addRef(int texx);
     int addShape(QString path);
-    int addShape(QString path, QString texPath);
+    int addShape(QString path, QString texPath, bool rollingStock = false);
     bool reloadShapeIfCached(QString path);
     void refreshSeasonTextures();
     std::shared_ptr<GltfPreview> getGltfShape(const QString &path, QString &error);

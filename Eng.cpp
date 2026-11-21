@@ -9,6 +9,7 @@
  */
 
 #include "Eng.h"
+#include "FreightAnimPath.h"
 #include "ParserX.h"
 #include "FileBuffer.h"
 #include "ReadFile.h"
@@ -539,9 +540,13 @@ void Eng::load(){
                                 if(loadpos == "above") loadoffset[1] = loadoffset[1] + loadbase;
 
                                 /// Send values to the eng sub-shape pointer                                
+                                const auto paths = FreightAnimPath::resolveLoad(
+                                    Game::root + "/TRAINS/TRAINSET", loadshape);
+                                if(paths.shape.isEmpty())
+                                    continue;
                                 freightanimShape.push_back(EngShape());
-                                freightanimShape.back().name = "../" + loadshape ;
-                                freightanimShape.back().altpath =  loaddir;
+                                freightanimShape.back().name = paths.shape;
+                                freightanimShape.back().containerTexturePath = paths.textures;
                                     
                                 freightanimShape.back().x = loadoroffset[0] + loadoffset[0];                                    
                                 freightanimShape.back().y = loadoroffset[1] + loadoffset[1];
@@ -888,10 +893,30 @@ void Eng::drawBorder3d(){
 
 // Rolling-stock references keep their authored names. glTF resources belong to
 // the active ShapeLib/context, while legacy shapes retain their existing IDs.
-int Eng::loadLegacyShape(const QString &name, const QString &texturePath) {
+int Eng::loadLegacyShape(const QString &name) {
     if(GltfModel::accepts(name))
         return -1;
-    return Game::currentShapeLib->addShape(path + "/" + name, texturePath);
+    const auto paths = FreightAnimPath::resolve(path, name);
+    return Game::currentShapeLib->addShape(paths.shape, paths.textures, true);
+}
+
+void Eng::loadFreightShapes() {
+    const long long shapeLibId = reinterpret_cast<long long>(Game::currentShapeLib);
+    for(EngShape &model : freightanimShape) {
+        if(model.id.contains(shapeLibId))
+            continue;
+        if(model.name.length() <= 1 || GltfModel::accepts(model.name)) {
+            model.id[shapeLibId] = -1;
+            continue;
+        }
+        const auto paths = model.containerTexturePath.isEmpty()
+            ? FreightAnimPath::resolve(path, model.name)
+            : FreightAnimPath::Paths{model.name, model.containerTexturePath};
+        model.id[shapeLibId] = Game::currentShapeLib->addShape(
+            paths.shape, paths.textures, true);
+        if(Game::debugOutput)
+            qDebug() << "FreightAnim:" << paths.shape << "textures:" << paths.textures;
+    }
 }
 
 void Eng::renderShape(EngShape &model, int selectionColor) {
@@ -903,8 +928,9 @@ void Eng::renderShape(EngShape &model, int selectionColor) {
         return;
     }
     QString error;
-    const auto preview = Game::currentShapeLib->getGltfShape(
-        path + "/" + model.name, error);
+    const QString modelPath = model.containerTexturePath.isEmpty()
+        ? path + "/" + model.name : model.name;
+    const auto preview = Game::currentShapeLib->getGltfShape(modelPath, error);
     if(preview && !preview->model.primitives.empty()) {
         GLUU *gluu = GLUU::get();
         const QMatrix4x4 world = GltfPlacementMath::rollingStockMatrix(gluu->mvMatrix);
@@ -925,7 +951,9 @@ void Eng::renderShape(EngShape &model, int selectionColor) {
 void Eng::reloadShape(EngShape &model) {
     const long long shapeLibId = reinterpret_cast<long long>(Game::currentShapeLib);
     if(GltfModel::accepts(model.name)) {
-        Game::currentShapeLib->reloadShapeIfCached(path + "/" + model.name);
+        const QString modelPath = model.containerTexturePath.isEmpty()
+            ? path + "/" + model.name : model.name;
+        Game::currentShapeLib->reloadShapeIfCached(modelPath);
         model.previewErrors.remove(shapeLibId);
     } else {
         const int id = model.id.value(shapeLibId, -1);
@@ -954,36 +982,12 @@ void Eng::render(int aktwx, int aktwz, int selectionColor) {
     long long int shapeLibId = reinterpret_cast<long long int>(Game::currentShapeLib);
     if(!shape.id.keys().contains(shapeLibId)){
         if(shape.name.length() > 1)
-            shape.id[shapeLibId] = loadLegacyShape(shape.name, path);
+            shape.id[shapeLibId] = loadLegacyShape(shape.name);
         else 
             shape.id[shapeLibId] = -1;
     }
 
-for(int i = 0; i < freightanimShape.size(); i++){   /// EFO heres where I might be able to override the path for textures
-        if(!freightanimShape[i].id.keys().contains(shapeLibId)){
-            if(freightanimShape[i].name.length() > 1)
-            {
-                if(Game::debugOutput) qDebug() << __FILE__ << __LINE__ << freightanimShape[i].altpath.length();
-                int lastslash = path.lastIndexOf("/");
-                QString altroot = path.left(lastslash);
-                lastslash = freightanimShape[i].name.lastIndexOf("/");
-                // QString altpath = freightanimShape[i].name.left(lastslash);
-                // altpath = altpath.replace("../","/");
-                
-                if(freightanimShape[i].altpath.length() > 5)
-                {
-                freightanimShape[i].id[shapeLibId] = loadLegacyShape(freightanimShape[i].name, altroot +"/"+ freightanimShape[i].altpath);
-                }
-                else
-                {
-                freightanimShape[i].id[shapeLibId] = loadLegacyShape(freightanimShape[i].name, path);
-                }
-             if(Game::debugOutput) qDebug() << __FILE__ << __LINE__<<  " Defining FreightAnim: " << freightanimShape[i].name << " / PATH = " << path << " / ALTPATH= " << altroot + freightanimShape[i].altpath;   
-            }
-            else 
-                freightanimShape[i].id[shapeLibId] = -1;
-        }
-    }
+    loadFreightShapes();
 
     //ruchy[0].renderCon(gl, aktwx, aktwz);
     //ruchy[1].renderCon(gl, aktwx, aktwz);
@@ -1080,21 +1084,12 @@ void Eng::renderOnTrack(GLUU* gluu, float* playerT, int selectionColor) {
     long long int shapeLibId = reinterpret_cast<long long int>(Game::currentShapeLib);
     if(!shape.id.keys().contains(shapeLibId)){
         if(shape.name.length() > 1)
-            shape.id[shapeLibId] = loadLegacyShape(shape.name, path);
+            shape.id[shapeLibId] = loadLegacyShape(shape.name);
         else 
             shape.id[shapeLibId] = -1;
     }
 
-    for(int i = 0; i < freightanimShape.size(); i++){
-        if(!freightanimShape[i].id.keys().contains(shapeLibId)){
-            if(freightanimShape[i].name.length() > 1){
-                freightanimShape[i].id[shapeLibId] = loadLegacyShape(freightanimShape[i].name, path);
-                         if(Game::debugOutput) qDebug() << __FILE__ << __LINE__ << " Defining FreightAnim: " << freightanimShape[i].name << " / PATH = " << path << " / ALTPATH= " << freightanimShape[i].altpath;   
-            }
-            else 
-                freightanimShape[i].id[shapeLibId] = -1;
-        }
-    }
+    loadFreightShapes();
     
     if (ruchPoint == NULL) {
         ruchPoint = new OglObj();

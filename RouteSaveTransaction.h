@@ -18,7 +18,9 @@ public:
     RouteSaveTransaction(const QString &routeRoot, const QString &backupRoot);
 
     // Repeated destinations are accepted only when their bytes are identical.
-    bool addFile(const QString &destination, const QByteArray &data, QString *error = NULL);
+    bool addFile(const QString &destination, const QByteArray &data, QString *error = NULL,
+                 const QByteArray &expectedHash = {});
+    bool addRemoval(const QString &destination, QString *error = NULL);
     bool commit(QString *error = NULL);
 
     static bool recoverInterrupted(const QString &routeRoot,
@@ -34,6 +36,8 @@ private:
         bool existed = false;
         QString backupName;
         QByteArray originalHash;
+        QByteArray expectedHash;
+        bool remove = false;
     };
 
     QString routeRoot;

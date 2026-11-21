@@ -11,6 +11,7 @@
 #define	TERRAINLIBQT_H
 
 #include "TerrainLib.h"
+#include "OpeningViewLoad.h"
 #include <QSet>
 
 class FileBuffer;
@@ -77,6 +78,7 @@ public:
     void fillTerrainData(Terrain *tTile, float *offsetXYZ);
     void pushRenderItems(float* playerT, float* playerW, float* target, float fov, int renderMode);
     void render(GLUU *gluu, float* playerT, float* playerW, float* target, float fov, int renderMode);
+    void queueOpeningDistantTerrain(int x, int z, OpeningViewLoad &opening);
     void renderLo(GLUU *gluu, float* playerT, float* playerW, float* target, float fov, int renderMode);
     void renderWater(GLUU *gluu, float* playerT, float* playerW, float* target, float fov, int renderMode, int layer);
     void renderWaterLo(GLUU *gluu, float* playerT, float* playerW, float* target, float fov, int renderMode, int layer);
@@ -96,6 +98,7 @@ protected:
     bool mapOverlayPurgeRequested = false;
     QSet<int> mapOverlayUnavailableTiles;
     
+    TerrainInfo *distantTerrainAt(int x, int z, unsigned int nameId);
     void spiralLoop(int n, int &x, int &y);
     void updateMapOverlayResidency(float *playerT);
 };

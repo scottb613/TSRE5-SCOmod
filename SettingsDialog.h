@@ -4,6 +4,7 @@
 #include <QDialog>
 #include <QMap>
 #include <QString>
+#include <QStringList>
 
 // Forward declarations to keep compile times fast
 class QFormLayout;
@@ -26,12 +27,14 @@ public:
 
 signals:
     void restartAndRestoreRequested();
+    void panelAlignmentChanged();
     
 private:
     void setupUi();
     void createScrollTab(QFormLayout*& layout, QTabWidget* tabs, const QString& title);
     void addRow(QFormLayout* l, const QString& key, const QString& type,
-                const QString& label, const QString& helpText = "");
+                const QString& label, const QString& helpText = "",
+                const QStringList& choices = {});
     QString helpForSetting(const QString& key, const QString& fallback = "") const;
     void createKeyAssignmentsTab(QTabWidget* tabs);
 

@@ -5,18 +5,24 @@
 
 #include "GltfModel.h"
 #include "GltfTextureBudget.h"
+#include "DdsDecoder.h"
 #define CGLTF_IMPLEMENTATION
 #include "third_party/cgltf/cgltf.h"
 #include <QBuffer>
+#include <QByteArrayView>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMatrix4x4>
 #include <QUrl>
+#include <QtEndian>
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <map>
 #include <memory>
 #include <set>
 #include <tuple>
@@ -24,6 +30,7 @@
 namespace {
 constexpr size_t maxParserBytes = 64 * 1024 * 1024;
 constexpr size_t maxResourceBytes = 256 * 1024 * 1024;
+constexpr size_t maxOwnedModelSourceBytes = maxResourceBytes + maxParserBytes;
 // Permit a standard 4K square; decimal 16 million rejects 4096-by-4096.
 constexpr size_t maxImagePixels = 4096 * 4096;
 constexpr size_t maxVertices = 3000000;
@@ -37,26 +44,26 @@ void *allocate(void *user, cgltf_size size) {
 }
 void deallocate(void *, void *ptr) { std::free(ptr); }
 
-bool readFile(const QString &path, QByteArray &bytes, QString &error,
+bool readFile(QFile &file, QByteArray &bytes, QString &error,
               size_t maximumBytes) {
-    QFile file(path);
-    if(!file.open(QIODevice::ReadOnly) || file.size() < 1) {
-        error = "Missing or empty resource: " + QFileInfo(path).fileName();
+    const QString name = QFileInfo(file).fileName();
+    if((!file.isOpen() && !file.open(QIODevice::ReadOnly)) || file.size() < 1) {
+        error = "Missing or empty resource: " + name;
         return false;
     }
     if(quint64(file.size()) > maximumBytes) {
-        error = "Resource exceeds the preview memory budget: " + QFileInfo(path).fileName();
+        error = "Resource exceeds the preview memory budget: " + name;
         return false;
     }
     // Bound the read itself, including a file that grows after the size check.
     bytes = file.read(qint64(maximumBytes) + 1);
     if(size_t(bytes.size()) > maximumBytes) {
-        error = "Resource exceeds the preview memory budget: " + QFileInfo(path).fileName();
+        error = "Resource exceeds the preview memory budget: " + name;
         bytes.clear();
         return false;
     }
     if(bytes.size() != file.size()) {
-        error = "Cannot read complete resource: " + QFileInfo(path).fileName();
+        error = "Cannot read complete resource: " + name;
         return false;
     }
     return true;
@@ -99,32 +106,87 @@ bool readUri(const char *uri, const QDir &directory, QByteArray &bytes, QString 
         error = "Missing resource or resource outside the model directory: " + relative;
         return false;
     }
-    return readFile(resolved, bytes, error, maximumBytes);
+    QFile file(resolved);
+    return readFile(file, bytes, error, maximumBytes);
 }
 
 bool finite(const QVector3D &v) {
     return std::isfinite(v.x()) && std::isfinite(v.y()) && std::isfinite(v.z());
 }
 
-bool decodeImage(const cgltf_image *image, const QDir &directory,
-        QImage &result, size_t &resourceBytes, QString &error) {
+bool decodeImage(const cgltf_image *image, bool isDds, const QDir &directory,
+        QImage &result, size_t &resourceBytes, QStringList &warnings, QString &error) {
     QByteArray bytes;
+    QByteArrayView embeddedMime;
     if(image->buffer_view) {
         const auto *view = image->buffer_view;
-        if(!cgltf_buffer_view_data(view)) {
+        embeddedMime = QByteArrayView(image->mime_type);
+        const bool validMime = isDds ? embeddedMime == "image/vnd-ms.dds"
+            : embeddedMime == "image/png" || embeddedMime == "image/jpeg";
+        if(image->uri || !validMime) {
+            error = "An embedded image buffer view requires the matching MIME type and no URI.";
+            return false;
+        }
+        const auto *data = cgltf_buffer_view_data(view);
+        if(!data || !view->size) {
             error = "Invalid embedded image.";
             return false;
         }
-        bytes = QByteArray(reinterpret_cast<const char *>(cgltf_buffer_view_data(view)),
+        // View the loaded buffer directly. Its owner remains alive through decoding.
+        bytes = QByteArray::fromRawData(reinterpret_cast<const char *>(data),
                 static_cast<qsizetype>(view->size));
-    } else if(!readUri(image->uri, directory, bytes, error,
-                      maxResourceBytes-resourceBytes)) return false;
+    } else if(QByteArrayView(image->uri).startsWith("data:")) {
+        // OR's image URI path checks the filename extension before opening a stream.
+        warnings << "Open Rails skips direct image data URIs. Use an image buffer view for embedded textures.";
+        return true;
+    } else {
+        if(isDds && !QUrl::fromEncoded(QByteArray(image->uri)).path().endsWith(".dds", Qt::CaseInsensitive)) {
+            error = "MSFT_texture_dds requires a DDS image.";
+            return false;
+        }
+        if(!readUri(image->uri, directory, bytes, error, maxResourceBytes - resourceBytes))
+            return false;
+    }
+    if(isDds) {
+        constexpr qsizetype caps2Offset = 112;
+        constexpr quint32 cubeOrVolume = 0x00200200;
+        if(bytes.size() >= caps2Offset + qsizetype(sizeof(quint32))
+                && (qFromLittleEndian<quint32>(bytes.constData() + caps2Offset) & cubeOrVolume)) {
+            error = "glTF DDS materials require a 2D texture.";
+            return false;
+        }
+        DdsImage decoded;
+        const size_t remainingBytes = std::min(maxImagePixels * 4, maxResourceBytes - resourceBytes);
+        if(!DdsDecoder::decode(bytes, decoded, &error, remainingBytes)) {
+            error = "Cannot decode glTF DDS image: " + error;
+            return false;
+        }
+        if(decoded.width > 8192 || decoded.height > 8192) {
+            error = "DDS image exceeds the preview image dimensions.";
+            return false;
+        }
+        result = QImage(reinterpret_cast<const uchar *>(decoded.rgba.constData()),
+            decoded.width, decoded.height, QImage::Format_RGBA8888).copy();
+        if(result.isNull()) {
+            error = "Cannot allocate glTF DDS image.";
+            return false;
+        }
+        resourceBytes += size_t(decoded.rgba.size());
+        return true;
+    }
     QBuffer buffer(&bytes);
     buffer.open(QIODevice::ReadOnly);
     QImageReader reader(&buffer);
     const QByteArray format = reader.format().toLower();
+    const bool isPng = format == "png";
+    const bool isJpeg = format == "jpeg" || format == "jpg";
+    if((embeddedMime == "image/png" && !isPng)
+            || (embeddedMime == "image/jpeg" && !isJpeg)) {
+        error = "Embedded image bytes do not match the declared PNG/JPEG MIME type.";
+        return false;
+    }
     const QSize size = reader.size();
-    if((format != "png" && format != "jpeg" && format != "jpg")
+    if((!isPng && !isJpeg)
             || !size.isValid() || size.width() > 8192 || size.height() > 8192
             || size_t(size.width()) * size_t(size.height()) > maxImagePixels) {
         error = "Preview requires PNG/JPEG images within the 4096-by-4096 pixel budget.";
@@ -153,8 +215,32 @@ bool GltfModel::load(const QString &path, QString &error) {
     // Commit only a complete load: failed reloads preserve the previous model.
     GltfModel pending;
     if(!accepts(path)) { error = "Expected a .gltf or .glb model."; return false; }
-    QByteArray source;
-    if(!readFile(path, source, error, maxResourceBytes+maxParserBytes)) return false;
+    // cgltf borrows the GLB chunk bytes for this load. Keep the file (and its
+    // mapping) alive until all accessors and embedded images have been read.
+    QFile modelFile(path);
+    QByteArray ownedSource;
+    QByteArrayView source;
+    if(modelFile.open(QIODevice::ReadOnly)) {
+        const QByteArray header = modelFile.peek(20);
+        if(header.size() == 20 && header.startsWith("glTF")) {
+            const qint64 length = modelFile.size();
+            // The GLB header's 32-bit total length bounds the read-only mapping.
+            if(length != qFromLittleEndian<quint32>(header.constData() + 8)) {
+                error = "GLB file size does not match its header.";
+                return false;
+            }
+            if(qFromLittleEndian<quint32>(header.constData() + 12) > maxParserBytes) {
+                error = "GLB JSON exceeds the preview parser budget.";
+                return false;
+            }
+            if(const auto *mapped = modelFile.map(0, length))
+                source = QByteArrayView(mapped, length);
+        }
+    }
+    if(source.isEmpty()) {
+        if(!readFile(modelFile, ownedSource, error, maxOwnedModelSourceBytes)) return false;
+        source = QByteArrayView(ownedSource);
+    }
     ParseBudget budget;
     cgltf_options options{};
     options.memory = {allocate, deallocate, &budget};
@@ -207,7 +293,8 @@ bool GltfModel::load(const QString &path, QString &error) {
         if(!usedExtensions.contains(extension)) {
             error = "Required extension is not listed in extensionsUsed: " + extension; return false;
         }
-        if(extension != "KHR_materials_unlit" && !previewMaterialExtensions.contains(extension)) {
+        if(extension != "KHR_materials_unlit" && extension != "MSFT_texture_dds"
+                && !previewMaterialExtensions.contains(extension)) {
             error = "Open Rails extension is pending in this preview: " + extension; return false;
         }
     }
@@ -215,15 +302,10 @@ bool GltfModel::load(const QString &path, QString &error) {
             || data->images_count > 4096) {
         error = "Model exceeds the preview scene limits."; return false;
     }
-    // The verified ORTS U2026.10.03 schema rejects non-core MIME enum values
-    // even on unused extension images. A PNG preview can otherwise hide this
-    // parser limitation. DDS's extension MIME value is valid; warn without
-    // rewriting any image or model metadata.
+    // Current Open Rails also recognizes the MIME type from MSFT_texture_dds.
     for(size_t i = 0; i < data->images_count; ++i) {
         const QString mime = QString::fromUtf8(data->images[i].mime_type);
-        if(mime == "image/vnd-ms.dds")
-            pending.warnings << "Open Rails compatibility: valid MSFT_texture_dds MIME metadata is rejected by the verified ORTS image schema. A PNG/JPEG test fallback avoids this parser limitation.";
-        else if(!mime.isEmpty() && mime != "image/png" && mime != "image/jpeg")
+        if(!mime.isEmpty() && mime != "image/png" && mime != "image/jpeg" && mime != "image/vnd-ms.dds")
             pending.warnings << "Open Rails compatibility: image MIME type '" + mime
                 + "' is rejected by the verified ORTS image schema; verify simulator compatibility before testing.";
     }
@@ -252,23 +334,20 @@ bool GltfModel::load(const QString &path, QString &error) {
     size_t resourceBytes = 0;
     for(size_t i = 0; i < data->buffers_count; ++i) {
         auto &buffer = data->buffers[i];
-        if(buffer.size > maxResourceBytes - resourceBytes) {
-            error = "Model exceeds the preview buffer budget."; return false;
-        }
-        resourceBytes += buffer.size;
         if(buffer.uri) {
+            if(buffer.size > maxResourceBytes - resourceBytes) {
+                error = "Model exceeds the preview buffer budget."; return false;
+            }
             if(!readUri(buffer.uri, directory, buffers[i], error,
-                        buffer.size+maxResourceBytes-resourceBytes)) return false;
+                        maxResourceBytes-resourceBytes)) return false;
             if(size_t(buffers[i].size()) < buffer.size) {
                 error = "External buffer is shorter than its declared size."; return false;
             }
-            const size_t extraBytes = size_t(buffers[i].size()) - buffer.size;
-            if(extraBytes > maxResourceBytes - resourceBytes) {
-                error = "Loaded buffers exceed the preview resource budget."; return false;
-            }
-            resourceBytes += extraBytes;
+            resourceBytes += size_t(buffers[i].size());
             buffer.data = buffers[i].data();
         } else if(i == 0 && data->bin && data->bin_size >= buffer.size) {
+            // The BIN chunk already resides in the input, outside the heap
+            // budget for separately loaded buffers and decoded textures.
             buffer.data = const_cast<void *>(data->bin);
         } else { error = "Missing model buffer."; return false; }
         buffer.data_free_method = cgltf_data_free_method_none;
@@ -276,11 +355,11 @@ bool GltfModel::load(const QString &path, QString &error) {
     if(cgltf_validate(data.get()) != cgltf_result_success) {
         error = "Invalid model indices or loaded buffer ranges."; return false;
     }
-    std::vector<QImage> images(data->images_count);
-    std::vector<bool> imageLoaded(data->images_count, false);
+    const bool usesDdsExtension = usedExtensions.contains("MSFT_texture_dds");
+    std::map<std::pair<size_t, bool>, QImage> images;
     size_t vertexCount = 0;
     size_t gpuImageBytes = 0;
-    std::set<std::tuple<size_t, int, int, int, int>> gpuTextures;
+    std::set<std::tuple<size_t, bool, int, int, int, int>> gpuTextures;
     QMatrix4x4 orientation;
     orientation.rotate(180.0f, 0, 1, 0);
     // Iterative scene traversal, bounded against cycles and excessive depth.
@@ -366,15 +445,31 @@ bool GltfModel::load(const QString &path, QString &error) {
                 }
                 uv = cgltf_find_accessor(&primitive, cgltf_attribute_type_texcoord, texture->texcoord);
                 const auto *image = texture->texture->image;
+                bool isDds = false;
+                if(usesDdsExtension) {
+                    for(size_t i = 0; i < texture->texture->extensions_count; ++i) {
+                        const auto &extension = texture->texture->extensions[i];
+                        if(QByteArrayView(extension.name) != "MSFT_texture_dds")
+                            continue;
+                        const auto definition = QJsonDocument::fromJson(QByteArray(extension.data)).object();
+                        const int sourceIndex = definition.value("source").toInt(-1);
+                        if(sourceIndex < 0 || size_t(sourceIndex) >= data->images_count) {
+                            error = "MSFT_texture_dds references an invalid image.";
+                            return false;
+                        }
+                        image = &data->images[sourceIndex];
+                        isDds = true;
+                        break;
+                    }
+                }
                 if(!image || !uv || uv->type != cgltf_type_vec2 || !uv->buffer_view) {
                     error = "Base-color texture has no supported image or UV set."; return false;
                 }
                 const size_t imageIndex = size_t(image - data->images);
-                if(!imageLoaded[imageIndex]) {
-                    if(!decodeImage(image, directory, images[imageIndex], resourceBytes, error)) return false;
-                    imageLoaded[imageIndex] = true;
-                }
-                output.image = images[imageIndex];
+                const auto [decoded, inserted] = images.try_emplace(std::make_pair(imageIndex, isDds));
+                if(inserted && !decodeImage(image, isDds, directory, decoded->second,
+                                            resourceBytes, pending.warnings, error)) return false;
+                output.image = decoded->second;
                 if(texture->texture->sampler) {
                     output.wrapS = texture->texture->sampler->wrap_s;
                     output.wrapT = texture->texture->sampler->wrap_t;
@@ -391,7 +486,7 @@ bool GltfModel::load(const QString &path, QString &error) {
                             && (output.minFilter < 9984 || output.minFilter > 9987))) {
                     error = "Invalid texture sampler filter."; return false;
                 }
-                if(gpuTextures.emplace(imageIndex, output.wrapS, output.wrapT,
+                if(!output.image.isNull() && gpuTextures.emplace(imageIndex, isDds, output.wrapS, output.wrapT,
                         output.minFilter, output.magFilter).second) {
                     const size_t imageBytes = gltfTextureBytes(output.image.size(), output.minFilter >= 9984);
                     if(imageBytes > maxResourceBytes - gpuImageBytes) {
@@ -432,7 +527,8 @@ bool GltfModel::load(const QString &path, QString &error) {
     for(const QString &extension : usedExtensions)
         if(previewMaterialExtensions.contains(extension))
             pending.warnings << "Simplified editor material: " + extension + " shading is not displayed.";
-        else if(extension != "KHR_materials_unlit" && ortsExtensions.contains(extension))
+        else if(extension != "KHR_materials_unlit" && extension != "MSFT_texture_dds"
+                && ortsExtensions.contains(extension))
             pending.warnings << "Optional ORTS extension is not previewed yet: " + extension;
     pending.warnings.removeDuplicates();
     *this = std::move(pending);

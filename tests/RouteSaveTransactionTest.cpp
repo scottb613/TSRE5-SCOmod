@@ -7,6 +7,7 @@
 #include "RouteSaveTransaction.h"
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -148,6 +149,32 @@ int main(int argc, char **argv) {
         return fail("Earlier component was not restored after a later failure.");
     if(QFileInfo::exists(missingParent))
         return fail("Failed later component was unexpectedly published.");
+
+    const QString generatedShape = routeRoot + "/DynaTrax-1.s";
+    if(!writeFile(generatedShape, "original-shape"))
+        return fail("Could not create generated shape fixture.");
+    RouteSaveTransaction removalRollback(routeRoot, backupRoot);
+    if(!removalRollback.addRemoval(generatedShape, &error)
+            || removalRollback.addRemoval(generatedShape, &error)
+            || !removalRollback.addFile(missingParent, "fail", &error)
+            || removalRollback.commit(&error)
+            || readFile(generatedShape) != "original-shape")
+        return fail("An unsuccessful conversion must restore the deleted shape.");
+
+    const auto expectedTdb = QCryptographicHash::hash(QByteArray("new-tdb"), QCryptographicHash::Sha256);
+    RouteSaveTransaction staleRemoval(routeRoot, backupRoot);
+    if(!staleRemoval.addFile(tdb, "replacement", &error, expectedTdb)
+            || !staleRemoval.addRemoval(generatedShape, &error)
+            || !writeFile(tdb, "changed-after-scan")
+            || staleRemoval.commit(&error)
+            || readFile(generatedShape) != "original-shape"
+            || readFile(tdb) != "changed-after-scan")
+        return fail("A stale conversion must preserve the newer input and the generated shape.");
+
+    RouteSaveTransaction removal(routeRoot, backupRoot);
+    if(!removal.addRemoval(generatedShape, &error) || !removal.commit(&error)
+            || QFileInfo::exists(generatedShape))
+        return fail("A committed conversion must remove the generated shape.");
 
     const QString interruptedDir = backupRoot + "/99999999-interrupted";
     QDir().mkpath(interruptedDir);

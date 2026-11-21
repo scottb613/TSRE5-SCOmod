@@ -29,11 +29,12 @@ public:
     bool loaded = false;
     bool dataOutOfSync = false;
     bool updateSectionDataRequired = false;
+    QString trackPathError;
     
     int tsectionMaxIdx = 0;// = 40000;
     int tsectionShapes = 0;// = 40000;
-    int routeMaxIdx;// = 40000;
-    int routeShapes;// = 40000;
+    int routeMaxIdx = 0;
+    int routeShapes = 0;
     //std::unordered_map<int, TrackShape::SectionIdx*> routeShape;
     
     TSectionDAT(bool autoFix = false, bool loadRouteNow = true);
@@ -43,7 +44,7 @@ public:
     void getShapeData(int id);
     bool saveRoute();
     bool loadRoute(bool autoFix = false);
-    void loadRouteUtf16Data(FileBuffer *data, bool autoFix = false);
+    bool loadRouteUtf16Data(FileBuffer *data, bool autoFix = false);
     void saveRouteToStream(QTextStream &out);
     void mergeTSection(TSectionDAT *second, QHash<unsigned int,unsigned int>& fixedSectionIds, QHash<unsigned int,unsigned int>& fixedShapeIds);
 private:

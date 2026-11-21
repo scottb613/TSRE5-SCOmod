@@ -46,6 +46,7 @@ public slots:
     void haxElevTDBVectorEnabled();
     void haxRemoveTDBTreeEnabled();
     void removeAllInteractivesEnabled();
+    void removeDynaTraxEnabled();
     void deleteSelectedInstancesEnabled();
     void fixSignalFlagsEnabled();
     void toggleHacksForSelection(

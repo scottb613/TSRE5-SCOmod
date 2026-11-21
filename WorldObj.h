@@ -22,6 +22,7 @@
 #include <QPainterPath>
 
 class SFile;
+struct OpeningViewLoad;
 class TrackItemObj;
 class ErrorMessage;
 
@@ -186,6 +187,7 @@ public:
     virtual void setModified(bool val = true);
     virtual void randomTransform(Ref::RandomTransformation * transformation);
     virtual int updateTrackSectionInfo(QHash<unsigned int, unsigned int> shapes, QHash<unsigned int, unsigned int> sections);
+    virtual void prepareOpeningView(OpeningViewLoad &opening);
     virtual void pushRenderItems(float lod, float posx, float posz, float* playerW, float* target, float fov, int selectionColor);
     virtual void render(GLUU* gluu, float lod, float posx, float posz, float* playerW, float* target, float fov, int selectionColor, int renderMode);
 protected:

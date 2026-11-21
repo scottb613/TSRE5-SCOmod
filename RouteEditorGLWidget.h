@@ -12,6 +12,9 @@
 #define GLWIDGET_H
 
 #include <QOpenGLWidget>
+#include "RouteLoadTiming.h"
+#include "OpeningViewLoad.h"
+#include "RouteFrameProfile.h"
 #include <QOpenGLFunctions>
 //#include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLVertexArrayObject>
@@ -19,9 +22,14 @@
 #include <QMatrix4x4>
 #include <QBasicTimer>
 #include <QJsonObject>
+#include <QHash>
+#include <QPointF>
 #include <QSet>
 #include <QPair>
 #include <QPointer>
+#include <cstdint>
+#include <memory>
+#include <optional>
 #include "ForestBakeManifest.h"
 #include "PolyVegCorridor.h"
 #include "CameraFree.h"
@@ -50,6 +58,7 @@ class QAction;
 class GuiGlCompass;
 class QFrame;
 class QLabel;
+class QProgressDialog;
 class RulerObj;
 class Terrain;
 class TrackItemObj;
@@ -399,6 +408,27 @@ private:
     Camera* camera = NULL;
     CameraFree* cameraFree = NULL;
     CameraConsist* cameraObj = NULL;
+    void beginOpeningView(bool jump = false);
+    void advanceOpeningView();
+    void finishOpeningView(bool completed);
+    void moveCameraForJump(int xTile, int zTile, float x, float y, float z);
+    void armJumpChirp();
+    struct LoadingJump {
+        QPoint tile;
+        QVector3D position;
+        bool blankPainted = false;
+        bool started = false;
+    };
+    std::optional<LoadingJump> loadingJump;
+    QHash<QPoint, QList<QPointF>> preparedViewPositions;
+    std::uint64_t preparedPreviewRevision = 0;
+    std::unique_ptr<OpeningViewLoad> openingView;
+    QPointer<QProgressDialog> openingProgress;
+    Route *openingRoute = nullptr;
+    std::optional<RouteLoadTiming> openingTiming;
+    bool scenePainted = false;
+    bool palettePending = false;
+    RouteFrameProfile frameProfile;
     bool selection = false;
     int mousex, mousey;
     int pointerDepthMouseX = -1;
